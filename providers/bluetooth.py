@@ -1,0 +1,296 @@
+"""Bluetooth devices whose battery level Windows itself knows
+(the ones shown in Settings > Bluetooth & devices).
+
+Battery:  DEVPKEY_Bluetooth_Battery {104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2 (PnP)
+Link:     WinRT BluetoothDevice.ConnectionStatus (BluetoothLEDevice for LE),
+          queried directly by MAC address: the same source Windows Settings uses.
+          Fallback when WinRT is unavailable: the undocumented PnP key
+          {83DA6326-97A6-4088-9453-A1923F573B29} 15 (in practice it flickers:
+          some headsets report False while playing audio).
+
+One physical device is several PnP nodes in Windows: the root node
+(BTHENUM\\DEV_<MAC>, BTHLE\\DEV_<MAC>) and service nodes. Nodes of one device
+are matched by the MAC address found in every node's instance id.
+Everything is fetched with a SINGLE PowerShell call.
+Windows 10/11 only; off by default (toggle in the tray menu).
+"""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from typing import Dict, List, Optional
+
+from .base import DeviceStatus, Provider, log
+
+K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
+K_CONN = "{83DA6326-97A6-4088-9453-A1923F573B29} 15"
+
+PS_SCRIPT = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# --- PnP: battery level (and the fallback connection flag) ---
+$devs = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })
+$props = @()
+if ($devs.Count -gt 0) {
+  $props = @(Get-PnpDeviceProperty -InstanceId $devs.InstanceId -KeyName '%BAT%', '%CONN%' |
+             Where-Object { $_.Data -ne $null } |
+             ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; key = $_.KeyName; data = $_.Data } })
+}
+$list = @($devs | ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; name = $_.FriendlyName; status = "$($_.Status)" } })
+
+# --- WinRT: reliable "connected right now", same as Windows Settings ---
+# A direct query by MAC (FromBluetoothAddressAsync) does not scan the air, so it
+# is fast. Enumerating with FindAllAsync triggered a scan and exceeded 15 s.
+$aep = @(); $aepErr = $null
+try {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
+    $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
+  $tClassic = [Windows.Devices.Bluetooth.BluetoothDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+  $tLE = [Windows.Devices.Bluetooth.BluetoothLEDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+  $roots = @($devs | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})' } |
+             ForEach-Object { $null = $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})'
+                              [pscustomobject]@{ le = ($Matches[1] -eq 'BTHLE'); mac = $Matches[2] } })
+  foreach ($r in $roots) {
+    $conn = $null; $err = $null
+    try {
+      $addr = [Convert]::ToUInt64($r.mac, 16)
+      if ($r.le) { $t = $tLE; $op = [Windows.Devices.Bluetooth.BluetoothLEDevice]::FromBluetoothAddressAsync($addr) }
+      else       { $t = $tClassic; $op = [Windows.Devices.Bluetooth.BluetoothDevice]::FromBluetoothAddressAsync($addr) }
+      $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op))
+      if ($task.Wait(3000)) {
+        $d = $task.Result
+        if ($d) { $conn = ("$($d.ConnectionStatus)" -eq 'Connected'); $d.Dispose() }
+      } else { $err = 'timeout' }
+    } catch { $err = "$_" }
+    $aep += [pscustomobject]@{ addr = $r.mac; conn = $conn; le = $r.le; err = $err }
+  }
+} catch { $aepErr = "$_" }
+
+ConvertTo-Json -InputObject ([pscustomobject]@{ devs = $list; props = $props; aep = $aep; aep_error = $aepErr }) -Compress -Depth 4
+""".replace("%BAT%", K_BAT).replace("%CONN%", K_CONN)
+
+_HEX12 = re.compile(r"(?<![0-9A-F])([0-9A-F]{12})(?![0-9A-F])")
+
+
+def mac_of(instance_id: str) -> Optional[str]:
+    """Device MAC address from the instance id of any of its PnP nodes."""
+    s = (instance_id or "").upper()
+    m = re.search(r"DEV_([0-9A-F]{12})(?![0-9A-F])", s)
+    if m:
+        return m.group(1)
+    found = _HEX12.findall(s)
+    return found[-1] if found else None
+
+
+def norm_addr(addr: str) -> Optional[str]:
+    """'a1:b2:c3:d4:e5:f6' -> 'A1B2C3D4E5F6'"""
+    h = re.sub(r"[^0-9A-Fa-f]", "", addr or "").upper()
+    return h if len(h) == 12 else None
+
+
+def _is_root(instance_id: str) -> bool:
+    return bool(re.match(r"^(BTHENUM|BTHLE)\\DEV_[0-9A-F]{12}", (instance_id or "").upper()))
+
+
+def _as_bool(v) -> Optional[bool]:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        if v.lower() == "true":
+            return True
+        if v.lower() == "false":
+            return False
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return None
+
+
+def _as_list(v):
+    if v is None:
+        return []
+    return [v] if isinstance(v, dict) else list(v)
+
+
+def group_devices(data: dict, diag: List[str],
+                  last_levels: Optional[Dict[str, int]] = None) -> List[DeviceStatus]:
+    """last_levels - last known battery level per MAC (updated in place)."""
+    if last_levels is None:
+        last_levels = {}
+    devs = _as_list(data.get("devs"))
+    props = _as_list(data.get("props"))
+    aep = _as_list(data.get("aep"))
+    if data.get("aep_error"):
+        diag.append(f"[Bluetooth] WinRT unavailable ({data['aep_error'][:150]}), "
+                    f"using the fallback PnP flag")
+
+    info = {d.get("id"): d for d in devs if d.get("id")}
+    by_mac: Dict[str, dict] = {}
+
+    def slot(mac):
+        return by_mac.setdefault(mac, {"level": None, "pnp_conn": None, "aep_conn": None,
+                                       "name": None, "root_name": None, "aep_name": None,
+                                       "status_ok": False, "aep_err": False})
+
+    for d in devs:
+        mac = mac_of(d.get("id"))
+        if mac:
+            g = slot(mac)
+            if _is_root(d.get("id")) and d.get("name"):
+                g["root_name"] = d["name"]
+
+    for p in props:
+        mac = mac_of(p.get("id"))
+        if not mac:
+            continue
+        g = slot(mac)
+        key = (p.get("key") or "").upper()
+        if key == K_BAT.upper():
+            try:
+                g["level"] = int(p.get("data"))
+            except (TypeError, ValueError):
+                continue
+            d = info.get(p.get("id")) or {}
+            g["name"] = g["name"] or d.get("name")
+            g["status_ok"] = g["status_ok"] or str(d.get("status", "")).upper() == "OK"
+        elif key == K_CONN.upper():
+            b = _as_bool(p.get("data"))
+            if b is not None:
+                g["pnp_conn"] = bool(g["pnp_conn"]) or b
+
+    for a in aep:
+        mac = norm_addr(a.get("addr"))
+        if not mac:
+            continue
+        g = slot(mac)
+        if a.get("err"):
+            g["aep_err"] = True
+            diag.append(f"[Bluetooth] WinRT for {mac}: {str(a['err'])[:120]}")
+        b = _as_bool(a.get("conn"))
+        if b is not None:
+            g["aep_conn"] = bool(g["aep_conn"]) or b
+        g["aep_name"] = g["aep_name"] or a.get("name")
+
+    out: List[DeviceStatus] = []
+    for mac, g in by_mac.items():
+        # battery: fresh value, otherwise the last known one (Windows sometimes omits it)
+        level, cached = g["level"], False
+        if level is not None:
+            last_levels[mac] = level
+        elif mac in last_levels:
+            level, cached = last_levels[mac], True
+        if level is None:
+            continue
+        name = (g["root_name"] or g["aep_name"] or g["name"] or f"Bluetooth {mac}").strip()
+        if g["aep_conn"] is not None:
+            shown, src = g["aep_conn"], "WinRT"
+        elif g["pnp_conn"] is not None:
+            shown, src = g["pnp_conn"], "PnP"
+        elif g["aep_err"]:
+            # WinRT gave no answer for this device and there is no PnP flag: hide it
+            # (falling back to "status OK" here used to show disconnected headsets)
+            shown, src = False, "no data"
+        else:
+            shown, src = g["status_ok"], "status"
+        diag.append(f"[Bluetooth] {name} ({mac}): {level}%{' (cached)' if cached else ''} "
+                    f"connected: WinRT={g['aep_conn']} PnP={g['pnp_conn']} "
+                    f"-> {'shown' if shown else 'hidden'} [{src}]")
+        if shown:
+            out.append(DeviceStatus(f"bt:{mac}", name, level, False, True, "bluetooth"))
+    if not by_mac:
+        diag.append("[Bluetooth] no Bluetooth devices found")
+    return out
+
+
+# How many polls in a row (one per minute) a device may be missing before its
+# icon is removed. Smooths over brief PowerShell failures and polls where
+# Windows reports a headset as disconnected for a moment.
+MISS_LIMIT = 2
+
+
+class BluetoothProvider(Provider):
+    name = "bluetooth"
+
+    def __init__(self):
+        self._diag: List[str] = []
+        self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
+        self._misses: Dict[str, int] = {}
+        self._levels: Dict[str, int] = {}           # MAC -> last known battery level
+
+    def _query(self) -> Optional[str]:
+        """Raw JSON from PowerShell, or None on failure."""
+        try:
+            flags = 0x08000000  # CREATE_NO_WINDOW
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                 "-Command", PS_SCRIPT],
+                stdin=subprocess.DEVNULL,       # pythonw has no console: pass an explicit empty stdin
+                capture_output=True, timeout=60, creationflags=flags)
+            raw = proc.stdout.decode("utf-8", errors="replace").strip().lstrip("\ufeff")
+            err = proc.stderr.decode("utf-8", errors="replace").strip()
+            if err:
+                self._diag.append(f"[Bluetooth] stderr: {err[:300]}")
+            if proc.returncode != 0:
+                self._diag.append(f"[Bluetooth] PowerShell exited with code {proc.returncode}")
+            self._diag.append(f"[Bluetooth] PowerShell: {len(raw)} bytes of output")
+            return raw
+        except subprocess.TimeoutExpired:
+            self._diag.append("[Bluetooth] FAILURE: PowerShell did not answer within 60 s")
+        except Exception as e:
+            self._diag.append(f"[Bluetooth] FAILURE: {e}")
+        return None
+
+    def poll(self) -> List[DeviceStatus]:
+        self._diag = []
+        if sys.platform != "win32":
+            return []
+        raw = self._query()
+        fresh = self.parse(raw) if raw is not None else None
+        result = self.merge(fresh)
+        for line in self._diag:          # every poll goes to the log in detail, to investigate disappearing icons
+            log.info(line)
+        return result
+
+    def merge(self, fresh: Optional[List[DeviceStatus]]) -> List[DeviceStatus]:
+        """Smoothing: a missing device is kept for MISS_LIMIT-1 more polls."""
+        if fresh is None:
+            self._diag.append("[Bluetooth] poll failed, keeping the previous icons")
+            fresh = []
+        now = {st.key: st for st in fresh}
+        for key, st in now.items():
+            self._shown[key] = st
+            self._misses[key] = 0
+        out = list(now.values())
+        for key in list(self._shown):
+            if key in now:
+                continue
+            self._misses[key] = self._misses.get(key, 0) + 1
+            if self._misses[key] < MISS_LIMIT:
+                self._diag.append(f"[Bluetooth] {self._shown[key].name}: missing from the reply, "
+                                  f"keeping the icon (miss {self._misses[key]}/{MISS_LIMIT})")
+                out.append(self._shown[key])
+            else:
+                self._diag.append(f"[Bluetooth] {self._shown[key].name}: removing the icon "
+                                  f"({self._misses[key]} misses in a row)")
+                self._shown.pop(key, None)
+                self._misses.pop(key, None)
+        return out
+
+    def parse(self, raw: str) -> Optional[List[DeviceStatus]]:
+        """None - unusable output (treated as a failure), [] - there really are no devices."""
+        if not raw:
+            self._diag.append("[Bluetooth] FAILURE: empty PowerShell output")
+            return None
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            self._diag.append(f"[Bluetooth] FAILURE: could not parse the output: {raw[:300]}")
+            return None
+        return group_devices(data, self._diag, self._levels)
+
+    def diagnostics(self) -> List[str]:
+        return list(self._diag)

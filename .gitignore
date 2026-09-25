@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller (build_exe.bat)
+build/
+dist/
+*.spec
+
+# Diagnostics and logs (written to %APPDATA%\HaloBattery, but just in case)
+*.log
+diagnostics.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
