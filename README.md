@@ -10,21 +10,34 @@ While charging, the arc slowly "breathes":
 
 ## Supported devices
 
-| Device | How the battery is read |
-|---|---|
-| Razer BlackShark V2 Pro 2023 (receiver 1532:0555) | The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging) |
-| Razer BlackShark V2 Pro 2020 and wireless Razer mice | The 90-byte Razer HID command: class 0x07, command 0x80 (battery), 0x84 (charging). For the 2020 headset the "PA" protocol is tried as a fallback |
-| WLmouse Beast X / Beast X Max / Mini Pro | Feature request `02 02 00 83` to the receiver (VID 0x36A7); if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon |
-| Bluetooth devices (enable in the menu) | The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices connected right now are shown: the link state comes from WinRT (`BluetoothDevice.ConnectionStatus`, queried by MAC address, the same source as Windows Settings); paired-only devices are hidden. If Windows skips the level on a poll, the last known value is shown. Refreshed once a minute |
+Tested on real hardware:
+
+| Device | Connection | How the battery is read |
+|---|---|---|
+| Razer BlackShark V2 Pro (2023) | 2.4 GHz receiver (1532:0555) | The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging) |
+| WLmouse Beast X Max | 8K receiver (36A7:A880) and USB cable | Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon |
+| Bluetooth devices, tested on the 1MORE SonoFlow headset | Bluetooth (enable in the menu) | The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices connected right now are shown: the link state comes from WinRT (`BluetoothDevice.ConnectionStatus`, the same source as Windows Settings) |
+
+Support for other devices is not guaranteed. The code already includes protocols for some other Razer and WLmouse models and works with any Bluetooth device whose battery level Windows reports, but these have not been tested. New devices are added based on feedback and diagnostics logs: if yours is not detected or shows a wrong level, open an issue and attach the diagnostics report (see [Troubleshooting](#troubleshooting)).
 
 ## Installation
 
+### Option 1: ready-made .exe (recommended)
+
+1. Download `HaloBattery.exe` from the [Releases](../../releases/latest) page.
+2. Put it somewhere permanent, e.g. `C:\Tools\HaloBattery\HaloBattery.exe`, and run it.
+3. Right-click the tray icon → **Start with Windows**.
+
+No Python or other dependencies required. Windows SmartScreen may warn about an unrecognized app on first launch, because the file is not code-signed: click **More info → Run anyway**.
+
+### Option 2: from source
+
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
-2. Unpack the folder somewhere permanent, e.g. `C:\Tools\HaloBattery`.
+2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
 3. Run `install_and_run.bat`.
 4. Right-click the tray icon → **Start with Windows**.
 
-Want a single .exe without Python? Run `build_exe.bat`; the result is `dist\HaloBattery.exe`.
+To build the .exe yourself, run `build_exe.bat`; the result is `dist\HaloBattery.exe`.
 
 ## The icon
 
