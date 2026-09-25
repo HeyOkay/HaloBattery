@@ -541,6 +541,13 @@ def dump_hid() -> List[str]:
 
 def probe():
     """Console mode: a single poll with verbose output."""
+    # device names come from Windows and may contain any characters; a cp1252
+    # console would otherwise crash on them
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     app = App.__new__(App)
     app.cfg = load_config()
     app.providers = [RazerProvider(), WLmouseProvider()]

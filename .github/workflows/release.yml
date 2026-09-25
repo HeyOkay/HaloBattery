@@ -1,0 +1,65 @@
+name: Build and release
+
+# Push a tag like v1.8.0 and GitHub builds HaloBattery.exe on a Windows runner
+# and attaches it to the release for that tag (the release is created if it
+# does not exist yet). "Run workflow" on the Actions tab builds the .exe
+# without releasing it; download it from the run's artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Check that the tag matches VERSION
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          if ($ver -ne $tag) {
+            Write-Error "Tag v$tag does not match VERSION = `"$ver`" in halo_battery.pyw"
+            exit 1
+          }
+          Write-Host "Version $ver"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Smoke test
+        # imports every module and runs one full poll on the runner (no devices there)
+        run: python halo_battery.pyw --probe
+
+      - name: Build HaloBattery.exe
+        run: |
+          python tools/make_icon.py halo.ico
+          python -m PyInstaller --noconfirm --onefile --windowed --name HaloBattery --icon halo.ico --hidden-import hid --hidden-import pystray._win32 halo_battery.pyw
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: HaloBattery
+          path: dist/HaloBattery.exe
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/HaloBattery.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -18,3 +18,6 @@ diagnostics.txt
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Generated exe icon (tools/make_icon.py)
+halo.ico

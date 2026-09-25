@@ -39,6 +39,8 @@ No Python or other dependencies required. Windows SmartScreen may warn about an 
 
 To build the .exe yourself, run `build_exe.bat`; the result is `dist\HaloBattery.exe`.
 
+Releases are built automatically: pushing a tag like `v1.8.0` makes GitHub Actions build `HaloBattery.exe` on Windows and attach it to the release (see `.github/workflows/release.yml`).
+
 ## The icon
 
 The icon is a battery ring with the device pictogram in the middle. The arc fills clockwise from the top.
