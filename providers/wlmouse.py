@@ -27,6 +27,9 @@ RECEIVERS = {0xA887, 0xA868, 0xA880}
 
 QUERY = [0x00, 0x00, 0x02, 0x02, 0x00, 0x83]
 
+# how long a silent mouse keeps its (greyed-out) icon before it is hidden, s
+ASLEEP_KEEP = 300
+
 
 def parse_feature(resp) -> Tuple[Optional[int], Optional[bool]]:
     if not resp:
@@ -190,11 +193,14 @@ class WLmouseProvider(Provider):
             self._last[key] = (batt, chg, time.time())
             return [DeviceStatus(key, name, batt, chg, True, "wlmouse")]
 
-        # the mouse is asleep and the receiver is silent: show the last value for up to 30 min
+        # The receiver is silent. It cannot tell a switched-off mouse from one that
+        # fell asleep a few seconds after the last movement, so keep the last value
+        # (greyed out) for a while and then hide the icon; it comes back as soon as
+        # the mouse answers again.
         last = self._last.get(key)
-        if last and time.time() - last[2] < 1800:
+        if last and time.time() - last[2] < ASLEEP_KEEP:
             return [DeviceStatus(key, name, last[0], last[1], False, "wlmouse")]
-        return [DeviceStatus(key, name, None, False, False, "wlmouse")]
+        return []
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

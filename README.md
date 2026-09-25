@@ -16,9 +16,10 @@ Tested on real hardware:
 |---|---|---|
 | Razer BlackShark V2 Pro (2023) | 2.4 GHz receiver (1532:0555) | The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging) |
 | WLmouse Beast X Max | 8K receiver (36A7:A880) and USB cable | Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon |
+| GameSir G7 Pro | 2.4 GHz receiver (shows up as an Xbox controller) | Windows.Gaming.Input battery report: exact percentage and charging state. XInput is the fallback (four levels only) |
 | Bluetooth devices, tested on the 1MORE SonoFlow headset | Bluetooth (enable in the menu) | The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices connected right now are shown: the link state comes from WinRT (`BluetoothDevice.ConnectionStatus`, the same source as Windows Settings) |
 
-Support for other devices is not guaranteed. The code already includes protocols for some other Razer and WLmouse models and works with any Bluetooth device whose battery level Windows reports, but these have not been tested. New devices are added based on feedback and diagnostics logs: if yours is not detected or shows a wrong level, open an issue and attach the diagnostics report (see [Troubleshooting](#troubleshooting)).
+Support for other devices is not guaranteed. The code already includes protocols for some other Razer and WLmouse models, reads other Xbox-compatible controllers the same way as the GameSir G7 Pro and works with any Bluetooth device whose battery level Windows reports, but these have not been tested. New devices are added based on feedback and diagnostics logs: if yours is not detected or shows a wrong level, open an issue and attach the diagnostics report (see [Troubleshooting](#troubleshooting)).
 
 ## Installation
 
@@ -45,11 +46,11 @@ Releases are built automatically: pushing a tag like `v1.8.0` makes GitHub Actio
 
 The icon is a battery ring with the device pictogram in the middle. The arc fills clockwise from the top.
 
-- Centre: a headset, a mouse or the Bluetooth rune. The pictogram can be turned off in the menu.
+- Centre: a headset, a mouse, a gamepad or the Bluetooth rune. The pictogram can be turned off in the menu.
 - Normal arc uses the taskbar colour: white on a dark taskbar, black on a light one.
 - Amber arc: the level is close to the alert threshold. Red: at or below it.
 - Green arc that slowly "breathes": charging. The animation can be turned off in the menu, leaving a plain green arc.
-- Translucent icon without an arc: the device is asleep or off.
+- Translucent icon: the mouse is asleep; it keeps its last level for 5 minutes. A device that is switched off disappears from the tray and comes back when it is switched on.
 
 Hover over the icon to see the exact percentage. The low battery notification fires once and only again after the device has been charged.
 

@@ -2,8 +2,9 @@ name: Build and release
 
 # Push a tag like v1.8.0 and GitHub builds HaloBattery.exe on a Windows runner
 # and attaches it to the release for that tag (the release is created if it
-# does not exist yet). "Run workflow" on the Actions tab builds the .exe
-# without releasing it; download it from the run's artifacts.
+# does not exist yet). The release text is the matching section of CHANGELOG.md.
+# "Run workflow" on the Actions tab builds the .exe without releasing it;
+# download it from the run's artifacts.
 
 on:
   push:
@@ -56,10 +57,15 @@ jobs:
           name: HaloBattery
           path: dist/HaloBattery.exe
 
+      - name: Release notes from CHANGELOG.md
+        if: github.ref_type == 'tag'
+        # fails if CHANGELOG.md has no section for this version
+        run: python tools/release_notes.py ${{ github.ref_name }} --out release_notes.md
+
       - name: Attach to release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           files: dist/HaloBattery.exe
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          body_path: release_notes.md

@@ -219,8 +219,9 @@ class RazerProvider(Provider):
             status, level, charging = st
             if status == STATUS_OK:
                 out.append(DeviceStatus(key, name, level, bool(charging), True, "razer"))
-            elif status == STATUS_TIMEOUT:
-                out.append(DeviceStatus(key, name, None, False, False, "razer"))
+            # STATUS_TIMEOUT: the receiver is plugged in but the device is off. It is
+            # not reported, so its icon goes away like an unplugged receiver's
+            # (after two failed polls in a row, so a single dropout does not hide it)
         return out
 
     def _poll_group(self, gkey, ifaces, pref_tid):

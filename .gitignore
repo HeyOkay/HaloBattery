@@ -21,3 +21,6 @@ desktop.ini
 
 # Generated exe icon (tools/make_icon.py)
 halo.ico
+
+# release notes extracted by the workflow
+release_notes.md

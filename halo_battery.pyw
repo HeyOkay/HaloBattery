@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -51,7 +51,8 @@ import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 import icons  # noqa: E402
-from providers import BluetoothProvider, DeviceStatus, RazerProvider, WLmouseProvider  # noqa: E402
+from providers import (BluetoothProvider, DeviceStatus, RazerProvider,  # noqa: E402
+                       WLmouseProvider, XInputProvider)
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
@@ -171,13 +172,17 @@ def badge_for(st: DeviceStatus) -> str:
     n = st.name.lower()
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
+    if st.source == "xinput":
+        return "gamepad"
     if st.source == "bluetooth":
         return "bluetooth"
     return "mouse"
 
 
 def describe(st: DeviceStatus) -> str:
-    if st.level is None:
+    if st.approx:
+        state = st.approx          # XInput: coarse levels or "not reported yet", never a fake "NN%"
+    elif st.level is None:
         state = "no link (off or asleep)"
     else:
         state = f"{st.level}%"
@@ -250,7 +255,7 @@ class App:
     def __init__(self):
         self.cfg = load_config()
         self.light_taskbar = icons.taskbar_is_light()
-        self.providers = [RazerProvider(), WLmouseProvider()]
+        self.providers = [RazerProvider(), WLmouseProvider(), XInputProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
@@ -421,11 +426,13 @@ class App:
             ic.update(st)
             self.check_alert(ic, st)
 
-        # device gone (receiver unplugged): remove the icon after 2 misses in a row
+        # device gone (receiver unplugged): remove the icon after 2 misses in a row;
+        # XInput reports a switched-off controller reliably, so its icon goes at once
         for key in list(self.icons):
             if key not in seen:
                 self.missing[key] = self.missing.get(key, 0) + 1
-                if self.missing[key] >= 2:
+                limit = 1 if key.startswith("xinput:") else 2
+                if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
 
         if self.icons and self.placeholder:
@@ -447,13 +454,17 @@ class App:
         if st.level <= low and not self.alerted.get(st.key):
             self.alerted[st.key] = True
             try:
-                ic.icon.notify(f"{st.name}: {st.level}% left. Time to charge.", "Low battery")
+                left = "battery is low" if st.approx else f"{st.level}% left"
+                ic.icon.notify(f"{st.name}: {left}. Time to charge.", "Low battery")
             except Exception as e:
                 log.warning("notify: %s", e)
 
     def loop(self):
         while not self.stop_evt.is_set():
             self.light_taskbar = icons.taskbar_is_light()
+            # snapshot BEFORE polling: anything that changes while the poll runs
+            # (a controller switched off mid-poll) still triggers the next poll
+            sig = self.change_signature()
             results = self.poll_once()
             try:
                 self.apply(results)
@@ -465,7 +476,7 @@ class App:
                     self.write_diag(results)
                 except Exception:
                     log.exception("diag")
-            self.wait_next()
+            self.wait_next(sig)
             self.wake.clear()
 
     @staticmethod
@@ -479,16 +490,34 @@ class App:
         except Exception:
             return None
 
-    def wait_next(self):
-        """Wait for the next scheduled poll, but wake up early if the set of USB devices changes."""
-        deadline = time.time() + self.cfg["interval"]
-        sig = self.usb_signature()
+    def change_signature(self):
+        """Cheap snapshot of what is connected: HID devices (receivers, cables)
+        plus XInput controller slots (a controller switched on behind a receiver
+        that stays plugged in does not change the HID list)."""
+        xs = None
+        for p in self.providers:
+            if isinstance(p, XInputProvider):
+                try:
+                    xs = p.connected_slots()
+                except Exception:
+                    xs = None
+        return (self.usb_signature(), xs)
+
+    def wait_next(self, sig=None):
+        """Wait for the next scheduled poll, but wake up early when a device is
+        plugged in, unplugged, switched on or off."""
+        interval = self.cfg["interval"]
+        if any(getattr(p, "pending", False) for p in self.providers):
+            interval = min(interval, 3)   # a new controller has no battery info yet: re-check soon
+        deadline = time.time() + interval
+        if sig is None:
+            sig = self.change_signature()
         while not self.stop_evt.is_set():
             left = deadline - time.time()
             if left <= 0 or self.wake.wait(min(2.5, left)):
                 return
-            now = self.usb_signature()
-            if sig is not None and now is not None and now != sig:
+            now = self.change_signature()
+            if now != sig:
                 time.sleep(1.0)          # give Windows time to finish setting up the device
                 return
 
@@ -550,7 +579,7 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = [RazerProvider(), WLmouseProvider()]
+    app.providers = [RazerProvider(), WLmouseProvider(), XInputProvider()]
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:

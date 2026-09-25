@@ -1,7 +1,7 @@
 """Tray icon rendering: a battery ring with a device pictogram in the middle.
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
-The centre shows the device silhouette: headset, mouse or the Bluetooth rune.
+The centre shows the device silhouette: headset, mouse, gamepad or the Bluetooth rune.
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
 amber, at or below the threshold it is red, and while charging the arc is
@@ -26,8 +26,8 @@ GREEN = (16, 196, 80)
 CLEAR = (0, 0, 0, 0)
 
 # device kind aliases (single letters are accepted too)
-KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth",
-         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth"}
+KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad",
+         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad"}
 
 
 def taskbar_is_light() -> bool:
@@ -83,8 +83,45 @@ def _bluetooth(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     d.line([(_r(x), _r(y)) for x, y in pts], fill=col, width=_r(s * 0.22), joint="curve")
 
 
+# Right half of the controller outline, clockwise from the top centre, in a
+# design grid about 40 units wide (x right, y down). Mirrored for the left half
+# and drawn as one smooth closed curve, so the sides have no bumps.
+_PAD_HALF = [(0, -9.4), (5, -10.2), (10, -11.2), (14.6, -10.8), (18.2, -8.2), (19.8, -3.8),
+             (20.2, 2.2), (19.6, 8.8), (17.6, 14.0), (14.2, 15.8), (11.0, 14.0), (8.6, 9.0),
+             (5.0, 4.4), (0, 3.6)]
+_PAD_STICK = (8.8, -3.0, 3.1)          # x (mirrored), y, radius: symmetric sticks
+
+
+def _smooth_closed(pts, steps: int = 12):
+    """Catmull-Rom spline through a closed list of points."""
+    out, n = [], len(pts)
+    for i in range(n):
+        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]
+        for j in range(steps):
+            t = j / steps
+            t2, t3 = t * t, t * t * t
+            out.append(tuple(
+                0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t
+                       + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2
+                       + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3)
+                for c in (0, 1)))
+    return out
+
+
+def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """Xbox controller silhouette: flat top over the bumpers, long grips and an
+    arch between them. Only the two sticks are cut out, placed symmetrically."""
+    k = s / 18.0
+    loop = _PAD_HALF + [(-x, y) for x, y in reversed(_PAD_HALF[1:-1])]
+    d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
+    sx, sy, sr = _PAD_STICK
+    for side in (-1, 1):
+        x, y, r = cx + side * sx * k, cy + sy * k, sr * k
+        d.ellipse((_r(x - r), _r(y - r), _r(x + r), _r(y + r)), fill=CLEAR)
+
+
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
-          "bluetooth": (_bluetooth, 0, 0, 18)}
+          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, -2.5, 18.4)}
 
 
 # ---------------------------------------------------------------- icon
