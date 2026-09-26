@@ -71,6 +71,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   behaviour is gated so a switched-off headset still loses its icon.
 
 ### Fixed
+- Razer mice that answer a battery request with somebody else's packet first are no
+  longer written off as "off or asleep". Razer Synapse polls LED state on the same
+  collection and its replies carry the same status byte as the battery reply, so the
+  first packet could belong to a different command (seen on a DeathAdder V2 Pro in
+  #3). The reply is now read on - bounded by the same deadline - until the answer to
+  the request arrives, and a packet that is not that answer is never turned into a
+  level, so a device that never answers still shows nothing rather than a number.
 - After a device went missing (e.g. a Razer headset switched off while its receiver
   stays plugged in), all devices were polled every 3-4 seconds for as long as the app
   ran, instead of at the poll interval: the quick re-check that confirms a disconnect
