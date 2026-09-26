@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.9.1"
+VERSION = "1.10.0"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -51,6 +51,7 @@ import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 import icons  # noqa: E402
+import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (BluetoothProvider, DeviceStatus, RazerProvider,  # noqa: E402
                        WLmouseProvider, XInputProvider)
@@ -66,6 +67,9 @@ DEFAULTS = {
     "bluetooth": False,
     "badges": True,      # device pictogram inside the ring
     "animation": True,   # "breathing" arc while charging
+    # icon colour: "auto" follows the Windows theme, or the top menu bar while
+    # MyDockFinder is running; "windows" / "topbar" force one source (config file only)
+    "icon_theme": "auto",
 }
 
 
@@ -205,12 +209,17 @@ class DeviceIcon:
         self.status: Optional[DeviceStatus] = None
         self.frames: Optional[list] = None      # "breathing" frames while charging
         self._state = None                      # to avoid redrawing when nothing changed
+        self._images: Dict[tuple, object] = {}  # state -> image or frames, both colours
         self.icon = pystray.Icon(f"{APP_NAME}_{abs(hash(key))}",
-                                 icons.render(None, False, False), APP_TITLE, app.build_menu(self))
+                                 icons.render(None, False, False, light_taskbar=app.light_taskbar), APP_TITLE, app.build_menu(self))
         self.thread = threading.Thread(target=self.icon.run, daemon=True)
         self.thread.start()
 
     def update(self, st: DeviceStatus) -> None:
+        with self.app.lock:
+            self._update(st)
+
+    def _update(self, st: DeviceStatus) -> None:
         self.status = st
         badge = badge_for(st) if self.app.cfg["badges"] else ""
         animate = (self.app.cfg["animation"] and st.charging and st.online
@@ -219,14 +228,13 @@ class DeviceIcon:
                  self.app.light_taskbar, badge, animate)
         if state != self._state:
             self._state = state
+            art = self._art(state)
             if animate:
-                self.frames = icons.charging_frames(st.level, st.online, self.app.cfg["low"],
-                                                    self.app.light_taskbar, badge)
-                self.icon.icon = self.frames[self.app.anim_tick % len(self.frames)]
+                self.frames = art
+                self.icon.icon = art[self.app.anim_tick % len(art)]
             else:
                 self.frames = None
-                self.icon.icon = icons.render(st.level, st.charging, st.online, self.app.cfg["low"],
-                                              self.app.light_taskbar, badge)
+                self.icon.icon = art
         title = describe(st)
         # the tray tooltip is limited to 127 characters
         if self.icon.title != title[:127]:
@@ -237,13 +245,29 @@ class DeviceIcon:
             except Exception:
                 pass
 
+    def _art(self, state: tuple):
+        """The image (or the charging frames) for a state. The same state in the
+        other colour is drawn at the same time, so when the bar colour flips the
+        icon switches without rendering anything."""
+        if state not in self._images:
+            self._images.clear()
+            level, charging, online, low, light, badge, animate = state
+            for lt in (light, not light):
+                if animate:
+                    art = icons.charging_frames(level, online, low, lt, badge)
+                else:
+                    art = icons.render(level, charging, online, low, lt, badge)
+                self._images[(level, charging, online, low, lt, badge, animate)] = art
+        return self._images[state]
+
     def tick(self, i: int) -> None:
-        frames = self.frames
-        if frames:
-            try:
-                self.icon.icon = frames[i % len(frames)]
-            except Exception:
-                pass
+        with self.app.lock:
+            frames = self.frames
+            if frames:
+                try:
+                    self.icon.icon = frames[i % len(frames)]
+                except Exception:
+                    pass
 
     def stop(self) -> None:
         self.frames = None
@@ -256,12 +280,15 @@ class DeviceIcon:
 class App:
     def __init__(self):
         self.cfg = load_config()
-        self.light_taskbar = icons.taskbar_is_light()
+        self.light_taskbar = False
+        self.theme_evt = threading.Event()   # "re-check the icon colour now"
+        self.win_events: Optional[winevents.WindowEventWatcher] = None
+        self.light_taskbar = self.compute_light()
         self.providers = [RazerProvider(), WLmouseProvider(), XInputProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.wake = threading.Event()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
@@ -338,6 +365,83 @@ class App:
             Item(f"Exit (v{VERSION})", lambda i, it: self.quit()),
         )
 
+    # ---------------- icon colour
+    def compute_light(self) -> bool:
+        """True when the icons should be drawn for a light bar (black icons).
+        With the standard Windows shell this is the Windows theme, as before.
+        MyDockFinder draws its own macOS-style menu bar and switches it between
+        light and dark by the wallpaper or the full-screen app, so while it is
+        running the icons follow what is on screen at the top instead."""
+        mode = self.cfg.get("icon_theme", "auto")
+        if mode == "auto":
+            mode = "topbar" if icons.mydockfinder_running() else "windows"
+        if mode == "topbar":
+            res = icons.top_bar_is_light(self.light_taskbar)
+            return self.light_taskbar if res is None else res
+        return icons.taskbar_is_light()
+
+    def refresh_theme(self) -> None:
+        light = self.compute_light()
+        if light == self.light_taskbar:
+            return
+        self.light_taskbar = light
+        for ic in list(self.icons.values()):
+            if ic.status is not None:
+                ic.update(ic.status)            # the state key includes the colour -> redraw
+        if self.placeholder is not None:
+            self.placeholder.icon = icons.render(None, False, False, light_taskbar=light)
+        log.info("icon colour: %s (%s%s)", "black" if light else "white", self.cfg.get("icon_theme"),
+                 ", MyDockFinder" if icons.mydockfinder_running() else "")
+
+    def follows_top_bar(self) -> bool:
+        mode = self.cfg.get("icon_theme", "auto")
+        return mode == "topbar" or (mode == "auto" and icons.mydockfinder_running())
+
+    def theme_loop(self):
+        """Keep the icon colour in step with the bar.
+
+        With the standard Windows shell: a registry read every 1.5 s, as before.
+
+        While MyDockFinder is running: the colour is re-checked the moment a
+        window is maximized, restored, snapped, moved, minimized, closed or
+        brought to the front (system window events, the same ones MyDockFinder
+        reacts to), and again 0.1, 0.3 and 0.6 s later, when the window
+        animation has settled. A poll every 0.25 s covers everything else
+        (a new wallpaper, a page turning dark inside a maximized window).
+        One check is five window lookups under the bar plus, when windows
+        cover it, a small screen sample: a few milliseconds."""
+        checks: List[float] = []        # scheduled re-checks (time.monotonic())
+        last = 0.0
+        while True:
+            fast = self.follows_top_bar()
+            if fast and self.win_events is None:
+                self.win_events = winevents.WindowEventWatcher(self.theme_evt)
+                log.info("window events: %s", "on" if self.win_events.start() else "unavailable")
+            now = time.monotonic()
+            if checks:
+                timeout = max(0.0, checks[0] - now)
+            else:
+                timeout = 0.25 if fast else 1.5
+            hit = self.theme_evt.wait(timeout)
+            if self.stop_evt.is_set():
+                return
+            now = time.monotonic()
+            if hit:
+                self.theme_evt.clear()
+                if not fast:
+                    continue
+                # right away (at most every 30 ms while a window is being dragged),
+                # then once the maximize / restore animation has finished
+                checks = sorted({max(now, last + 0.03), now + 0.1, now + 0.3, now + 0.6})
+                if checks[0] > now:
+                    continue
+            checks = [t for t in checks if t > now + 0.005]
+            last = now
+            try:
+                self.refresh_theme()
+            except Exception:
+                log.exception("theme")
+
     # ---------------- diagnostics
     def request_diag(self):
         self.diag_requested.set()
@@ -358,6 +462,17 @@ class App:
                  f"Python {sys.version.split()[0]}  {sys.platform}", ""]
         lines.append("=== Poll result ===")
         lines += [describe(s) + f"   [{s.key}]" for s in results] or ["(nothing)"]
+        lines.append("")
+        lines.append("=== Icon colour ===")
+        lines.append(f"mode: {self.cfg.get('icon_theme', 'auto')}, icons drawn for a "
+                     f"{'light' if self.light_taskbar else 'dark'} bar")
+        we = self.win_events
+        lines.append("window events: " + ("not used" if we is None else
+                     f"{'on' if we.running() else 'unavailable'}, {we.count} received"))
+        try:
+            lines += icons.theme_report()
+        except Exception as e:
+            lines.append(f"(failed: {e})")
         lines.append("")
         lines.append("=== Protocol details ===")
         for p in self.providers + ([self.bt] if self.cfg["bluetooth"] else []):
@@ -466,7 +581,8 @@ class App:
             self.placeholder.stop()
             self.placeholder = None
         elif not self.icons and not self.placeholder:
-            self.placeholder = pystray.Icon(f"{APP_NAME}_idle", icons.render(None, False, False),
+            self.placeholder = pystray.Icon(f"{APP_NAME}_idle",
+                                            icons.render(None, False, False, light_taskbar=self.light_taskbar),
                                             f"{APP_TITLE}: no devices found",
                                             self.build_menu(None))
             threading.Thread(target=self.placeholder.run, daemon=True).start()
@@ -488,7 +604,6 @@ class App:
 
     def loop(self):
         while not self.stop_evt.is_set():
-            self.light_taskbar = icons.taskbar_is_light()
             # snapshot BEFORE polling: anything that changes while the poll runs
             # (a controller switched off mid-poll) still triggers the next poll
             sig = self.change_signature()
@@ -568,6 +683,9 @@ class App:
 
     def quit(self):
         self.stop_evt.set()
+        self.theme_evt.set()
+        if self.win_events is not None:
+            self.win_events.stop()
         self.wake.set()
         self.bt_wake.set()
         if self.bt_watch is not None:
@@ -581,6 +699,7 @@ class App:
         log.info("start v%s", VERSION)
         worker = threading.Thread(target=self.loop, daemon=True)
         worker.start()
+        threading.Thread(target=self.theme_loop, daemon=True).start()
         threading.Thread(target=self.anim_loop, daemon=True).start()
         threading.Thread(target=self.bt_loop, daemon=True).start()
         try:
