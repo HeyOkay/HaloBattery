@@ -4,9 +4,17 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.11.0] - 2026-09-27
 
 ### Added
+- **Update check**: once a day the app asks GitHub for the latest release. When a newer
+  one is out, a notification says so once, and the tray menu gets a "Download vX.Y.Z…"
+  item that opens the release page. Nothing is downloaded or installed automatically,
+  and "Check for updates" in the menu turns it off (#14).
+- Sony DualShock 4 and DualSense / DualSense Edge over USB and Bluetooth, read straight
+  from the controller's HID input report (the same source as the Linux drivers and
+  DS4Windows): exact level and charging state. A controller on the cable and on
+  Bluetooth at once keeps one icon. Thanks to @dendr203 (#7).
 - HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 - SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
@@ -87,6 +95,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   shoulders, straight sides down to the grips, and the two sticks in the Xbox layout
   (left stick high, right stick low and nearer the middle). Nothing else is cut out,
   so it stays readable at 16 px.
+- PlayStation controllers get a DualShock 4 pictogram in the same style: the outline
+  with its stepped shoulder buttons and long grips, the touchpad and the two symmetric
+  sticks cut out. The DualSense uses it too for now.
+- HyperX: when the dongle has no 0xFF90:0x0303 collection, nothing is written to any
+  other collection; the diagnostics list what the dongle offers instead.
 
 ### Fixed
 - Razer mice that answer a battery request with somebody else's packet first are no

@@ -43,7 +43,7 @@ Two limitations of the Maxwell support are worth stating rather than leaving to 
 2. Extract it somewhere permanent, e.g. `C:\Tools`, so you get `C:\Tools\HaloBattery\HaloBattery.exe`, and run `HaloBattery.exe`. Keep the whole `HaloBattery` folder together: the .exe needs the `_internal` folder next to it.
 3. Right-click the tray icon → **Start with Windows**.
 
-To update, close the app (tray menu → **Exit**) and replace the folder with the new one. If you used the old single-file `HaloBattery.exe`, delete it; **Start with Windows** follows the new copy automatically the first time you run it.
+The app checks GitHub for a new release once a day and, when there is one, adds **Download vX.Y.Z…** to the tray menu (it only opens the release page; nothing is installed for you). To update, close the app (tray menu → **Exit**) and replace the folder with the new one. If you used the old single-file `HaloBattery.exe`, delete it; **Start with Windows** follows the new copy automatically the first time you run it.
 
 No Python or other dependencies required. Windows SmartScreen may warn about an unrecognized app on first launch, because the file is not code-signed: click **More info → Run anyway**. Some antivirus programs flag unsigned Python apps by mistake (typically a generic machine-learning detection with `!ml` in its name, such as `Trojan:Win32/Sabsik.TE.A!ml`). The release is built by GitHub Actions straight from this repository, and the build logs are public; if in doubt, run it from source (Option 2).
 
@@ -76,6 +76,7 @@ Hover over the icon to see the exact percentage. The low battery notification fi
 - **Windows Bluetooth devices**, **Device pictogram**, **Charging animation**
 - **Icon colour**: Automatic (the Windows theme, or MyDockFinder's menu bar while it is running), White or Black
 - **Start with Windows** (per-user registry key, no admin rights needed)
+- **Check for updates**: once a day, on by default; a notification and a **Download vX.Y.Z…** item appear when a new release is out
 - **Diagnostics…**: writes a detailed report and opens it
 
 ## Troubleshooting

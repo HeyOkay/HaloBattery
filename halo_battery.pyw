@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -57,6 +57,7 @@ import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 import icons  # noqa: E402
+import updates  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AudezeProvider, BluetoothProvider, DeviceStatus, HyperXProvider,  # noqa: E402
@@ -78,6 +79,7 @@ DEFAULTS = {
     # MyDockFinder is running; "white" / "black" are fixed (tray menu > Icon colour);
     # "windows" / "topbar" force one automatic source (config file only)
     "icon_theme": "auto",
+    "update_check": True,   # once a day: is there a newer release on GitHub?
 }
 
 
@@ -408,6 +410,8 @@ class App:
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
         self.bt_watch: Optional[BluetoothWatcher] = None
         self.bt_watch_failed = False
+        self.update: Optional[tuple] = None   # (version, release page) when a newer one exists
+        self.update_wake = threading.Event()  # "check for updates now"
 
     # ---------------- menu
     def build_menu(self, owner: Optional[DeviceIcon]) -> Menu:
@@ -437,6 +441,13 @@ class App:
                 if key == "bluetooth":
                     self.bt_cache = []
                     self.bt_wake.set()
+                if key == "update_check":
+                    if self.cfg[key]:
+                        self.cfg["update_last"] = 0     # turned back on: check right away
+                        self.update_wake.set()
+                    else:
+                        self.update = None
+                        self.refresh_menus()
                 self.wake.set()
             return _f
 
@@ -459,8 +470,13 @@ class App:
         themes = [("auto", "Automatic"), ("white", "White"), ("black", "Black")]
         lows = [(0, "Off"), (10, "10%"), (15, "15%"), (20, "20%"), (25, "25%"), (30, "30%")]
 
+        def update_text(_item):
+            return f"Download v{self.update[0]}…" if self.update else "Download update…"
+
         return Menu(
             Item(header_text, None, enabled=False),
+            Item(update_text, lambda i, it: self.open_update(),
+                 visible=lambda it: self.update is not None),
             Menu.SEPARATOR,
             Item("Refresh now", lambda i, it: self.wake.set(), default=True),
             Item("Poll interval", Menu(*[
@@ -480,6 +496,8 @@ class App:
                 for m, t in themes])),
             Item("Start with Windows", toggle_autostart,
                  checked=lambda it: autostart_enabled()),
+            Item("Check for updates", toggle("update_check"),
+                 checked=lambda it: self.cfg.get("update_check", True)),
             Menu.SEPARATOR,
             Item("Diagnostics…", lambda i, it: self.request_diag()),
             Item(f"Exit (v{VERSION})", lambda i, it: self.quit()),
@@ -814,8 +832,75 @@ class App:
             for ic in list(self.icons.values()):
                 ic.tick(self.anim_tick)
 
+    # ---------------- update check
+    def refresh_menus(self) -> None:
+        """Rebuild the tray menus, so an item that appeared or went away shows up."""
+        targets = [ic.icon for ic in list(self.icons.values())]
+        if self.placeholder is not None:
+            targets.append(self.placeholder)
+        for icon in targets:
+            try:
+                icon.update_menu()
+            except Exception:
+                pass
+
+    def notify_any(self, text: str, title: str) -> None:
+        """A tray notification from whichever icon is there."""
+        icon = next((ic.icon for ic in list(self.icons.values())), None) or self.placeholder
+        if icon is not None:
+            try:
+                icon.notify(text, title)
+            except Exception as e:
+                log.warning("notify: %s", e)
+
+    def open_update(self) -> None:
+        url = self.update[1] if self.update else updates.RELEASES_URL
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception as e:
+            log.warning("open %s: %s", url, e)
+
+    def update_loop(self):
+        """Once a day ask GitHub for the latest release; nothing is downloaded or
+        installed, the menu only offers the release page."""
+        # what the last check found is shown right away, without waiting for the network
+        seen = self.cfg.get("update_latest", "")
+        if self.cfg.get("update_check", True) and updates.is_newer(seen, VERSION):
+            self.update = (seen, self.cfg.get("update_url") or updates.RELEASES_URL)
+        if self.stop_evt.wait(30):               # let the icons come up first
+            return
+        while not self.stop_evt.is_set():
+            last = float(self.cfg.get("update_last", 0) or 0)
+            if self.cfg.get("update_check", True) and time.time() - last >= updates.CHECK_EVERY:
+                self.check_update()
+            self.update_wake.wait(3600)
+            self.update_wake.clear()
+
+    def check_update(self) -> None:
+        try:
+            latest, url = updates.fetch_latest(VERSION)
+        except Exception as e:
+            log.info("update check failed: %s", e)   # offline, rate limit: try again later
+            self.cfg["update_last"] = time.time() - updates.CHECK_EVERY + 3 * 3600
+            save_config(self.cfg)
+            return
+        self.cfg.update(update_last=time.time(), update_latest=latest, update_url=url)
+        if updates.is_newer(latest, VERSION):
+            log.info("update available: v%s (running v%s)", latest, VERSION)
+            self.update = (latest, url)
+            self.refresh_menus()
+            if self.cfg.get("update_notified") != latest:
+                self.cfg["update_notified"] = latest
+                self.notify_any(f"Version {latest} is available. Right-click a battery icon "
+                                f"and choose \"Download v{latest}…\".", f"{APP_TITLE} update")
+        else:
+            self.update = None
+        save_config(self.cfg)
+
     def quit(self):
         self.stop_evt.set()
+        self.update_wake.set()
         self.theme_evt.set()
         if self.win_events is not None:
             self.win_events.stop()
@@ -835,6 +920,7 @@ class App:
         threading.Thread(target=self.theme_loop, daemon=True).start()
         threading.Thread(target=self.anim_loop, daemon=True).start()
         threading.Thread(target=self.bt_loop, daemon=True).start()
+        threading.Thread(target=self.update_loop, daemon=True).start()
         try:
             while not self.stop_evt.is_set():
                 self.stop_evt.wait(1)

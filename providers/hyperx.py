@@ -21,7 +21,10 @@ from __future__ import annotations
 import time
 from typing import List, Optional
 
-import hid
+try:
+    import hid
+except ImportError:              # pragma: no cover
+    hid = None
 
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
@@ -74,14 +77,15 @@ class HyperXProvider(Provider):
         self._diag: List[str] = []
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
-        """The battery collection by usage page/usage, falling back to the first
-        entry so that a probe still shows what the dongle offers."""
+        """The battery collection by usage page/usage. Without it nothing is written:
+        the other collections on that interface are not the battery endpoint, so the
+        probe only lists what the dongle offers."""
         for d in infos:
             if (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE):
                 return d
-        self._diag.append(f"  no usage {USAGE_PAGE:04x}:{USAGE:04x} collection; "
-                          f"falling back to the first of {len(infos)}")
-        return infos[0] if infos else None
+        offered = ", ".join(f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}" for d in infos)
+        self._diag.append(f"  no usage {USAGE_PAGE:04x}:{USAGE:04x} collection (found: {offered})")
+        return None
 
     def _query(self, path: bytes, cmd: int) -> Optional[List[int]]:
         dev = hid.device()
@@ -110,6 +114,8 @@ class HyperXProvider(Provider):
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
+        if hid is None:
+            return []
         try:
             infos = hidlist.enumerate(HYPERX_VID)
         except Exception as e:  # pragma: no cover

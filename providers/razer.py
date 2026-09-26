@@ -171,7 +171,10 @@ class RazerProvider(Provider):
             # "status=02 tid'=1f cmd=0f:03" and got written off as "off or asleep" - see
             # issue #3. Whether the real reply is behind that packet in the queue is not
             # verified on that hardware; reading on is strictly better than stopping.
-            if time.time() < deadline and (status == STATUS_BUSY or value is None):
+            # (only a success status can hide somebody else's packet: 04 asleep and 05
+            # not supported are final answers and come back right away)
+            if time.time() < deadline and (status == STATUS_BUSY
+                                           or (status == STATUS_OK and value is None)):
                 time.sleep(0.08)
                 continue
             return status, value
