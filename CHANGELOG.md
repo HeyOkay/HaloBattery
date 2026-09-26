@@ -35,8 +35,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
   unchanged while Razer Synapse runs.
 - MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
-  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
-  command 0x06, every payload byte inverted, which returns
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x11 (the shorter
+  report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns
   `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
   The request has to be repeated for every read, and the receiver only relays a real
   value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
@@ -54,6 +54,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `AA 30` header is relied on, since byte 3 differs between dongle (`0x0b`) and cable (`0x3c`).
   A level out of range is still refused rather than reported as a made-up number. It gets an icon
   of its own, so it and an M7 Ultra on the same machine do not fight over one.
+- MCHOSE A7 V2 Ultra (3837:100B), which is the same protocol as the M7 Ultra on MCHOSE's
+  newer vendor id: the reference driver treats both identically and matches on the vendor
+  id plus the vendor collection rather than by model list, which is what this provider
+  does too. Its status read is documented on the shorter 0x11 report, so both report ids
+  are tried, and a model the name table does not know is named from the receiver's own
+  product string. **Unverified** - from the diagnostics in #4, no device here - and it
+  gets an icon of its own, so it and an M7 Ultra on one machine stay two icons.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for
@@ -73,8 +80,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
   instead of losing the icon after two failed polls (`STATUS_TIMEOUT`, "receiver
   present, device not responding"). That is what the README already described; the
   behaviour is gated so a switched-off headset still loses its icon.
+- New controller pictogram for Xbox-compatible controllers (XInput and
+  Windows.Gaming.Input), traced from the Xbox controller glyph: flat top, rounded
+  shoulders, straight sides down to the grips, and the two sticks in the Xbox layout
+  (left stick high, right stick low and nearer the middle). Nothing else is cut out,
+  so it stays readable at 16 px.
 
 ### Fixed
+- Razer mice that answer a battery request with somebody else's packet first are no
+  longer written off as "off or asleep". Razer Synapse polls LED state on the same
+  collection and its replies carry the same status byte as the battery reply, so the
+  first packet could belong to a different command (seen on a DeathAdder V2 Pro in
+  #3). The reply is now read on - bounded by the same deadline - until the answer to
+  the request arrives, and a packet that is not that answer is never turned into a
+  level, so a device that never answers still shows nothing rather than a number.
 - After a device went missing (e.g. a Razer headset switched off while its receiver
   stays plugged in), all devices were polled every 3-4 seconds for as long as the app
   ran, instead of at the poll interval: the quick re-check that confirms a disconnect
@@ -89,7 +108,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Bluetooth copy is dropped and the HID reading - the device's own protocol, carrying
   the charging state - is kept. A device only Bluetooth can see keeps its Bluetooth
   icon, which is how a Maxwell used purely over Bluetooth is covered at all: the vendor
-  collection the provider needs does not exist over Bluetooth.
+  collection the provider needs does not exist over Bluetooth. Game controllers are
+  left out of this: for a controller on Bluetooth, Windows' own value is still the one
+  shown, as in 1.10.1.
 - Audeze: a switched-off headset no longer pays for the battery packet that cannot be
   answered (1.5 s per poll instead of 1.7 s), and its failure block is written once per
   outage instead of every poll.
@@ -100,6 +121,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   linked, "Audeze Maxwell HID" with one. Nothing is reported while it says Dongle,
   so the icon leaves the tray the way the README says a switched-off device does,
   and the 1.5 s battery sequence is not sent at all.
+
 ## [1.10.1] - 2026-09-26
 
 ### Added

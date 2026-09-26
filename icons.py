@@ -84,13 +84,19 @@ def _bluetooth(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     d.line([(_r(x), _r(y)) for x, y in pts], fill=col, width=_r(s * 0.22), joint="curve")
 
 
-# Right half of the controller outline, clockwise from the top centre, in a
-# design grid about 40 units wide (x right, y down). Mirrored for the left half
-# and drawn as one smooth closed curve, so the sides have no bumps.
-_PAD_HALF = [(0, -9.4), (5, -10.2), (10, -11.2), (14.6, -10.8), (18.2, -8.2), (19.8, -3.8),
-             (20.2, 2.2), (19.6, 8.8), (17.6, 14.0), (14.2, 15.8), (11.0, 14.0), (8.6, 9.0),
-             (5.0, 4.4), (0, 3.6)]
-_PAD_STICK = (8.8, -3.0, 3.1)          # x (mirrored), y, radius: symmetric sticks
+# Right half of an Xbox controller outline, clockwise from the top centre, in a
+# design grid about 40 units wide (x right, y down), traced from the Xbox
+# controller glyph: flat top, rounded shoulders, straight sides flaring down to
+# the grips, and a wide flat-bottomed notch between them. Mirrored for the left
+# half and drawn as one smooth closed curve. Used for every Xbox-compatible
+# (XInput / Windows.Gaming.Input) controller.
+_PAD_HALF = [(0, -13.9), (5.5, -13.9), (9.3, -12.9), (12.8, -10.3), (15.2, -7.9), (16.3, -5.9),
+             (18.1, -0.3), (19.7, 4.8), (20.0, 7.6), (19.5, 10.7), (17.9, 12.8), (15.3, 14.0),
+             (14.5, 13.6), (9.0, 8.1), (6.0, 6.8), (0, 6.8)]
+# the two sticks where they sit on an Xbox pad: left stick high and to the side,
+# right stick lower and closer to the middle; nothing else is cut out
+_PAD_STICKS = [(-9.7, -6.1), (5.2, -0.3)]
+_PAD_STICK_R = 2.6
 
 
 def _smooth_closed(pts, steps: int = 12):
@@ -110,19 +116,18 @@ def _smooth_closed(pts, steps: int = 12):
 
 
 def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
-    """Xbox controller silhouette: flat top over the bumpers, long grips and an
-    arch between them. Only the two sticks are cut out, placed symmetrically."""
+    """Xbox controller silhouette with the two sticks cut out in the Xbox layout."""
     k = s / 18.0
     loop = _PAD_HALF + [(-x, y) for x, y in reversed(_PAD_HALF[1:-1])]
     d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
-    sx, sy, sr = _PAD_STICK
-    for side in (-1, 1):
-        x, y, r = cx + side * sx * k, cy + sy * k, sr * k
+    r = _PAD_STICK_R * k
+    for sx, sy in _PAD_STICKS:
+        x, y = cx + sx * k, cy + sy * k
         d.ellipse((_r(x - r), _r(y - r), _r(x + r), _r(y + r)), fill=CLEAR)
 
 
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
-          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, -2.5, 18.4)}
+          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, 0, 18.4)}
 
 
 # ---------------------------------------------------------------- icon
