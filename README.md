@@ -14,6 +14,7 @@ Tested on real hardware:
 
 | Device | Connection | How the battery is read |
 |---|---|---|
+| AirPods (Pro, Pro 2, 3, 2; AirPods Max untested) | Bluetooth LE, no pairing to the PC needed | AirPods give Windows no battery at all, so they are read from the "proximity pairing" BLE advertisement they broadcast (the packet an iPhone reads): model id at bytes 3-4, case level in the high nibble of byte 5, left and right in the nibbles of byte 6, lid and in-ear flags in byte 7, each nibble x10. The weaker bud is shown and charging follows the buds. Advertisements are public, so anything weaker than -70 dBm is ignored as somebody else's. Needs `bleak` from requirements.txt |
 | Razer BlackShark V2 Pro (2023) | 2.4 GHz receiver (1532:0555) | The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging) |
 | WLmouse Beast X Max | 8K receiver (36A7:A880) and USB cable | Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon |
 | Razer Basilisk V3 Pro, Razer Basilisk Ultimate (tested by users) | 2.4 GHz receiver | The standard Razer 90-byte feature report, as used by Synapse and OpenRazer: power class 0x07, commands 0x80 (battery) and 0x84 (charging) |

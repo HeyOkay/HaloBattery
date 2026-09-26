@@ -4,6 +4,24 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- AirPods over Bluetooth LE, with no driver and no vendor app: AirPods report no
+  battery to Windows at all, but they broadcast their levels in the "proximity
+  pairing" advertisement - the packet an iPhone reads. Offsets are the ones
+  AirPodsDesktop and RustPods use (model id at bytes 3-4, case battery in the high
+  nibble of byte 5, left and right in the two nibbles of byte 6, lid and in-ear
+  flags in byte 7, every nibble times ten). Checked against a live capture on
+  2026-09-26: an AirPods 3 advertising `07 19 01 13 20 2b 98 8f` decoded as left
+  90%, right 80%, case 20%. The icon shows the weaker bud, charging follows the
+  buds rather than the case, and an unknown nibble (0xF) is reported as unknown
+  instead of 150%. Advertisements are public, so anything weaker than -70 dBm is
+  ignored: a pair two rooms away measured -75 dBm here against -55 dBm for a pair
+  on the same desk. **New dependency**: reading advertisements needs `bleak`
+  (added to requirements.txt); without it this provider reports nothing and says
+  so in the diagnostics instead of breaking the poll (#40).
+
 ## [1.11.0] - 2026-09-27
 
 ### Added
