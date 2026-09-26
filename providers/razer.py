@@ -81,6 +81,11 @@ STATUS_BUSY = 0x01
 STATUS_TIMEOUT = 0x04     # receiver present, device not responding (off / asleep)
 STATUS_NOT_SUPPORTED = 0x05
 
+# How long a device that stopped answering keeps its last value, greyed out (the
+# translucent icon the README describes for a sleeping mouse), before the icon goes
+# away. Same value as the WLmouse provider uses.
+ASLEEP_KEEP = 300
+
 
 def build_request(transaction_id: int, cmd_class: int, cmd_id: int, size: int = 0x02) -> bytes:
     msg = bytearray(90)
@@ -131,6 +136,7 @@ class RazerProvider(Provider):
         self._dead: Dict[bytes, float] = {}   # interfaces known not to respond
         self._diag: List[str] = []
         self._failing: Dict[str, str] = {}    # key -> reason of the ongoing failure
+        self._last: Dict[str, Tuple[int, bool, float]] = {}   # last good level per device
 
     # ---- low level -------------------------------------------------------
     def _query(self, dev, tid: int, cmd_class: int, cmd_id: int) -> Tuple[Optional[int], Optional[int]]:
@@ -200,6 +206,21 @@ class RazerProvider(Provider):
             serial = d.get("serial_number") or ""
             groups.setdefault((pid, serial), []).append(d)
 
+        # Windows re-parents some collections: Razer Synapse creates RZVIRTUAL
+        # children for a mouse's extra buttons, and hidapi reports those with an
+        # empty serial and no strings. Grouped by serial they look like a second,
+        # identical device that can never answer, so every poll logs a "poll
+        # failed" line for a device that is fine (and if one ever did answer, the
+        # same mouse would get a second icon). Attach them to the real device of
+        # the same PID when there is exactly one.
+        named: Dict[int, List[str]] = {}
+        for pid, serial in groups:
+            if serial:
+                named.setdefault(pid, []).append(serial)
+        for (pid, serial) in list(groups):
+            if not serial and len(named.get(pid, [])) == 1:
+                groups[(pid, named[pid][0])] += groups.pop((pid, serial))
+
         out: List[DeviceStatus] = []
         for (pid, serial), ifaces in groups.items():
             name, pref_tid = KNOWN.get(pid, (None, None))
@@ -233,16 +254,26 @@ class RazerProvider(Provider):
                              name, reason)
                     for line in self._diag[diag_from:]:
                         log.info("%s", line)
+                # STATUS_TIMEOUT covers a switched-off device and one that fell asleep
+                # a few seconds after the last movement, and the receiver cannot tell
+                # them apart. Keep the last value (greyed out, the translucent icon
+                # the README describes) for a while and let the icon go away after
+                # that; it comes back as soon as the device answers again. The same
+                # thing the WLmouse provider does for a silent mouse.
+                #
+                # Headsets are left alone: the README says a switched-off headset
+                # disappears from the tray, and no Razer headset is on hand to test a
+                # sleeping one, so they keep exactly the behaviour they had before.
+                last = self._last.get(key)
+                if not is_headset and last and time.time() - last[2] < ASLEEP_KEEP:
+                    out.append(DeviceStatus(key, name, last[0], last[1], False, "razer"))
+                continue
             elif self._failing.pop(key, None) is not None:
                 log.info("[Razer] %s: answering again", name)
-            if st is None:
-                continue
             status, level, charging = st
             if status == STATUS_OK:
+                self._last[key] = (level, bool(charging), time.time())
                 out.append(DeviceStatus(key, name, level, bool(charging), True, "razer"))
-            # STATUS_TIMEOUT: the receiver is plugged in but the device is off. It is
-            # not reported, so its icon goes away like an unplugged receiver's
-            # (after two failed polls in a row, so a single dropout does not hide it)
         return out
 
     def _poll_group(self, gkey, ifaces, pref_tid):
@@ -254,9 +285,13 @@ class RazerProvider(Provider):
             self._cache.pop(gkey, None)
 
         # Probe order: vendor / main collection interfaces first, then the rest.
+        # Collections Windows re-parented (interface number -1) go last.
         def rank(d):
             up = d.get("usage_page", 0)
-            return (0 if up in (0x0001, 0xFF00) else 1, d.get("interface_number", 0))
+            iface = d.get("interface_number", 0)
+            if iface is None or iface < 0:
+                iface = 99
+            return (0 if up in (0x0001, 0xFF00) else 1, iface)
 
         tids = [pref_tid] if pref_tid else []
         tids += [t for t in TRANSACTION_IDS if t not in tids]
