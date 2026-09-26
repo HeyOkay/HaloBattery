@@ -14,6 +14,7 @@ Tested on real hardware:
 
 | Device | Connection | How the battery is read |
 |---|---|---|
+| Razer BlackShark V2 Pro (2020) | 2.4 GHz receiver (1532:0528) | 64-byte feature report `0xFF` on usage page `0xFF00`, request `FF 0A 00 FD 04 12 F1 02 05`. Reads the reported battery level and charging flag; tested on Windows on battery, while charging, switched off and reconnected. The USB charging cable (1532:052E) is skipped to keep one icon; the receiver must remain plugged in |
 | Razer BlackShark V2 Pro (2023) | 2.4 GHz receiver (1532:0555) | The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging) |
 | WLmouse Beast X Max | 8K receiver (36A7:A880) and USB cable | Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon |
 | Razer Basilisk V3 Pro, Razer Basilisk Ultimate (tested by users) | 2.4 GHz receiver | The standard Razer 90-byte feature report, as used by Synapse and OpenRazer: power class 0x07, commands 0x80 (battery) and 0x84 (charging) |
@@ -90,6 +91,8 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery`.
 ## Credits
 
 The WLmouse protocol was reverse-engineered by @len0c ([incconutwo/mouse-battery-tray](https://github.com/incconutwo/mouse-battery-tray), MIT). The MCHOSE protocol comes from the write-up by @alexfrih ([alexfrih/mchose-linux](https://github.com/alexfrih/mchose-linux), recovered from MCHOSE's own web driver), with the details this mouse forced noted in `providers/mchose.py`. The MCHOSE G7 protocol comes from @kek353's own monitor and the device dump they posted in [#8](https://github.com/HeyOkay/HaloBattery/issues/8). The BlackShark V2 Pro 2023 protocol comes from the OpenRazer driver ([PR #2862](https://github.com/openrazer/openrazer/pull/2862)). Razer PIDs and transaction IDs come from OpenRazer and [RazerBatteryTaskbar](https://github.com/Tekk-Know/RazerBatteryTaskbar).
+
+The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #1280](https://github.com/openrazer/openrazer/issues/1280) and [Modzeleczek/RazerNariBatteryLevel](https://github.com/Modzeleczek/RazerNariBatteryLevel).
 
 ## License
 

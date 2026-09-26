@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark, hidlist
+from . import blackshark, blackshark2020, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -240,11 +240,16 @@ class RazerProvider(Provider):
             key = f"razer:{pid:04x}:{serial}"
             diag_from = len(self._diag)
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
+            if pid == blackshark2020.CABLE_PID:
+                self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
+                continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
                 continue
             is_headset = pid in blackshark.PA_PIDS or "blackshark" in name.lower()
-            if pid in blackshark.PA_PIDS:
+            if pid == blackshark2020.PID:
+                st = self._poll_2020(ifaces)
+            elif pid in blackshark.PA_PIDS:
                 # 2023 headset: its own protocol first
                 st = self._poll_pa((pid, serial), ifaces)
                 if st is None:
@@ -331,6 +336,21 @@ class RazerProvider(Provider):
             if not answered:
                 self._dead[path] = now + 300   # leave this interface alone for 5 minutes
         return timeout_hit
+
+    def _poll_2020(self, ifaces):
+        """Only the 0xFF00 collection accepts the 2020 feature report."""
+        offline = None
+        for d in ifaces:
+            if not blackshark2020.is_candidate(d):
+                continue
+            self._diag.append(
+                f"  [2020] iface={d.get('interface_number')} usage=ff00:0001")
+            res, level, charging = blackshark2020.read_battery(d["path"], self._diag)
+            if res == "ok":
+                return STATUS_OK, level, charging
+            if res == "offline":
+                offline = (STATUS_TIMEOUT, None, None)
+        return offline
 
     def _poll_pa(self, gkey, ifaces):
         """BlackShark V2 Pro 2023: the "PA" protocol over output/input reports."""

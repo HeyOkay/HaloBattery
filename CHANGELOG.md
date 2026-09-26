@@ -7,6 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [1.11.0] - 2026-09-27
 
 ### Added
+- Razer BlackShark V2 Pro (2020, receiver 1532:0528): battery level and charging
+  state through its 64-byte feature report 0xFF. Uses its own protocol instead of
+  probing the generic Razer and 2023 PA protocols. Stale replies from a switched-off
+  headset are rejected; the charging cable (1532:052E) does not create another icon.
 - **Update check**: once a day the app asks GitHub for the latest release. When a newer
   one is out, a notification says so once, and the tray menu gets a "Download vX.Y.Z…"
   item that opens the release page. Nothing is downloaded or installed automatically,
