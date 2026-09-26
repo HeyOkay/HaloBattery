@@ -15,7 +15,7 @@ class DeviceStatus:
     level: Optional[int] = None  # 0..100, None = unknown
     charging: bool = False
     online: bool = True          # False = receiver present, but the device is asleep/off
-    source: str = ""             # razer / wlmouse / bluetooth / xinput
+    source: str = ""             # razer / wlmouse / logitech / steelseries / bluetooth / xinput
     approx: str = ""             # set when the device only reports coarse levels,
                                  # e.g. "about 55% (medium)"; shown instead of "NN%"
 

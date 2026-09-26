@@ -3,6 +3,8 @@
 Supported:
   * Razer (BlackShark V2 Pro headset, mice, etc.): directly over USB/HID, no Synapse
   * WLmouse (Beast X / Beast X Max / Mini Pro)
+  * Logitech (HID++ 2.0 mice and keyboards: Lightspeed / Unifying receivers, G HUB not needed)
+  * SteelSeries (Arctis Nova 7 headset, GG not needed)
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -53,11 +55,11 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 import icons  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (BluetoothProvider, DeviceStatus, RazerProvider,  # noqa: E402
-                       WLmouseProvider, XInputProvider)
+from providers import (BluetoothProvider, DeviceStatus, LogitechProvider, RazerProvider,  # noqa: E402
+                       SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
-HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
+HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "arctis", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
 
 DEFAULTS = {
@@ -284,7 +286,8 @@ class App:
         self.theme_evt = threading.Event()   # "re-check the icon colour now"
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
-        self.providers = [RazerProvider(), WLmouseProvider(), XInputProvider()]
+        self.providers = [RazerProvider(), WLmouseProvider(), LogitechProvider(),
+                          SteelSeriesProvider(), XInputProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
@@ -737,7 +740,8 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = [RazerProvider(), WLmouseProvider(), XInputProvider()]
+    app.providers = [RazerProvider(), WLmouseProvider(), LogitechProvider(),
+                     SteelSeriesProvider(), XInputProvider()]
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:
