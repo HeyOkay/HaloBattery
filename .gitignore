@@ -24,3 +24,6 @@ halo.ico
 
 # release notes extracted by the workflow
 release_notes.md
+
+# Generated version resource (tools/make_version.py)
+version_info.txt

@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.10.0"
+VERSION = "1.10.1"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -64,11 +64,12 @@ DEFAULTS = {
     "interval": 60,      # seconds between polls
     "low": 20,           # low battery notification threshold, %
     "notify": True,
-    "bluetooth": False,
+    "bluetooth": True,   # Windows Bluetooth devices
     "badges": True,      # device pictogram inside the ring
     "animation": True,   # "breathing" arc while charging
     # icon colour: "auto" follows the Windows theme, or the top menu bar while
-    # MyDockFinder is running; "windows" / "topbar" force one source (config file only)
+    # MyDockFinder is running; "white" / "black" are fixed (tray menu > Icon colour);
+    # "windows" / "topbar" force one automatic source (config file only)
     "icon_theme": "auto",
 }
 
@@ -165,6 +166,28 @@ def migrate_legacy_autostart() -> bool:
         return False
 
 
+def refresh_autostart() -> bool:
+    """If "Start with Windows" is on but points at another copy of the app
+    (e.g. the old single HaloBattery.exe after moving to the folder build),
+    point it at the copy that is running now. Only for the built .exe."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            current, _ = winreg.QueryValueEx(k, APP_NAME)
+    except OSError:
+        return False                         # autostart is off: leave it off
+    if str(current).strip().lower() == _launch_command().lower():
+        return False
+    try:
+        set_autostart(True)
+        return True
+    except OSError as e:
+        log.warning("autostart refresh: %s", e)
+        return False
+
+
 def single_instance() -> bool:
     if sys.platform != "win32":
         return True
@@ -175,6 +198,8 @@ def single_instance() -> bool:
 
 # ------------------------------------------------------------ formatting
 def badge_for(st: DeviceStatus) -> str:
+    if st.kind in ("headset", "mouse", "gamepad"):     # reported by the device itself
+        return st.kind
     n = st.name.lower()
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
@@ -183,6 +208,23 @@ def badge_for(st: DeviceStatus) -> str:
     if st.source == "bluetooth":
         return "bluetooth"
     return "mouse"
+
+
+GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")
+
+
+def dedupe_controllers(results: List[DeviceStatus], bt: List[DeviceStatus]) -> List[DeviceStatus]:
+    """A controller connected over Bluetooth is seen twice: by the controller
+    provider and as a Bluetooth device. Windows' own Bluetooth battery value is
+    the one shown in Settings, so the controller provider's entry is dropped."""
+    bt_pads = [s for s in bt if s.kind == "gamepad" or any(w in s.name.lower() for w in GAMEPAD_WORDS)]
+    if not bt_pads:
+        return results
+    out = [s for s in results if not (s.source == "xinput" and s.via == "bluetooth")]
+    for s in results:
+        if s not in out:
+            log.info("[XInput] %s is connected over Bluetooth and shown as a Bluetooth device", s.name)
+    return out
 
 
 def describe(st: DeviceStatus) -> str:
@@ -332,6 +374,14 @@ class App:
                 self.wake.set()
             return _f
 
+        def set_theme(mode):
+            def _f(icon, item):
+                self.cfg["icon_theme"] = mode
+                save_config(self.cfg)
+                self.refresh_theme()
+                self.theme_evt.set()
+            return _f
+
         def toggle_autostart(icon, item):
             try:
                 set_autostart(not autostart_enabled())
@@ -340,6 +390,7 @@ class App:
 
         intervals = [(15, "15 seconds"), (30, "30 seconds"), (60, "1 minute"),
                      (120, "2 minutes"), (300, "5 minutes")]
+        themes = [("auto", "Automatic"), ("white", "White"), ("black", "Black")]
         lows = [(0, "Off"), (10, "10%"), (15, "15%"), (20, "20%"), (25, "25%"), (30, "30%")]
 
         return Menu(
@@ -358,6 +409,9 @@ class App:
                  checked=lambda it: self.cfg["badges"]),
             Item("Charging animation", toggle("animation"),
                  checked=lambda it: self.cfg["animation"]),
+            Item("Icon colour", Menu(*[
+                Item(t, set_theme(m), checked=lambda it, m=m: self.cfg.get("icon_theme", "auto") == m, radio=True)
+                for m, t in themes])),
             Item("Start with Windows", toggle_autostart,
                  checked=lambda it: autostart_enabled()),
             Menu.SEPARATOR,
@@ -373,6 +427,8 @@ class App:
         light and dark by the wallpaper or the full-screen app, so while it is
         running the icons follow what is on screen at the top instead."""
         mode = self.cfg.get("icon_theme", "auto")
+        if mode in ("white", "black"):          # set by hand (e.g. a transparent taskbar)
+            return mode == "black"
         if mode == "auto":
             mode = "topbar" if icons.mydockfinder_running() else "windows"
         if mode == "topbar":
@@ -417,6 +473,9 @@ class App:
             if fast and self.win_events is None:
                 self.win_events = winevents.WindowEventWatcher(self.theme_evt)
                 log.info("window events: %s", "on" if self.win_events.start() else "unavailable")
+            elif not fast and self.win_events is not None:
+                self.win_events.stop()          # fixed colour chosen, or MyDockFinder closed
+                self.win_events = None
             now = time.monotonic()
             if checks:
                 timeout = max(0.0, checks[0] - now)
@@ -507,7 +566,8 @@ class App:
                 log.exception("provider %s", p.name)
         if self.cfg["bluetooth"]:
             # Bluetooth is polled in its own thread (bt_loop); only the cache is used here
-            results += list(self.bt_cache)
+            bt = list(self.bt_cache)
+            results = dedupe_controllers(results, bt) + bt
         return results
 
     def _bt_update(self, res: List[DeviceStatus]):
@@ -762,6 +822,8 @@ def main():
         log.info("settings migrated from %%APPDATA%%\\%s", LEGACY_NAME)
     if migrate_legacy_autostart():
         log.info("autostart entry migrated from %s", LEGACY_NAME)
+    elif refresh_autostart():
+        log.info("autostart entry now points at %s", sys.executable)
     App().run()
 
 

@@ -17,6 +17,7 @@ check every couple of seconds.
 from __future__ import annotations
 
 import ctypes
+import re
 import sys
 import time
 from typing import Dict, List, Optional
@@ -83,6 +84,21 @@ def load_xinput():
         except (OSError, AttributeError):
             continue
     return None
+
+
+# HID interfaces of Bluetooth devices: classic HID {00001124-...} or HID over
+# GATT {00001812-...}, with the vendor and product id in the path
+_BT_HID = re.compile(r"\{0000(?:1124|1812)-0000-1000-8000-00805f9b34fb\}[^#]*?vid&([0-9a-f]+)_pid&([0-9a-f]{4})")
+
+
+def bluetooth_ids(paths) -> set:
+    """(vid, pid) of HID devices connected over Bluetooth, from the device paths."""
+    out = set()
+    for p in paths or ():
+        m = _BT_HID.search(p.lower())
+        if m:
+            out.add((int(m.group(1)[-4:], 16), int(m.group(2), 16)))
+    return out
 
 
 def controller_name(hid_devices: List[dict]) -> str:
@@ -194,10 +210,25 @@ class XInputProvider(Provider):
         # slots in order (with one controller, which is the usual case, it is exact)
         reports = [c for c in self._wgi(now, frozenset(s for s, _ in slots)) if c.level is not None]
 
+        try:
+            bt_ids = bluetooth_ids(hidlist.interface_paths())
+        except Exception:
+            bt_ids = set()
         connected = []
+        vias = {}
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) else None
             name = (rep.name if rep and rep.name else None) or base_name
+            if rep is not None and (rep.vid, rep.pid) in bt_ids:
+                vias[slot] = "bluetooth"
+                self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth")
+                # Over Bluetooth, Windows.Gaming.Input's report is not usable: an
+                # Xbox Wireless Controller reported remain=100 full=1000 (10%) at
+                # 82%. The real level comes from the Bluetooth device instead.
+                connected.append((slot, name, None, False,
+                                  "connected over Bluetooth; turn on \"Windows Bluetooth devices\" "
+                                  "to see its battery"))
+                continue
             if rep is not None:
                 self._waiting.pop(slot, None)
                 if not rep.charging:
@@ -225,7 +256,8 @@ class XInputProvider(Provider):
         for n, (slot, name, level, charging, approx) in enumerate(connected):
             if len(connected) > 1:
                 name = f"{name} {n + 1}"
-            out.append(DeviceStatus(f"xinput:{slot}", name, level, charging, True, "xinput", approx))
+            out.append(DeviceStatus(f"xinput:{slot}", name, level, charging, True, "xinput", approx,
+                                    kind="gamepad", via=vias.get(slot, "")))
         return out
 
     def diagnostics(self) -> List[str]:

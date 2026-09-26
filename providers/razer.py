@@ -65,6 +65,17 @@ KNOWN = {
 
 TRANSACTION_IDS = (0x1F, 0x3F, 0xFF, 0x9F, 0x08)
 
+# Devices that are not in KNOWN are only polled when their name suggests a
+# battery: some wired Razer devices (e.g. the Huntsman V2 keyboard) answer the
+# battery command too, with a meaningless value.
+WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
+                  "blackshark", "barracuda", "nari")
+
+
+def maybe_wireless(pid: int, name: str) -> bool:
+    n = name.lower()
+    return pid in KNOWN or pid in blackshark.PA_PIDS or any(w in n for w in WIRELESS_WORDS)
+
 STATUS_OK = 0x02
 STATUS_BUSY = 0x01
 STATUS_TIMEOUT = 0x04     # receiver present, device not responding (off / asleep)
@@ -196,6 +207,9 @@ class RazerProvider(Provider):
             key = f"razer:{pid:04x}:{serial}"
             diag_from = len(self._diag)
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
+            if not maybe_wireless(pid, name):
+                self._diag.append("  skipped: not a known wireless device")
+                continue
             is_headset = pid in blackshark.PA_PIDS or "blackshark" in name.lower()
             if pid in blackshark.PA_PIDS:
                 # 2023 headset: its own protocol first

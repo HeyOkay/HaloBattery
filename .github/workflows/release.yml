@@ -1,10 +1,15 @@
 name: Build and release
 
-# Push a tag like v1.8.0 and GitHub builds HaloBattery.exe on a Windows runner
-# and attaches it to the release for that tag (the release is created if it
+# Push a tag like v1.8.0 and GitHub builds Halo Battery on a Windows runner and
+# attaches HaloBattery-<version>.zip (a HaloBattery folder with HaloBattery.exe
+# and its libraries) to the release for that tag (the release is created if it
 # does not exist yet). The release text is the matching section of CHANGELOG.md.
-# "Run workflow" on the Actions tab builds the .exe without releasing it;
-# download it from the run's artifacts.
+# "Run workflow" on the Actions tab builds it without releasing; download it
+# from the run's artifacts.
+#
+# The app is built as a folder, not a single self-extracting .exe: a one-file
+# PyInstaller .exe unpacks Python into a temp folder at every start, which
+# antivirus machine-learning heuristics often flag as a trojan.
 
 on:
   push:
@@ -46,16 +51,28 @@ jobs:
         # imports every module and runs one full poll on the runner (no devices there)
         run: python halo_battery.pyw --probe
 
-      - name: Build HaloBattery.exe
+      - name: Build HaloBattery
         run: |
           python tools/make_icon.py halo.ico
-          python -m PyInstaller --noconfirm --onefile --windowed --name HaloBattery --icon halo.ico --hidden-import hid --hidden-import pystray._win32 halo_battery.pyw
+          python tools/make_version.py version_info.txt
+          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 halo_battery.pyw
+
+      - name: Zip the HaloBattery folder
+        id: zip
+        shell: pwsh
+        run: |
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          $zip = "HaloBattery-$ver.zip"
+          Compress-Archive -Path dist/HaloBattery -DestinationPath $zip
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $zip"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: HaloBattery
-          path: dist/HaloBattery.exe
+          path: dist/HaloBattery
 
       - name: Release notes from CHANGELOG.md
         if: github.ref_type == 'tag'
@@ -66,6 +83,6 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/HaloBattery.exe
+          files: ${{ steps.zip.outputs.zip }}
           fail_on_unmatched_files: true
           body_path: release_notes.md
