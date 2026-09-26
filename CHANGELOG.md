@@ -7,6 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Razer BlackShark V2 Pro (2020, receiver 1532:0528): battery level and charging
+  state through its 64-byte feature report 0xFF. Uses its own protocol instead of
+  probing the generic Razer and 2023 PA protocols. Stale replies from a switched-off
+  headset are rejected; the charging cable (1532:052E) does not create another icon.
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
