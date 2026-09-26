@@ -1,7 +1,9 @@
 """Tray icon rendering: a battery ring with a device pictogram in the middle.
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
-The centre shows the device silhouette: headset, mouse, gamepad or the Bluetooth rune.
+The centre shows the device silhouette: headset, mouse, the Bluetooth rune, or a
+gamepad drawn per family - an Xbox pad (diagonal sticks), a DualShock 4 (wide
+touchpad) or a DualSense (flared "wings" and a lightbar beside the touchpad).
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
 amber, at or below the threshold it is red, and while charging the arc is
@@ -28,7 +30,9 @@ CLEAR = (0, 0, 0, 0)
 
 # device kind aliases (single letters are accepted too)
 KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad",
-         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad"}
+         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
+         "dualshock": "dualshock", "dualsense": "dualsense",
+         "ps4": "dualshock", "ps5": "dualsense", "xbox": "gamepad"}
 
 
 def taskbar_is_light() -> bool:
@@ -90,7 +94,25 @@ def _bluetooth(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
 _PAD_HALF = [(0, -9.4), (5, -10.2), (10, -11.2), (14.6, -10.8), (18.2, -8.2), (19.8, -3.8),
              (20.2, 2.2), (19.6, 8.8), (17.6, 14.0), (14.2, 15.8), (11.0, 14.0), (8.6, 9.0),
              (5.0, 4.4), (0, 3.6)]
-_PAD_STICK = (8.8, -3.0, 3.1)          # x (mirrored), y, radius: symmetric sticks
+# Xbox layout: the sticks sit diagonally (left stick high, right stick low),
+# the tell that sets an Xbox pad apart from the symmetric PlayStation one.
+_XBOX_STICKS = [(-8.6, -4.6), (8.6, 0.2)]
+_XBOX_STICK_R = 2.9
+
+# PlayStation controllers: a rounder body with symmetric sticks low and close to
+# the centre, and a touchpad cut into the top. The DualShock 4 (PS4) is compact
+# with a wide touchpad; the DualSense (PS5) is larger, its grips flare out into
+# longer "wings" and its touchpad is a little narrower and taller.
+_DS4_HALF = [(0, -8.4), (6.2, -9.0), (11.2, -9.0), (15.0, -8.0), (17.6, -5.2), (18.2, -0.6),
+             (17.8, 4.6), (16.0, 9.6), (12.6, 12.4), (9.6, 11.0), (7.8, 6.6), (4.6, 3.6), (0, 3.1)]
+_DS4_TOUCH = (4.8, 1.9, -4.2)          # half width, half height, centre y (wide, short)
+_DS4_STICKS = (5.5, 6.0, 2.3)          # x (mirrored), y, radius
+
+_DS5_HALF = [(0, -8.8), (6.5, -9.5), (11.8, -9.5), (15.8, -8.4), (18.6, -5.6), (19.6, -1.0),
+             (21.2, 5.0), (21.4, 10.5), (18.6, 15.2), (14.4, 16.6), (10.6, 13.0), (8.2, 7.0),
+             (4.6, 3.6), (0, 3.0)]
+_DS5_TOUCH = (3.9, 2.5, -3.6)          # narrower, taller
+_DS5_STICKS = (5.9, 6.8, 2.5)
 
 
 def _smooth_closed(pts, steps: int = 12):
@@ -109,20 +131,60 @@ def _smooth_closed(pts, steps: int = 12):
     return out
 
 
+def _pad_body(d: ImageDraw.ImageDraw, cx: float, cy: float, k: float, col, half):
+    """Fill the mirrored, smoothed controller outline given its right half."""
+    loop = half + [(-x, y) for x, y in reversed(half[1:-1])]
+    d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
+
+
+def _cut_stick(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float):
+    d.ellipse((_r(cx - r), _r(cy - r), _r(cx + r), _r(cy + r)), fill=CLEAR)
+
+
 def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     """Xbox controller silhouette: flat top over the bumpers, long grips and an
-    arch between them. Only the two sticks are cut out, placed symmetrically."""
+    arch between them, with the two sticks cut out on a diagonal (Xbox layout)."""
     k = s / 18.0
-    loop = _PAD_HALF + [(-x, y) for x, y in reversed(_PAD_HALF[1:-1])]
-    d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
-    sx, sy, sr = _PAD_STICK
+    _pad_body(d, cx, cy, k, col, _PAD_HALF)
+    for sx, sy in _XBOX_STICKS:
+        _cut_stick(d, cx + sx * k, cy + sy * k, _XBOX_STICK_R * k)
+
+
+def _playstation(d, cx, cy, s, col, half, touch, sticks):
+    """Shared PlayStation body: rounded outline with a touchpad cut into the top
+    centre and two symmetric sticks cut low, close to the middle."""
+    k = s / 18.0
+    _pad_body(d, cx, cy, k, col, half)
+    tw, th, ty = touch
+    d.rounded_rectangle((_r(cx - tw * k), _r(cy + (ty - th) * k),
+                         _r(cx + tw * k), _r(cy + (ty + th) * k)),
+                        radius=_r(1.1 * k), fill=CLEAR)
+    sx, sy, sr = sticks
     for side in (-1, 1):
-        x, y, r = cx + side * sx * k, cy + sy * k, sr * k
-        d.ellipse((_r(x - r), _r(y - r), _r(x + r), _r(y + r)), fill=CLEAR)
+        _cut_stick(d, cx + side * sx * k, cy + sy * k, sr * k)
+
+
+def _dualshock(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """DualShock 4 (PS4): compact body, wide touchpad."""
+    _playstation(d, cx, cy, s, col, _DS4_HALF, _DS4_TOUCH, _DS4_STICKS)
+
+
+def _dualsense(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """DualSense (PS5): larger body with flared "wing" grips, narrower touchpad
+    flanked by two small lightbar notches."""
+    _playstation(d, cx, cy, s, col, _DS5_HALF, _DS5_TOUCH, _DS5_STICKS)
+    k = s / 18.0
+    tw, th, ty = _DS5_TOUCH
+    for side in (-1, 1):                                # lightbar marks beside the touchpad
+        x = cx + side * (tw + 1.4) * k
+        d.rounded_rectangle((_r(x - 0.5 * k), _r(cy + (ty - th * 0.7) * k),
+                             _r(x + 0.5 * k), _r(cy + (ty + th * 0.7) * k)),
+                            radius=_r(0.4 * k), fill=CLEAR)
 
 
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
-          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, -2.5, 18.4)}
+          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, -2.5, 18.4),
+          "dualshock": (_dualshock, 0, -1.5, 18.6), "dualsense": (_dualsense, 0, -2.5, 18.8)}
 
 
 # ---------------------------------------------------------------- icon
