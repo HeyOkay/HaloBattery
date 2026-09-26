@@ -4,6 +4,20 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
+  paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
+  reports itself; the level comes from the unified battery, battery status or battery
+  voltage feature, whichever the device has. Tested on the G502 LIGHTSPEED (voltage,
+  matches G HUB); other HID++ 2.0 mice and keyboards should work the same way.
+  A mouse whose radio dozes takes up to half a second to answer, so the first request
+  waits longer; a mouse that is asleep keeps its last level, greyed out, for 5 minutes.
+- SteelSeries Arctis Nova 7 support through its 2.4 GHz dongle, without SteelSeries GG
+  (and alongside it): exact level and charging state. Other models with the same
+  protocol are one line in `providers/steelseries.py`.
+  
 ## [1.10.1] - 2026-09-26
 
 ### Added
@@ -151,6 +165,7 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
+[Unreleased]: ../../compare/v1.10.1...HEAD
 [1.10.1]: ../../compare/v1.10.0...v1.10.1
 [1.10.0]: ../../compare/v1.9.1...v1.10.0
 [1.9.1]: ../../compare/v1.9.0...v1.9.1
