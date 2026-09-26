@@ -4,7 +4,7 @@ Supported:
   * Razer (BlackShark V2 Pro headset, mice, etc.): directly over USB/HID, no Synapse
   * WLmouse (Beast X / Beast X Max / Mini Pro)
   * Logitech (HID++ 2.0 mice and keyboards: Lightspeed / Unifying receivers, G HUB not needed)
-  * SteelSeries (Arctis Nova 7 headset, GG not needed)
+  * SteelSeries (Arctis Nova 7 and Nova 5 headsets, GG not needed)
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -59,7 +59,7 @@ from providers import (BluetoothProvider, DeviceStatus, LogitechProvider, RazerP
                        SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
-HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "arctis", "headset",
+HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
 
 DEFAULTS = {

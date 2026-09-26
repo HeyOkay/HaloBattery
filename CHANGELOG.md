@@ -9,15 +9,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
-  reports itself; the level comes from the unified battery, battery status or battery
-  voltage feature, whichever the device has. Tested on the G502 LIGHTSPEED (voltage,
-  matches G HUB); other HID++ 2.0 mice and keyboards should work the same way.
-  A mouse whose radio dozes takes up to half a second to answer, so the first request
-  waits longer; a mouse that is asleep keeps its last level, greyed out, for 5 minutes.
+  reports itself and with the mouse or keyboard pictogram it reports; the level comes
+  from the unified battery, battery status or battery voltage feature, whichever the
+  device has. The icon follows the device's unit id, so two identical mice get two
+  icons and a mouse keeps its icon between the receiver and the cable. Tested on the
+  G502 LIGHTSPEED (voltage, matches G HUB); other HID++ 2.0 mice and keyboards should
+  work the same way.
+  A dozing radio takes up to half a second to answer, so the first request waits up
+  to 2 s; once a paired device stops answering (asleep or switched off) it is only
+  pinged briefly until it answers again, and keeps its last level, greyed out, for
+  5 minutes.
 - SteelSeries Arctis Nova 7 support through its 2.4 GHz dongle, without SteelSeries GG
-  (and alongside it): exact level and charging state. Other models with the same
-  protocol are one line in `providers/steelseries.py`.
-  
+  (and alongside it): exact level and charging state. The other Arctis Nova 7 / 7X /
+  7x variants and the Arctis Nova 5 / 5X are included from HeadsetControl's device
+  list but not tested; new models with the same protocol are one line in
+  `providers/steelseries.py`.
+
 ## [1.10.1] - 2026-09-26
 
 ### Added
