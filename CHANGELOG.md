@@ -34,6 +34,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
   table: transaction id 0x1F, command class 0x07, command 0x80 answers
   `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
   unchanged while Razer Synapse runs.
+- MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
+  command 0x06, every payload byte inverted, which returns
+  `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
+  The request has to be repeated for every read, and the receiver only relays a real
+  value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
+  its last level on a greyed icon, the same as an idle Razer mouse. On the cable the mouse
+  answers on its own PID (5253:0031) with the charging byte set to 1 while the receiver
+  goes quiet, and the two connections still share one icon.
+- MCHOSE G7 (A8A5:2255, chip 'YJX-CHIP'), which is a different chip and a different
+  protocol from the M7 Ultra: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`,
+  answered by an input report starting `AA 30` with the level at byte 8 and the charging
+  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8, so it is
+  **unverified** - no G7 was on hand - and a level out of range is refused rather than
+  reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
+  same machine do not fight over one.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for
