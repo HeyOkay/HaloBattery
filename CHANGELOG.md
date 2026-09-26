@@ -85,7 +85,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Bluetooth copy is dropped and the HID reading - the device's own protocol, carrying
   the charging state - is kept. A device only Bluetooth can see keeps its Bluetooth
   icon, which is how a Maxwell used purely over Bluetooth is covered at all: the vendor
-  collection the provider needs does not exist over Bluetooth.
+  collection the provider needs does not exist over Bluetooth. Game controllers are
+  left out of this: for a controller on Bluetooth, Windows' own value is still the one
+  shown, as in 1.10.1.
 - Audeze: a switched-off headset no longer pays for the battery packet that cannot be
   answered (1.5 s per poll instead of 1.7 s), and its failure block is written once per
   outage instead of every poll.
@@ -96,6 +98,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   linked, "Audeze Maxwell HID" with one. Nothing is reported while it says Dongle,
   so the icon leaves the tray the way the README says a switched-off device does,
   and the 1.5 s battery sequence is not sent at all.
+
 ## [1.10.1] - 2026-09-26
 
 ### Added
