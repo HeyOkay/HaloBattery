@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Razer BlackShark V2 Pro (2020, receiver 1532:0528): battery level and charging
+  state through its 64-byte feature report 0xFF. Uses its own protocol instead of
+  probing the generic Razer and 2023 PA protocols. Stale replies from a switched-off
+
 ### Changed
 - New tray menu in the Windows 11 style: Segoe UI Variable text, Fluent icons, an acrylic
   (blurred, translucent) background, rounded corners on Windows 11 and the light or dark
