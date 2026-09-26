@@ -17,62 +17,112 @@ Windows 10/11 only; off by default (toggle in the tray menu).
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
-from typing import Dict, List, Optional
+import threading
+import time
+from typing import Callable, Dict, List, Optional
 
 from .base import DeviceStatus, Provider, log
 
 K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
 K_CONN = "{83DA6326-97A6-4088-9453-A1923F573B29} 15"
 
-PS_SCRIPT = r"""
+PS_COMMON = r"""
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# --- PnP: battery level (and the fallback connection flag) ---
-$devs = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })
-$props = @()
-if ($devs.Count -gt 0) {
-  $props = @(Get-PnpDeviceProperty -InstanceId $devs.InstanceId -KeyName '%BAT%', '%CONN%' |
-             Where-Object { $_.Data -ne $null } |
-             ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; key = $_.KeyName; data = $_.Data } })
-}
-$list = @($devs | ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; name = $_.FriendlyName; status = "$($_.Status)" } })
-
-# --- WinRT: reliable "connected right now", same as Windows Settings ---
+# --- WinRT setup: reliable "connected right now", same as Windows Settings ---
 # A direct query by MAC (FromBluetoothAddressAsync) does not scan the air, so it
 # is fast. Enumerating with FindAllAsync triggered a scan and exceeded 15 s.
-$aep = @(); $aepErr = $null
+$script:winrtErr = $null
 try {
   Add-Type -AssemblyName System.Runtime.WindowsRuntime
-  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $script:asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
     $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
     $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-  $tClassic = [Windows.Devices.Bluetooth.BluetoothDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
-  $tLE = [Windows.Devices.Bluetooth.BluetoothLEDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
-  $roots = @($devs | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})' } |
-             ForEach-Object { $null = $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})'
-                              [pscustomobject]@{ le = ($Matches[1] -eq 'BTHLE'); mac = $Matches[2] } })
+  $script:tClassic = [Windows.Devices.Bluetooth.BluetoothDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+  $script:tLE = [Windows.Devices.Bluetooth.BluetoothLEDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+} catch { $script:winrtErr = "$_" }
+
+function Get-BtConn($roots) {
+  $out = @()
+  if ($script:winrtErr) { return $out }
   foreach ($r in $roots) {
     $conn = $null; $err = $null
     try {
       $addr = [Convert]::ToUInt64($r.mac, 16)
-      if ($r.le) { $t = $tLE; $op = [Windows.Devices.Bluetooth.BluetoothLEDevice]::FromBluetoothAddressAsync($addr) }
-      else       { $t = $tClassic; $op = [Windows.Devices.Bluetooth.BluetoothDevice]::FromBluetoothAddressAsync($addr) }
-      $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op))
+      if ($r.le) { $t = $script:tLE; $op = [Windows.Devices.Bluetooth.BluetoothLEDevice]::FromBluetoothAddressAsync($addr) }
+      else       { $t = $script:tClassic; $op = [Windows.Devices.Bluetooth.BluetoothDevice]::FromBluetoothAddressAsync($addr) }
+      $task = $script:asTask.MakeGenericMethod($t).Invoke($null, @($op))
       if ($task.Wait(3000)) {
         $d = $task.Result
         if ($d) { $conn = ("$($d.ConnectionStatus)" -eq 'Connected'); $d.Dispose() }
       } else { $err = 'timeout' }
     } catch { $err = "$_" }
-    $aep += [pscustomobject]@{ addr = $r.mac; conn = $conn; le = $r.le; err = $err }
+    $out += [pscustomobject]@{ addr = $r.mac; conn = $conn; le = $r.le; err = $err }
   }
-} catch { $aepErr = "$_" }
+  return $out
+}
 
-ConvertTo-Json -InputObject ([pscustomobject]@{ devs = $list; props = $props; aep = $aep; aep_error = $aepErr }) -Compress -Depth 4
+function Get-BtSnapshot {
+  # --- PnP: battery level (and the fallback connection flag) ---
+  $devs = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })
+  $props = @()
+  if ($devs.Count -gt 0) {
+    $props = @(Get-PnpDeviceProperty -InstanceId $devs.InstanceId -KeyName '%BAT%', '%CONN%' |
+               Where-Object { $_.Data -ne $null } |
+               ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; key = $_.KeyName; data = $_.Data } })
+  }
+  $list = @($devs | ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; name = $_.FriendlyName; status = "$($_.Status)" } })
+  $roots = @($devs | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})' } |
+             ForEach-Object { $null = $_.InstanceId -match '^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})'
+                              [pscustomobject]@{ le = ($Matches[1] -eq 'BTHLE'); mac = $Matches[2] } })
+  $aep = @(Get-BtConn $roots)
+  return [pscustomobject]@{ devs = $list; props = $props; aep = $aep; aep_error = $script:winrtErr; roots = $roots }
+}
+
+function Get-ConnKey($aep) { return (@($aep | ForEach-Object { "$($_.addr)=$($_.conn)" }) -join ',') }
 """.replace("%BAT%", K_BAT).replace("%CONN%", K_CONN)
+
+# one-shot query (fallback and diagnostics)
+PS_SCRIPT = PS_COMMON + r"""
+ConvertTo-Json -InputObject (Get-BtSnapshot) -Compress -Depth 4
+"""
+
+# Long-running watcher: checks only the WinRT connection state every 2 s (no
+# PowerShell start-up, no device scan), and takes a full snapshot with battery
+# levels right after a device connects or disconnects (then again at +3, +8 and
+# +15 s, because Windows reports the battery a little after connecting) and
+# once a minute. Each snapshot is printed as one JSON line. The script exits by
+# itself when the app's process is gone.
+WATCH_SCRIPT = PS_COMMON + r"""
+$parent = %PPID%
+function Emit($snap) { [Console]::Out.WriteLine((ConvertTo-Json -InputObject $snap -Compress -Depth 4)); [Console]::Out.Flush() }
+$queue = New-Object 'System.Collections.Generic.List[datetime]'
+$snap = Get-BtSnapshot; Emit $snap
+$roots = $snap.roots; $prev = Get-ConnKey $snap.aep; $nextFull = (Get-Date).AddSeconds(60)
+while ($true) {
+  try { $null = [System.Diagnostics.Process]::GetProcessById($parent) } catch { break }
+  Start-Sleep -Milliseconds 2000
+  $now = Get-Date
+  if ($roots.Count -gt 0 -and -not $script:winrtErr) {
+    $key = Get-ConnKey (Get-BtConn $roots)
+    if ($key -ne $prev) {
+      $prev = $key; $queue.Clear()
+      foreach ($s in 0, 3, 8, 15) { $queue.Add($now.AddSeconds($s)) }
+    }
+  }
+  $due = $false
+  while ($queue.Count -gt 0 -and $queue[0] -le $now) { $queue.RemoveAt(0); $due = $true }
+  if ($due -or $now -ge $nextFull) {
+    $snap = Get-BtSnapshot; Emit $snap
+    $roots = $snap.roots; $prev = Get-ConnKey $snap.aep; $nextFull = (Get-Date).AddSeconds(60)
+  }
+}
+"""
 
 _HEX12 = re.compile(r"(?<![0-9A-F])([0-9A-F]{12})(?![0-9A-F])")
 
@@ -255,6 +305,14 @@ class BluetoothProvider(Provider):
             log.info(line)
         return result
 
+    def handle(self, raw: str) -> List[DeviceStatus]:
+        """One snapshot line from the watcher -> the devices to show."""
+        self._diag = []
+        result = self.merge(self.parse(raw))
+        for line in self._diag:
+            log.info(line)
+        return result
+
     def merge(self, fresh: Optional[List[DeviceStatus]]) -> List[DeviceStatus]:
         """Smoothing: a missing device is kept for MISS_LIMIT-1 more polls."""
         if fresh is None:
@@ -294,3 +352,76 @@ class BluetoothProvider(Provider):
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
+
+
+class BluetoothWatcher:
+    """Runs WATCH_SCRIPT in one long-lived PowerShell process and feeds every
+    snapshot it prints to the provider. Restarts the process if it dies; after
+    three quick failures in a row it gives up (failed = True) and the app falls
+    back to one-shot polls once a minute."""
+
+    def __init__(self, provider: BluetoothProvider, on_update: Callable[[List[DeviceStatus]], None]):
+        self.provider = provider
+        self.on_update = on_update
+        self.failed = False
+        self.snapshots = 0
+        self._stop = threading.Event()
+        self._proc: Optional[subprocess.Popen] = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def command(self) -> List[str]:
+        script = WATCH_SCRIPT.replace("%PPID%", str(os.getpid()))
+        return ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]
+
+    def start(self) -> "BluetoothWatcher":
+        self._thread.start()
+        return self
+
+    def running(self) -> bool:
+        return self._thread.is_alive() and not self.failed
+
+    def stop(self) -> None:
+        self._stop.set()
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+
+    def _run(self) -> None:
+        quick_failures = 0
+        while not self._stop.is_set():
+            started = time.time()
+            try:
+                self._proc = subprocess.Popen(
+                    self.command(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL, creationflags=0x08000000 if sys.platform == "win32" else 0)
+            except Exception as e:
+                log.warning("bluetooth watcher: cannot start PowerShell: %s", e)
+                self.failed = True
+                return
+            got_output = False
+            for line in self._proc.stdout:
+                text = line.decode("utf-8", errors="replace").strip().lstrip("\ufeff")
+                if not text:
+                    continue
+                got_output = True
+                try:
+                    devices = self.provider.handle(text)
+                except Exception:
+                    log.exception("bluetooth watcher")
+                    continue
+                self.snapshots += 1
+                self.on_update(devices)
+            self._proc.wait()
+            if self._stop.is_set():
+                return
+            log.warning("bluetooth watcher: PowerShell exited with code %s", self._proc.returncode)
+            quick = not got_output or time.time() - started < 30
+            quick_failures = quick_failures + 1 if quick else 0
+            if quick_failures >= 3:
+                log.warning("bluetooth watcher: giving up, falling back to polling once a minute")
+                self.failed = True
+                return
+            self._stop.wait(5)

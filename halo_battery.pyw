@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.9.0"
+VERSION = "1.9.1"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -51,8 +51,10 @@ import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 import icons  # noqa: E402
+from providers import hidlist  # noqa: E402
 from providers import (BluetoothProvider, DeviceStatus, RazerProvider,  # noqa: E402
                        WLmouseProvider, XInputProvider)
+from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
@@ -269,6 +271,8 @@ class App:
         self.anim_tick = 0
         self.bt_wake = threading.Event()      # "poll Bluetooth now"
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
+        self.bt_watch: Optional[BluetoothWatcher] = None
+        self.bt_watch_failed = False
 
     # ---------------- menu
     def build_menu(self, owner: Optional[DeviceIcon]) -> Menu:
@@ -337,8 +341,8 @@ class App:
     # ---------------- diagnostics
     def request_diag(self):
         self.diag_requested.set()
-        if self.cfg["bluetooth"]:
-            # fresh Bluetooth poll first, then the report
+        if self.cfg["bluetooth"] and not (self.bt_watch and self.bt_watch.running()):
+            # fallback mode: fresh Bluetooth poll first, then the report
             self.bt_fresh.clear()
             self.bt_wake.set()
             threading.Thread(target=self._diag_after_bt, daemon=True).start()
@@ -391,10 +395,32 @@ class App:
             results += list(self.bt_cache)
         return results
 
+    def _bt_update(self, res: List[DeviceStatus]):
+        """A snapshot from the Bluetooth watcher: show it right away."""
+        if self.cfg["bluetooth"]:
+            self.bt_cache = res
+        self.bt_fresh.set()
+        self.wake.set()
+
     def bt_loop(self):
         """Separate thread: PowerShell can take a few seconds and must not delay
-        the mouse and headset icons."""
+        the mouse and headset icons. On Windows a long-lived watcher reports
+        connects and disconnects within a few seconds; if it cannot run, one-shot
+        polls once a minute are the fallback."""
         while not self.stop_evt.is_set():
+            if self.cfg["bluetooth"] and sys.platform == "win32" and not self.bt_watch_failed:
+                if self.bt_watch is None:
+                    self.bt_watch = BluetoothWatcher(self.bt, self._bt_update).start()
+                if self.bt_watch.failed:
+                    self.bt_watch_failed = True
+                    self.bt_watch = None
+                    continue
+                self.bt_wake.wait(2)
+                self.bt_wake.clear()
+                continue
+            if self.bt_watch is not None:            # Bluetooth turned off in the menu
+                self.bt_watch.stop()
+                self.bt_watch = None
             if self.cfg["bluetooth"]:
                 t0 = time.time()
                 try:
@@ -427,11 +453,12 @@ class App:
             self.check_alert(ic, st)
 
         # device gone (receiver unplugged): remove the icon after 2 misses in a row;
-        # XInput reports a switched-off controller reliably, so its icon goes at once
+        # XInput reports a switched-off controller reliably, and the Bluetooth
+        # provider already confirms a disconnect itself, so those go at once
         for key in list(self.icons):
             if key not in seen:
                 self.missing[key] = self.missing.get(key, 0) + 1
-                limit = 1 if key.startswith("xinput:") else 2
+                limit = 1 if key.startswith(("xinput:", "bt:")) else 2
                 if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
 
@@ -481,8 +508,16 @@ class App:
 
     @staticmethod
     def usb_signature():
-        """Set of connected HID devices (VID:PID). Cheap; used to notice plug and
-        unplug events: mouse put on the cable, receiver removed, etc."""
+        """Set of present HID interfaces, used to notice plug and unplug events
+        (mouse put on the cable, receiver removed, etc.). On Windows this only
+        lists device paths and does not open any device; hid.enumerate() would
+        open every HID device, the keyboard included, every 2.5 s."""
+        try:
+            paths = hidlist.interface_paths()
+        except Exception:
+            paths = None
+        if paths is not None:
+            return paths
         if hid is None:
             return None
         try:
@@ -509,6 +544,8 @@ class App:
         interval = self.cfg["interval"]
         if any(getattr(p, "pending", False) for p in self.providers):
             interval = min(interval, 3)   # a new controller has no battery info yet: re-check soon
+        if any(self.missing.values()):
+            interval = min(interval, 3)   # a device just went missing: confirm quickly instead of in a minute
         deadline = time.time() + interval
         if sig is None:
             sig = self.change_signature()
@@ -533,6 +570,8 @@ class App:
         self.stop_evt.set()
         self.wake.set()
         self.bt_wake.set()
+        if self.bt_watch is not None:
+            self.bt_watch.stop()
         for ic in list(self.icons.values()):
             ic.stop()
         if self.placeholder:

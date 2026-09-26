@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
+from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 WLMOUSE_VIDS = (0x36A7,)
@@ -152,7 +153,7 @@ class WLmouseProvider(Provider):
         infos = []
         for vid in WLMOUSE_VIDS:
             try:
-                infos += hid.enumerate(vid)
+                infos += hidlist.enumerate(vid)
             except Exception as e:  # pragma: no cover
                 log.warning("hid.enumerate(wlmouse): %s", e)
         if not infos:

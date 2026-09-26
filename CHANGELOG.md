@@ -4,6 +4,32 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [1.9.1] - 2026-09-26
+
+### Fixed
+- Possible USB keyboard dropouts while the app is running. To notice devices being
+  plugged in or removed, the app listed all HID devices every 2.5 seconds through
+  hidapi, which briefly opens every HID device on the system, the keyboard included;
+  some high-polling-rate keyboards (e.g. NuPhy Air75 HE) may not tolerate that.
+  - Plug and unplug detection now reads only the list of device paths from the
+    Windows configuration manager and does not open any device.
+  - The full device list is re-read only when a device is actually plugged in or
+    removed, and only for the vendors the app supports (Razer, WLmouse, and the
+    controller vendors used for naming); vendors that are not present are skipped.
+  - Controller polls no longer read the product strings of every HID device.
+- The icon of a device whose receiver was unplugged or that was switched off could
+  stay for up to a minute: the second, confirming check waited for the next
+  scheduled poll. It now runs 3 seconds after the first miss.
+- Bluetooth devices took about a minute to appear after connecting (and to disappear
+  after disconnecting): they were checked by a new PowerShell run once a minute.
+  One long-lived PowerShell process now checks only the connection state every
+  2 seconds (a direct WinRT query by MAC address, no device scan) and reads the
+  battery levels right after a device connects or disconnects, again at +3, +8 and
+  +15 seconds (Windows reports the battery a moment after connecting) and once a
+  minute. A connected device now shows up within a few seconds. If that process
+  cannot run, the app falls back to the old once-a-minute check. The process exits
+  together with the app.
+
 ## [1.9.0] - 2026-09-25
 
 ### Added
@@ -58,5 +84,6 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
+[1.9.1]: ../../compare/v1.9.0...v1.9.1
 [1.9.0]: ../../compare/v1.8.0...v1.9.0
 [1.8.0]: ../../releases/tag/v1.8.0

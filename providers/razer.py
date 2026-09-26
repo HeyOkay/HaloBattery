@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark
+from . import blackshark, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -176,7 +176,7 @@ class RazerProvider(Provider):
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         try:
-            infos = hid.enumerate(RAZER_VID)
+            infos = hidlist.enumerate(RAZER_VID)
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(razer): %s", e)
             return []

@@ -21,7 +21,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import wgi
+from . import hidlist, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -161,11 +161,14 @@ class XInputProvider(Provider):
                 self._diag.append("[XInput] xinput1_4.dll not available")
             return []
 
-        try:
-            import hid
-            hid_devices = hid.enumerate()
-        except Exception:
-            hid_devices = []
+        # only the vendors that can name the controller, from the cached list:
+        # no full hid.enumerate() (which opens every HID device) on each poll
+        hid_devices: List[dict] = []
+        for vid, _word, _name in NAMED:
+            try:
+                hid_devices += hidlist.enumerate(vid)
+            except Exception:
+                pass
         base_name = controller_name(hid_devices)
 
         now = time.time()
