@@ -8,7 +8,9 @@ Protocol (model list and reply layouts as documented by Sapd/HeadsetControl):
       status 00 = headset off / out of range, 01 / 02 = charging, 03 = on battery
   * Nova 5 reply:  b0 <status> <?> <battery 0..100> <charging> ...
       status 02 = headset off / out of range, charging 01 = charging
-  * other reports can arrive on the same interface; the b0 reply is picked out
+  * other reports can arrive on the same interface; the b0 reply is picked out, and the
+   parsers insist on it, so anything else the dongle sends yields no reading at all
+   (without that check a stray report reads as a level: `01 00 63 02` as 99%)
 
 New models go into MODELS: product id -> (name, reply parser).
 """
@@ -31,7 +33,7 @@ Reading = Tuple[Optional[int], bool, bool]   # level, charging, online
 
 
 def parse_nova7(r) -> Reading:
-    if len(r) < 4 or r[3] == 0x00:
+    if len(r) < 4 or r[0] != 0xB0 or r[3] == 0x00:
         return None, False, False
     return min(r[2], 100), r[3] in (0x01, 0x02), True
 
@@ -42,7 +44,7 @@ def parse_nova7_discrete(r) -> Reading:
 
 
 def parse_nova5(r) -> Reading:
-    if len(r) < 5 or r[1] == 0x02:
+    if len(r) < 5 or r[0] != 0xB0 or r[1] == 0x02:
         return None, False, False
     return min(r[3], 100), r[4] == 0x01, True
 
