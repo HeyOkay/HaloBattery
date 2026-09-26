@@ -5,6 +5,7 @@ Supported:
   * WLmouse (Beast X / Beast X Max / Mini Pro)
   * Logitech (HID++ 2.0 mice and keyboards: Lightspeed / Unifying receivers, G HUB not needed)
   * SteelSeries (Arctis Nova 7 and Nova 5 headsets, GG not needed)
+  * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -55,8 +56,8 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 import icons  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (BluetoothProvider, DeviceStatus, LogitechProvider, RazerProvider,  # noqa: E402
-                       SteelSeriesProvider, WLmouseProvider, XInputProvider)
+from providers import (BluetoothProvider, DeviceStatus, LogitechProvider, MchoseProvider,  # noqa: E402
+                       RazerProvider, SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
@@ -328,7 +329,7 @@ class App:
         self.theme_evt = threading.Event()   # "re-check the icon colour now"
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
-        self.providers = [RazerProvider(), WLmouseProvider(), LogitechProvider(),
+        self.providers = [RazerProvider(), WLmouseProvider(), MchoseProvider(), LogitechProvider(),
                           SteelSeriesProvider(), XInputProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
@@ -803,7 +804,7 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = [RazerProvider(), WLmouseProvider(), LogitechProvider(),
+    app.providers = [RazerProvider(), WLmouseProvider(), MchoseProvider(), LogitechProvider(),
                      SteelSeriesProvider(), XInputProvider()]
     app.bt = BluetoothProvider()
     res = []

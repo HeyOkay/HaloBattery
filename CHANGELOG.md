@@ -23,6 +23,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   7x variants and the Arctis Nova 5 / 5X are included from HeadsetControl's device
   list but not tested; new models with the same protocol are one line in
   `providers/steelseries.py`.
+- MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
+  command 0x06, every payload byte inverted, which returns
+  `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
+  The request has to be repeated for every read, and the receiver only relays a real
+  value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
+  its last level on a greyed icon, the same as an idle Razer mouse. On the cable the mouse
+  answers on its own PID (5253:0031) with the charging byte set to 1 while the receiver
+  goes quiet, and the two connections still share one icon.
 
 ### Fixed
 - After a device went missing (e.g. a Razer headset switched off while its receiver
