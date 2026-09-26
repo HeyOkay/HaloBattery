@@ -47,7 +47,7 @@ Releases are built automatically: pushing a tag like `v1.8.0` makes GitHub Actio
 The icon is a battery ring with the device pictogram in the middle. The arc fills clockwise from the top.
 
 - Centre: a headset, a mouse, a gamepad or the Bluetooth rune. The pictogram can be turned off in the menu.
-- Normal arc uses the taskbar colour: white on a dark taskbar, black on a light one.
+- Normal arc uses the taskbar colour: white on a dark taskbar, black on a light one. With [MyDockFinder](https://store.steampowered.com/app/1787090/MyDockFinder/) running, the colour follows its top menu bar instead, which switches with the wallpaper.
 - Amber arc: the level is close to the alert threshold. Red: at or below it.
 - Green arc that slowly "breathes": charging. The animation can be turned off in the menu, leaving a plain green arc.
 - Translucent icon: the mouse is asleep; it keeps its last level for 5 minutes. A device that is switched off disappears from the tray and comes back when it is switched on.
