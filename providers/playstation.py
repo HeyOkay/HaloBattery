@@ -70,16 +70,18 @@ def parse_ds4(byte: int) -> Tuple[int, bool]:
 
 
 def parse_dualsense(byte: int) -> Optional[Tuple[int, bool]]:
-    """DualSense status byte -> (level %, charging), or None for an error state."""
-    level = min((byte & 0x0F) * 10 + 5, 100)
+    """DualSense status byte -> (level %, charging).
+
+    The low nibble is the real battery level (0..10) and is used as-is, even
+    while charging: the DualSense keeps reporting the true level on the cable, so
+    it must not be forced to 100 %. The high nibble is the charging state
+    (0 = on battery, 1 = charging, 2 = charge complete but still plugged in,
+    0xa/0xb/0xf = temperature / charging error)."""
+    level = min(byte & 0x0F, 10) * 10
     charge = (byte >> 4) & 0x0F
-    if charge == 0x0:               # discharging
-        return level, False
-    if charge == 0x1:               # charging
+    if charge in (0x1, 0x2):        # on the cable
         return level, True
-    if charge == 0x2:               # fully charged
-        return 100, False
-    return None                     # 0xa/0xb/0xf: temperature / charging error
+    return level, False             # on battery, or an error state: show the level, no arc pulse
 
 
 class PlayStationProvider(Provider):
