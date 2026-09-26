@@ -7,6 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
