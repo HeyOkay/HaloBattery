@@ -12,7 +12,7 @@ One physical device is several PnP nodes in Windows: the root node
 (BTHENUM\\DEV_<MAC>, BTHLE\\DEV_<MAC>) and service nodes. Nodes of one device
 are matched by the MAC address found in every node's instance id.
 Everything is fetched with a SINGLE PowerShell call.
-Windows 10/11 only; off by default (toggle in the tray menu).
+Windows 10/11 only; on by default (toggle in the tray menu).
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ function Get-BtConn($roots) {
   $out = @()
   if ($script:winrtErr) { return $out }
   foreach ($r in $roots) {
-    $conn = $null; $err = $null
+    $conn = $null; $err = $null; $cls = $null
     try {
       $addr = [Convert]::ToUInt64($r.mac, 16)
       if ($r.le) { $t = $script:tLE; $op = [Windows.Devices.Bluetooth.BluetoothLEDevice]::FromBluetoothAddressAsync($addr) }
@@ -59,10 +59,15 @@ function Get-BtConn($roots) {
       $task = $script:asTask.MakeGenericMethod($t).Invoke($null, @($op))
       if ($task.Wait(3000)) {
         $d = $task.Result
-        if ($d) { $conn = ("$($d.ConnectionStatus)" -eq 'Connected'); $d.Dispose() }
+        if ($d) {
+          $conn = ("$($d.ConnectionStatus)" -eq 'Connected')
+          # device type: Class of Device (classic) or Appearance (LE)
+          try { if ($r.le) { $cls = [int]$d.Appearance.RawValue } else { $cls = [int]$d.ClassOfDevice.RawValue } } catch { }
+          $d.Dispose()
+        }
       } else { $err = 'timeout' }
     } catch { $err = "$_" }
-    $out += [pscustomobject]@{ addr = $r.mac; conn = $conn; le = $r.le; err = $err }
+    $out += [pscustomobject]@{ addr = $r.mac; conn = $conn; le = $r.le; err = $err; cls = $cls }
   }
   return $out
 }
@@ -143,6 +148,35 @@ def norm_addr(addr: str) -> Optional[str]:
     return h if len(h) == 12 else None
 
 
+# Bluetooth service UUIDs (16-bit) found in the instance ids of a device's
+# service nodes: audio profiles mean headphones or a headset
+AUDIO_SERVICES = ("0000110b-", "0000111e-", "00001108-", "00001131-")   # A2DP sink, HFP, HSP, HSP HS
+
+
+def kind_from_class(raw, le: bool) -> str:
+    """headset / mouse / keyboard / gamepad from the Bluetooth Class of Device
+    (classic) or the GAP Appearance value (LE); "" if unknown or other."""
+    try:
+        raw = int(raw)
+    except (TypeError, ValueError):
+        return ""
+    if le:
+        cat, sub = raw >> 6, raw & 0x3F
+        if cat == 0x0F:                               # HID
+            return {1: "keyboard", 2: "mouse", 3: "gamepad", 4: "gamepad"}.get(sub, "")
+        if cat == 0x25:                               # wearable audio device
+            return "headset"
+        return ""
+    major, minor = (raw >> 8) & 0x1F, (raw >> 2) & 0x3F
+    if major == 4:                                    # audio / video
+        return "headset" if minor in (1, 2, 6) else ""   # wearable headset, hands-free, headphones
+    if major == 5:                                    # peripheral
+        if (minor & 0x0F) in (1, 2):                  # joystick, gamepad
+            return "gamepad"
+        return {1: "keyboard", 2: "mouse", 3: "keyboard"}.get(minor >> 4, "")
+    return ""
+
+
 def _is_root(instance_id: str) -> bool:
     return bool(re.match(r"^(BTHENUM|BTHLE)\\DEV_[0-9A-F]{12}", (instance_id or "").upper()))
 
@@ -184,7 +218,8 @@ def group_devices(data: dict, diag: List[str],
     def slot(mac):
         return by_mac.setdefault(mac, {"level": None, "pnp_conn": None, "aep_conn": None,
                                        "name": None, "root_name": None, "aep_name": None,
-                                       "status_ok": False, "aep_err": False})
+                                       "status_ok": False, "aep_err": False,
+                                       "kind": "", "audio": False})
 
     for d in devs:
         mac = mac_of(d.get("id"))
@@ -192,6 +227,8 @@ def group_devices(data: dict, diag: List[str],
             g = slot(mac)
             if _is_root(d.get("id")) and d.get("name"):
                 g["root_name"] = d["name"]
+            if any(u in (d.get("id") or "").lower() for u in AUDIO_SERVICES):
+                g["audio"] = True
 
     for p in props:
         mac = mac_of(p.get("id"))
@@ -224,6 +261,7 @@ def group_devices(data: dict, diag: List[str],
         if b is not None:
             g["aep_conn"] = bool(g["aep_conn"]) or b
         g["aep_name"] = g["aep_name"] or a.get("name")
+        g["kind"] = g["kind"] or kind_from_class(a.get("cls"), bool(_as_bool(a.get("le"))))
 
     out: List[DeviceStatus] = []
     for mac, g in by_mac.items():
@@ -246,11 +284,12 @@ def group_devices(data: dict, diag: List[str],
             shown, src = False, "no data"
         else:
             shown, src = g["status_ok"], "status"
+        kind = g["kind"] or ("headset" if g["audio"] else "")
         diag.append(f"[Bluetooth] {name} ({mac}): {level}%{' (cached)' if cached else ''} "
                     f"connected: WinRT={g['aep_conn']} PnP={g['pnp_conn']} "
-                    f"-> {'shown' if shown else 'hidden'} [{src}]")
+                    f"-> {'shown' if shown else 'hidden'} [{src}], kind: {kind or 'unknown'}")
         if shown:
-            out.append(DeviceStatus(f"bt:{mac}", name, level, False, True, "bluetooth"))
+            out.append(DeviceStatus(f"bt:{mac}", name, level, False, True, "bluetooth", kind=kind))
     if not by_mac:
         diag.append("[Bluetooth] no Bluetooth devices found")
     return out

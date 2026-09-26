@@ -17,6 +17,51 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - SteelSeries Arctis Nova 7 support through its 2.4 GHz dongle, without SteelSeries GG
   (and alongside it): exact level and charging state. Other models with the same
   protocol are one line in `providers/steelseries.py`.
+  
+## [1.10.1] - 2026-09-26
+
+### Added
+- **Icon colour** in the tray menu: Automatic (as before), White or Black. For a
+  transparent taskbar (e.g. TranslucentTB), where the Windows theme does not match
+  what is behind the icons.
+- README: the Razer Basilisk V3 Pro and Basilisk Ultimate, the FlyDigi Vader Pro
+  controller, and Audio-Technica and JBL Tune 760NC Bluetooth headphones,
+  confirmed working by users.
+
+### Changed
+- Releases are now a zip with a `HaloBattery` folder (`HaloBattery.exe` plus its
+  libraries in `_internal`) instead of a single `HaloBattery.exe`. The single-file
+  .exe unpacked Python into a temp folder at every start, which Windows Defender
+  and other antivirus machine-learning heuristics flagged as a trojan by mistake
+  (e.g. `Trojan:Win32/Sabsik.TE.A!ml`). The .exe now also carries version
+  information (name, version, description) in its Properties, and is built
+  without UPX compression. To update, replace the old `HaloBattery.exe` with the
+  folder; "Start with Windows" is pointed at the new copy the first time it runs.
+- "Windows Bluetooth devices" is now on by default for new installations, since
+  many people use the app with Bluetooth headphones and controllers. Existing
+  settings are kept: if the option was saved as off, it stays off.
+- Bluetooth devices get a pictogram by their type instead of the Bluetooth rune:
+  headphones and headsets the headset, mice the mouse, controllers the gamepad.
+  The type comes from the device itself (the Bluetooth Class of Device, or the
+  Appearance value for Bluetooth LE) or from its audio services; devices of other
+  types, or whose type is unknown, keep the Bluetooth rune. Diagnostics show the
+  detected type.
+
+### Fixed
+- An Xbox controller connected over Bluetooth showed up twice with "Windows
+  Bluetooth devices" on: once as a Bluetooth device with the level Windows shows
+  in Settings, and once as a controller with a wrong level (e.g. 10% instead of
+  71%) and a generic "HID-compliant game controller" name. When the Bluetooth
+  entry is there, the controller entry is now dropped; with Bluetooth devices
+  turned off, it is shown without a level instead of the wrong one (over
+  Bluetooth, Windows.Gaming.Input reported 100 of 1000 mWh for a controller at
+  82%). Controllers named with a generic HID name are now called by their vendor
+  ("Xbox controller") instead.
+- Wired Razer devices without a battery (e.g. the Huntsman V2 keyboard) could show
+  up as a tray icon: some of them answer the battery command too. Razer devices are
+  now polled only when they are on the list of known wireless models or their name
+  suggests a battery (HyperSpeed, wireless, receiver, dongle, dock, or a BlackShark,
+  Barracuda or Nari headset). Skipped devices are still listed in the diagnostics.
 
 ## [1.10.0] - 2026-09-26
 
@@ -120,6 +165,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
+[Unreleased]: ../../compare/v1.10.1...HEAD
+[1.10.1]: ../../compare/v1.10.0...v1.10.1
 [1.10.0]: ../../compare/v1.9.1...v1.10.0
 [1.9.1]: ../../compare/v1.9.0...v1.9.1
 [1.9.0]: ../../compare/v1.8.0...v1.9.0

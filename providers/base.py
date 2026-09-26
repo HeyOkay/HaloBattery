@@ -18,6 +18,9 @@ class DeviceStatus:
     source: str = ""             # razer / wlmouse / logitech / steelseries / bluetooth / xinput
     approx: str = ""             # set when the device only reports coarse levels,
                                  # e.g. "about 55% (medium)"; shown instead of "NN%"
+    kind: str = ""               # headset / mouse / keyboard / gamepad when known
+                                 # (picks the pictogram); "" = guess from the source
+    via: str = ""                # "bluetooth": a controller connected over Bluetooth
 
 
 class Provider:
