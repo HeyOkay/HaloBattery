@@ -7,3 +7,5 @@ from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
+from .hyperx import HyperXProvider  # noqa: F401
+from .playstation import PlayStationProvider  # noqa: F401

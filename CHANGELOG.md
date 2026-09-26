@@ -4,13 +4,23 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.11.0] - 2026-09-27
 
 ### Added
 - Razer BlackShark V2 Pro (2020, receiver 1532:0528): battery level and charging
   state through its 64-byte feature report 0xFF. Uses its own protocol instead of
   probing the generic Razer and 2023 PA protocols. Stale replies from a switched-off
   headset are rejected; the charging cable (1532:052E) does not create another icon.
+- **Update check**: once a day the app asks GitHub for the latest release. When a newer
+  one is out, a notification says so once, and the tray menu gets a "Download vX.Y.Z…"
+  item that opens the release page. Nothing is downloaded or installed automatically,
+  and "Check for updates" in the menu turns it off (#14).
+- Sony DualShock 4 and DualSense / DualSense Edge over USB and Bluetooth, read straight
+  from the controller's HID input report (the same source as the Linux drivers and
+  DS4Windows): exact level and charging state. A controller on the cable and on
+  Bluetooth at once keeps one icon. Thanks to @dendr203 (#7).
+- HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
+- SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
@@ -39,8 +49,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
   unchanged while Razer Synapse runs.
 - MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
-  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
-  command 0x06, every payload byte inverted, which returns
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x11 (the shorter
+  report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns
   `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
   The request has to be repeated for every read, and the receiver only relays a real
   value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
@@ -50,10 +60,21 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - MCHOSE G7 (A8A5:2255, chip 'YJX-CHIP'), which is a different chip and a different
   protocol from the M7 Ultra: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`,
   answered by an input report starting `AA 30` with the level at byte 8 and the charging
-  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8, so it is
-  **unverified** - no G7 was on hand - and a level out of range is refused rather than
-  reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
-  same machine do not fight over one.
+  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8 and
+  **confirmed on their G7**: it answers `aa 30 a5 0b 0a 01 01 01 2e 00 00 00`, byte 8 =
+  0x2E = 46% and byte 9 = 0 on the dongle, the same level their own tool shows. On its cable
+  the same 0xFF01 read answers with the same level and the PID unchanged (`aa 30 a5 3c 0a 01
+  01 01 2e 01 00 00`, byte 9 = 1 while charging), so a G7 keeps one icon either way; only the
+  `AA 30` header is relied on, since byte 3 differs between dongle (`0x0b`) and cable (`0x3c`).
+  A level out of range is still refused rather than reported as a made-up number. It gets an icon
+  of its own, so it and an M7 Ultra on the same machine do not fight over one.
+- MCHOSE A7 V2 Ultra (3837:100B), which is the same protocol as the M7 Ultra on MCHOSE's
+  newer vendor id: the reference driver treats both identically and matches on the vendor
+  id plus the vendor collection rather than by model list, which is what this provider
+  does too. Its status read is documented on the shorter 0x11 report, so both report ids
+  are tried, and a model the name table does not know is named from the receiver's own
+  product string. **Unverified** - from the diagnostics in #4, no device here - and it
+  gets an icon of its own, so it and an M7 Ultra on one machine stay two icons.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for
@@ -73,8 +94,25 @@ and the project follows [Semantic Versioning](https://semver.org/).
   instead of losing the icon after two failed polls (`STATUS_TIMEOUT`, "receiver
   present, device not responding"). That is what the README already described; the
   behaviour is gated so a switched-off headset still loses its icon.
+- New controller pictogram for Xbox-compatible controllers (XInput and
+  Windows.Gaming.Input), traced from the Xbox controller glyph: flat top, rounded
+  shoulders, straight sides down to the grips, and the two sticks in the Xbox layout
+  (left stick high, right stick low and nearer the middle). Nothing else is cut out,
+  so it stays readable at 16 px.
+- PlayStation controllers get a DualShock 4 pictogram in the same style: the outline
+  with its stepped shoulder buttons and long grips, the touchpad and the two symmetric
+  sticks cut out. The DualSense uses it too for now.
+- HyperX: when the dongle has no 0xFF90:0x0303 collection, nothing is written to any
+  other collection; the diagnostics list what the dongle offers instead.
 
 ### Fixed
+- Razer mice that answer a battery request with somebody else's packet first are no
+  longer written off as "off or asleep". Razer Synapse polls LED state on the same
+  collection and its replies carry the same status byte as the battery reply, so the
+  first packet could belong to a different command (seen on a DeathAdder V2 Pro in
+  #3). The reply is now read on - bounded by the same deadline - until the answer to
+  the request arrives, and a packet that is not that answer is never turned into a
+  level, so a device that never answers still shows nothing rather than a number.
 - After a device went missing (e.g. a Razer headset switched off while its receiver
   stays plugged in), all devices were polled every 3-4 seconds for as long as the app
   ran, instead of at the poll interval: the quick re-check that confirms a disconnect
