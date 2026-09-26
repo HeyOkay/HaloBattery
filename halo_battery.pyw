@@ -968,8 +968,11 @@ def probe():
     for s in res:
         print(describe(s))
     if not res:
-        print("Nothing found. All HID devices:")
-        print("\n".join(dump_hid()))
+        print("Nothing found.")
+    # always list every HID device: the case worth dumping is a device that did
+    # not answer while others did, and that never reaches the branch above
+    print("\nAll HID devices:")
+    print("\n".join(dump_hid()))
 
 
 def main():
