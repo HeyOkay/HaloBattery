@@ -1,7 +1,9 @@
 """Tray icon rendering: a battery ring with a device pictogram in the middle.
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
-The centre shows the device silhouette: headset, mouse, gamepad or the Bluetooth rune.
+The centre shows the device silhouette: headset, mouse, the Bluetooth rune, or a
+gamepad drawn per family - an Xbox pad or a PlayStation DualShock 4 (touchpad and
+symmetric sticks).
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
 amber, at or below the threshold it is red, and while charging the arc is
@@ -28,7 +30,9 @@ CLEAR = (0, 0, 0, 0)
 
 # device kind aliases (single letters are accepted too)
 KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad",
-         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad"}
+         "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
+         "dualshock": "dualshock", "dualsense": "dualsense",
+         "ps4": "dualshock", "ps5": "dualsense", "xbox": "gamepad"}
 
 
 def taskbar_is_light() -> bool:
@@ -98,6 +102,20 @@ _PAD_HALF = [(0, -13.9), (5.5, -13.9), (9.3, -12.9), (12.8, -10.3), (15.2, -7.9)
 _PAD_STICKS = [(-9.7, -6.1), (5.2, -0.3)]
 _PAD_STICK_R = 2.6
 
+# DualShock 4 (and, until it has its own, DualSense): right half of the outline in the
+# same grid, following the controller's shape - flat top with the shoulder buttons
+# stepped up at the corners, straight sides, long grips that stay wide down to round
+# ends, and a small bulge under each stick. The touchpad and the two symmetric sticks
+# are cut out; nothing else is.
+_DS4_HALF = [(0.0, -11.44), (9.67, -11.44), (9.73, -12.18), (10.44, -12.31), (14.67, -12.22),
+             (15.22, -11.6), (16.22, -10.44), (17.33, -8.89), (18.22, -7.11), (18.89, -4.44),
+             (19.44, -1.11), (19.82, 2.22), (20.0, 5.56), (19.89, 8.44), (19.44, 10.44),
+             (18.44, 12.0), (17.11, 12.62), (15.78, 12.71), (14.22, 12.33), (12.89, 11.56),
+             (12.0, 10.22), (11.33, 8.67), (10.67, 6.67), (10.11, 5.11), (9.67, 3.89),
+             (8.22, 4.22), (6.67, 4.56), (4.89, 4.22), (3.78, 3.38), (0.0, 3.33)]
+_DS4_TOUCH = (7.5, -10.7, -3.6, 1.0)     # half width, top, bottom, corner radius
+_DS4_STICKS = (6.5, 0.6, 2.35)           # x (mirrored), y, radius
+
 
 def _smooth_closed(pts, steps: int = 12):
     """Catmull-Rom spline through a closed list of points."""
@@ -115,6 +133,16 @@ def _smooth_closed(pts, steps: int = 12):
     return out
 
 
+def _pad_body(d: ImageDraw.ImageDraw, cx: float, cy: float, k: float, col, half):
+    """Fill the mirrored, smoothed controller outline given its right half."""
+    loop = half + [(-x, y) for x, y in reversed(half[1:-1])]
+    d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
+
+
+def _cut_stick(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float):
+    d.ellipse((_r(cx - r), _r(cy - r), _r(cx + r), _r(cy + r)), fill=CLEAR)
+
+
 def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     """Xbox controller silhouette with the two sticks cut out in the Xbox layout."""
     k = s / 18.0
@@ -126,8 +154,22 @@ def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
         d.ellipse((_r(x - r), _r(y - r), _r(x + r), _r(y + r)), fill=CLEAR)
 
 
+def _dualshock(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """DualShock 4 silhouette with the touchpad and the two sticks cut out."""
+    k = s / 18.0
+    _pad_body(d, cx, cy, k, col, _DS4_HALF)
+    w, y0, y1, rad = _DS4_TOUCH
+    d.rounded_rectangle((_r(cx - w * k), _r(cy + y0 * k), _r(cx + w * k), _r(cy + y1 * k)),
+                        radius=_r(rad * k), fill=CLEAR)
+    sx, sy, sr = _DS4_STICKS
+    for side in (-1, 1):
+        _cut_stick(d, cx + side * sx * k, cy + sy * k, sr * k)
+
+
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
-          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, 0, 18.4)}
+          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, 0, 18.4),
+          "dualshock": (_dualshock, 0, -0.2, 18.4),
+          "dualsense": (_dualshock, 0, -0.2, 18.4)}   # its own silhouette is still to come
 
 
 # ---------------------------------------------------------------- icon

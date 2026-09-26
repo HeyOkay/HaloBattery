@@ -32,7 +32,13 @@ _lock = threading.Lock()
 _cache: Dict[int, Tuple[FrozenSet[str], List[dict]]] = {}
 _stats = {"hidapi": 0, "cached": 0, "skipped": 0}
 
-_VID_RE = re.compile(r"vid_([0-9a-f]{4})")
+# USB paths carry the vendor id as "VID_054C"; Bluetooth HID paths use
+# "VID&0002054C" (eight hex digits, the vendor id is the low four). Match both.
+_VID_RE = re.compile(r"vid[_&]([0-9a-f]{4,8})")
+
+
+def _path_vids(path: str) -> FrozenSet[int]:
+    return frozenset(int(m.group(1)[-4:], 16) for m in _VID_RE.finditer(path))
 
 
 class _GUID(ctypes.Structure):
@@ -83,16 +89,13 @@ def interface_paths() -> Optional[FrozenSet[str]]:
 
 
 def vendor_present(paths: FrozenSet[str], vid: int) -> bool:
-    tag = f"vid_{vid:04x}"
-    return any(tag in p for p in paths)
+    return any(vid in _path_vids(p) for p in paths)
 
 
 def present_vids(paths: FrozenSet[str]) -> FrozenSet[int]:
     out = set()
     for p in paths:
-        m = _VID_RE.search(p)
-        if m:
-            out.add(int(m.group(1), 16))
+        out |= _path_vids(p)
     return frozenset(out)
 
 

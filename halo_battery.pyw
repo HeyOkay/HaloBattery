@@ -7,6 +7,8 @@ Supported:
   * Logitech (HID++ 2.0 mice and keyboards: Lightspeed / Unifying receivers, G HUB not needed)
   * SteelSeries (Arctis Nova 7 and Nova 5 headsets, GG not needed)
   * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
+  * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
+  * PlayStation controllers (DualShock 4, DualSense): directly over USB/HID
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -58,8 +60,8 @@ import icons  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AudezeProvider, BluetoothProvider, DeviceStatus, HyperXProvider,  # noqa: E402
-                       LogitechProvider, MchoseProvider, RazerProvider, SteelSeriesProvider,
-                       WLmouseProvider, XInputProvider)
+                       LogitechProvider, MchoseProvider, PlayStationProvider, RazerProvider,
+                       SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
@@ -208,6 +210,8 @@ def badge_for(st: DeviceStatus) -> str:
     n = st.name.lower()
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
+    if st.source == "playstation":
+        return "dualsense" if "dualsense" in n else "dualshock"
     if st.source == "xinput":
         return "gamepad"
     if st.source == "bluetooth":
@@ -386,7 +390,8 @@ class App:
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
         self.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-                          HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
+                          HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+                          PlayStationProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
@@ -690,12 +695,15 @@ class App:
             self.check_alert(ic, st)
 
         # device gone (receiver unplugged): remove the icon after 2 misses in a row;
-        # XInput reports a switched-off controller reliably, and the Bluetooth
-        # provider already confirms a disconnect itself, so those go at once
+        # XInput reports a switched-off controller reliably, the Bluetooth provider
+        # already confirms a disconnect itself, and a PlayStation controller's
+        # presence comes from the reliable HID list (and its key switches between
+        # the cable-only and Bluetooth forms when a cable is added to a BT pad),
+        # so those go at once
         for key in list(self.icons):
             if key not in seen:
                 self.missing[key] = self.missing.get(key, 0) + 1
-                limit = 1 if key.startswith(("xinput:", "bt:")) else 2
+                limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                 if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
                     # the icon is gone: stop counting, otherwise the quick
@@ -863,7 +871,8 @@ def probe():
     app = App.__new__(App)
     app.cfg = load_config()
     app.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-                     HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
+                     HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+                     PlayStationProvider()]
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:
