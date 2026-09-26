@@ -7,6 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
