@@ -62,7 +62,7 @@ import updates  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AsusProvider, AudezeProvider, BarracudaProvider,  # noqa: E402
-                       BluetoothProvider, DeviceStatus, GWolvesProvider, HyperXCloud3Provider,
+                       BluetoothProvider, DeviceStatus, AirPodsProvider, GWolvesProvider, HyperXCloud3Provider,
                        HyperXProvider, JblProvider, KeychronProvider, LogitechProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesProvider, WLmouseProvider, XInputProvider)
@@ -455,7 +455,7 @@ class App:
                           HyperXCloud3Provider(), HyperXProvider(), KeychronProvider(), PulsarProvider(),
                           JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
                           PlayStationProvider(), BarracudaProvider(), NintendoProvider(), AsusProvider(),
-                          GWolvesProvider()]
+                          GWolvesProvider(), AirPodsProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
@@ -1135,7 +1135,7 @@ def probe():
                      HyperXCloud3Provider(), HyperXProvider(), KeychronProvider(), PulsarProvider(),
                      JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
                      PlayStationProvider(), BarracudaProvider(), NintendoProvider(), AsusProvider(),
-                     GWolvesProvider()]
+                     GWolvesProvider(), AirPodsProvider()]
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:

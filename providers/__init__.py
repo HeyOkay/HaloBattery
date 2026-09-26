@@ -17,3 +17,4 @@ from .playstation import PlayStationProvider  # noqa: F401
 from .nintendo import NintendoProvider  # noqa: F401
 from .asus import AsusProvider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
+from .airpods import AirPodsProvider  # noqa: F401
