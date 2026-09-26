@@ -2,8 +2,8 @@
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
 The centre shows the device silhouette: headset, mouse, the Bluetooth rune, or a
-gamepad drawn per family - an Xbox pad (diagonal sticks), a DualShock 4 (wide
-touchpad) or a DualSense (flared "wings" and a lightbar beside the touchpad).
+gamepad drawn per family - an Xbox pad or a PlayStation DualShock 4 (touchpad and
+symmetric sticks).
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
 amber, at or below the threshold it is red, and while charging the arc is
@@ -88,31 +88,33 @@ def _bluetooth(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     d.line([(_r(x), _r(y)) for x, y in pts], fill=col, width=_r(s * 0.22), joint="curve")
 
 
-# Right half of the controller outline, clockwise from the top centre, in a
-# design grid about 40 units wide (x right, y down). Mirrored for the left half
-# and drawn as one smooth closed curve, so the sides have no bumps.
-_PAD_HALF = [(0, -9.4), (5, -10.2), (10, -11.2), (14.6, -10.8), (18.2, -8.2), (19.8, -3.8),
-             (20.2, 2.2), (19.6, 8.8), (17.6, 14.0), (14.2, 15.8), (11.0, 14.0), (8.6, 9.0),
-             (5.0, 4.4), (0, 3.6)]
-# Xbox layout: the sticks sit diagonally (left stick high, right stick low),
-# the tell that sets an Xbox pad apart from the symmetric PlayStation one.
-_XBOX_STICKS = [(-8.6, -4.6), (8.6, 0.2)]
-_XBOX_STICK_R = 2.9
+# Right half of an Xbox controller outline, clockwise from the top centre, in a
+# design grid about 40 units wide (x right, y down), traced from the Xbox
+# controller glyph: flat top, rounded shoulders, straight sides flaring down to
+# the grips, and a wide flat-bottomed notch between them. Mirrored for the left
+# half and drawn as one smooth closed curve. Used for every Xbox-compatible
+# (XInput / Windows.Gaming.Input) controller.
+_PAD_HALF = [(0, -13.9), (5.5, -13.9), (9.3, -12.9), (12.8, -10.3), (15.2, -7.9), (16.3, -5.9),
+             (18.1, -0.3), (19.7, 4.8), (20.0, 7.6), (19.5, 10.7), (17.9, 12.8), (15.3, 14.0),
+             (14.5, 13.6), (9.0, 8.1), (6.0, 6.8), (0, 6.8)]
+# the two sticks where they sit on an Xbox pad: left stick high and to the side,
+# right stick lower and closer to the middle; nothing else is cut out
+_PAD_STICKS = [(-9.7, -6.1), (5.2, -0.3)]
+_PAD_STICK_R = 2.6
 
-# PlayStation controllers: a rounder body with symmetric sticks low and close to
-# the centre, and a touchpad cut into the top. The DualShock 4 (PS4) is compact
-# with a wide touchpad; the DualSense (PS5) is larger, its grips flare out into
-# longer "wings" and its touchpad is a little narrower and taller.
-_DS4_HALF = [(0, -8.4), (6.2, -9.0), (11.2, -9.0), (15.0, -8.0), (17.6, -5.2), (18.2, -0.6),
-             (17.8, 4.6), (16.0, 9.6), (12.6, 12.4), (9.6, 11.0), (7.8, 6.6), (4.6, 3.6), (0, 3.1)]
-_DS4_TOUCH = (4.8, 1.9, -4.2)          # half width, half height, centre y (wide, short)
-_DS4_STICKS = (5.5, 6.0, 2.3)          # x (mirrored), y, radius
-
-_DS5_HALF = [(0, -8.8), (6.5, -9.5), (11.8, -9.5), (15.8, -8.4), (18.6, -5.6), (19.6, -1.0),
-             (21.2, 5.0), (21.4, 10.5), (18.6, 15.2), (14.4, 16.6), (10.6, 13.0), (8.2, 7.0),
-             (4.6, 3.6), (0, 3.0)]
-_DS5_TOUCH = (3.9, 2.5, -3.6)          # narrower, taller
-_DS5_STICKS = (5.9, 6.8, 2.5)
+# DualShock 4 (and, until it has its own, DualSense): right half of the outline in the
+# same grid, following the controller's shape - flat top with the shoulder buttons
+# stepped up at the corners, straight sides, long grips that stay wide down to round
+# ends, and a small bulge under each stick. The touchpad and the two symmetric sticks
+# are cut out; nothing else is.
+_DS4_HALF = [(0.0, -11.44), (9.67, -11.44), (9.73, -12.18), (10.44, -12.31), (14.67, -12.22),
+             (15.22, -11.6), (16.22, -10.44), (17.33, -8.89), (18.22, -7.11), (18.89, -4.44),
+             (19.44, -1.11), (19.82, 2.22), (20.0, 5.56), (19.89, 8.44), (19.44, 10.44),
+             (18.44, 12.0), (17.11, 12.62), (15.78, 12.71), (14.22, 12.33), (12.89, 11.56),
+             (12.0, 10.22), (11.33, 8.67), (10.67, 6.67), (10.11, 5.11), (9.67, 3.89),
+             (8.22, 4.22), (6.67, 4.56), (4.89, 4.22), (3.78, 3.38), (0.0, 3.33)]
+_DS4_TOUCH = (7.5, -10.7, -3.6, 1.0)     # half width, top, bottom, corner radius
+_DS4_STICKS = (6.5, 0.6, 2.35)           # x (mirrored), y, radius
 
 
 def _smooth_closed(pts, steps: int = 12):
@@ -142,49 +144,32 @@ def _cut_stick(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float):
 
 
 def _gamepad(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
-    """Xbox controller silhouette: flat top over the bumpers, long grips and an
-    arch between them, with the two sticks cut out on a diagonal (Xbox layout)."""
+    """Xbox controller silhouette with the two sticks cut out in the Xbox layout."""
     k = s / 18.0
-    _pad_body(d, cx, cy, k, col, _PAD_HALF)
-    for sx, sy in _XBOX_STICKS:
-        _cut_stick(d, cx + sx * k, cy + sy * k, _XBOX_STICK_R * k)
+    loop = _PAD_HALF + [(-x, y) for x, y in reversed(_PAD_HALF[1:-1])]
+    d.polygon([(_r(cx + x * k), _r(cy + y * k)) for x, y in _smooth_closed(loop)], fill=col)
+    r = _PAD_STICK_R * k
+    for sx, sy in _PAD_STICKS:
+        x, y = cx + sx * k, cy + sy * k
+        d.ellipse((_r(x - r), _r(y - r), _r(x + r), _r(y + r)), fill=CLEAR)
 
 
-def _playstation(d, cx, cy, s, col, half, touch, sticks):
-    """Shared PlayStation body: rounded outline with a touchpad cut into the top
-    centre and two symmetric sticks cut low, close to the middle."""
+def _dualshock(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """DualShock 4 silhouette with the touchpad and the two sticks cut out."""
     k = s / 18.0
-    _pad_body(d, cx, cy, k, col, half)
-    tw, th, ty = touch
-    d.rounded_rectangle((_r(cx - tw * k), _r(cy + (ty - th) * k),
-                         _r(cx + tw * k), _r(cy + (ty + th) * k)),
-                        radius=_r(1.1 * k), fill=CLEAR)
-    sx, sy, sr = sticks
+    _pad_body(d, cx, cy, k, col, _DS4_HALF)
+    w, y0, y1, rad = _DS4_TOUCH
+    d.rounded_rectangle((_r(cx - w * k), _r(cy + y0 * k), _r(cx + w * k), _r(cy + y1 * k)),
+                        radius=_r(rad * k), fill=CLEAR)
+    sx, sy, sr = _DS4_STICKS
     for side in (-1, 1):
         _cut_stick(d, cx + side * sx * k, cy + sy * k, sr * k)
 
 
-def _dualshock(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
-    """DualShock 4 (PS4): compact body, wide touchpad."""
-    _playstation(d, cx, cy, s, col, _DS4_HALF, _DS4_TOUCH, _DS4_STICKS)
-
-
-def _dualsense(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
-    """DualSense (PS5): larger body with flared "wing" grips, narrower touchpad
-    flanked by two small lightbar notches."""
-    _playstation(d, cx, cy, s, col, _DS5_HALF, _DS5_TOUCH, _DS5_STICKS)
-    k = s / 18.0
-    tw, th, ty = _DS5_TOUCH
-    for side in (-1, 1):                                # lightbar marks beside the touchpad
-        x = cx + side * (tw + 1.4) * k
-        d.rounded_rectangle((_r(x - 0.5 * k), _r(cy + (ty - th * 0.7) * k),
-                             _r(x + 0.5 * k), _r(cy + (ty + th * 0.7) * k)),
-                            radius=_r(0.4 * k), fill=CLEAR)
-
-
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
-          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, -2.5, 18.4),
-          "dualshock": (_dualshock, 0, -1.5, 18.6), "dualsense": (_dualsense, 0, -2.5, 18.8)}
+          "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, 0, 18.4),
+          "dualshock": (_dualshock, 0, -0.2, 18.4),
+          "dualsense": (_dualshock, 0, -0.2, 18.4)}   # its own silhouette is still to come
 
 
 # ---------------------------------------------------------------- icon

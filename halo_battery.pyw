@@ -2,7 +2,11 @@
 
 Supported:
   * Razer (BlackShark V2 Pro headset, mice, etc.): directly over USB/HID, no Synapse
+  * Audeze Maxwell (2.4 GHz dongle or USB-C cable)
   * WLmouse (Beast X / Beast X Max / Mini Pro)
+  * Logitech (HID++ 2.0 mice and keyboards: Lightspeed / Unifying receivers, G HUB not needed)
+  * SteelSeries (Arctis Nova 7 and Nova 5 headsets, GG not needed)
+  * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
   * PlayStation controllers (DualShock 4, DualSense): directly over USB/HID
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
@@ -19,11 +23,11 @@ import sys
 import threading
 import time
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.10.0"
+VERSION = "1.10.1"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -55,8 +59,9 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 import icons  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (BluetoothProvider, DeviceStatus, PlayStationProvider,  # noqa: E402
-                       RazerProvider, WLmouseProvider, XInputProvider)
+from providers import (AudezeProvider, BluetoothProvider, DeviceStatus, HyperXProvider,  # noqa: E402
+                       LogitechProvider, MchoseProvider, PlayStationProvider, RazerProvider,
+                       SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
@@ -66,11 +71,12 @@ DEFAULTS = {
     "interval": 60,      # seconds between polls
     "low": 20,           # low battery notification threshold, %
     "notify": True,
-    "bluetooth": False,
+    "bluetooth": True,   # Windows Bluetooth devices
     "badges": True,      # device pictogram inside the ring
     "animation": True,   # "breathing" arc while charging
     # icon colour: "auto" follows the Windows theme, or the top menu bar while
-    # MyDockFinder is running; "windows" / "topbar" force one source (config file only)
+    # MyDockFinder is running; "white" / "black" are fixed (tray menu > Icon colour);
+    # "windows" / "topbar" force one automatic source (config file only)
     "icon_theme": "auto",
 }
 
@@ -167,6 +173,28 @@ def migrate_legacy_autostart() -> bool:
         return False
 
 
+def refresh_autostart() -> bool:
+    """If "Start with Windows" is on but points at another copy of the app
+    (e.g. the old single HaloBattery.exe after moving to the folder build),
+    point it at the copy that is running now. Only for the built .exe."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            current, _ = winreg.QueryValueEx(k, APP_NAME)
+    except OSError:
+        return False                         # autostart is off: leave it off
+    if str(current).strip().lower() == _launch_command().lower():
+        return False
+    try:
+        set_autostart(True)
+        return True
+    except OSError as e:
+        log.warning("autostart refresh: %s", e)
+        return False
+
+
 def single_instance() -> bool:
     if sys.platform != "win32":
         return True
@@ -177,6 +205,8 @@ def single_instance() -> bool:
 
 # ------------------------------------------------------------ formatting
 def badge_for(st: DeviceStatus) -> str:
+    if st.kind in ("headset", "mouse", "gamepad"):     # reported by the device itself
+        return st.kind
     n = st.name.lower()
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
@@ -187,6 +217,77 @@ def badge_for(st: DeviceStatus) -> str:
     if st.source == "bluetooth":
         return "bluetooth"
     return "mouse"
+
+
+GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")
+
+
+def dedupe_controllers(results: List[DeviceStatus], bt: List[DeviceStatus]) -> List[DeviceStatus]:
+    """A controller connected over Bluetooth is seen twice: by the controller
+    provider and as a Bluetooth device. Windows' own Bluetooth battery value is
+    the one shown in Settings, so the controller provider's entry is dropped."""
+    bt_pads = [s for s in bt if s.kind == "gamepad" or any(w in s.name.lower() for w in GAMEPAD_WORDS)]
+    if not bt_pads:
+        return results
+    out = [s for s in results if not (s.source == "xinput" and s.via == "bluetooth")]
+    for s in results:
+        if s not in out:
+            log.info("[XInput] %s is connected over Bluetooth and shown as a Bluetooth device", s.name)
+    return out
+
+
+# Words that describe how a device is connected or what shape it is, rather than which
+# device it is. The two dedupe helpers pick opposite winners on purpose: for a
+# controller over Bluetooth, Windows' own value is the one Settings shows and the
+# controller provider's is wrong (see above), while a headset read over HID carries its
+# own charging state and the Bluetooth copy of it lags a percent behind.
+_TRANSPORT_WORDS = frozenset((
+    "bt", "ble", "bluetooth", "wireless", "dongle", "receiver", "headset", "usb",
+))
+
+
+def device_family(name: str) -> str:
+    """A device name reduced to what identifies the device, not the connection.
+
+    "Audeze Maxwell", "Audeze Maxwell Headset" and "Audeze Maxwell BT" are one headset
+    seen over three connections and have to come out equal.
+    """
+    words = "".join(c if c.isalnum() else " " for c in (name or "").lower()).split()
+    return " ".join(w for w in words if w not in _TRANSPORT_WORDS)
+
+
+def drop_bluetooth_duplicates(results: List[DeviceStatus],
+                              logged: Set[str]) -> List[DeviceStatus]:
+    """One icon per device, not one per transport.
+
+    A device that is read over HID is also visible to Windows' own Bluetooth battery
+    API once it is paired: a Maxwell reports the same level over the USB-C endpoint and
+    over Bluetooth at the same time, which put a second icon in the tray next to the
+    live one. The HID reading wins here - it is the device's own protocol and it
+    carries the charging state - so the Bluetooth copy is dropped and said so once per
+    device rather than every poll. A device HID cannot see (Bluetooth only, nothing
+    plugged in) keeps its Bluetooth icon, which is how a headset used purely over
+    Bluetooth is covered at all: the vendor collection the provider needs does not
+    exist over Bluetooth.
+    """
+    # controllers are left to dedupe_controllers(): for them the Bluetooth value wins
+    hid = [device_family(st.name) for st in results
+           if not st.key.startswith("bt:") and st.source not in ("bluetooth", "xinput")]
+    kept: List[DeviceStatus] = []
+    for st in results:
+        if st.key.startswith("bt:") or st.source == "bluetooth":
+            fam = device_family(st.name)
+            duplicate = bool(fam) and any(
+                fam == h or (len(fam) >= 6 and (fam in h or h in fam)) for h in hid)
+            if duplicate:
+                if st.key not in logged:
+                    logged.add(st.key)
+                    log.info("[Bluetooth] %s is already read over HID, the "
+                             "Bluetooth copy is not shown", st.name)
+                continue
+            logged.discard(st.key)
+        kept.append(st)
+    return kept
 
 
 def describe(st: DeviceStatus) -> str:
@@ -288,12 +389,14 @@ class App:
         self.theme_evt = threading.Event()   # "re-check the icon colour now"
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
-        self.providers = [RazerProvider(), WLmouseProvider(), XInputProvider(),
+        self.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+                          HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
                           PlayStationProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
         self.lock = threading.RLock()
+        self._bt_dup_logged: Set[str] = set()   # Bluetooth copies already reported
         self.wake = threading.Event()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
@@ -337,6 +440,14 @@ class App:
                 self.wake.set()
             return _f
 
+        def set_theme(mode):
+            def _f(icon, item):
+                self.cfg["icon_theme"] = mode
+                save_config(self.cfg)
+                self.refresh_theme()
+                self.theme_evt.set()
+            return _f
+
         def toggle_autostart(icon, item):
             try:
                 set_autostart(not autostart_enabled())
@@ -345,6 +456,7 @@ class App:
 
         intervals = [(15, "15 seconds"), (30, "30 seconds"), (60, "1 minute"),
                      (120, "2 minutes"), (300, "5 minutes")]
+        themes = [("auto", "Automatic"), ("white", "White"), ("black", "Black")]
         lows = [(0, "Off"), (10, "10%"), (15, "15%"), (20, "20%"), (25, "25%"), (30, "30%")]
 
         return Menu(
@@ -363,6 +475,9 @@ class App:
                  checked=lambda it: self.cfg["badges"]),
             Item("Charging animation", toggle("animation"),
                  checked=lambda it: self.cfg["animation"]),
+            Item("Icon colour", Menu(*[
+                Item(t, set_theme(m), checked=lambda it, m=m: self.cfg.get("icon_theme", "auto") == m, radio=True)
+                for m, t in themes])),
             Item("Start with Windows", toggle_autostart,
                  checked=lambda it: autostart_enabled()),
             Menu.SEPARATOR,
@@ -378,6 +493,8 @@ class App:
         light and dark by the wallpaper or the full-screen app, so while it is
         running the icons follow what is on screen at the top instead."""
         mode = self.cfg.get("icon_theme", "auto")
+        if mode in ("white", "black"):          # set by hand (e.g. a transparent taskbar)
+            return mode == "black"
         if mode == "auto":
             mode = "topbar" if icons.mydockfinder_running() else "windows"
         if mode == "topbar":
@@ -422,6 +539,9 @@ class App:
             if fast and self.win_events is None:
                 self.win_events = winevents.WindowEventWatcher(self.theme_evt)
                 log.info("window events: %s", "on" if self.win_events.start() else "unavailable")
+            elif not fast and self.win_events is not None:
+                self.win_events.stop()          # fixed colour chosen, or MyDockFinder closed
+                self.win_events = None
             now = time.monotonic()
             if checks:
                 timeout = max(0.0, checks[0] - now)
@@ -512,7 +632,9 @@ class App:
                 log.exception("provider %s", p.name)
         if self.cfg["bluetooth"]:
             # Bluetooth is polled in its own thread (bt_loop); only the cache is used here
-            results += list(self.bt_cache)
+            bt = list(self.bt_cache)
+            results = dedupe_controllers(results, bt) + bt
+            results = drop_bluetooth_duplicates(results, self._bt_dup_logged)
         return results
 
     def _bt_update(self, res: List[DeviceStatus]):
@@ -584,6 +706,9 @@ class App:
                 limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                 if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
+                    # the icon is gone: stop counting, otherwise the quick
+                    # 3-second re-check in wait_next() would go on forever
+                    self.missing.pop(key, None)
 
         if self.icons and self.placeholder:
             self.placeholder.stop()
@@ -745,7 +870,8 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = [RazerProvider(), WLmouseProvider(), XInputProvider(),
+    app.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+                     HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
                      PlayStationProvider()]
     app.bt = BluetoothProvider()
     res = []
@@ -771,6 +897,8 @@ def main():
         log.info("settings migrated from %%APPDATA%%\\%s", LEGACY_NAME)
     if migrate_legacy_autostart():
         log.info("autostart entry migrated from %s", LEGACY_NAME)
+    elif refresh_autostart():
+        log.info("autostart entry now points at %s", sys.executable)
     App().run()
 
 

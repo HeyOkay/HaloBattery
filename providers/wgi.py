@@ -66,7 +66,10 @@ class WgiController:
         if isinstance(remain, (int, float)) and isinstance(full, (int, float)) and full > 0:
             self.level = max(0, min(100, round(remain * 100 / full)))
         name = (raw.get("name") or "").strip()
-        if name.lower() in GENERIC_NAMES:
+        # "HID-compliant game controller" and its translations: a generic HID name
+        if "hid" in name.lower():
+            name = VENDOR_NAMES.get(self.vid, "")        # "" -> the provider's own name
+        elif name.lower() in GENERIC_NAMES:
             name = VENDOR_NAMES.get(self.vid, name or "")
         self.name = name
 
