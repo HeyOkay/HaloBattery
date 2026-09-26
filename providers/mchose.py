@@ -38,13 +38,15 @@ their own monitor and the HID dump in issue #8: a 65-byte output report starting
 ``00 55 30 A5 0B 2E 01 01 01``, answered by an input report starting ``AA 30`` whose byte 8
 is the level and byte 9 the charging flag. Its vendor collections are 0xFFA5:0x88,
 0xFF05:0x88 and 0xFF01:0x10; only the last one is written to, as in @kek353's monitor.
-**Nobody has run this against the hardware** - it is implemented from their code and their
-device dump, so a level out of range is rejected instead of shown, and the byte layout of
-that reply is the first thing to check on a real G7.
+**Confirmed on @kek353's own G7** (issue #8): the probe answers
+``aa 30 a5 0b 0a 01 01 01 2e 00 00 00``, so byte 8 = 0x2E = 46% and byte 9 = 0 while the
+mouse sits on its dongle, and that level is the one their tool shows. What the same read
+returns on the *cable* is still open, and so is whether the PID stays A8A5:2255 there -
+that is what decides whether a G7 keeps a single icon the way the M7 Ultra does.
 
-Not verified: the 0x3837 family, other models, the G7 (no device on hand), and the meaning
-of the second level/charging pair in the 0x5253 reply (it has matched the first pair in
-every reading so far).
+Not verified: the 0x3837 family (no device here), the G7 on its cable, other models, and the
+meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
+in every reading so far).
 """
 from __future__ import annotations
 
@@ -132,9 +134,13 @@ def parse_g7(resp) -> Optional[Tuple[int, bool]]:
     """(level, charging) from a G7 reply, or None if it is not one.
 
     Layout from @kek353's monitor and the HID dump in issue #8: the frame starts AA 30,
-    the level is byte 8 and the charging flag byte 9. Nothing here was measured on the
-    hardware, so an out-of-range level is refused rather than reported as a made-up
-    number - the next person with a G7 should check these two offsets first.
+    the level is byte 8 and the charging flag byte 9. Confirmed on @kek353's G7, on the
+    dongle and on its cable: `aa 30 a5 0b 0a 01 01 01 2e 00 00 00` (46%, not charging) and
+    `aa 30 a5 3c 0a 01 01 01 2e 01 00 00` (46%, charging). Only the two-byte AA 30 header is
+    relied on - byte 3 differs between those two (0x0b against 0x3c) - and the same PID
+    (A8A5:2255) on the same 0xFF01 collection answers either way, which is what keeps one
+    icon for a G7 on its dongle and on its cable. An out-of-range level is refused rather
+    than reported as a made-up number.
     """
     if not resp or len(resp) <= G7_CHARGE_BYTE:
         return None

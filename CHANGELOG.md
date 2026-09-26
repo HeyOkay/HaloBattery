@@ -46,10 +46,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - MCHOSE G7 (A8A5:2255, chip 'YJX-CHIP'), which is a different chip and a different
   protocol from the M7 Ultra: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`,
   answered by an input report starting `AA 30` with the level at byte 8 and the charging
-  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8, so it is
-  **unverified** - no G7 was on hand - and a level out of range is refused rather than
-  reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
-  same machine do not fight over one.
+  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8 and
+  **confirmed on their G7**: it answers `aa 30 a5 0b 0a 01 01 01 2e 00 00 00`, byte 8 =
+  0x2E = 46% and byte 9 = 0 on the dongle, the same level their own tool shows. On its cable
+  the same 0xFF01 read answers with the same level and the PID unchanged (`aa 30 a5 3c 0a 01
+  01 01 2e 01 00 00`, byte 9 = 1 while charging), so a G7 keeps one icon either way; only the
+  `AA 30` header is relied on, since byte 3 differs between dongle (`0x0b`) and cable (`0x3c`).
+  A level out of range is still refused rather than reported as a made-up number. It gets an icon
+  of its own, so it and an M7 Ultra on the same machine do not fight over one.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for
