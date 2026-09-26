@@ -56,11 +56,16 @@ breathes where the headset's own LED is solid green.
 
 Measured with the headset switched off and the dongle left plugged in: the
 dongle keeps enumerating (all three collections stay, only the audio endpoints
-go away) and keeps answering every packet, but the battery marker is gone from
-its buffer once the buffer has rolled over - a poll running right after the
-switch-off can still see the last value, the one after that sees nothing. So the
-icon goes away through the usual "two misses" path and a switched-off headset is
-never reported as 0%.
+go away) and keeps answering every packet with the last value it held - the
+marker does not disappear from its buffer, so a stale level and a live one are
+indistinguishable that way (nine answers over two and a half minutes, all the
+same value). The dongle does say which state it is in, though: with no headset
+linked it enumerates as "Audeze Maxwell Dongle" instead of "Audeze Maxwell HID",
+and its interface paths change at the same moment, so hidlist's path-keyed cache
+re-enumerates by itself and poll() sees the fresh string. poll() reads that
+before anything else and reports nothing while it says Dongle: a switched-off
+headset leaves the tray through the usual "two misses" path, is never reported as
+0%, and its 1.5 s battery sequence is not sent at all.
 
 Both endpoints report serial number ``0000000000000000``, so the icon key is that
 serial and two Maxwells on one machine would share one icon (and only the first
@@ -75,7 +80,7 @@ buffer can still hold the last value for one poll), and since the cable is read
 first a stale dongle value never wins. Windows shows no Audeze audio endpoint
 while the headset is off even though both HID endpoints stay enumerated, and the
 dongle's product string reads "Audeze Maxwell Dongle" instead of "Audeze Maxwell
-HID" - not used for anything, but it is the only state hint seen so far.
+HID" - poll() uses that to tell a switched-off headset from a live one.
 """
 from __future__ import annotations
 
@@ -205,6 +210,18 @@ def newest_level(frames) -> Optional[int]:
 
 def is_vendor_interface(d: dict) -> bool:
     return d.get("usage_page") == VENDOR_USAGE_PAGE and d.get("usage", 0) == VENDOR_USAGE
+
+
+# With no headset linked the dongle identifies itself as this instead of
+# "Audeze Maxwell HID". Its interface paths change at the same moment, so
+# hidlist's path-keyed cache hands poll() a fresh string - no cache to fight.
+NO_HEADSET_STRING = "audeze maxwell dongle"
+
+
+def no_headset_linked(ifaces) -> bool:
+    """True when the dongle itself says no headset is linked (switched off)."""
+    return any((d.get("product_string") or "").strip().lower() == NO_HEADSET_STRING
+               for d in ifaces)
 
 
 class AudezeProvider(Provider):
@@ -341,17 +358,30 @@ class AudezeProvider(Provider):
             # writing the sequence to them cost 2.6 s and ~45 log lines per poll
             # while the headset was switched off, so they are only tried on a
             # device that has no 0xFF13 collection at all.
+            # A switched-off headset: the dongle keeps answering, but with the last
+            # value it held, and there is no way to tell that from a live reading -
+            # the icon sat there showing the stale level for as long as the headset
+            # stayed off (nine answers over 2.5 minutes, all the same value). The
+            # dongle does say which state it is in, so report nothing: the icon
+            # leaves through the usual two-misses path (what the README promises for
+            # a switched-off device) and the battery sequence is not sent at all,
+            # 1.5 s saved per poll for a value that cannot change while it is off.
+            off = pid not in CABLE_PIDS and no_headset_linked(ifaces)
             cands = ([d for d in ifaces if is_vendor_interface(d)]
                      or [d for d in ifaces if d.get("usage_page") == VENDOR_USAGE_PAGE]
                      or sorted(ifaces, key=lambda d: d.get("interface_number", 0)))
             level = None
-            for d in cands:
-                if len(cands) > 1:
-                    self._diag.append(f"  iface={d.get('interface_number')} "
-                                      f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                level, _ = self._read_battery(d["path"], (pid, serial))
-                if level is not None:
-                    break
+            if off:
+                self._diag.append("    the dongle reports no headset linked "
+                                  "(switched off), skipping the read")
+            else:
+                for d in cands:
+                    if len(cands) > 1:
+                        self._diag.append(f"  iface={d.get('interface_number')} "
+                                          f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                    level, _ = self._read_battery(d["path"], (pid, serial))
+                    if level is not None:
+                        break
             if level is None:
                 # A switched-off headset is a routine state, not a fault. Log the
                 # outage once per headset and stay quiet until it answers again:

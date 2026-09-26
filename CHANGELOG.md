@@ -73,6 +73,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Audeze: a switched-off headset no longer pays for the battery packet that cannot be
   answered (1.5 s per poll instead of 1.7 s), and its failure block is written once per
   outage instead of every poll.
+- Audeze: a Maxwell that is switched off is no longer reported at the level it was
+  on before. The dongle keeps answering with that value as if it were live (nine
+  answers out of nine over two and a half minutes, all the same), so the dongle's
+  own product string decides instead - "Audeze Maxwell Dongle" with no headset
+  linked, "Audeze Maxwell HID" with one. Nothing is reported while it says Dongle,
+  so the icon leaves the tray the way the README says a switched-off device does,
+  and the 1.5 s battery sequence is not sent at all.
 ## [1.10.1] - 2026-09-26
 
 ### Added
