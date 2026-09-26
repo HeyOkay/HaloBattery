@@ -4,19 +4,6 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [1.10.0] - 2026-09-26
-
-### Added
-- MyDockFinder support. MyDockFinder draws its own macOS-style menu bar and switches
-  it between light and dark by the wallpaper or the full-screen app, while the Windows
-  theme stays the same. While MyDockFinder is running, the icon colour now follows the
-  same rule as its bar, checked every 1.5 seconds: with a maximized or full-screen
-  window on top, by that window's title bar (a thin strip at the top right of the
-  screen is sampled; no cursor flicker, nothing is saved); otherwise by the wallpaper
-  as a whole, so a dark sky over a light landscape still counts as light. The icons
-  are black on a light bar and white on a dark one. With the standard Windows shell
-  nothing changes: the icons follow the Windows theme as before.
-
 ## [1.9.1] - 2026-09-26
 
 ### Fixed
@@ -33,17 +20,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - The icon of a device whose receiver was unplugged or that was switched off could
   stay for up to a minute: the second, confirming check waited for the next
   scheduled poll. It now runs 3 seconds after the first miss.
-- Bluetooth devices took about a minute to appear after connecting and up to two
-  minutes to disappear after disconnecting: they were checked by a new PowerShell
-  run once a minute, and a disconnect had to be confirmed by the next run.
+- Bluetooth devices took about a minute to appear after connecting (and to disappear
+  after disconnecting): they were checked by a new PowerShell run once a minute.
   One long-lived PowerShell process now checks only the connection state every
   2 seconds (a direct WinRT query by MAC address, no device scan) and reads the
   battery levels right after a device connects or disconnects, again at +3, +8 and
   +15 seconds (Windows reports the battery a moment after connecting) and once a
-  minute. A connected device now shows up within a few seconds, and a disconnected
-  one disappears in about 5 seconds (a disconnect is still confirmed once, so a
-  momentary dropout does not hide the icon). If that process cannot run, the app
-  falls back to the old once-a-minute check. The process exits together with the app.
+  minute. A connected device now shows up within a few seconds. If that process
+  cannot run, the app falls back to the old once-a-minute check. The process exits
+  together with the app.
 
 ## [1.9.0] - 2026-09-25
 
@@ -99,7 +84,6 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[1.10.0]: ../../compare/v1.9.1...v1.10.0
 [1.9.1]: ../../compare/v1.9.0...v1.9.1
 [1.9.0]: ../../compare/v1.8.0...v1.9.0
 [1.8.0]: ../../releases/tag/v1.8.0
