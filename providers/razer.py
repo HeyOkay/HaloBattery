@@ -130,6 +130,7 @@ class RazerProvider(Provider):
         self._cache: Dict[Tuple[int, str], _Cand] = {}
         self._dead: Dict[bytes, float] = {}   # interfaces known not to respond
         self._diag: List[str] = []
+        self._failing: Dict[str, str] = {}    # key -> reason of the ongoing failure
 
     # ---- low level -------------------------------------------------------
     def _query(self, dev, tid: int, cmd_class: int, cmd_id: int) -> Tuple[Optional[int], Optional[int]]:
@@ -223,11 +224,17 @@ class RazerProvider(Provider):
                     if pa is not None and (st is None or pa[0] == STATUS_OK):
                         st = pa
             if st is None or st[0] != STATUS_OK:
-                # failed poll: details go to the log so the failure history is visible
-                log.info("[Razer] %s: poll failed (%s)", name,
-                         "no reply" if st is None else f"status {st[0]:02x}")
-                for line in self._diag[diag_from:]:
-                    log.info("%s", line)
+                # failed poll: the details go to the log once, when the device stops
+                # answering (or the reason changes), not on every poll while it is off
+                reason = "no reply" if st is None else f"status {st[0]:02x}"
+                if self._failing.get(key) != reason:
+                    self._failing[key] = reason
+                    log.info("[Razer] %s: poll failed (%s); not logged again until it changes",
+                             name, reason)
+                    for line in self._diag[diag_from:]:
+                        log.info("%s", line)
+            elif self._failing.pop(key, None) is not None:
+                log.info("[Razer] %s: answering again", name)
             if st is None:
                 continue
             status, level, charging = st

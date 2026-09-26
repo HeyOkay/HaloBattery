@@ -9,12 +9,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
-  reports itself and with the mouse or keyboard pictogram it reports; the level comes
-  from the unified battery, battery status or battery voltage feature, whichever the
-  device has. The icon follows the device's unit id, so two identical mice get two
-  icons and a mouse keeps its icon between the receiver and the cable. Tested on the
-  G502 LIGHTSPEED (voltage, matches G HUB); other HID++ 2.0 mice and keyboards should
-  work the same way.
+  reports itself; the level comes from the unified battery, battery status or battery
+  voltage feature, whichever the device has. The icon follows the device's unit id, so
+  two identical mice get two icons and a mouse keeps its icon between the receiver and
+  the cable. Tested on the G502 LIGHTSPEED (voltage, matches G HUB) and the G502 X PLUS
+  (unified battery); other HID++ 2.0 mice and keyboards should work the same way.
   A dozing radio takes up to half a second to answer, so the first request waits up
   to 2 s; once a paired device stops answering (asleep or switched off) it is only
   pinged briefly until it answers again, and keeps its last level, greyed out, for
@@ -24,6 +23,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   7x variants and the Arctis Nova 5 / 5X are included from HeadsetControl's device
   list but not tested; new models with the same protocol are one line in
   `providers/steelseries.py`.
+
+### Fixed
+- After a device went missing (e.g. a Razer headset switched off while its receiver
+  stays plugged in), all devices were polled every 3-4 seconds for as long as the app
+  ran, instead of at the poll interval: the quick re-check that confirms a disconnect
+  never stopped after the icon had been removed. Besides filling the log, this would
+  keep waking wireless mice (e.g. Logitech) over the radio.
+- A Razer device that is switched off while its receiver stays plugged in no longer
+  writes the same six log lines on every poll: the failure is logged once, and again
+  only when the reason changes or the device answers again.
 
 ## [1.10.1] - 2026-09-26
 
