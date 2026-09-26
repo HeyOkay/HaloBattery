@@ -35,8 +35,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
   unchanged while Razer Synapse runs.
 - MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
-  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
-  command 0x06, every payload byte inverted, which returns
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x11 (the shorter
+  report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns
   `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
   The request has to be repeated for every read, and the receiver only relays a real
   value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
@@ -50,6 +50,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   **unverified** - no G7 was on hand - and a level out of range is refused rather than
   reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
   same machine do not fight over one.
+- MCHOSE A7 V2 Ultra (3837:100B), which is the same protocol as the M7 Ultra on MCHOSE's
+  newer vendor id: the reference driver treats both identically and matches on the vendor
+  id plus the vendor collection rather than by model list, which is what this provider
+  does too. Its status read is documented on the shorter 0x11 report, so both report ids
+  are tried, and a model the name table does not know is named from the receiver's own
+  product string. **Unverified** - from the diagnostics in #4, no device here - and it
+  gets an icon of its own, so it and an M7 Ultra on one machine stay two icons.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for

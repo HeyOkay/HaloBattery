@@ -42,9 +42,16 @@ is the level and byte 9 the charging flag. Its vendor collections are 0xFFA5:0x8
 device dump, so a level out of range is rejected instead of shown, and the byte layout of
 that reply is the first thing to check on a real G7.
 
-Not verified: the 0x3837 family, other models, the G7 (no device on hand), and the meaning
-of the second level/charging pair in the 0x5253 reply (it has matched the first pair in
-every reading so far).
+The 0x3837 family is the same protocol on MCHOSE's newer vendor id: the reference driver
+"treats both identically" and matches on the vendor id plus the vendor collection rather
+than by model list, which is what this provider does as well. The diagnostics in issue #4
+(a MCHOSE A7 V2 Ultra, 3837:100b, RealTek strings, collections 0xFF0B:0x104 and
+0xFF01:0x01 on interface 2) have exactly that shape, and the reference documents the status
+read on the *short* 0x11 report, so both report ids are tried before a poll gives up.
+
+Not verified: the 0x3837 family (the device in issue #4 is not here), other models, the G7
+(no device on hand), and the meaning of the second level/charging pair in the 0x5253 reply
+(it has matched the first pair in every reading so far).
 """
 from __future__ import annotations
 
@@ -56,9 +63,10 @@ import hid
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
-# 0x5253 is confirmed; 0x3837 is the newer MCHOSE vendor id that the reference driver
-# treats identically, listed so those mice get a chance rather than no support at all.
-MCHOSE_VIDS = (0x5253, 0x3837)
+# 0x5253 is the family measured here and keeps the plain icon key; 0x3837 is the newer
+# MCHOSE vendor id the reference driver treats identically (issue #4's A7 V2 Ultra).
+MEASURED_VID = 0x5253
+MCHOSE_VIDS = (MEASURED_VID, 0x3837)
 
 # model ids seen in the 0x06 reply (the receiver's own PID does not identify the mouse:
 # 0x1020 is used by the M7 Ultra and by the L7 Pro)
@@ -80,8 +88,15 @@ G7_READ_GAP = 0.02
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
 LONG_REPORT = 0x12
+SHORT_LEN = 20                # payload bytes on 0x11, 64 on 0x12 (the frame adds the id)
+LONG_LEN = 64
 CMD_STATUS = 0x06
 CMD_BOND = 0x03
+
+# The status read is documented on the short report and was also captured there on the M7
+# Ultra, so it is tried first (cheaper: 21 bytes on the wire instead of 65); the long
+# report is the channel this provider polled on before, kept as the fallback.
+CHANNELS = ((SHORT_REPORT, SHORT_LEN), (LONG_REPORT, LONG_LEN))
 
 # Re-ask rather than re-read (see the module docstring): the real answer normally arrives
 # on the second exchange. An awake mouse answers within a couple of exchanges; a sleeping
@@ -150,11 +165,12 @@ def parse_g7(resp) -> Optional[Tuple[int, bool]]:
 def device_key(vid: int, pid: int) -> str:
     """One icon per device: the dongle and the cable of the same mouse share a key.
 
-    The 0x5253 family keeps the plain "mchose" key it has always used, so an icon does
-    not move when this changes; anything else (the G7's 0xA8A5) gets a key of its own,
-    which is what keeps a G7 and an M7 Ultra from fighting over one icon.
+    Only the family measured here (0x5253) keeps the plain "mchose" key it has always
+    used, so an existing icon does not move. Anything else gets a key of its own - the
+    G7's 0xA8A5, and the newer 0x3837 receivers (the A7 V2 Ultra in issue #4) - which is
+    what keeps two MCHOSE devices on one machine off a single shared icon.
     """
-    return "mchose" if vid in MCHOSE_VIDS else f"mchose:{vid:04x}"
+    return "mchose" if vid == MEASURED_VID else f"mchose:{vid:04x}"
 
 
 class MchoseProvider(Provider):
@@ -174,24 +190,27 @@ class MchoseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            req = make_request(CMD_STATUS)
-            for attempt in range(ATTEMPTS):
-                try:
-                    dev.send_feature_report(req)
-                except (OSError, ValueError) as e:
-                    self._diag.append(f"    send: {e}")
-                    return None
-                time.sleep(ATTEMPT_GAP)
-                try:
-                    resp = dev.get_feature_report(LONG_REPORT, 65)
-                except (OSError, ValueError):
-                    continue                      # the receiver answers with "read error"
-                got = parse_status(resp)          # until it has the value from the mouse
-                if got:
-                    self._diag.append(f"    answered on attempt {attempt + 1}: "
-                                      f"{hexdump(resp, 16)}")
-                    return got
-            self._diag.append("    no fresh reply to 0x06")
+            for report, length in CHANNELS:
+                # re-ask before every read (see the module docstring): one request
+                # followed by repeated reads only ever returns the request itself.
+                req = make_request(CMD_STATUS, report=report, length=length)
+                for attempt in range(ATTEMPTS):
+                    try:
+                        dev.send_feature_report(req)
+                    except (OSError, ValueError) as e:
+                        self._diag.append(f"    send on report {report:#04x}: {e}")
+                        break
+                    time.sleep(ATTEMPT_GAP)
+                    try:
+                        resp = dev.get_feature_report(report, length + 1)
+                    except (OSError, ValueError):
+                        continue                  # the receiver answers with "read error"
+                    got = parse_status(resp)      # until it has the value from the mouse
+                    if got:
+                        self._diag.append(f"    answered on report {report:#04x}, attempt "
+                                          f"{attempt + 1}: {hexdump(resp, 16)}")
+                        return got
+                self._diag.append(f"    no fresh reply to 0x06 on report {report:#04x}")
             return None
         finally:
             try:
@@ -317,12 +336,23 @@ class MchoseProvider(Provider):
         return out
 
     def _display_name(self, key: str) -> str:
+        """A measured model id first, then the device's own product string.
+
+        The id in the reply names the model on the family measured here (0x0031 is the M7
+        Ultra, the same number it uses as its wired PID), but it is a per-model number
+        that is not listed per device anywhere, so a model this table does not know is
+        named from the receiver's product string: for the A7 V2 Ultra in issue #4 that
+        reads "MCHOSE A7 V2 Ultra", the name on the box.
+        """
         model = self._models.get(key)
         if model and model in MODEL_NAMES:
             return MODEL_NAMES[model]
+        name = (self._names.get(key) or "").strip()
+        if name:
+            return name
         if model:
             return f"MCHOSE mouse (0x{model:04x})"
-        return self._names.get(key) or "MCHOSE mouse"
+        return "MCHOSE mouse"
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
