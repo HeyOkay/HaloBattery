@@ -57,9 +57,9 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 import icons  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (AudezeProvider, BluetoothProvider, DeviceStatus, LogitechProvider,  # noqa: E402
-                       MchoseProvider, RazerProvider, SteelSeriesProvider, WLmouseProvider,
-                       XInputProvider)
+from providers import (AudezeProvider, BluetoothProvider, DeviceStatus, HyperXProvider,  # noqa: E402
+                       LogitechProvider, MchoseProvider, RazerProvider, SteelSeriesProvider,
+                       WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
@@ -386,7 +386,7 @@ class App:
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
         self.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-                          LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
+                          HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
         self.placeholder: Optional[pystray.Icon] = None
@@ -863,7 +863,7 @@ def probe():
     app = App.__new__(App)
     app.cfg = load_config()
     app.providers = [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-                     LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
+                     HyperXProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider()]
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:
