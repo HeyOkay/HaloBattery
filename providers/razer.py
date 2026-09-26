@@ -163,7 +163,15 @@ class RazerProvider(Provider):
             self._diag.append(
                 f"    tid={tid:02x} cmd={cmd_class:02x}:{cmd_id:02x} -> status={status:02x} "
                 f"tid'={data[1]:02x} raw={hexdump(data, 12)}")
-            if status == STATUS_BUSY and time.time() < deadline:
+            # Keep reading while the device is busy, and also while the packet in hand is
+            # not the answer to this command. The status byte alone cannot tell the two
+            # apart: Razer Synapse polls the same collection (LED state is class 0x0f) and
+            # its replies carry status 0x02 exactly like ours. Giving up on the first reply
+            # is how a DeathAdder V2 Pro answered a class 0x07:0x80 battery request with
+            # "status=02 tid'=1f cmd=0f:03" and got written off as "off or asleep" - see
+            # issue #3. Whether the real reply is behind that packet in the queue is not
+            # verified on that hardware; reading on is strictly better than stopping.
+            if time.time() < deadline and (status == STATUS_BUSY or value is None):
                 time.sleep(0.08)
                 continue
             return status, value

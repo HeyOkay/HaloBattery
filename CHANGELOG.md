@@ -36,8 +36,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
   unchanged while Razer Synapse runs.
 - MCHOSE M7 Ultra (5253:1020) over the 2.4 GHz receiver, on the vendor collection
-  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x12 with
-  command 0x06, every payload byte inverted, which returns
+  (usage page 0xFF01, whose sibling 0xFF0B never answers): feature report 0x11 (the shorter
+  report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns
   `53 52 31 00 02 05 07 00 09 64 00 64` (vid, model, firmware, flags, level, charging).
   The request has to be repeated for every read, and the receiver only relays a real
   value while the mouse is awake - asleep it answers with zeros, so a silent mouse keeps
@@ -47,10 +47,21 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - MCHOSE G7 (A8A5:2255, chip 'YJX-CHIP'), which is a different chip and a different
   protocol from the M7 Ultra: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`,
   answered by an input report starting `AA 30` with the level at byte 8 and the charging
-  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8, so it is
-  **unverified** - no G7 was on hand - and a level out of range is refused rather than
-  reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
-  same machine do not fight over one.
+  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8 and
+  **confirmed on their G7**: it answers `aa 30 a5 0b 0a 01 01 01 2e 00 00 00`, byte 8 =
+  0x2E = 46% and byte 9 = 0 on the dongle, the same level their own tool shows. On its cable
+  the same 0xFF01 read answers with the same level and the PID unchanged (`aa 30 a5 3c 0a 01
+  01 01 2e 01 00 00`, byte 9 = 1 while charging), so a G7 keeps one icon either way; only the
+  `AA 30` header is relied on, since byte 3 differs between dongle (`0x0b`) and cable (`0x3c`).
+  A level out of range is still refused rather than reported as a made-up number. It gets an icon
+  of its own, so it and an M7 Ultra on the same machine do not fight over one.
+- MCHOSE A7 V2 Ultra (3837:100B), which is the same protocol as the M7 Ultra on MCHOSE's
+  newer vendor id: the reference driver treats both identically and matches on the vendor
+  id plus the vendor collection rather than by model list, which is what this provider
+  does too. Its status read is documented on the shorter 0x11 report, so both report ids
+  are tried, and a model the name table does not know is named from the receiver's own
+  product string. **Unverified** - from the diagnostics in #4, no device here - and it
+  gets an icon of its own, so it and an M7 Ultra on one machine stay two icons.
 
 ### Changed
 - Audeze: the poll sends one packet instead of twenty. The packet that asks for
@@ -70,8 +81,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
   instead of losing the icon after two failed polls (`STATUS_TIMEOUT`, "receiver
   present, device not responding"). That is what the README already described; the
   behaviour is gated so a switched-off headset still loses its icon.
+- New controller pictogram for Xbox-compatible controllers (XInput and
+  Windows.Gaming.Input), traced from the Xbox controller glyph: flat top, rounded
+  shoulders, straight sides down to the grips, and the two sticks in the Xbox layout
+  (left stick high, right stick low and nearer the middle). Nothing else is cut out,
+  so it stays readable at 16 px.
 
 ### Fixed
+- Razer mice that answer a battery request with somebody else's packet first are no
+  longer written off as "off or asleep". Razer Synapse polls LED state on the same
+  collection and its replies carry the same status byte as the battery reply, so the
+  first packet could belong to a different command (seen on a DeathAdder V2 Pro in
+  #3). The reply is now read on - bounded by the same deadline - until the answer to
+  the request arrives, and a packet that is not that answer is never turned into a
+  level, so a device that never answers still shows nothing rather than a number.
 - After a device went missing (e.g. a Razer headset switched off while its receiver
   stays plugged in), all devices were polled every 3-4 seconds for as long as the app
   ran, instead of at the poll interval: the quick re-check that confirms a disconnect
