@@ -17,6 +17,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Bluetooth at once keeps one icon. Thanks to @dendr203 (#7).
 - HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 - SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
+- Corsair wireless headsets (Void v2 Wireless, Virtuoso Max Wireless, HS80 Max
+  Wireless) through their receiver, without iCUE: exact level, from HeadsetControl's
+  corsair_void_v2w protocol. A minimal handshake wakes a sleeping headset for the
+  read, the same one HeadsetControl uses, which avoids the audible pop of switching
+  the headset into software mode.
+  **Unverified** here: no Corsair headset was on hand, and the receiver sometimes
+  answers with something other than a level, so that is retried and then refused
+  rather than shown. Charging is not reported - the reply carries no such flag, and
+  HeadsetControl reports this family as not charging either.
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
