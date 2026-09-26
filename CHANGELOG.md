@@ -17,6 +17,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Bluetooth at once keeps one icon. Thanks to @dendr203 (#7).
 - HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 - SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
+- Keychron support over the Ultra-Link 8K receiver (3434:D028) and the cable (3434:D048,
+  the M5), without Keychron's own software: the vendor protocol - a 64-byte feature
+  report `b3 06` answered by a 64-byte input report `b4 06` whose byte 20 is the level -
+  as implemented by csutcliff/keychron-battery-dkms for these two ids.
+  **Unverified** here: no Keychron device was on hand, so a level above 100 is refused
+  rather than shown. Charging is not reported - the reply carries no such flag.
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
