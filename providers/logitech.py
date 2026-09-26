@@ -5,19 +5,20 @@ Protocol (documented by Logitech, implemented in Solaar):
   * long request on the receiver's vendor interface ff00:0002:
       11 <device index> <feature index> <function << 4 | swid> <params...>
     device index 1..6 behind a receiver, 0xFF for a device on the cable
-  * root feature (index 0) function 0 maps a feature id to its index
+  * root feature (index 0): fn 0 maps a feature id to its index, fn 1 is a ping
   * battery, first one the device supports:
       0x1004 unified battery, fn 1: <percent> <level flags> <charging status> ...
       0x1000 battery status,  fn 0: <percent> <next level> <status>
       0x1001 battery voltage, fn 0: <mV hi> <mV lo> <flags>   (G502 Lightspeed)
-  * 0x0005 device name
-  * an error reply (10 <idx> 8f ... / 11 <idx> ff ...) means the device is
-    asleep, switched off or not paired at that index
+  * 0x0005 device name (fn 0 length, fn 1 characters, fn 2 device type)
+  * 0x0003 device information, fn 0: <entities> <unit id: 4 bytes> ...
+  * an error reply (10 <idx> 8f ... / 11 <idx> ff ...) comes at once for an
+    empty slot; a paired device that is asleep or switched off does not answer
 """
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import hid
 
@@ -27,11 +28,14 @@ from .base import DeviceStatus, Provider, hexdump, log
 LOGITECH_VID = 0x046D
 SWID = 0x0A
 TIMEOUT = 0.6
-PING_TIMEOUT = 2.0
+PING_TIMEOUT = 2.0       # a dozing radio takes up to ~0.5 s to answer the first request
 ASLEEP_KEEP = 300        # how long a silent device keeps its (greyed-out) icon, s
 
-F_ROOT, F_NAME = 0x0000, 0x0005
+F_ROOT, F_INFO, F_NAME = 0x0000, 0x0003, 0x0005
 F_UNIFIED, F_STATUS, F_VOLTAGE = 0x1004, 0x1000, 0x1001
+
+# 0x0005 device type -> DeviceStatus.kind
+KINDS = {0: "keyboard", 2: "keyboard", 3: "mouse", 4: "mouse", 5: "mouse"}
 
 # Li-ion discharge curve used by Solaar, mV -> %
 VOLTAGE_CURVE = ((4186, 100), (4067, 90), (3989, 80), (3922, 70), (3859, 60), (3811, 50),
@@ -48,16 +52,17 @@ def voltage_to_percent(mv: int) -> int:
 
 
 def parse_battery(feature: int, p) -> Tuple[Optional[int], bool]:
-    """Battery level and charging flag from the params of a battery reply."""
-    if feature == F_UNIFIED:
-        return (p[0] if p[0] <= 100 else None), p[2] in (1, 2)
-    if feature == F_STATUS:
-        return (p[0] if 0 < p[0] <= 100 else None), p[2] in (1, 2)
-    if feature == F_VOLTAGE:
+    """Battery level and "on external power" from the params of a battery reply.
+    A full battery still on the charger counts as charging."""
+    if feature == F_UNIFIED:     # 1 charging, 2 slow charging, 3 complete
+        return (p[0] if p[0] <= 100 else None), p[2] in (1, 2, 3)
+    if feature == F_STATUS:      # 1 recharging, 2 almost full, 3 full
+        return (p[0] if 0 < p[0] <= 100 else None), p[2] in (1, 2, 3)
+    if feature == F_VOLTAGE:     # bit 7: external power (Solaar's rule)
         mv = (p[0] << 8) | p[1]
         if mv < 2500:
             return None, False
-        return voltage_to_percent(mv), bool(p[2] & 0x80) and (p[2] & 0x07) in (0, 1)
+        return voltage_to_percent(mv), bool(p[2] & 0x80)
     return None, False
 
 
@@ -66,6 +71,7 @@ class _Channel:
 
     def __init__(self, short_path: Optional[bytes], long_path: bytes):
         self.devs = []
+        self.error = False       # the last request got an error reply (not a timeout)
         self.long = hid.device()
         self.long.open_path(long_path)
         self.long.set_nonblocking(True)
@@ -88,7 +94,8 @@ class _Channel:
 
     def request(self, idx: int, feat: int, func: int, params=(),
                 timeout: float = TIMEOUT) -> Optional[List[int]]:
-        """Params of the reply, or None on an error reply or timeout."""
+        """Params of the reply, or None on an error reply (self.error set) or timeout."""
+        self.error = False
         req = [0x11, idx, feat, (func << 4) | SWID] + list(params)
         self.long.write(req + [0] * (20 - len(req)))
         end = time.time() + timeout
@@ -98,6 +105,7 @@ class _Channel:
                 if not r or len(r) < 4 or r[1] != idx:
                     continue
                 if r[2] in (0x8F, 0xFF) and r[3] == feat:
+                    self.error = True
                     return None
                 if r[2] == feat and r[3] == (func << 4) | SWID:
                     return list(r[4:]) + [0] * 16
@@ -108,19 +116,28 @@ class _Channel:
         r = self.request(idx, 0, 0, [feature_id >> 8, feature_id & 0xFF])
         return r[0] if r else 0
 
-    def name(self, idx: int) -> str:
+    def identity(self, idx: int) -> Tuple[str, str, str]:
+        """(name, kind, unit id) of the device at idx; parts it cannot read are empty."""
+        name = kind = unit = ""
         fi = self.feature_index(idx, F_NAME)
-        if not fi:
-            return ""
-        r = self.request(idx, fi, 0)
-        length = r[0] if r else 0
-        raw = b""
-        while len(raw) < length:
-            r = self.request(idx, fi, 1, [len(raw)])
-            if not r:
-                break
-            raw += bytes(r[:16])
-        return raw[:length].decode("utf-8", "replace").strip()
+        if fi:
+            r = self.request(idx, fi, 0)
+            length = r[0] if r else 0
+            raw = b""
+            while len(raw) < length:
+                r = self.request(idx, fi, 1, [len(raw)])
+                if not r:
+                    break
+                raw += bytes(r[:16])
+            name = raw[:length].decode("utf-8", "replace").strip()
+            r = self.request(idx, fi, 2)
+            kind = KINDS.get(r[0], "") if r else ""
+        fi = self.feature_index(idx, F_INFO)
+        if fi:
+            r = self.request(idx, fi, 0)
+            if r and any(r[1:5]):
+                unit = bytes(r[1:5]).hex().upper()
+        return name, kind, unit
 
 
 class LogitechProvider(Provider):
@@ -128,16 +145,29 @@ class LogitechProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._names: Dict[Tuple[bytes, int], str] = {}   # (path, device index) -> name
-        self._last: Dict[str, Tuple[str, int, bool, float]] = {}
+        self._ids: Dict[Tuple[int, int], Tuple[str, str, str]] = {}   # (pid, idx) -> identity
+        self._asleep: Set[Tuple[int, int]] = set()   # paired slots that stopped answering
+        self._last: Dict[str, Tuple[DeviceStatus, float]] = {}
 
-    def _read(self, ch: _Channel, idx: int, where: str):
-        """(name, level, charging) of the device at idx, or None if it does not answer."""
-        # ping; a dozing mouse takes up to ~0.5 s to answer the first request after a pause
-        if ch.request(idx, F_ROOT, 1, timeout=PING_TIMEOUT) is None:
+    def _read(self, ch: _Channel, pid: int, idx: int) -> Optional[DeviceStatus]:
+        slot = (pid, idx)
+        # A paired device that is asleep does not answer at all, which would cost the
+        # full ping timeout on every poll (all night long). Once a slot has gone
+        # silent, ping it with the short timeout until it answers again.
+        timeout = TIMEOUT if slot in self._asleep else PING_TIMEOUT
+        if ch.request(idx, F_ROOT, 1, timeout=timeout) is None:
+            if ch.error:                      # empty slot
+                self._asleep.discard(slot)
+            else:                             # paired, but silent
+                self._asleep.add(slot)
+                name = self._ids.get(slot, ("",))[0] or "paired device"
+                self._diag.append(f"  idx={idx} '{name}': no answer (asleep or off)")
             return None
-        name = self._names.get((where, idx)) or ch.name(idx) or "Logitech device"
-        self._names[(where, idx)] = name
+        self._asleep.discard(slot)
+        if slot not in self._ids:
+            self._ids[slot] = ch.identity(idx)
+        name, kind, unit = self._ids[slot]
+        name = name or "Logitech device"
         for feature in (F_UNIFIED, F_STATUS, F_VOLTAGE):
             fi = ch.feature_index(idx, feature)
             if not fi:
@@ -146,10 +176,13 @@ class LogitechProvider(Provider):
             if r is None:
                 continue
             level, chg = parse_battery(feature, r)
-            self._diag.append(f"  idx={idx} '{name}' feature {feature:04x}: {hexdump(r, 4)}"
-                              f" -> {level}%{' (charging)' if chg else ''}")
+            self._diag.append(f"  idx={idx} '{name}' unit={unit or '?'} feature {feature:04x}: "
+                              f"{hexdump(r, 4)} -> {level}%{' (charging)' if chg else ''}")
             if level is not None:
-                return name, level, chg
+                # the unit id is stable across receiver and cable and tells identical
+                # devices apart; without one, fall back to the receiver slot
+                key = f"logitech:{unit}" if unit else f"logitech:{pid:04x}:{idx}"
+                return DeviceStatus(key, name, level, chg, True, "logitech", kind=kind)
         self._diag.append(f"  idx={idx} '{name}': no battery feature answered")
         return None
 
@@ -166,7 +199,7 @@ class LogitechProvider(Provider):
             if d.get("usage_page") == 0xFF00 and d.get("usage") in (1, 2):
                 groups.setdefault(d["product_id"], {})[d["usage"]] = d["path"]
 
-        readings: Dict[str, Tuple[int, bool]] = {}
+        found: Dict[str, DeviceStatus] = {}
         for pid, paths in groups.items():
             if 2 not in paths:
                 continue
@@ -180,29 +213,26 @@ class LogitechProvider(Provider):
                 continue
             try:
                 for idx in (range(1, 7) if receiver else (0xFF,)):
-                    got = self._read(ch, idx, f"{pid:04x}")
-                    if got:
-                        name, level, chg = got
-                        # the same device on the cable and through the receiver: charging wins
-                        if name not in readings or chg:
-                            readings[name] = (level, chg)
+                    st = self._read(ch, pid, idx)
+                    # the same device on the cable and through the receiver: charging wins
+                    if st and (st.key not in found or st.charging):
+                        found[st.key] = st
             except (OSError, IOError, ValueError) as e:
                 self._diag.append(f"  error: {e}")
             finally:
                 ch.close()
 
         now = time.time()
-        out = []
-        for name, (level, chg) in readings.items():
-            key = f"logitech:{name}"
-            self._last[key] = (name, level, chg, now)
-            out.append(DeviceStatus(key, name, level, chg, True, "logitech"))
+        out = list(found.values())
+        for st in out:
+            self._last[st.key] = (st, now)
         # asleep or switched off: keep the last value greyed out for a while
-        for key, (name, level, chg, t) in list(self._last.items()):
-            if name in readings:
+        for key, (st, t) in list(self._last.items()):
+            if key in found:
                 continue
             if now - t < ASLEEP_KEEP and groups:
-                out.append(DeviceStatus(key, name, level, chg, False, "logitech"))
+                out.append(DeviceStatus(key, st.name, st.level, st.charging, False, "logitech",
+                                        kind=st.kind))
             else:
                 del self._last[key]
         return out
