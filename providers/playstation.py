@@ -167,12 +167,13 @@ class PlayStationProvider(Provider):
             serial = d.get("serial_number") or ""
             groups.setdefault((pid, serial), []).append(d)
 
-        out: List[DeviceStatus] = []
+        conns: List[dict] = []          # one entry per connection (transport)
         for (pid, serial), ifaces in groups.items():
             name, is_dualsense = KNOWN[pid]
             product = (ifaces[0].get("product_string") or "").strip()
-            key = f"ps:{pid:04x}:{serial}"
-            self._diag.append(f"[PlayStation] {name} pid={pid:04x} interfaces={len(ifaces)} '{product}'")
+            bluetooth = self._is_bluetooth(ifaces[0]["path"])
+            self._diag.append(f"[PlayStation] {name} pid={pid:04x} "
+                              f"{'Bluetooth' if bluetooth else 'USB'} interfaces={len(ifaces)} '{product}'")
             res = None
             for d in ifaces:
                 self._diag.append(
@@ -181,18 +182,60 @@ class PlayStationProvider(Provider):
                 res = self._read(d["path"], is_dualsense)
                 if res is not None:
                     break
+            if res is not None:
+                self._diag.append(f"  -> {res[0]}%{' charging' if res[1] else ''}")
+            conns.append({"pid": pid, "name": name, "bluetooth": bluetooth,
+                          "mac": serial if bluetooth and serial else "", "reading": res})
+
+        out: List[DeviceStatus] = []
+        for dev in self._merge(conns):
+            key = f"ps:{dev['pid']:04x}:{dev['mac']}"
+            res = dev["reading"]
             if res is None:
                 # present but battery not read (just connected, or another app holds it):
                 # show the icon without an arc and re-check soon
                 self.pending = True
-                log.info("[PlayStation] %s: connected, battery not reported yet", name)
-                out.append(DeviceStatus(key, name, None, False, True, "playstation",
+                log.info("[PlayStation] %s: connected, battery not reported yet", dev["name"])
+                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation",
                                         "connected, battery level not reported yet"))
                 continue
             level, charging = res
-            self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
-            out.append(DeviceStatus(key, name, level, charging, True, "playstation"))
+            out.append(DeviceStatus(key, dev["name"], level, charging, True, "playstation"))
         return out
+
+    def _merge(self, conns: List[dict]) -> List[dict]:
+        """One physical controller can be connected over Bluetooth AND the cable at
+        the same time, showing up as two connections of the same PID. Collapse them
+        into a single device (keyed by the Bluetooth MAC, so the icon does not
+        change when the cable is plugged in), preferring the reading that reports
+        charging (the cable)."""
+        by_pid: Dict[int, List[dict]] = {}
+        for c in conns:
+            by_pid.setdefault(c["pid"], []).append(c)
+        out: List[dict] = []
+        for pid, group in by_pid.items():
+            wireless = [c for c in group if c["bluetooth"]]
+            wired = [c for c in group if not c["bluetooth"]]
+            if len(wireless) == 1 and wired:
+                dev = dict(wireless[0])
+                dev["reading"] = self._prefer([wired[0]["reading"], wireless[0]["reading"]])
+                self._diag.append(f"[PlayStation] pid={pid:04x}: same controller on cable and "
+                                  f"Bluetooth, showing one icon")
+                out.append(dev)
+            else:
+                out.extend(group)
+        return out
+
+    @staticmethod
+    def _prefer(readings: List[Optional[Tuple[int, bool]]]) -> Optional[Tuple[int, bool]]:
+        """Pick the cable reading (the one that reports charging), else any reading."""
+        for r in readings:
+            if r is not None and r[1]:
+                return r
+        for r in readings:
+            if r is not None:
+                return r
+        return None
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

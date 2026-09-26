@@ -573,12 +573,15 @@ class App:
             self.check_alert(ic, st)
 
         # device gone (receiver unplugged): remove the icon after 2 misses in a row;
-        # XInput reports a switched-off controller reliably, and the Bluetooth
-        # provider already confirms a disconnect itself, so those go at once
+        # XInput reports a switched-off controller reliably, the Bluetooth provider
+        # already confirms a disconnect itself, and a PlayStation controller's
+        # presence comes from the reliable HID list (and its key switches between
+        # the cable-only and Bluetooth forms when a cable is added to a BT pad),
+        # so those go at once
         for key in list(self.icons):
             if key not in seen:
                 self.missing[key] = self.missing.get(key, 0) + 1
-                limit = 1 if key.startswith(("xinput:", "bt:")) else 2
+                limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                 if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
 
