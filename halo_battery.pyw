@@ -639,6 +639,9 @@ class App:
                 limit = 1 if key.startswith(("xinput:", "bt:")) else 2
                 if self.missing[key] >= limit:
                     self.icons.pop(key).stop()
+                    # the icon is gone: stop counting, otherwise the quick
+                    # 3-second re-check in wait_next() would go on forever
+                    self.missing.pop(key, None)
 
         if self.icons and self.placeholder:
             self.placeholder.stop()
