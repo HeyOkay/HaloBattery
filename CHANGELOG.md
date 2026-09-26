@@ -102,6 +102,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   other collection; the diagnostics list what the dongle offers instead.
 
 ### Fixed
+- `--probe` now always lists every HID device it can see. The list was only printed when
+  the poll found nothing at all, so on a machine whose other devices answered, a device
+  that no provider sees - the case the list exists for - never appeared (found while
+  answering #21).
 - Razer mice that answer a battery request with somebody else's packet first are no
   longer written off as "off or asleep". Razer Synapse polls LED state on the same
   collection and its replies carry the same status byte as the battery reply, so the
