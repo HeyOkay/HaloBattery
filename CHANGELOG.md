@@ -17,6 +17,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Bluetooth at once keeps one icon. Thanks to @dendr203 (#7).
 - HyperX Cloud II Wireless over HID (`03F0:0696`, `03F0:018B`): battery and charging, using the exchange HeadsetControl documents for these product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 - SteelSeries Rival 3 Wireless (`1038:1830`) over HID: battery and charging on the mouse exchange, next to the existing Nova headsets and alongside SteelSeries GG. **Unverified** - the reply layout is the open question in [#5](https://github.com/HeyOkay/HaloBattery/issues/5), so a reply without the command echo is skipped and a level above 100 refused rather than shown
+- Astro A50 Gen 5 support through its base station, without G HUB: exact level, and
+  charging while the headset sits on the dock (the station reports that as byte 8).
+  The protocol is HeadsetControl's, reverse-engineered from G HUB captures and
+  verified on the same station (046D:0B1C); it is neither HID++ nor the A50 X's
+  "Centurion" protocol, and the provider only matches that USB id.
+  **Unverified** here: no A50 was on hand, so a level out of 0..100 is refused
+  rather than shown.
 - Logitech support over HID++ 2.0, without G HUB (and alongside it). Every device
   paired to a Lightspeed or Unifying receiver gets its own icon, named as the device
   reports itself; the level comes from the unified battery, battery status or battery
