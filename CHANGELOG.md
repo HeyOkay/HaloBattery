@@ -23,6 +23,36 @@ and the project follows [Semantic Versioning](https://semver.org/).
   7x variants and the Arctis Nova 5 / 5X are included from HeadsetControl's device
   list but not tested; new models with the same protocol are one line in
   `providers/steelseries.py`.
+- Audeze Maxwell support, over the 2.4 GHz dongle (3329:4B19) and the USB-C cable
+  (3329:4B1A), reading the vendor collection (usage page 0xFF13) with the sequence
+  HeadsetControl uses: no Audeze HQ needed, and it works alongside it. The battery is
+  attribute 0x0CD6, so the level is read as an attribute rather than hunted as an
+  offset. Dongle and cable are one headset and share one icon, keyed on the serial
+  number they report, so plugging in the cable does not make the icon disappear and
+  come back. The Maxwell counts as a headset, so its icon gets the headset pictogram.
+- Razer DeathAdder V4 Pro (1532:00BF) confirmed on hardware, listed in the README's
+  table: transaction id 0x1F, command class 0x07, command 0x80 answers
+  `02 1f 00 00 00 02 07 80 00 ab`, raw 0xAB = 171/255 = 67%, stable across polls and
+  unchanged while Razer Synapse runs.
+
+### Changed
+- Audeze: the poll sends one packet instead of twenty. The packet that asks for
+  attribute 0x0CD6 comes back with the marker on its own, on the dongle and on the
+  USB-C endpoint alike: 0.19 s against 1.48 s. Both ran against each other every 30 s
+  through a charge from 85% to 91% and agreed in 19 of 20 cycles, the one difference
+  being the long sequence reading an older copy out of the device's rolling buffer.
+  The full sequence stays as the fallback for a firmware that only reports after the
+  initialisation.
+- Audeze: charging is inferred from the cable endpoint answering, because the protocol
+  carries no charging flag. Verified by diffing every record the headset returns while
+  charging and while running off the dongle: identical apart from the echo of the query
+  that was just sent. Docked and already full the icon still breathes where the LED is
+  solid green, which is the trade for not telling someone to charge a headset that is
+  plugged in.
+- Razer: a sleeping mouse now keeps its last level on a greyed icon for five minutes
+  instead of losing the icon after two failed polls (`STATUS_TIMEOUT`, "receiver
+  present, device not responding"). That is what the README already described; the
+  behaviour is gated so a switched-off headset still loses its icon.
 
 ### Fixed
 - After a device went missing (e.g. a Razer headset switched off while its receiver
@@ -33,7 +63,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - A Razer device that is switched off while its receiver stays plugged in no longer
   writes the same six log lines on every poll: the failure is logged once, and again
   only when the reason changes or the device answers again.
-
+- Bluetooth: a device that is also read over HID no longer gets a second icon from
+  Windows' own Bluetooth battery API. A paired Maxwell reports the same level over both
+  transports at once (90% over the cable endpoint and 90% over Bluetooth), so the
+  Bluetooth copy is dropped and the HID reading - the device's own protocol, carrying
+  the charging state - is kept. A device only Bluetooth can see keeps its Bluetooth
+  icon, which is how a Maxwell used purely over Bluetooth is covered at all: the vendor
+  collection the provider needs does not exist over Bluetooth.
+- Audeze: a switched-off headset no longer pays for the battery packet that cannot be
+  answered (1.5 s per poll instead of 1.7 s), and its failure block is written once per
+  outage instead of every poll.
 ## [1.10.1] - 2026-09-26
 
 ### Added
