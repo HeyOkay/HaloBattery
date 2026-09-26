@@ -32,6 +32,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   its last level on a greyed icon, the same as an idle Razer mouse. On the cable the mouse
   answers on its own PID (5253:0031) with the charging byte set to 1 while the receiver
   goes quiet, and the two connections still share one icon.
+- MCHOSE G7 (A8A5:2255, chip 'YJX-CHIP'), which is a different chip and a different
+  protocol from the M7 Ultra: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`,
+  answered by an input report starting `AA 30` with the level at byte 8 and the charging
+  flag at byte 9. Implemented from @kek353's monitor and the device dump in #8, so it is
+  **unverified** - no G7 was on hand - and a level out of range is refused rather than
+  reported as a made-up number. It gets an icon of its own, so it and an M7 Ultra on the
+  same machine do not fight over one.
 
 ### Fixed
 - After a device went missing (e.g. a Razer headset switched off while its receiver

@@ -32,8 +32,19 @@ Also measured on the cable: the mouse answers on its own wired PID (5253:0031 - 
 number it reports as the model id) with the same collection and the same command, while
 the receiver goes quiet, so the charging source wins and the icon stays single.
 
-Not verified: the 0x3837 family, other models, and the meaning of the second level/charging
-pair (it has matched the first pair in every reading so far).
+The G7 is a different chip on a different vendor id (A8A5:2255, 'YJX-CHIP', while the
+0x5253 receivers are RealTek) and speaks a different protocol, worked out by @kek353 from
+their own monitor and the HID dump in issue #8: a 65-byte output report starting
+``00 55 30 A5 0B 2E 01 01 01``, answered by an input report starting ``AA 30`` whose byte 8
+is the level and byte 9 the charging flag. Its vendor collections are 0xFFA5:0x88,
+0xFF05:0x88 and 0xFF01:0x10; only the last one is written to, as in @kek353's monitor.
+**Nobody has run this against the hardware** - it is implemented from their code and their
+device dump, so a level out of range is rejected instead of shown, and the byte layout of
+that reply is the first thing to check on a real G7.
+
+Not verified: the 0x3837 family, other models, the G7 (no device on hand), and the meaning
+of the second level/charging pair in the 0x5253 reply (it has matched the first pair in
+every reading so far).
 """
 from __future__ import annotations
 
@@ -54,6 +65,17 @@ MCHOSE_VIDS = (0x5253, 0x3837)
 MODEL_NAMES = {
     0x0031: "MCHOSE M7 Ultra",
 }
+
+# The G7: another chip (0xA8A5, 'YJX-CHIP') and another protocol, from @kek353's monitor
+# and the HID dump in issue #8 - see the module docstring. Unverified: no device here.
+G7_VID = 0xA8A5
+G7_PID = 0x2255
+G7_REQUEST = bytes([0x00, 0x55, 0x30, 0xA5, 0x0B, 0x2E, 0x01, 0x01, 0x01]).ljust(65, b"\x00")
+G7_HEADER = b"\xaa\x30"
+G7_LEVEL_BYTE = 8
+G7_CHARGE_BYTE = 9
+G7_READS = 25                 # a non-blocking read loop, ~0.5 s at G7_READ_GAP
+G7_READ_GAP = 0.02
 
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
@@ -106,14 +128,43 @@ def parse_status(resp) -> Optional[Tuple[int, int, int, int]]:
     return level, charge, model, flags
 
 
+def parse_g7(resp) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from a G7 reply, or None if it is not one.
+
+    Layout from @kek353's monitor and the HID dump in issue #8: the frame starts AA 30,
+    the level is byte 8 and the charging flag byte 9. Nothing here was measured on the
+    hardware, so an out-of-range level is refused rather than reported as a made-up
+    number - the next person with a G7 should check these two offsets first.
+    """
+    if not resp or len(resp) <= G7_CHARGE_BYTE:
+        return None
+    r = bytes(resp)
+    if not r.startswith(G7_HEADER):
+        return None
+    level = r[G7_LEVEL_BYTE]
+    if level > 100:
+        return None
+    return level, bool(r[G7_CHARGE_BYTE])
+
+
+def device_key(vid: int, pid: int) -> str:
+    """One icon per device: the dongle and the cable of the same mouse share a key.
+
+    The 0x5253 family keeps the plain "mchose" key it has always used, so an icon does
+    not move when this changes; anything else (the G7's 0xA8A5) gets a key of its own,
+    which is what keeps a G7 and an M7 Ultra from fighting over one icon.
+    """
+    return "mchose" if vid in MCHOSE_VIDS else f"mchose:{vid:04x}"
+
+
 class MchoseProvider(Provider):
     name = "mchose"
 
     def __init__(self):
         self._diag: List[str] = []
         self._last: Dict[str, Tuple[int, bool, float]] = {}
-        self._name: Optional[str] = None
-        self._model: Optional[int] = None
+        self._names: Dict[str, str] = {}
+        self._models: Dict[str, int] = {}
 
     def _read_collection(self, path: bytes) -> Optional[Tuple[int, int, int, int]]:
         dev = hid.device()
@@ -148,11 +199,52 @@ class MchoseProvider(Provider):
             except Exception:
                 pass
 
+    def _read_g7(self, path: bytes) -> Optional[Tuple[int, bool]]:
+        """The G7's own protocol: one output report, then wait for an AA 30 input report.
+
+        @kek353's monitor writes the request once and reads until the answer turns up
+        (non-blocking, in a loop), so that is what this does - with a bounded budget and
+        a sleep between reads instead of a spin. Unverified against the hardware.
+        """
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            try:
+                dev.set_nonblocking(True)
+            except Exception:                       # pragma: no cover
+                pass
+            try:
+                dev.write(G7_REQUEST)
+            except (OSError, ValueError) as e:
+                self._diag.append(f"    write: {e}")
+                return None
+            for _ in range(G7_READS):
+                time.sleep(G7_READ_GAP)
+                try:
+                    resp = dev.read(64)
+                except (OSError, ValueError):
+                    continue
+                got = parse_g7(resp)
+                if got:
+                    self._diag.append(f"    AA 30 answer: {hexdump(resp, 12)}")
+                    return got
+            self._diag.append("    no AA 30 answer")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def poll(self) -> List[DeviceStatus]:
-        """One icon for the mouse, whether it is on the dongle or on the cable."""
+        """One icon per device, whether it is on the dongle, on the cable or on radio."""
         self._diag = []
-        infos = []
-        for vid in MCHOSE_VIDS:
+        infos: List[dict] = []
+        for vid in MCHOSE_VIDS + (G7_VID,):
             try:
                 infos += hidlist.enumerate(vid)
             except Exception as e:  # pragma: no cover
@@ -160,55 +252,77 @@ class MchoseProvider(Provider):
         if not infos:
             return []
 
-        groups: Dict[int, List[dict]] = {}
+        # group the collections of one receiver (or one mouse) together, per vendor id:
+        # a G7 and an M7 Ultra on one machine are two devices and get two icons
+        groups: Dict[Tuple[int, int], List[dict]] = {}
         for d in infos:
-            groups.setdefault(d["product_id"], []).append(d)
+            groups.setdefault((d["vendor_id"], d["product_id"]), []).append(d)
 
-        readings = []                              # (level, charging, pid, model)
-        for pid, ifaces in groups.items():
+        found: Dict[str, List[Tuple[int, bool, int, int]]] = {}   # key -> readings
+        for (vid, pid), ifaces in groups.items():
+            key = device_key(vid, pid)
             product = (ifaces[0].get("product_string") or "").strip()
-            if product and not self._name:
-                self._name = product
+            if product:
+                self._names[key] = product
             cols = [d for d in ifaces if (d.get("usage_page") or 0) >= 0xFF00]
-            # the configuration collection first; 0xFF0B is dead on the M7 Ultra
-            cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))
+            if vid == G7_VID:
+                # the G7 answers on 0xFF01 only; the other vendor collections are left
+                # alone (nothing off the documented path is written to)
+                cols = [d for d in cols if (d.get("usage_page") or 0) == CONFIG_PAGE]
+            else:
+                # the configuration collection first; 0xFF0B is dead on the M7 Ultra
+                cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))
+            if not cols:
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
+                                  "no vendor collection")
+                continue
             for d in cols:
-                sig = (pid, d.get("usage_page") or 0, d.get("usage") or 0)
-                self._diag.append(f"[MCHOSE] pid={pid:04x} product='{product}' "
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}' "
                                   f"iface={d.get('interface_number')} "
-                                  f"usage={sig[1]:04x}:{sig[2]:04x}")
-                got = self._read_collection(d["path"])
-                if got:
-                    readings.append((got[0], bool(got[1]), pid, got[2]))
+                                  f"usage={(d.get('usage_page') or 0):04x}:"
+                                  f"{(d.get('usage') or 0):04x}")
+                if vid == G7_VID:
+                    got_g7 = self._read_g7(d["path"])
+                    if got_g7:
+                        found.setdefault(key, []).append((got_g7[0], got_g7[1], pid, 0))
+                else:
+                    got = self._read_collection(d["path"])
+                    if got:
+                        self._models[key] = got[2]
+                        found.setdefault(key, []).append((got[0], bool(got[1]), pid, got[2]))
+                if found.get(key):
                     break
 
-        if readings:
+        out: List[DeviceStatus] = []
+        for key, readings in found.items():
             # a wired mouse may be silent on the radio: prefer whichever source reports
             # charging, and one icon either way
             readings.sort(key=lambda r: (not r[1],))
             level, charge, pid, model = readings[0]
-            if not self._model:
-                self._model = model
-            self._diag.append(f"  -> pid={pid:04x} model=0x{model:04x}: {level}%"
-                              f"{' (charging)' if charge else ''}")
-            self._last["mchose"] = (level, charge, time.time())
-            return [DeviceStatus("mchose", self._display_name(model), level, charge, True,
-                                 "mchose", kind="mouse")]
+            self._diag.append(f"  -> {key} pid={pid:04x}"
+                              + (f" model=0x{model:04x}" if model else "")
+                              + f": {level}%{' (charging)' if charge else ''}")
+            self._last[key] = (level, charge, time.time())
+            out.append(DeviceStatus(key, self._display_name(key), level, charge, True,
+                                    "mchose", kind="mouse"))
 
-        # silent: the receiver cannot tell a switched-off mouse from one that went to sleep
+        # silent: a receiver cannot tell a switched-off mouse from one that went to sleep
         # a few seconds ago, so keep the last value greyed out for a while
-        last = self._last.get("mchose")
-        if last and time.time() - last[2] < ASLEEP_KEEP:
-            return [DeviceStatus("mchose", self._display_name(self._model), last[0], last[1],
-                                 False, "mchose", kind="mouse")]
-        return []
+        now = time.time()
+        for key, last in self._last.items():
+            if key in found or now - last[2] >= ASLEEP_KEEP:
+                continue
+            out.append(DeviceStatus(key, self._display_name(key), last[0], last[1],
+                                    False, "mchose", kind="mouse"))
+        return out
 
-    def _display_name(self, model: Optional[int]) -> str:
+    def _display_name(self, key: str) -> str:
+        model = self._models.get(key)
         if model and model in MODEL_NAMES:
             return MODEL_NAMES[model]
         if model:
             return f"MCHOSE mouse (0x{model:04x})"
-        return self._name or "MCHOSE mouse"
+        return self._names.get(key) or "MCHOSE mouse"
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
