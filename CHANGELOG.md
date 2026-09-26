@@ -69,6 +69,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   instead of losing the icon after two failed polls (`STATUS_TIMEOUT`, "receiver
   present, device not responding"). That is what the README already described; the
   behaviour is gated so a switched-off headset still loses its icon.
+- New controller pictogram for Xbox-compatible controllers (XInput and
+  Windows.Gaming.Input), traced from the Xbox controller glyph: flat top, rounded
+  shoulders, straight sides down to the grips, and the two sticks in the Xbox layout
+  (left stick high, right stick low and nearer the middle). Nothing else is cut out,
+  so it stays readable at 16 px.
 
 ### Fixed
 - After a device went missing (e.g. a Razer headset switched off while its receiver
