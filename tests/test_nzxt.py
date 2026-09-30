@@ -1,9 +1,10 @@
 """Tests for providers/nzxt.py. No hardware and no CAM needed.
 
 The frames are the ones CAM 4.76.5 exchanged with the reporter's NZXT Lift
-Elite dongle in the USBPcap capture of issue #148 (2026-09-30). Seven
-telemetry reads were in the capture; three of them are fixtures here - the
-first (77 %), one mid-capture (76 %), and the last (76 %, flags byte 82).
+Elite dongle in the USBPcap captures of issue #148 (2026-09-30). Six of the
+telemetry reads are fixtures here: three wireless (77 %, 76 %, and the last
+one with flags byte 82) and three from the charging session (byte 22's low
+bit set while the charging cable was in).
 The collection shape is the reporter's diagnostics dump (1e71:2101: the
 ffca:0001 vendor collection plus the mouse's and the dongle's others).
 
@@ -22,32 +23,39 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import nzxt as N  # noqa: E402
 
 
-def telem(level=76, mv=0x0FFD, flags=0x86, extra=0x00F3):
+def telem(level=76, mv=0x0FFD, flags=0x86, extra=0x00F3, charge=0x00, b21=0x1E, b10=0xFF):
     """A telemetry reply as captured, with the fields under test adjustable."""
     r = bytearray(64)
     r[:4] = bytes([0x4E, 0x02, 0x97, 0x00])
     r[4:7] = bytes([0x01, 0x40, 0x01])
     r[7] = flags
     r[8:10] = mv.to_bytes(2, "big")
-    r[10] = 0xFF
+    r[10] = b10
     r[11:13] = bytes([0x40, 0x01])
     r[13:15] = extra.to_bytes(2, "little")
     r[15:17] = bytes([0x43, 0x00])
     r[17:19] = level.to_bytes(2, "little")
     r[19:21] = bytes([0x64, 0x00])
-    r[21:23] = bytes([0x1E, 0x00])
+    r[21:23] = bytes([b21, charge])
     r[23:25] = bytes([0x08, 0x00])
     r[25:27] = bytes([0x40, 0x01])
     return bytes(r)
 
 
-# the exact bytes of three captured replies
+# the exact bytes of captured replies: three wireless and three from the
+# charging session (the cable went in after the wireless ones were taken)
 CAP_77 = bytes.fromhex("4e 02 97 00 01 40 01 86 0f fd ff 40 01 f6 00 43 00 4d 00"
                        " 64 00 1e 00 08 00 40 01") + bytes(37)
 CAP_76 = bytes.fromhex("4e 02 97 00 01 40 01 86 0f fd ff 40 01 f3 00 43 00 4c 00"
                        " 64 00 1e 00 08 00 40 01") + bytes(37)
 CAP_76B = bytes.fromhex("4e 02 97 00 01 40 01 82 0f fc ff 40 01 f3 00 43 00 4c 00"
                         " 64 00 1e 00 08 00 40 01") + bytes(37)
+CAP_CHARGE_77 = bytes.fromhex("4e 02 97 00 01 40 01 1c 10 fc ff 40 01 f6 00 43 00 4d 00"
+                              " 64 00 1e 01 08 00 40 01") + bytes(37)
+CAP_CHARGE_78 = bytes.fromhex("4e 02 97 00 01 40 01 31 10 2b 01 40 01 f9 00 43 00 4e 00"
+                              " 64 00 1c 01 08 00 40 01") + bytes(37)
+CAP_78_FREE = bytes.fromhex("4e 02 97 00 01 40 01 9b 0f fc ff 40 01 f9 00 43 00 4e 00"
+                            " 64 00 1e 00 08 00 40 01") + bytes(37)
 
 ACK = bytes([0x4E, 0xE5] + [0x00] * 62)
 
@@ -124,14 +132,26 @@ class PollTest(unittest.TestCase):
     # ---------------------------------------------------------------- parsing
 
     def test_the_captured_frames_decode(self):
-        self.assertEqual(N.parse_telemetry(CAP_77), (77, 4093))
-        self.assertEqual(N.parse_telemetry(CAP_76), (76, 4093))
-        self.assertEqual(N.parse_telemetry(CAP_76B), (76, 4092))
+        self.assertEqual(N.parse_telemetry(CAP_77), (77, 4093, False))
+        self.assertEqual(N.parse_telemetry(CAP_76), (76, 4093, False))
+        self.assertEqual(N.parse_telemetry(CAP_76B), (76, 4092, False))
+
+    def test_the_charging_frames_decode(self):
+        self.assertEqual(N.parse_telemetry(CAP_CHARGE_77), (77, 4348, True))
+        self.assertEqual(N.parse_telemetry(CAP_CHARGE_78), (78, 4139, True))
+        self.assertEqual(N.parse_telemetry(CAP_78_FREE), (78, 4092, False))
 
     def test_the_fixtures_are_the_captured_bytes(self):
         self.assertEqual(CAP_77, telem(level=77, mv=0x0FFD, flags=0x86, extra=0x00F6))
         self.assertEqual(CAP_76, telem(level=76, mv=0x0FFD, flags=0x86, extra=0x00F3))
         self.assertEqual(CAP_76B, telem(level=76, mv=0x0FFC, flags=0x82, extra=0x00F3))
+        self.assertEqual(CAP_CHARGE_77,
+                         telem(level=77, mv=0x10FC, flags=0x1C, extra=0x00F6, charge=0x01))
+        self.assertEqual(CAP_CHARGE_78,
+                         telem(level=78, mv=0x102B, flags=0x31, extra=0x00F9,
+                               charge=0x01, b21=0x1C, b10=0x01))
+        self.assertEqual(CAP_78_FREE,
+                         telem(level=78, mv=0x0FFC, flags=0x9B, extra=0x00F9))
 
     def test_the_request_is_the_captured_request(self):
         self.assertEqual(N.REQUEST, bytes([0x4E, 0x02, 0x81, 0x00, 0xB0]) + bytes(59))
@@ -162,6 +182,12 @@ class PollTest(unittest.TestCase):
                           "nzxt", "mouse"))
         first = N.candidates(entries)[0]
         self.assertEqual(cols[first["path"]].written, [N.REQUEST])
+
+    def test_the_charging_cable_reads_as_charging(self):
+        entries = receiver_entries()
+        cols = self.cols(entries, post=(ACK, CAP_CHARGE_77))
+        out = self.poll(entries, cols)
+        self.assertEqual((out[0].level, out[0].charging), (77, True))
 
     def test_the_ack_is_skipped_and_junk_ignored(self):
         entries = receiver_entries()

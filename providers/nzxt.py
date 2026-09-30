@@ -2,28 +2,40 @@
 
 No public protocol exists for this mouse - OpenRGB's NZXT controller covers the
 wired Lift's LEDs only, and CAM keeps the battery inside its closed native
-module. Every byte here is therefore taken from a USBPcap capture of CAM
-4.76.5 talking to the reporter's own dongle (issue #148, 2026-09-30, battery
-at 76-77 %). The conversation is a request in a 64-byte interrupt OUT report
-and a reply on interrupt IN, both starting with 0x4e:
+module. Every byte here is therefore taken from USBPcap captures of CAM
+4.76.5 talking to the reporter's own dongle (issue #148; two captures on
+2026-09-30 - one wireless at 76-77 %, one with the charging cable in). The
+conversation is a request in a 64-byte interrupt OUT report and a reply on
+interrupt IN, both starting with 0x4e:
 
     request:  4e 02 81 00 b0 00 ...
               0x4e framing, 02 = the mouse behind the dongle, 81 = "read a
               property", 0xb0 = the telemetry property this provider wants
     reply:    4e 02 97 00 01 40 01 86 0f fd ff 40 01 f6 00 43 00 4d 00 64 ...
 
-Field map, read off the capture (seven telemetry reads at two battery states):
+Field map, read off the reporter's captures (a wireless session and a charging
+one):
 
-    bytes 17-18  battery percent, little-endian (4d 00 = 77, 4c 00 = 76).
-                 CAM's own panel read 76 -> 75 over the same capture, so the
-                 reporter's hardware run is what pins the two against each
-                 other.
-    bytes 8-9    cell voltage, big-endian millivolts (0f fd = 4093 mV); it
-                 fell to 4092 in step with the percentage.
-    byte 7       flags; 86 in five reads, 82 in two with nothing in the
-                 capture explaining the difference - NOT decoded.
-    the rest     constant across all seven reads (43 00, 64 00, 1e 00, 08 00
-                 and a repeated 40 01) - not decoded, nothing is guessed.
+    bytes 17-18  battery percent, little-endian (4d 00 = 77, 4c 00 = 76). The
+                 tray reads one step above CAM's panel (76 against 75, 78
+                 against 77) - CAM smooths its display; the raw gauge is what
+                 is shown here.
+    bytes 8-9    cell voltage, big-endian millivolts (0f fd = 4093 mV wireless;
+                 10 fc = 4348 mV while charging; 0f 1e = 3870 right after the
+                 cable came out).
+    byte 22      bit 0 set while the mouse is on its charging cable: it read 1
+                 in every charging-session frame and 0 in every wireless one,
+                 including right after unplugging.
+    byte 7       drifts between reads (86/82 wireless, 94..91 and 9b on either
+                 side of charging, 1c/31/a5 during it) with nothing conclusive
+                 - NOT decoded.
+    bytes 13-14  a slowly moving value (00f6 = 246 up to 00f9 = 249 across the
+                 captures, rising during charging) that looks like a
+                 temperature in 0.1 C - NOT decoded.
+    byte 10      ff wireless; 01 from mid-charging through the unplug, back to
+                 ff once settled - the exact meaning is not clear, so it is
+                 not used; byte 21 reads 1e normally and 1c once.
+    the rest     (43 00, 64 00, 08 00, a repeated 40 01) is constant.
 
 The reply arrived ~25 ms after the request, always preceded by a 4e e5 00
 acknowledgement from the dongle, so the read loop skips e5 frames and waits
@@ -34,12 +46,12 @@ The dongle splits into six HID collections; the conversation rode the one on
 usage page ffca / usage 0001 - the same page the wired Lift's OpenRGB driver
 picks - chosen by usage page, never by interface number.
 
-The charging state was never captured (the cable was not plugged in during
-the recording), so charging is not claimed at all for this mouse. Claimed for
-1e71:2101 only, the receiver the capture came from; the 1e71:2131 keyboard is
-wired and has no battery to read. **Unverified on hardware** until the
-reporter's test build run; if the dongle should turn out to need CAM running,
-the diagnostics will show it acknowledging the request and never answering.
+Claimed for 1e71:2101 only, the receiver the captures came from; the 1e71:2131
+keyboard is wired and has no battery to read. Confirmed on hardware by the
+reporter of #148 (@MrBeat93): the level tracks, charging follows the cable.
+While NZXT CAM itself is open the dongle stops answering this request - the
+app then keeps the last value on a greyed icon (the same coexistence shape as
+other vendor tools).
 """
 from __future__ import annotations
 
@@ -72,6 +84,7 @@ REQUEST = bytes([MAGIC, TARGET_MOUSE, OP_READ, 0x00, PROP_TELEMETRY]) + b"\x00" 
 
 LEVEL_INDEX = 17
 VOLTAGE_INDEX = 8
+CHARGING_INDEX = 22               # bit 0: 1 while the mouse is on its charging cable
 MIN_FRAME = 27
 
 READ_ATTEMPTS = 10
@@ -81,11 +94,11 @@ DRAIN_TIMEOUT_MS = 1
 MAX_CANDIDATES = 2
 ASLEEP_KEEP = 300                 # s, as in the other receiver providers
 
-Reading = Tuple[int, int]         # level %, cell millivolts
+Reading = Tuple[int, int, bool]   # level %, cell millivolts, on the charging cable
 
 
 def parse_telemetry(r) -> Optional[Reading]:
-    """(level, millivolts) from a telemetry reply, or None when it is not one."""
+    """(level, millivolts, charging) from a telemetry reply, or None when it is not one."""
     if not r or len(r) < MIN_FRAME:
         return None
     if r[0] != MAGIC or r[1] != TARGET_MOUSE or r[2] != REPLY_TELEMETRY:
@@ -94,7 +107,8 @@ def parse_telemetry(r) -> Optional[Reading]:
     if not 0 <= level <= 100:
         return None               # not a percentage - refuse rather than show it
     mv = (r[VOLTAGE_INDEX] << 8) | r[VOLTAGE_INDEX + 1]
-    return level, mv
+    charging = bool(r[CHARGING_INDEX] & 0x01)
+    return level, mv, charging
 
 
 def candidates(ifaces: List[dict]) -> List[dict]:
@@ -116,7 +130,7 @@ class NzxtProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[int, int, float]] = None
+        self._last: Optional[Tuple[int, int, bool, float]] = None
         self._chosen: Optional[bytes] = None
 
     def _read(self, path: bytes) -> Optional[Reading]:
@@ -199,16 +213,17 @@ class NzxtProvider(Provider):
                     self._chosen = d["path"]
                     break
             if got is not None:
-                level, mv = got
-                self._last = (level, mv, time.time())
-                self._diag.append(f"  {level} % (cell {mv} mV); the charging state "
-                                  f"was not in the capture, so it is not shown")
-                out.append(DeviceStatus(key, name, level, False, True, "nzxt",
+                level, mv, charging = got
+                self._last = (level, mv, charging, time.time())
+                self._diag.append(f"  {level} % (cell {mv} mV"
+                                  + (", on the charging cable" if charging else "")
+                                  + ")")
+                out.append(DeviceStatus(key, name, level, charging, True, "nzxt",
                                         kind="mouse"))
                 continue
-            if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
+            if self._last and time.time() - self._last[3] < ASLEEP_KEEP:
                 self._diag.append("  no reply; keeping the last level, greyed out")
-                out.append(DeviceStatus(key, name, self._last[0], False, False,
+                out.append(DeviceStatus(key, name, self._last[0], self._last[2], False,
                                         "nzxt", kind="mouse"))
             else:
                 self._diag.append("  no reply yet and no earlier level")
