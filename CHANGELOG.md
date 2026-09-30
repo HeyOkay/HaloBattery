@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Hitscan Hyperlight on its 8K receiver (`3770:0300`). Uses the same vendor collection
+  (`ff02:0002`) and 17-byte command `0x04` frame as the 1K receiver.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
