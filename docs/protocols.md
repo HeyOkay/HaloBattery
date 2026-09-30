@@ -240,6 +240,12 @@ Read straight from the HID input report (USB byte 53, Bluetooth full report byte
 
 Read straight from the HID input report: exact percentage and charging state (USB byte 30, Bluetooth full report byte 32). Over Bluetooth, see the note below the table
 
+### Steam Controller (2025) with its puck
+
+**Connection:** 2.4 GHz puck (28DE:1304 Proteus, 28DE:1305 Nereid)
+
+Listened to, never written: the puck relays each controller on its own vendor collection (usage page 0xFF00 / usage 0x0001) on interfaces 2 to 5, one interface per controller slot, as SDL's driver reads it (src/joystick/hidapi/SDL_hidapi_steam_triton.c). Input report 0x43 carries the charge state in byte 0 (1 discharging, 2 charging, 4 charging done) and the level in % in byte 1; reports 0x79 and 0x46 report a controller connecting or disconnecting, and 0x42, 0x45 and 0x47 are the controller's state reports. How often the puck sends 0x43 was not measured, so the last level is kept between reports the way SDL keeps it; a slot that goes quiet keeps its last value greyed, and a disconnect removes the icon at once. SDL sends rumble, IMU and a lizard mode command over the same report and disables lizard mode every 3 seconds - none of that is sent here, so the controller keeps behaving the way the user's games expect. The older 2015 Steam Controller and its dongle speak a different protocol and are not covered. **Unverified** - no Steam Controller was on hand, so a level above 100 is refused rather than shown
+
 ### Xbox-compatible controllers (other models)
 
 **Connection:** USB or the Xbox wireless adapter
