@@ -69,6 +69,11 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   the headset to speak and held back the icons of all other devices. The app now listens
   to the receiver all the time in the background, so polls do not wait, and a level the
   headset sends between polls is no longer missed.
+- Steam Controller (2025) over its puck (#58): the battery is read from the controller's
+  own input reports - the charge state and level in report 0x43, a connect and disconnect
+  in reports 0x79 / 0x46 - listen-only, nothing is sent to the controller, so its lizard
+  mode and rumble stay as the user's games set them. Unit tests. Unverified on hardware
+  here.
 
 ## [1.13.0] - 2026-09-29
 
