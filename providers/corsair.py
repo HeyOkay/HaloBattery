@@ -33,8 +33,9 @@ divide by 10. The 1.13.0 build asked this dongle with ckb-next's "nxp" packet;
 the reporter's runs in #56 showed it never answers that one, and that one of
 its *other* frames parsed as a level was the 0 % flash. The request above and
 its `01 02 00 26 02 ...` answer (55 %) were captured from the reporter's
-dongle; the level itself awaits his test build run. Only the dongle is claimed:
-a wired 1b1c:1b7e exists and nothing here can prove it answers.
+dongle, and the exchange is confirmed on hardware: KKiruano's test build run
+showed the same level SignalRGB does. Only the dongle is claimed: a wired
+1b1c:1b7e exists and nothing here can prove it answers.
 """
 from __future__ import annotations
 

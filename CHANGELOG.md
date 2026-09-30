@@ -12,8 +12,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   newer routed exchange (ckb-next's "bragi", OpenLinkHub's "slipstream") and returns the level in
   tenths of a percent behind the mouse's route byte. A frame that is not exactly an answer - the
   receiver's device records and notices - is no longer read as a level; that parsing was the 0 %
-  flash. The request and the answer were captured on the reporter's dongle; the level itself is
-  Unverified until his test build run.
+  flash. The request and the answer were captured on the reporter's dongle; the reading is
+  confirmed on hardware: KKiruano ran the test build against his mouse and it showed
+  the same value as SignalRGB ([#56](https://github.com/HeyOkay/HaloBattery/issues/56)).
 
 ## [1.14.0] - 2026-10-05
 
