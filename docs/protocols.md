@@ -130,9 +130,9 @@ The same feature report exchange as the WLmouse mice (`00 00 02 02 00 83` out, `
 
 ### Hitscan Hyperlight
 
-**Connection:** 2.4 GHz receiver (3770:0200) or USB cable (3770:0100)
+**Connection:** 2.4 GHz receiver (3770:0200), 8K receiver (3770:0300) or USB cable (3770:0100)
 
-The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection `ff02:0002`: [sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery) mapped them from USB captures of Hitscan Utility 1.0.2 (command 0x04, level in byte 6, charging in byte 7, millivolts in bytes 8-9) and reads them on Linux. Note the vendor application's own battery indicator is broken - it showed 100 % while the device answered 75 - so the raw byte is the truth. **Unverified** here: no Hyperlight was on hand, [so #105's reporter confirming the level](https://github.com/HeyOkay/HaloBattery/issues/105) would settle it
+The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection `ff02:0002`: [sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery) mapped them from USB captures of Hitscan Utility 1.0.2 (command 0x04, level in byte 6, charging in byte 7, millivolts in bytes 8-9) and reads them on Linux; the 8K receiver id is confirmed in Hitscan Utility's `Config.ini` (`Wireless8_PID = MDMwMA==`). Note the vendor application's own battery indicator is broken - it showed 100 % while the device answered 75 - so the raw byte is the truth. **Unverified** here: no Hyperlight was on hand, [so #105's reporter confirming the level](https://github.com/HeyOkay/HaloBattery/issues/105) would settle it
 
 ### LAMZU Maya X
 
