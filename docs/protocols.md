@@ -98,6 +98,12 @@ The same `b0` exchange as the other Nova headsets, asked for with report id `06`
 
 ## Mice
 
+### AJAZZ AJ179 V2 MAX
+
+**Connection:** 2.4 GHz receiver (249A:5C2F)
+
+The vendor app's own startup read, and the receiver's own announcement. The app writes `10 00 00 ...` (32 bytes, report id 0) and reads back `10 00 01 0b 4e 36 32 35 00 00 11 01 00 <level> 01 ... <checksum>` - the percentage at byte 13 (`0x4b` = 75 %), the length at byte 3 and a checksum of bytes 4-30 summed, low 8 bits. On its own the receiver also announces `c0 01 <level>` (byte 1 non-zero on a live link; `c0 00` frames are command replies). Both were recorded from AJAZZ Driver 1.0.7.3 in the USBPcap captures in [#74](https://github.com/HeyOkay/HaloBattery/issues/74): 75 % in both after a charge (74 % a moment later) and 13 % before it; the announcement layout also matches [johan-akn/aj179-linux](https://github.com/johan-akn/aj179-linux) (MIT), a native driver for this exact receiver, and [GetTheNya/Aj179PStat](https://github.com/GetTheNya/Aj179PStat), which reads byte 2 of the same frame on `3151:402d`. The vendor channel is the only collection with an output report (33 bytes both ways, `mi_02`), but the dump carries no usage for it, so the collections are tried in turn and the one that takes the write is remembered. A zero level is refused with the sibling AJAZZ receiver's rule (a zero there means the link is not up yet), and no charging flag is shown. **Unverified** here - no AJAZZ mouse was on hand, so the reporter's test build in [#74](https://github.com/HeyOkay/HaloBattery/issues/74) has to answer once
+
 ### AM Infinity 8K (Angry Miao)
 
 **Connection:** 2.4 GHz receiver (3151:5007)
