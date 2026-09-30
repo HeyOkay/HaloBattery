@@ -1,16 +1,16 @@
 """Tests for the Corsair provider: the headset family (Void v2 / Virtuoso Max /
-HS80 Max, from HeadsetControl) and the Dark Core / Ironclaw "nxp" family from
-ckb-next. No hardware is needed.
+HS80 Max, from HeadsetControl) and the Dark Core RGB Pro SE dongle, whose
+routed exchange ckb-next calls "bragi" and OpenLinkHub "slipstream". No
+hardware is needed.
 
-The nxp frames are ckb-next's: CMD_GET 0x0e plus FIELD_BATTERY 0x50 in a 64-byte
-packet (src/daemon/nxp_proto.h), answered with a level index at byte 4 and a
-status byte at byte 5, the index selecting from the five-step table
-{0, 15, 30, 50, 100} (src/daemon/device.c, nxp_battery_lut). The report id in
-front of the packet is hidapi's, not ckb-next's: it talks to the device over
-libusb, which has no report ids. No capture of this dongle was available, so
-the collection (ff42:0001 on its interface 1, from the reporter's dump in #56)
-and the reply offsets are the reference's, and both are marked unverified in
-the README and the provider docstring.
+The frames are the reporter's, from the probe output in #56: a 64-byte routed
+frame behind report id 0 - route 0x09 asks the mouse behind the receiver for
+property 0x0F (battery level) - answered with `01 02 00 26 02 ...`: the mouse's
+route, the get command, err 0 and the value little-endian in tenths of a
+percent (550 = 55 %). The dongle sends other frames on the same channel
+(device-list records like `00 12 00 ...`, receiver answers like `00 02 00 7f
+1b ...`) and notices on its sibling collection; only the shape above is a
+reading - parsing the others was the 0 % flash the 1.13.0 build showed.
 
 Run from the repository root:
 
@@ -33,25 +33,37 @@ def entry(pid, path, iface, page, usage, name=DONGLE):
             "path": path, "product_string": name, "serial_number": ""}
 
 
-def nxp_reply(idx, status=2, report_id=True, size=C.NXP_MSG_SIZE):
+def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0x00,
+                report_id=False, size=C.BRAGI_MSG_SIZE):
+    """A reply frame of the shape the dongle sends; value is in tenths of a percent."""
     payload = bytearray(size)
-    payload[0] = C.NXP_CMD_GET
-    payload[1] = C.NXP_FIELD_BATTERY
-    payload[C.NXP_LEVEL_INDEX] = idx
-    payload[C.NXP_STATUS_INDEX] = status
+    payload[0] = route
+    payload[1] = cmd
+    payload[2] = err
+    payload[3] = value & 0xFF
+    payload[4] = (value >> 8) & 0xFF
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
 class FakeDongle:
-    """One HID interface of the dongle. Answers the next read with a battery reply."""
+    """One HID interface of the dongle. Each read returns the next queued reply;
+    a single reply repeats."""
 
-    def __init__(self, reply=None, silent=False):
-        self.reply = reply if reply is not None else nxp_reply(3)
+    def __init__(self, replies=None, silent=False):
+        if replies is None:
+            replies = [bragi_reply()]
+        elif isinstance(replies, list) and replies and isinstance(replies[0], list):
+            replies = list(replies)                  # a queue of reply frames
+        else:
+            replies = [replies]                      # one reply frame
+        self.replies = [list(r) for r in replies]
         self.silent = silent
         self.writes = []
 
     def read(self, size, timeout_ms):
-        return [] if self.silent else self.reply
+        if self.silent or not self.replies:
+            return []
+        return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
 
 class FakeBus:
@@ -83,42 +95,53 @@ class FakeBus:
         return FakeDevice
 
 
-class NxpParseTest(unittest.TestCase):
-    def test_the_request_is_the_ckb_next_packet_behind_a_report_id(self):
-        req = C.nxp_request()
-        self.assertEqual(len(req), C.NXP_MSG_SIZE + 1)
-        self.assertEqual(req[0], 0x00)
-        self.assertEqual(req[1], 0x0E)          # CMD_GET
-        self.assertEqual(req[2], 0x50)          # FIELD_BATTERY
+class BragiParseTest(unittest.TestCase):
+    def test_the_request_is_the_routed_get_behind_report_id_0(self):
+        req = C.bragi_request()
+        self.assertEqual(len(req), C.BRAGI_MSG_SIZE + 1)
+        self.assertEqual((req[0], req[1], req[2], req[3]), (0x00, 0x09, 0x02, 0x0F))
 
-    def test_every_index_maps_through_the_five_step_table(self):
-        got = [C.parse_nxp(nxp_reply(i))[0] for i in range(5)]
-        self.assertEqual(got, [0, 15, 30, 50, 100])
+    def test_the_reporter_s_answer_parses_to_55_percent(self):
+        # the frame from the probe output in #56: 01 02 00 26 02 ...
+        self.assertEqual(C.parse_bragi(bragi_reply(550)), 55)
 
-    def test_the_label_says_about_and_the_level(self):
-        level, label = C.parse_nxp(nxp_reply(3))
-        self.assertEqual((level, label), (50, "about 50%"))
+    def test_the_value_is_tenths_of_a_percent(self):
+        self.assertEqual(C.parse_bragi(bragi_reply(765)), 76)
+        self.assertEqual(C.parse_bragi(bragi_reply(1000)), 100)
+        self.assertEqual(C.parse_bragi(bragi_reply(9)), 0)
 
-    def test_an_index_past_the_table_is_refused(self):
-        self.assertIsNone(C.parse_nxp(nxp_reply(5)))
-        self.assertIsNone(C.parse_nxp(nxp_reply(255)))
+    def test_a_value_past_the_max_is_refused(self):
+        self.assertIsNone(C.parse_bragi(bragi_reply(1001)))
 
-    def test_a_short_reply_is_refused(self):
-        self.assertIsNone(C.parse_nxp([0x00, 0x0E, 0x50, 0x00, 0x03]))
-        self.assertIsNone(C.parse_nxp([0x00]))
+    def test_zero_is_not_a_reading(self):
+        # the dongle's notices carry value 0 - the 1.13.0 build showed that as 0 %
+        self.assertIsNone(C.parse_bragi(bragi_reply(0)))
 
-    def test_an_empty_reply_is_refused(self):
-        self.assertIsNone(C.parse_nxp([]))
-        self.assertIsNone(C.parse_nxp(None))
+    def test_the_receiver_s_own_answers_are_not_the_mouse_s(self):
+        # route 0x00 is the receiver itself: `00 02 00 7f 1b ...` is its product id
+        self.assertIsNone(C.parse_bragi(bragi_reply(550, route=0x00)))
+
+    def test_a_record_frame_is_not_a_reading(self):
+        # `00 12 00 04 ...` (the device list) rides the same channel
+        self.assertIsNone(C.parse_bragi(bragi_reply(550, cmd=0x12)))
+
+    def test_an_error_answer_is_not_a_reading(self):
+        for err in (1, 2, 3):
+            self.assertIsNone(C.parse_bragi(bragi_reply(550, err=err)))
+
+    def test_a_short_or_empty_reply_is_refused(self):
+        self.assertIsNone(C.parse_bragi([]))
+        self.assertIsNone(C.parse_bragi(None))
+        self.assertIsNone(C.parse_bragi([0x01, 0x02, 0x00, 0x26]))
 
     def test_the_report_id_is_tolerated_with_or_without(self):
-        a = C.parse_nxp(nxp_reply(2, report_id=True))
-        b = C.parse_nxp(nxp_reply(2, report_id=False))
+        a = C.parse_bragi(bragi_reply(550, report_id=True))
+        b = C.parse_bragi(bragi_reply(550, report_id=False))
         self.assertEqual(a, b)
-        self.assertEqual(a[0], 30)
+        self.assertEqual(a, 55)
 
 
-class NxpPollTest(unittest.TestCase):
+class BragiPollTest(unittest.TestCase):
     def setUp(self):
         self._saved = (C.hid, C.hidlist)
 
@@ -131,73 +154,91 @@ class NxpPollTest(unittest.TestCase):
         C.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
         return C.CorsairProvider().poll(), bus
 
-    def test_the_dongle_is_shown_as_a_gauge(self):
+    def test_the_dongle_shows_the_reporter_s_55_percent(self):
         out, bus = self.poll(
             [entry(0x1B7F, b"dongle-ff420001", 1, 0xFF42, 0x0001)],
-            {b"dongle-ff420001": FakeDongle(nxp_reply(3))})
+            {b"dongle-ff420001": FakeDongle(bragi_reply(550))})
         self.assertEqual(len(out), 1)
         st = out[0]
-        self.assertEqual((st.key, st.level, st.approx, st.kind), ("corsair:1b7f", 50, "about 50%", "mouse"))
+        self.assertEqual((st.key, st.level, st.approx, st.kind),
+                         ("corsair:1b7f", 55, "", "mouse"))
         self.assertFalse(st.charging)
         self.assertTrue(st.online)
         self.assertEqual(bus.opened, [b"dongle-ff420001"])
 
-    def test_the_packet_goes_on_the_wire_unchanged(self):
+    def test_the_question_goes_on_the_wire_as_the_probe_sent_it(self):
         _, bus = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)], {b"d": FakeDongle()})
         w = bus.dongles[b"d"].writes[0]
-        self.assertEqual((w[0], w[1], w[2], len(w)), (0x00, 0x0E, 0x50, C.NXP_MSG_SIZE + 1))
+        self.assertEqual((w[0], w[1], w[2], w[3], len(w)),
+                         (0x00, 0x09, 0x02, 0x0F, C.BRAGI_MSG_SIZE + 1))
+
+    def test_the_usage_1_collection_is_asked_first(self):
+        # the 0x0002 collection is the dongle's notice channel and stays untouched
+        e = [entry(0x1B7F, b"notice", 2, 0xFF42, 0x0002),
+             entry(0x1B7F, b"answers", 1, 0xFF42, 0x0001)]
+        out, bus = self.poll(e, {b"answers": FakeDongle(bragi_reply(550)),
+                                 b"notice": FakeDongle(bragi_reply(0))})
+        self.assertEqual(bus.opened, [b"answers"])
+        self.assertEqual(out[0].level, 55)
+
+    def test_the_iface_1_collection_is_tried_first(self):
+        # with no usage 0x0001 collection, the interface-1 one goes first
+        e = [entry(0x1B7F, b"c0002", 2, 0xFF42, 0x0002),
+             entry(0x1B7F, b"c0001", 1, 0xFF42, 0x0003)]
+        out, bus = self.poll(e, {b"c0001": FakeDongle(bragi_reply(765)),
+                                 b"c0002": FakeDongle(bragi_reply(0))})
+        self.assertEqual(bus.opened, [b"c0001"])
+        self.assertEqual(out[0].level, 76)
 
     def test_both_vendor_collections_are_tried_and_the_first_that_answers_wins(self):
         e = [entry(0x1B7F, b"c0001", 1, 0xFF42, 0x0001),
              entry(0x1B7F, b"c0002", 2, 0xFF42, 0x0002)]
         silent = FakeDongle(silent=True)
-        out, bus = self.poll(e, {b"c0001": silent, b"c0002": FakeDongle(nxp_reply(4))})
-        self.assertEqual(out[0].level, 100)
+        out, bus = self.poll(e, {b"c0001": silent, b"c0002": FakeDongle(bragi_reply(765))})
+        self.assertEqual(out[0].level, 76)
         self.assertEqual(bus.opened, [b"c0001", b"c0002"])
 
-    def test_the_iface_1_collection_is_tried_first(self):
-        e = [entry(0x1B7F, b"c0002", 2, 0xFF42, 0x0002),
-             entry(0x1B7F, b"c0001", 1, 0xFF42, 0x0001)]
-        out, bus = self.poll(e, {b"c0001": FakeDongle(nxp_reply(4)),
-                                 b"c0002": FakeDongle(nxp_reply(0))})
-        self.assertEqual(bus.opened, [b"c0001"])
-        self.assertEqual(out[0].level, 100)
+    def test_a_sleeping_or_unanswering_dongle_gives_no_icon(self):
+        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
+                           {b"d": FakeDongle(silent=True)})
+        self.assertEqual(out, [])
 
-    def test_the_usage_1_collection_wins_on_one_interface(self):
-        # both collections can sit on the same interface; the usage decides
-        e = [entry(0x1B7F, b"u0002", 1, 0xFF42, 0x0002),
-             entry(0x1B7F, b"u0001", 1, 0xFF42, 0x0001)]
-        out, bus = self.poll(e, {b"u0001": FakeDongle(nxp_reply(4)),
-                                 b"u0002": FakeDongle(nxp_reply(0))})
-        self.assertEqual(bus.opened, [b"u0001"])
-        self.assertEqual(out[0].level, 100)
+    def test_a_notice_frame_is_not_a_level(self):
+        # `01 02 00 00 ...` is the dongle answering something that is not the
+        # battery; the 1.13.0 build showed it as 0 % briefly
+        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
+                           {b"d": FakeDongle(bragi_reply(0))})
+        self.assertEqual(out, [])
+
+    def test_a_receiver_record_before_the_answer_is_ignored(self):
+        # the device-list records (`00 12 00 ...`) ride the same channel
+        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
+                           {b"d": FakeDongle([bragi_reply(550, route=0x00, cmd=0x12),
+                                              bragi_reply(550)])})
+        self.assertEqual(out[0].level, 55)
 
     def test_a_non_ff42_collection_is_not_substituted_when_ff42_exists(self):
         # a silent ff42 collection must give no reading, not a try on the keyboard page
         e = [entry(0x1B7F, b"vendor", 1, 0xFF42, 0x0001),
              entry(0x1B7F, b"kbdpage", 0, 0x0001, 0x0002)]
         out, bus = self.poll(e, {b"vendor": FakeDongle(silent=True),
-                                 b"kbdpage": FakeDongle(nxp_reply(4))})
+                                 b"kbdpage": FakeDongle(bragi_reply(550))})
         self.assertEqual(out, [])
         self.assertEqual(bus.opened, [b"vendor"])
 
-    def test_an_index_past_the_table_gives_no_reading(self):
-        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
-                           {b"d": FakeDongle(nxp_reply(9))})
-        self.assertEqual(out, [])
-
     def test_an_empty_dump_entry_set_is_tried_when_ff42_is_missing(self):
         # the doc's collection comes from the reporter's dump; if a firmware ever
-        # reports another page, trying the remaining collections is one read
+        # reports another page, trying the remaining collections is one read window
         out, bus = self.poll([entry(0x1B7F, b"d", 0, 0x0001, 0x0002)],
-                             {b"d": FakeDongle(nxp_reply(1))})
-        self.assertEqual(out[0].level, 15)
+                             {b"d": FakeDongle(bragi_reply(765))})
+        self.assertEqual(out[0].level, 76)
         self.assertEqual(bus.opened, [b"d"])
 
     def test_the_headset_family_is_untouched(self):
         self.assertEqual(C.PIDS, {0x2A08: "Corsair Void v2 Wireless",
                                   0x2A02: "Corsair Virtuoso Max Wireless",
                                   0x0A97: "Corsair HS80 Max Wireless"})
+        self.assertEqual(C.BRAGI_PIDS, {0x1B7F: "Corsair Dark Core RGB Pro SE"})
         self.assertNotIn(0x1B7F, C.PIDS)
 
 
