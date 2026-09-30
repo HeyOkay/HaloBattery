@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Lofree Flow Lite84 keyboard on its 2.4 GHz dongle (#165). Lofree's Control HUB web
+  driver speaks the same 17-byte Compx frame as the Pulsar/ATK/VXE mice with the
+  keyboard flag set, asking "online" (`03`) before the battery (`04`). Unverified on
+  hardware here.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
