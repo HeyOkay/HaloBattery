@@ -37,7 +37,8 @@ keyboard online": byte 6 is 1) before command 0x04. Both are answered on the fam
 control collection
 0xFF02:0x0002, the one this provider opens. Only the 2.4 GHz dongle (05AC:024F,
 manufacturer 'CX' - a copy of Apple's vendor id) is claimed: no wired id was
-reported. Unverified on hardware here.
+reported. Confirmed on a Flow Lite84 on its 2.4 GHz dongle (#165): the level and the
+charging state both showed.
 """
 from __future__ import annotations
 
