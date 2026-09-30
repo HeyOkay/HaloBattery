@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Lofree Flow Lite84 keyboard on its 2.4 GHz dongle (#165). Lofree's Control HUB web
+  driver speaks the same 17-byte Compx frame as the Pulsar/ATK/VXE mice with the
+  keyboard flag set, asking "online" (`03`) before the battery (`04`). Unverified on
+  hardware here.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

@@ -35,6 +35,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [JBL Quantum 910 Wireless](docs/protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](docs/protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](docs/protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
+| [Lofree Flow Lite84](docs/protocols.md#lofree-flow-lite84) | 2.4 GHz dongle | no |
 | [Lofree Hyzen](docs/protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
 | [Logitech G502 LIGHTSPEED, G502 X PLUS](docs/protocols.md#logitech-g502-lightspeed-g502-x-plus) | Lightspeed receiver | yes |
 | [Logitech (more HID++ 2.0 devices and G-series headsets)](docs/protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
