@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Corsair Dark Core RGB Pro SE: read the battery the way the dongle actually answers (#56). The
+  1.13.0 build asked with ckb-next's "nxp" packet, which this dongle never answers; it speaks the
+  newer routed exchange (ckb-next's "bragi", OpenLinkHub's "slipstream") and returns the level in
+  tenths of a percent behind the mouse's route byte. A frame that is not exactly an answer - the
+  receiver's device records and notices - is no longer read as a level; that parsing was the 0 %
+  flash. The request and the answer were captured on the reporter's dongle; the level itself is
+  Unverified until his test build run.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

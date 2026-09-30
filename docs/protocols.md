@@ -96,7 +96,7 @@ The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the ven
 
 **Connection:** 2.4 GHz dongle (1B1C:1B7F)
 
-The Dark Core / Ironclaw "nxp" protocol from ckb-next: a 64-byte packet `CMD_GET 0x0e` + `FIELD_BATTERY 0x50` answered with a level index into the five-step table {0, 15, 30, 50, 100}, so the level is shown as a gauge ("about 50%") and no charging state is reported. The wired id 1B1C:1B7E is left out. **Unverified** - no Corsair mouse was on hand; the collection (`ff42:0001`) comes from the reporter's dump in #56
+The newer routed exchange that ckb-next calls "bragi" and OpenLinkHub "slipstream": 64-byte frames behind report id 0, route `0x09` asks the mouse behind the receiver (the receiver itself is `0x08`), command `0x02` "get property", property `0x0F` battery. The answer `01 02 00 <value:2 LE> ...` carries the level in tenths of a percent (`26 02` = 550 = 55 %). Frames that are not exactly that shape - the receiver's device records, its notices - are not levels. The request and the answer were captured from the reporter's dongle in #56; the level itself is awaiting his test build run. No charging state is reported. The wired id 1B1C:1B7E is left out. **Unverified** - the app has not run against the mouse yet
 
 ### G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini
 

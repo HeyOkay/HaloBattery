@@ -21,19 +21,25 @@ Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
 The reply carries no charging flag: HeadsetControl reports the level as
 available (not charging) for this family, and so does this provider.
 
-The Dark Core / Ironclaw mice and their dongles speak a second, unrelated
-protocol ("nxp" in ckb-next, which reads them): a single-field 64-byte packet
-`{CMD_GET 0x0e, FIELD_BATTERY 0x50}` answered with the level as an index into a
-five-step table `{0, 15, 30, 50, 100}` at byte 4 and a status byte at byte 5.
-ckb-next's source is the reference (src/daemon/nxp_proto.h and device.c,
-repo ckb-next/ckb-next; its protocol notes live in ckb-next/corsair-protocol).
-The status byte's meaning is not written down in either, so no charging state
-is reported, and the level is coarse, so it is shown as "about N%".
+The Dark Core RGB Pro SE (dongle 1b1c:1b7f) speaks the newer Corsair protocol
+that ckb-next calls "bragi" (USES_BRAGI in src/daemon/usb.h; bragi_proto.h,
+device_bragi.c) and OpenLinkHub "slipstream" (src/devices/slipstream/): 64-byte
+routed frames behind report id 0, 65 bytes to hidapi. Byte 1 is the route (0x08
+the receiver itself, 0x08 | child the device behind it; 0x09 = the paired
+mouse), byte 2 the command (0x02 = get) and byte 3 the property (battery level
+0x0F). An answer is `[route][0x02][err][value]...`: err 0 means OK, and the
+battery sits little-endian in bytes 3-4 in tenths of a percent - both drivers
+divide by 10. The 1.13.0 build asked this dongle with ckb-next's "nxp" packet;
+the reporter's runs in #56 showed it never answers that one, and that one of
+its *other* frames parsed as a level was the 0 % flash. The request above and
+its `01 02 00 26 02 ...` answer (55 %) were captured from the reporter's
+dongle; the level itself awaits his test build run. Only the dongle is claimed:
+a wired 1b1c:1b7e exists and nothing here can prove it answers.
 """
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import hid
 
@@ -77,42 +83,56 @@ def make_request(endpoint: int, sub: int, command: int) -> List[int]:
     return frame + [0x00] * (MSG_SIZE_WRITE - len(frame))
 
 
-# --- second family: the "nxp" protocol of the Dark Core / Ironclaw mice --------------------
+# --- second family: the "bragi" / "slipstream" exchange of the Dark Core RGB Pro SE dongle ---
 # A wired mouse (1b1c:1b7e) exists too; nothing here can prove it answers, so only the
 # dongle is read.
-NXP_PIDS = {
+BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
 }
-NXP_USAGE_PAGE = 0xFF42          # the dongle's two vendor collections, from the #56 dump
-NXP_CMD_GET = 0x0E               # ckb-next: CMD_GET
-NXP_FIELD_BATTERY = 0x50         # ckb-next: FIELD_BATTERY
-NXP_MSG_SIZE = 64                # ckb-next: MSG_SIZE (structures.h)
-NXP_LEVEL_INDEX = 4
-NXP_STATUS_INDEX = 5
-NXP_LEVELS = (0, 15, 30, 50, 100)   # ckb-next's nxp_battery_lut
+BRAGI_VENDOR_PAGE = 0xFF42       # the dongle's two vendor collections, from the #56 dump
+BRAGI_USAGE = 0x0001             # the one that answers; 0x0002 is its notice channel
+BRAGI_MSG_SIZE = 64              # ckb-next: MSG_SIZE (structures.h)
+BRAGI_ROUTE_DONGLE = 0x08        # the receiver itself
+BRAGI_ROUTE_MOUSE = 0x09         # 0x08 | child 1: the paired mouse
+BRAGI_ROUTE_CHILD = 0x01         # the route the mouse's answers come back with
+BRAGI_CMD_GET = 0x02             # ckb-next: CMD_GET
+BRAGI_PROP_BATTERY = 0x0F        # ckb-next: BRAGI_BATTERY_LEVEL
+BRAGI_LEVEL_MAX = 1000           # tenths of a percent (765 -> 76 %)
+BRAGI_READS = 10                 # x READ_TIMEOUT_MS: the answer measured ~4.7 s after the write
 
 
-def nxp_request() -> bytes:
-    """The 64-byte nxp packet; hidapi wants the report id (0) in front of it."""
-    payload = bytearray(NXP_MSG_SIZE)
-    payload[0] = NXP_CMD_GET
-    payload[1] = NXP_FIELD_BATTERY
+def bragi_request(prop: int = BRAGI_PROP_BATTERY) -> bytes:
+    """A get-property question to the mouse: report id 0, route 0x09, cmd 0x02."""
+    payload = bytearray(BRAGI_MSG_SIZE)
+    payload[0] = BRAGI_ROUTE_MOUSE
+    payload[1] = BRAGI_CMD_GET
+    payload[2] = prop
     return b"\x00" + bytes(payload)
 
 
-def parse_nxp(reply) -> Optional[Tuple[int, str]]:
-    """-> (level, label) from a battery reply, or None when it is not one."""
+def parse_bragi(reply) -> Optional[int]:
+    """The level in percent from a get-property answer, or None when it is not one.
+
+    An answer is `[route][0x02][err][value]...`: 0x01 is the mouse's route, err 0
+    means OK, and bytes 3-4 hold the value little-endian, in tenths of a percent.
+    The dongle sends other frames as well (device-list records on the same
+    channel, notices on its sibling collection), so a frame counts only when
+    every field above matches - one of those frames parsed as a level was the
+    0 % flash the earlier release showed.
+    """
     if not reply:
         return None
     data = list(reply)
-    if len(data) >= NXP_MSG_SIZE + 1:      # hidapi may hand the report id back
+    if len(data) >= BRAGI_MSG_SIZE + 1:      # hidapi may hand the report id back
         data = data[1:]
-    if len(data) < NXP_STATUS_INDEX + 1:
+    if len(data) < 5:
         return None
-    idx = data[NXP_LEVEL_INDEX]
-    if not 0 <= idx < len(NXP_LEVELS):
+    if data[0] != BRAGI_ROUTE_CHILD or data[1] != BRAGI_CMD_GET or data[2] != 0x00:
         return None
-    return NXP_LEVELS[idx], f"about {NXP_LEVELS[idx]}%"
+    value = data[3] | (data[4] << 8)
+    if value == 0 or value > BRAGI_LEVEL_MAX:
+        return None
+    return value // 10
 
 
 def parse_level(r) -> Optional[int]:
@@ -139,18 +159,29 @@ class CorsairProvider(Provider):
                           f"falling back to the first of {len(infos)}")
         return infos[0] if infos else None
 
-    def _pick_nxp(self, infos: List[dict]) -> List[dict]:
-        """The dongle's vendor collections, its own iface 1 first; the rest only
-        when the dump's collection is missing (a wrong endpoint then costs one read)."""
-        vend = [d for d in infos if d.get("usage_page") == NXP_USAGE_PAGE]
+    def _pick_bragi(self, infos: List[dict]) -> List[dict]:
+        """The dongle's vendor collections, the one that answers first.
+
+        It has two (0xFF42:0x0001 and 0xFF42:0x0002, from the #56 dump): the
+        exchange answers on usage 0x0001, while 0x0002 is its notice channel and
+        is not asked. When 0xFF42 is missing, the remaining collections are tried,
+        which then costs one read window.
+        """
+        vend = [d for d in infos if d.get("usage_page") == BRAGI_VENDOR_PAGE]
         if not vend:
-            self._diag.append(f"  no {NXP_USAGE_PAGE:04x} collection; trying all "
+            self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x} collection; trying all "
                               f"{len(infos)}")
             vend = list(infos)
-        return sorted(vend, key=lambda d: (0 if d.get("usage") == 0x0001 else 1,
+        return sorted(vend, key=lambda d: (0 if d.get("usage") == BRAGI_USAGE else 1,
                                            d.get("interface_number") or 99))
 
-    def _query_nxp(self, path: bytes) -> Optional[List[int]]:
+    def _query_bragi(self, path: bytes) -> Optional[int]:
+        """One battery question to the dongle; the level, or None.
+
+        The answer arrives late - measured ~4.7 s on the reporter's dongle with
+        the mouse resting (#56) - so the reads wait up to BRAGI_READS *
+        READ_TIMEOUT_MS and take the first frame that is really an answer.
+        """
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -158,13 +189,18 @@ class CorsairProvider(Provider):
             self._diag.append(f"  open: {e}")
             return None
         try:
-            dev.write(nxp_request())
-            r = dev.read(NXP_MSG_SIZE + 1, READ_TIMEOUT_MS)
-            if not r:
-                self._diag.append("  no reply")
-                return None
-            self._diag.append(f"  reply: {hexdump(r)}")
-            return list(r)
+            self._drain(dev)
+            dev.write(bragi_request())
+            for attempt in range(BRAGI_READS):
+                r = dev.read(BRAGI_MSG_SIZE + 1, READ_TIMEOUT_MS)
+                if not r:
+                    continue
+                self._diag.append(f"  reply {attempt + 1}: {hexdump(r)}")
+                level = parse_bragi(r)
+                if level is not None:
+                    return level
+            self._diag.append("  no battery answer")
+            return None
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
             return None
@@ -250,21 +286,20 @@ class CorsairProvider(Provider):
                 continue
             out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
                                     "corsair", kind="headset"))
-        for pid, name in NXP_PIDS.items():
+        for pid, name in BRAGI_PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
                 continue
-            self._diag.append(f"[Corsair nxp] pid={pid:04x} '{name}'")
-            for d in self._pick_nxp(mine):
+            self._diag.append(f"[Corsair bragi] pid={pid:04x} '{name}'")
+            for d in self._pick_bragi(mine):
                 self._diag.append(f"  iface={d.get('interface_number')} "
                                   f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 seen.add(d["path"])
-                parsed = parse_nxp(self._query_nxp(d["path"]))
-                if parsed is None:
+                level = self._query_bragi(d["path"])
+                if level is None:
                     continue
-                level, label = parsed
                 out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
-                                        "corsair", approx=label, kind="mouse"))
+                                        "corsair", kind="mouse"))
                 break
         return out
 
