@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- AJAZZ AJ179 V2 MAX on its 2.4 GHz receiver (`249A:5C2F`): the vendor app's first startup read (command `0x10`) is answered with the level at byte 13 of its info block, and the receiver also announces it by itself as `c0 01 <level>`; the read is sent and whichever frame arrives is taken. From the reporter's USB captures in [#74](https://github.com/HeyOkay/HaloBattery/issues/74) and [johan-akn/aj179-linux](https://github.com/johan-akn/aj179-linux) (MIT); the app itself is **Unverified** until his test build run
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

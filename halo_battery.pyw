@@ -140,7 +140,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
-                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
+                       AjazzProvider, RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        WLmouseProvider, XInputProvider, SteamProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -180,6 +180,7 @@ DEFAULTS = {
 # devices keep their own switch ("bluetooth" above), as before.
 PROVIDER_LABELS = {
     "8bitdo": "8BitDo controllers",
+    "ajazz": "AJAZZ mice",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
     "astro": "Astro A50",
     "asus": "ASUS ROG / TUF mice",
@@ -221,7 +222,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider()]
+            SteamProvider(), AjazzProvider()]
 
 
 # ---------------------------------------------------------------- config
