@@ -7,7 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- NZXT Lift Elite Wireless (`1e71:2101`, the "NZXT Lift Elite Dongle"): the battery is read with the same telemetry request NZXT CAM uses, decoded from a USBPcap capture of CAM (field map and the `ffca:0001` collection in `docs/protocols.md`). The charging state was not in the capture, so it is not shown. **Unverified on hardware** - built from the reporter's capture in [#148](https://github.com/HeyOkay/HaloBattery/issues/148); their test build run is the confirmation.
+- NZXT Lift Elite Wireless (`1e71:2101`, the "NZXT Lift Elite Dongle"): the battery is read with the same telemetry request NZXT CAM uses, decoded from USBPcap captures of CAM (field map and the `ffca:0001` collection in `docs/protocols.md`). Charging follows the cable. Confirmed on hardware by @MrBeat93 ([#148](https://github.com/HeyOkay/HaloBattery/issues/148)): the level tracks CAM (one step above CAM's smoothed panel) and the charging flag follows the cable. While CAM is open the dongle does not answer and the last value stays on a greyed icon.
 
 ## [1.13.0] - 2026-09-29
 

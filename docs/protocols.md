@@ -193,15 +193,17 @@ talking to the dongle ([#148](https://github.com/HeyOkay/HaloBattery/issues/148)
 interrupt OUT, `4e 02 81 00 b0 ..` (02 = the mouse behind the dongle, `81` =
 read a property, `b0` = the telemetry one), answered on interrupt IN with
 `4e 02 97 ..` about 25 ms later, after a `4e e5` acknowledgement. In the
-reply, bytes 17-18 little-endian are the battery percent (the capture holds
-77 then 76 while the level moved) and bytes 8-9 are the cell voltage in
-millivolts (4093, then 4092 in step with the level). The flags byte 7 and the
+reply, bytes 17-18 little-endian are the battery percent (the captures hold
+77 then 78 across the reporter's charging session) and bytes 8-9 are the cell
+voltage in millivolts (4093 wireless, 4348 while charging); byte 22's low bit
+reads 1 while the mouse is on its charging cable. The flags byte 7 and the
 rest of the frame are not decoded and nothing is guessed from them. The
 conversation rides the `ffca:0001` collection (the same page OpenRGB uses for
-the wired Lift), picked by usage page. The charging state has not been
-captured yet, so charging is not shown for this mouse. **Unverified on
-hardware** - built from the reporter's capture; their test build run is what
-confirms it and pins the percentage against CAM's own display.
+the wired Lift), picked by usage page. **Confirmed on hardware** by @MrBeat93:
+the level tracks CAM (one step above its smoothed panel) and charging follows
+the cable. While NZXT CAM itself is open the dongle stops answering this
+request - the app keeps the last value on a greyed icon, so live readings want
+CAM closed.
 
 ## Mice and keyboards
 
