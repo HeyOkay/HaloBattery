@@ -9,8 +9,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Lofree Flow Lite84 keyboard on its 2.4 GHz dongle (#165). Lofree's Control HUB web
   driver speaks the same 17-byte Compx frame as the Pulsar/ATK/VXE mice with the
-  keyboard flag set, asking "online" (`03`) before the battery (`04`). Unverified on
-  hardware here.
+  keyboard flag set, asking "online" (`03`) before the battery (`04`). Confirmed on a
+  real keyboard by @KuroZantetsuken in [#165](https://github.com/HeyOkay/HaloBattery/issues/165):
+  the keyboard was detected and both the level and the charging state showed, so it is
+  no longer marked unverified.
 
 ## [1.14.0] - 2026-10-05
 

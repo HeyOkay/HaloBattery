@@ -218,7 +218,7 @@ Keychron's vendor protocol on interface 4: a 64-byte feature report `b3 06` (sta
 
 **Connection:** 2.4 GHz dongle (05AC:024F)
 
-The 17-byte Compx frame of the [Pulsar X2 V2 Mini, ATK VXE R1 SE+, VXE R1 Pro Max](#pulsar-x2-v2-mini-atk-vxe-r1-se-vxe-r1-pro-max) with the keyboard flag set (bit 7 of the frame's byte 5) and the family checksum that leaves the whole frame summing to `0x55`. From Lofree's Control HUB web driver (lofree.tech/home), which asks command `03` ("is the keyboard online", the answer in byte 6) before command `04` returns the level (byte 6), the charging flag (byte 7) and millivolts big-endian (bytes 8-9). Read on the vendor collection 0xFF02:0x0002; only the dongle is claimed, no wired id was reported. **Unverified** - no Flow Lite84 was on hand
+The 17-byte Compx frame of the [Pulsar X2 V2 Mini, ATK VXE R1 SE+, VXE R1 Pro Max](#pulsar-x2-v2-mini-atk-vxe-r1-se-vxe-r1-pro-max) with the keyboard flag set (bit 7 of the frame's byte 5) and the family checksum that leaves the whole frame summing to `0x55`. From Lofree's Control HUB web driver (lofree.tech/home), which asks command `03` ("is the keyboard online", the answer in byte 6) before command `04` returns the level (byte 6), the charging flag (byte 7) and millivolts big-endian (bytes 8-9). Read on the vendor collection 0xFF02:0x0002; only the dongle is claimed, no wired id was reported. Confirmed on a Flow Lite84 on its 2.4 GHz dongle ([#165](https://github.com/HeyOkay/HaloBattery/issues/165)) - the level and the charging state both showed
 
 ### Lofree Hyzen
 
