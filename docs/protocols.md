@@ -214,6 +214,12 @@ Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used
 
 Keychron's vendor protocol on interface 4: a 64-byte feature report `b3 06` (status), answered by a 64-byte input report `b4 06` whose byte 20 is the level, retried up to three times. From csutcliff/keychron-battery-dkms, which implements it for these two ids. **Unverified** - no Keychron device was on hand, so a level above 100 is refused rather than shown
 
+### Lofree Flow Lite84
+
+**Connection:** 2.4 GHz dongle (05AC:024F)
+
+The 17-byte Compx frame of the [Pulsar X2 V2 Mini, ATK VXE R1 SE+, VXE R1 Pro Max](#pulsar-x2-v2-mini-atk-vxe-r1-se-vxe-r1-pro-max) with the keyboard flag set (bit 7 of the frame's byte 5) and the family checksum that leaves the whole frame summing to `0x55`. From Lofree's Control HUB web driver (lofree.tech/home), which asks command `03` ("is the keyboard online", the answer in byte 6) before command `04` returns the level (byte 6), the charging flag (byte 7) and millivolts big-endian (bytes 8-9). Read on the vendor collection 0xFF02:0x0002; only the dongle is claimed, no wired id was reported. **Unverified** - no Flow Lite84 was on hand
+
 ### Lofree Hyzen
 
 **Connection:** 2.4 GHz dongle (388D:0025)
