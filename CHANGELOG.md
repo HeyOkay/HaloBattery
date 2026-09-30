@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- NZXT Lift Elite Wireless (`1e71:2101`, the "NZXT Lift Elite Dongle"): the battery is read with the same telemetry request NZXT CAM uses, decoded from a USBPcap capture of CAM (field map and the `ffca:0001` collection in `docs/protocols.md`). The charging state was not in the capture, so it is not shown. **Unverified on hardware** - built from the reporter's capture in [#148](https://github.com/HeyOkay/HaloBattery/issues/148); their test build run is the confirmation.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
