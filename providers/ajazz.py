@@ -7,8 +7,10 @@ app (AJAZZ Driver 1.0.7.3) in the reporter's USBPcap captures in #74:
     block that carries the percentage at byte 13:
 
         10 00 01 0b 4e 36 32 35 00 00 11 01 00 4b 01 00 ... 49
-        |  |  |  |  "N625" firmware tag          |        +-- checksum: bytes 4..30
-        |  |  |  |                                |            summed, low 8 bits
+        |  |  |  |  "N625" firmware tag          |  |     +-- checksum: bytes 4..30
+        |  |  |  |                                |  |         summed, low 8 bits
+        |  |  |  |                                |  +-------- 0x00 while the mouse is
+        |  |  |  |                                |            on its charging cable
         |  |  |  |                                +----------- battery percent 0..100
         |  |  |  |                                              (0x4b = 75)
         |  |  |  +-------------------------------------------- payload length (11)
@@ -43,12 +45,16 @@ is tried in turn and the one that takes the write is remembered - the
 vendor-page ranking is a preference, not a filter. The receiver cannot tell
 a sleeping mouse from a switched-off one: a silent poll keeps the last level
 on a greyed icon for a while, then the icon goes away and comes back with the
-next reading. No charging flag was found in either frame, so none is shown.
-Only 249a:5c2f is claimed - the receiver the #74 capture came from.
+next reading. The info block's byte after the level (14) is the charging flag:
+it read 0x01 in the two wireless captures (13 % and 75 %) and 0x00 in the
+diagnostics the reporter saved while charging (56 %, whose dump also carried
+the mouse's own wired USB id) - charging shows from it, and his plug/unplug
+run is the live confirmation. An announcement carries no flag, so it keeps the
+last state. Only 249a:5c2f is claimed - the receiver the captures came from.
 
-**Unverified** on hardware here: the exchange is the vendor app's own and the
-numbers match its captures, but a HaloBattery read has to answer once on the
-reporter's mouse before this leaves Unverified.
+The level is confirmed on the reporter's mouse ("everything works now"). The
+charging flag is **unverified**: its three samples are consistent, but the
+switch itself has not been watched live yet - his plug/unplug run settles it.
 """
 from __future__ import annotations
 
@@ -78,6 +84,10 @@ INFO_PAD = 0x00                  # reply byte 1
 INFO_MARK = 0x01                 # reply byte 2 on every good reply
 INFO_LEN = 0x0B                  # reply byte 3: the info block is 11 bytes long
 LEVEL_INDEX = 13                 # ... and the percentage is its next-to-last byte
+FLAG_INDEX = 14                  # the byte after it: 0x00 while the mouse sits on
+                                 # its charging cable, 0x01 otherwise (0x01 in the
+                                 # wireless captures at 13 % and 75 %, 0x00 in the
+                                 # one taken while charging at 56 %)
 CHECKSUM_INDEX = 31              # reply byte 31: bytes 4..30 summed, low 8 bits
 CHECKSUM_FROM = 4
 
@@ -98,8 +108,11 @@ def make_request() -> bytes:
     return b"\x00" + bytes(payload)
 
 
-def parse_reply(frame) -> Optional[Tuple[int, str]]:
-    """(level, "info" | "announcement") from a receiver report, or None without a level."""
+def parse_reply(frame) -> Optional[Tuple[int, str, Optional[bool]]]:
+    """(level, "info" | "announcement", charging) from a receiver report, or None.
+
+    charging is None for an announcement - those frames carry the level only.
+    """
     if not frame:
         return None
     f = list(frame)
@@ -112,7 +125,7 @@ def parse_reply(frame) -> Optional[Tuple[int, str]]:
             return None                            # a c0 00 command reply, not an announcement
         level = f[ANNOUNCE_LEVEL_INDEX]
         if 0 < level <= 100:
-            return level, "announcement"
+            return level, "announcement", None
         return None
     if f[0] != INFO_CMD or f[1] != INFO_PAD or f[2] != INFO_MARK or f[3] != INFO_LEN:
         return None
@@ -120,7 +133,7 @@ def parse_reply(frame) -> Optional[Tuple[int, str]]:
         return None
     level = f[LEVEL_INDEX]
     if 0 < level <= 100:
-        return level, "info"
+        return level, "info", f[FLAG_INDEX] == 0x00
     return None
 
 
@@ -154,9 +167,10 @@ class AjazzProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Optional[Tuple[int, float]] = None    # (level, when)
+        self._charging = False                            # from the info block's flag
         self._chosen: Optional[bytes] = None
 
-    def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str]], bool]:
+    def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.
 
         -> (reading, accepted): accepted is True when the collection took the
@@ -183,7 +197,8 @@ class AjazzProvider(Provider):
                     continue              # quiet until the answer to the read
                 got = parse_reply(r)
                 self._diag.append(f"    report: {hexdump(r, 20)}"
-                                  + (f"  -> {got[0]} % ({got[1]})" if got
+                                  + (f"  -> {got[0]} % ({got[1]}"
+                                     f"{', charging' if got[2] else ''})" if got
                                      else "  (no level in it)"))
                 if got is not None:
                     return got, True
@@ -229,15 +244,20 @@ class AjazzProvider(Provider):
                 break
 
         if got is not None:
-            level, _kind = got
+            level, _kind, charging = got
+            if charging is None:
+                charging = self._charging         # announcements carry no flag
+            else:
+                self._charging = charging
             self._last = (level, time.time())
-            return [DeviceStatus(KEY, NAME, level, False, True, "ajazz", kind="mouse")]
+            return [DeviceStatus(KEY, NAME, level, charging, True, "ajazz", kind="mouse")]
 
         # Silent receiver: it cannot tell a sleeping mouse from a switched-off
         # one, so the last value stays (greyed out) for a while, then the icon
         # is hidden and comes back with the next reading.
         if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
-            return [DeviceStatus(KEY, NAME, self._last[0], False, False, "ajazz", kind="mouse")]
+            return [DeviceStatus(KEY, NAME, self._last[0], self._charging, False, "ajazz",
+                                 kind="mouse")]
         return []
 
     def diagnostics(self) -> List[str]:

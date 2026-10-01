@@ -3,8 +3,10 @@
 The frames are the ones the reporter's AJAZZ AJ179 V2 MAX receiver answered
 in the USBPcap captures in issue #74, recorded while AJAZZ's own app
 (AJAZZ Driver 1.0.7.3) talked to it: `10 00 01 0b 4e 36 32 35 00 00 11 01 00
-4b 01 ... 49` = 75 % after a charge (13 % before, `0d` instead of `4b`), and
-the receiver's own announcements `c0 01 4b` / `c0 01 4a`. The collection
+4b 01 ... 49` = 75 % wireless (13 % before, `0d` instead of `4b`), `... 38 00
+... 35` = 56 % from the diagnostics taken while the mouse was charging (the
+byte after the level is the charging flag), and the receiver's own
+announcements `c0 01 4b` / `c0 01 4a`. The collection
 shape is the reporter's diagnostics dump (249a:5c2f: the mouse collection on
 interface 0, consumer control and a keyboard collection on interface 1, and
 the 33-byte vendor channel mi_02 on interface 2, whose usage the dump does
@@ -29,14 +31,16 @@ CAPTURED75 = ([0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x00,
                0x11, 0x01, 0x00, 0x4B, 0x01] + [0x00] * 16 + [0x49])
 CAPTURED13 = ([0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x00,
                0x11, 0x01, 0x00, 0x0D, 0x01] + [0x00] * 16 + [0x0B])
+CAPTURED56_CHARGING = ([0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x00,
+                        0x11, 0x01, 0x00, 0x38, 0x00] + [0x00] * 16 + [0x35])
 ANNOUNCED75 = [0xC0, 0x01, 0x4B] + [0x00] * 29
 ANNOUNCED74 = [0xC0, 0x01, 0x4A] + [0x00] * 29
 
 
-def info(level):
+def info(level, flag=0x01):
     """A well-formed info reply with the right checksum, for boundary tests."""
     f = [0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x00,
-         0x11, 0x01, 0x00, level, 0x01]
+         0x11, 0x01, 0x00, level, flag]
     f += [0x00] * (31 - len(f))
     f.append(sum(f[4:31]) & 0xFF)
     return f
@@ -122,17 +126,24 @@ class PollTest(unittest.TestCase):
     # ---------------------------------------------------------------- parsing
 
     def test_the_captured_after_charge_reply_reads_75(self):
-        self.assertEqual(A.parse_reply(CAPTURED75), (75, "info"))
+        self.assertEqual(A.parse_reply(CAPTURED75), (75, "info", False))
 
     def test_the_captured_before_charge_reply_reads_13(self):
-        self.assertEqual(A.parse_reply(CAPTURED13), (13, "info"))
+        self.assertEqual(A.parse_reply(CAPTURED13), (13, "info", False))
+
+    def test_the_captured_charging_reply_reads_56_while_charging(self):
+        self.assertEqual(A.parse_reply(CAPTURED56_CHARGING), (56, "info", True))
+
+    def test_the_flag_byte_is_the_charging_state(self):
+        self.assertEqual(A.parse_reply(info(75, flag=0x00)), (75, "info", True))
+        self.assertEqual(A.parse_reply(info(75, flag=0x01)), (75, "info", False))
 
     def test_the_captured_announcements_read_75_and_74(self):
-        self.assertEqual(A.parse_reply(ANNOUNCED75), (75, "announcement"))
-        self.assertEqual(A.parse_reply(ANNOUNCED74), (74, "announcement"))
+        self.assertEqual(A.parse_reply(ANNOUNCED75), (75, "announcement", None))
+        self.assertEqual(A.parse_reply(ANNOUNCED74), (74, "announcement", None))
 
     def test_a_windows_read_keeps_the_report_id(self):
-        self.assertEqual(A.parse_reply([0x00] + CAPTURED75), (75, "info"))
+        self.assertEqual(A.parse_reply([0x00] + CAPTURED75), (75, "info", False))
 
     def test_an_announcement_needs_the_live_flag(self):
         self.assertIsNone(A.parse_reply([0xC0, 0x00, 0x4B] + [0x00] * 29))
@@ -186,6 +197,20 @@ class PollTest(unittest.TestCase):
         cols = self.cols(entries, replies=(ANNOUNCED75,))
         out = self.poll(entries, cols)
         self.assertEqual([(s.level, s.online) for s in out], [(75, True)])
+
+    def test_the_charging_reply_shows_charging(self):
+        entries = receiver_entries()
+        cols = self.cols(entries, replies=(CAPTURED56_CHARGING,))
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(56, True, True)])
+
+    def test_an_announcement_keeps_the_last_charging_state(self):
+        entries = receiver_entries()
+        cols = self.cols(entries, replies=(CAPTURED56_CHARGING,))
+        self.poll(entries, cols)
+        cols[VENDOR_PATH].replies = [ANNOUNCED74]
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(74, True, True)])
 
     def test_junk_before_the_answer_is_skipped(self):
         entries = receiver_entries()
