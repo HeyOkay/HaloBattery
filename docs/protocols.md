@@ -140,6 +140,12 @@ The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection 
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
 
+### MCHOSE A5 Pro Max
+
+**Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
+
+A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the vendor collection (usage page `0xFFFF`, report id 0), from the community web driver [z750sasr/mchose-a5-pro-max-web-driver](https://github.com/z750sasr/mchose-a5-pro-max-web-driver) - the same route/length/page/command framing for every command, battery on page `0x00` command `0x83`, whose reply carries the `0xA1` marker, echoes page and command, and holds the charging state in byte 6 and the level in byte 7 (clamped to 100, as the reference clamps it). The transport is corroborated by [Klegus/mchose-macos](https://github.com/Klegus/mchose-macos), an independent reverse-engineering of the same vendor id's driver. **Unverified** on hardware here: the reporter's diagnostics (@Pekish992, [#149](https://github.com/HeyOkay/HaloBattery/issues/149)) pin the receiver and its collections, and his run is the confirmation
+
 ### MCHOSE A7 V2 Ultra
 
 **Connection:** 2.4 GHz receiver (3837:100B, RealTek strings)
