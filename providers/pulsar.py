@@ -1,4 +1,4 @@
-"""Pulsar, ATK, VXE and Hitscan wireless mice over USB/HID, without vendor software.
+"""Pulsar, ATK, VXE, Hitscan and Scyrox wireless mice over USB/HID, without vendor software.
 
 Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
 "HID: pulsar" driver in review for the Linux kernel and lists these ids:
@@ -6,6 +6,7 @@ Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
   * 3554:f508  Pulsar X2 V2 Mini (1 kHz dongle)      3554:f507  the same mouse on the cable
   * 3554:f58f  ATK VXE R1 SE+ (wired)                373b:1085  ATK VXE R1 SE+ (2.4 GHz)
   * 3554:f58a  VXE R1 Pro Max (1 kHz dongle, #87)    3554:f58c  the same mouse on its cable
+  * 3554:f5f7  Scyrox 8K Dongle                      3554:f5f6  the same mouse on its cable
   * the Kysona M600 and the VXE Dragonfly R1 Pro use the same protocol (their ids are
     not in the tool, so they are not claimed here).
 
@@ -146,6 +147,8 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
+        0xF5F7: "Scyrox 8K Dongle",
+        0xF5F6: "Scyrox (wired)",
     },
     0x373B: {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
@@ -188,11 +191,15 @@ def voltage_mv(r) -> Optional[int]:
     return int.from_bytes(bytes(r[VOLTAGE_SLICE[0]:VOLTAGE_SLICE[1]]), "big")
 
 
+ASLEEP_KEEP = 300
+
+
 class PulsarProvider(Provider):
     name = "pulsar"
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Dict[str, Tuple[int, bool, float]] = {}
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         """The collection to open.
@@ -286,16 +293,21 @@ class PulsarProvider(Provider):
                                   f"iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}"
                                   f" output={output_length(d['path'])}")
+                key = f"pulsar:{vid:04x}{pid:04x}"
                 reply = self._query(d["path"])
                 parsed = parse_power(reply)
-                if parsed is None:
-                    continue
-                level, on_cable = parsed
-                mv = voltage_mv(reply)
-                if mv:
-                    self._diag.append(f"  {mv} mV")
-                out.append(DeviceStatus(f"pulsar:{vid:04x}{pid:04x}", name, level, on_cable,
-                                        True, "pulsar", kind="mouse"))
+                if parsed is not None:
+                    level, on_cable = parsed
+                    mv = voltage_mv(reply)
+                    if mv:
+                        self._diag.append(f"  {mv} mV")
+                    self._last[key] = (level, on_cable, time.time())
+                    out.append(DeviceStatus(key, name, level, on_cable,
+                                            True, "pulsar", kind="mouse"))
+                elif key in self._last and time.time() - self._last[key][2] < ASLEEP_KEEP:
+                    last_level, last_cable, _ = self._last[key]
+                    out.append(DeviceStatus(key, name, last_level, last_cable,
+                                            False, "pulsar", kind="mouse"))
         return out
 
     def diagnostics(self) -> List[str]:
