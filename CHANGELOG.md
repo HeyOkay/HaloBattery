@@ -7,6 +7,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- The `--probe` run digs deeper for the Corsair receiver family (#28): every write's
+  return value, every frame with its arrival time, a listen-only pass before anything
+  is written, and the vendor app's fuller software-mode sequence as a fallback. The
+  tray's polling is unchanged.
+
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
   and CONTRIBUTING.md into `.github/`. The README now fits on one screen; the full list of
