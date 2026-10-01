@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Inphic In9 Pro (1d57:fa65): the mouse announces its level and charging state
+  by itself on its dongle's status collection; nothing is ever sent to it. The
+  frame map is mirrored from the vendor's own INPHIC HUB driver
+  ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)). Unverified until
+  the reporter's run.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

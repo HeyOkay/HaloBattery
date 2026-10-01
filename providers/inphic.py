@@ -1,0 +1,230 @@
+"""Inphic In9 Pro (shown as 'Inphic KP 8K') over its 2.4 GHz dongle, without INPHIC HUB.
+
+The mouse announces its level and charging state by itself - nothing is ever
+written to it. The frames were decoded from the vendor's own Windows app
+(INPHIC HUB, the driver the reporter linked in #160): the app enumerates
+1d57:fa65 with hidapi, opens the collection whose usage page is 0x000A and
+usage 0x0000 (next to the vendor page ff00:0001, which it keeps for its
+writes) and reads its reports there. On Windows hidapi hands the report id
+back first, which is why the app's parse starts one byte in:
+
+    03 95 40 01 4b 00 ...
+    |  |  |  |  +-- level 0..100 (0x4b = 75) - on the 0x01 frames only
+    |  |  |  +----- 0x01 level, 0x02 full (the app shows 100 %), 0x03 charging
+    |  |  +-------- the battery command (0x40)
+    |  +----------- model code among 0x95 / 0x90 / 0x93 / 0x99
+    +-------------- report id
+
+On an 0x03 frame the app starts a 30 ms breathing animation over its battery
+display and keeps the last level; 0x02 stops the animation and shows 100 %;
+every other sub-command stores the level byte (1..100) and stops the
+animation. This file mirrors that mapping. A level outside 1..100 is
+refused, never shown - a wrong 0 % is worse than no icon.
+
+The dongle also carries the mouse and keyboard collections; those are left
+to Windows. The status collections are tried in turn - the vendor app's
+000a:0000 first - and the one that delivers frames is remembered. The frames
+come by themselves every couple of seconds, so a poll that misses one keeps
+the last level: the icon stays lit for a while, then greys out, then goes
+away - a level is never invented.
+
+The same `40` command byte and level position appear in the earlier
+recordings of this chip family's receivers (the `03 55 40 01 4b` frame in
+the notes behind #69), so the family shapes agree with the vendor app's
+parse. Only 1d57:fa65 is claimed here - the dongle the diagnostics came from.
+
+The support is **unverified**: no Inphic device was on hand, the mapping is
+a mirror of the vendor app's own read path, and the reporter's run in #160
+is the live confirmation.
+"""
+from __future__ import annotations
+
+import time
+from typing import List, Optional, Tuple
+
+try:
+    import hid
+except ImportError:                  # pragma: no cover
+    hid = None
+
+from . import hidlist
+from .base import DeviceStatus, Provider, hexdump, log
+
+VID = 0x1D57
+PID = 0xFA65
+NAME = "Inphic In9 Pro"
+KEY = f"inphic:{PID:04x}"
+
+REPORT_ID = 0x03                    # hidapi hands it back first on Windows
+MODELS = (0x95, 0x90, 0x93, 0x99)   # the model codes INPHIC HUB accepts
+CMD_BATTERY = 0x40
+SUB_FULL = 0x02                     # charge complete: the app shows 100 %
+SUB_CHARGING = 0x03                 # on the cable: the app runs its animation
+LEVEL_MIN, LEVEL_MAX = 1, 100
+
+READ_SIZE = 100                     # the vendor app's read buffer
+READ_TIMEOUT_MS = 250
+READ_ATTEMPTS = 5                   # ~1.2 s on the remembered collection
+SWEEP_ATTEMPTS = 2                  # ... and per collection while looking
+MAX_CANDIDATES = 4
+ONLINE_FRESH = 90                   # s: how long one observed frame keeps the
+                                    # icon lit even if a poll misses the next one
+ASLEEP_KEEP = 300                   # s: then greyed, then gone
+
+STATUS_USAGE = (0x000A, 0x0000)     # where INPHIC HUB reads the frames
+VENDOR_USAGE = (0xFF00, 0x0001)     # its second handle (writes); tried second
+MOUSE_USAGE = (0x0001, 0x0002)      # never opened: the OS owns the pointer stream
+KEYBOARD_USAGE = (0x0001, 0x0006)   # the keyboard collections are left to it too
+
+
+def parse_frame(frame) -> Optional[Tuple[Optional[int], bool]]:
+    """(level, charging) from a device report, or None when it is not one.
+
+    level is None when the frame only carries the charging state - the level
+    from the last full report stays on screen, as in the vendor app.
+    """
+    if not frame:
+        return None
+    f = list(frame)
+    if f[0] == REPORT_ID:            # hidapi hands the report id back
+        f = f[1:]
+    if len(f) < 4:
+        return None
+    if f[0] not in MODELS or f[1] != CMD_BATTERY:
+        return None
+    if f[2] == SUB_CHARGING:
+        return None, True
+    if f[2] == SUB_FULL:
+        return 100, True
+    level = f[3]
+    if LEVEL_MIN <= level <= LEVEL_MAX:
+        return level, False
+    return None
+
+
+def candidates(ifaces: List[dict]) -> List[dict]:
+    """The collections to try, best first: the vendor app's status collection,
+    its vendor page, then the rest. The mouse and keyboard collections are
+    never opened - the OS owns those streams."""
+    def rank(d: dict) -> tuple:
+        usage = (d.get("usage_page", 0), d.get("usage", 0))
+        if usage == STATUS_USAGE:
+            return (0,)
+        if usage == VENDOR_USAGE:
+            return (1,)
+        return (2,)
+
+    seen = set()
+    out = []
+    for d in ifaces:
+        if (d.get("usage_page"), d.get("usage")) in (MOUSE_USAGE, KEYBOARD_USAGE):
+            continue
+        key = d.get("path")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(d)
+    return sorted(out, key=rank)
+
+
+class InphicProvider(Provider):
+    name = "inphic"
+
+    def __init__(self):
+        self._diag: List[str] = []
+        self._last: Optional[Tuple[Optional[int], float]] = None   # (level, when)
+        self._charging = False
+        self._chosen: Optional[bytes] = None
+
+    def _listen(self, d: dict, attempts: int) -> Optional[Tuple[Optional[int], bool]]:
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            for _ in range(attempts):
+                r = dev.read(READ_SIZE, READ_TIMEOUT_MS)
+                if not r:
+                    continue             # the frames come by themselves
+                got = parse_frame(r)
+                self._diag.append(f"    report: {hexdump(r, 20)}"
+                                  + (f"  -> level {got[0]}, "
+                                     f"{'charging' if got[1] else 'on battery'}" if got
+                                     else "  (not a battery frame)"))
+                if got is not None:
+                    return got
+            self._diag.append("    no frame in the window "
+                              "(the mouse announces every couple of seconds)")
+            return None
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"    read error: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def poll(self) -> List[DeviceStatus]:
+        self._diag = []
+        if hid is None:
+            return []
+        try:
+            infos = hidlist.enumerate(VID)
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(inphic): %s", e)
+            return []
+        mine = [d for d in infos if d.get("product_id") == PID]
+        if not mine:
+            return []
+        self._diag.append(f"[Inphic] pid={PID:04x} '{NAME}' "
+                          f"product='{(mine[0].get('product_string') or '').strip()}'")
+
+        order = candidates(mine)
+        if self._chosen is not None:
+            order = sorted(order, key=lambda d: d["path"] != self._chosen)
+        stale = self._last is None or time.time() - self._last[1] >= ASLEEP_KEEP
+        got = None
+        for d in order[:MAX_CANDIDATES]:
+            is_chosen = d["path"] == self._chosen
+            if self._chosen is not None and not stale and not is_chosen:
+                break                 # a fresh reading: the known collection is enough
+            # The vendor app's own collection gets the full window while looking
+            # for it; the rest only get a short listen before moving on.
+            patience = (d.get("usage_page"), d.get("usage")) == STATUS_USAGE
+            attempts = READ_ATTEMPTS if is_chosen or patience else SWEEP_ATTEMPTS
+            self._diag.append(f"  listening on iface={d.get('interface_number')} "
+                              f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            got = self._listen(d, attempts)
+            if got is not None:
+                if self._chosen != d["path"]:
+                    self._chosen = d["path"]
+                break
+
+        if got is not None:
+            level, charging = got
+            ts = time.time()
+            if level is not None:
+                self._last = (level, ts)
+            elif self._last is not None:
+                self._last = (self._last[0], ts)      # a frame with no level: heartbeat
+            else:
+                self._last = (None, ts)               # charging before any level was seen
+            self._charging = charging
+            return [DeviceStatus(KEY, NAME, self._last[0], charging, True, "inphic",
+                                 kind="mouse")]
+
+        # No frame in the window. The pushes come every couple of seconds, so a
+        # single miss says nothing yet: the last level stays lit for a while,
+        # then greys out, then the icon is hidden until the next frame.
+        if self._last is not None:
+            age = time.time() - self._last[1]
+            if age < ASLEEP_KEEP:
+                return [DeviceStatus(KEY, NAME, self._last[0], self._charging,
+                                     age < ONLINE_FRESH, "inphic", kind="mouse")]
+        return []
+
+    def diagnostics(self) -> List[str]:
+        return list(self._diag)

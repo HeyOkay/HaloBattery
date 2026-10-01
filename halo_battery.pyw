@@ -136,7 +136,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXProvider, JblProvider,
+                       HyperXProvider, InphicProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
@@ -191,6 +191,7 @@ PROVIDER_LABELS = {
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
+    "inphic": "Inphic mice",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
@@ -221,7 +222,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider()]
+            SteamProvider(), InphicProvider()]
 
 
 # ---------------------------------------------------------------- config
