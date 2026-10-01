@@ -11,6 +11,10 @@ collection shape is the reporter's diagnostics dump (1d57:fa65: a keyboard
 and a mouse collection, then the four status collections on interface 2,
 with the vendor app reading 000a:0000 and keeping ff00:0001 for its writes).
 
+The Attack Shark X11/R1 frame (`03 55 40 01 1f` = 31 %, on 1d57:fa60) is the
+one a reporter's probe caught in #163; each receiver only reads the model
+codes proven on it.
+
 Run from the repository root:
 
     python -m unittest discover -s tests
@@ -31,6 +35,11 @@ LEVEL75 = [0x03, 0x95, 0x40, 0x01, 0x4B] + [0x00] * 95
 LEVEL80 = [0x03, 0x90, 0x40, 0x01, 0x50] + [0x00] * 95
 CHARGING = [0x03, 0x93, 0x40, 0x03, 0x00] + [0x00] * 95
 FULL = [0x03, 0x99, 0x40, 0x02, 0x00] + [0x00] * 95
+
+# the Attack Shark X11/R1 frame a reporter's probe caught on 1d57:fa60 (#163)
+AS_31 = [0x03, 0x55, 0x40, 0x01, 0x1F] + [0x00] * 95
+INPHIC = I.PIDS[0xFA65][1]
+ATTACK = I.PIDS[0xFA60][1]
 
 
 class FakeCollection:
@@ -64,7 +73,7 @@ def fake_device_class(cols, order_log):
     return FakeDevice
 
 
-def receiver_entries(pid=I.PID, prefix=b"kp"):
+def receiver_entries(pid=0xFA65, prefix=b"kp"):
     # the collections of the reporter's dongle in the #160 dump order
     shape = [(0, 0x0001, 0x0006),      # keyboard collection: never opened
              (1, 0x0001, 0x0002),      # the mouse: never opened
@@ -75,7 +84,7 @@ def receiver_entries(pid=I.PID, prefix=b"kp"):
              (3, 0x0001, 0x0006)]      # the second keyboard collection
     return [{"product_id": pid, "interface_number": i, "usage_page": p, "usage": u,
              "path": prefix + b"-%d-%04x-%02x" % (i, p, u),
-             "product_string": "Inphic KP 8K"}
+             "product_string": "Inphic KP 8K" if pid == 0xFA65 else "2.4G Wireless Device"}
             for i, p, u in shape]
 
 
@@ -85,47 +94,59 @@ SYSTEM_PATH = receiver_entries()[2]["path"]
 CONSUMER_PATH = receiver_entries()[3]["path"]
 KEYBOARD_PATH = receiver_entries()[0]["path"]
 MOUSE_PATH = receiver_entries()[1]["path"]
+AS_STATUS_PATH = receiver_entries(pid=0xFA60, prefix=b"as")[4]["path"]
 
 
 class ParseTest(unittest.TestCase):
     def test_the_level_frame_reads_75(self):
-        self.assertEqual(I.parse_frame(LEVEL75), (75, False))
+        self.assertEqual(I.parse_frame(LEVEL75, INPHIC), (75, False))
 
     def test_every_model_code_the_vendor_app_accepts_reads(self):
         for code in (0x95, 0x90, 0x93, 0x99):
             frame = [0x03, code, 0x40, 0x01, 0x32] + [0x00] * 95
-            self.assertEqual(I.parse_frame(frame), (50, False), hex(code))
+            self.assertEqual(I.parse_frame(frame, INPHIC), (50, False), hex(code))
 
     def test_a_frame_without_the_report_id_reads_too(self):
-        self.assertEqual(I.parse_frame(LEVEL75[1:]), (75, False))
+        self.assertEqual(I.parse_frame(LEVEL75[1:], INPHIC), (75, False))
 
     def test_the_charging_frame_keeps_the_level_and_shows_charging(self):
         # byte 4 is not a level on a 0x03 frame; the vendor app keeps its last
-        self.assertEqual(I.parse_frame(CHARGING), (None, True))
+        self.assertEqual(I.parse_frame(CHARGING, INPHIC), (None, True))
 
     def test_the_full_frame_shows_100_and_charging(self):
-        self.assertEqual(I.parse_frame(FULL), (100, True))
+        self.assertEqual(I.parse_frame(FULL, INPHIC), (100, True))
 
-    def test_the_sibling_family_model_code_is_refused(self):
-        # 0x55 is the older 8K receiver family's code (#69); only the four
-        # models INPHIC HUB accepts are read here
-        self.assertIsNone(I.parse_frame([0x03, 0x55, 0x40, 0x01, 0x4B] + [0x00] * 95))
+    def test_the_attack_shark_frame_reads_with_its_own_models(self):
+        # 0x55 is the Attack Shark X11/R1 code the reporter's probe caught
+        # announcing 31 % on 1d57:fa60 (#163) - the same shape throughout
+        self.assertEqual(I.parse_frame(AS_31, ATTACK), (31, False))
+        charged = [0x03, 0x55, 0x40, 0x03, 0x00] + [0x00] * 95
+        full = [0x03, 0x55, 0x40, 0x02, 0x00] + [0x00] * 95
+        self.assertEqual(I.parse_frame(charged, ATTACK), (None, True))
+        self.assertEqual(I.parse_frame(full, ATTACK), (100, True))
+
+    def test_each_receivers_model_codes_are_gated(self):
+        # a model byte is only trusted on the receiver it was proven on
+        self.assertIsNone(I.parse_frame(AS_31, INPHIC))
+        self.assertIsNone(I.parse_frame(LEVEL75, ATTACK))
 
     def test_another_command_is_refused(self):
-        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x41, 0x01, 0x4B] + [0x00] * 95))
-        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x10, 0x00, 0x00] + [0x00] * 95))
+        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x41, 0x01, 0x4B] + [0x00] * 95, INPHIC))
+        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x10, 0x00, 0x00] + [0x00] * 95, INPHIC))
 
     def test_levels_outside_1_to_100_are_refused(self):
-        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x00] + [0x00] * 95))
-        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x65] + [0x00] * 95))
-        self.assertEqual(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x01] + [0x00] * 95), (1, False))
-        self.assertEqual(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x64] + [0x00] * 95), (100, False))
+        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x00] + [0x00] * 95, INPHIC))
+        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x65] + [0x00] * 95, INPHIC))
+        self.assertEqual(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x01] + [0x00] * 95, INPHIC),
+                         (1, False))
+        self.assertEqual(I.parse_frame([0x03, 0x95, 0x40, 0x01, 0x64] + [0x00] * 95, INPHIC),
+                         (100, False))
 
     def test_a_short_frame_is_refused(self):
-        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40]))
-        self.assertIsNone(I.parse_frame([0x95, 0x40]))
-        self.assertIsNone(I.parse_frame([]))
-        self.assertIsNone(I.parse_frame(None))
+        self.assertIsNone(I.parse_frame([0x03, 0x95, 0x40], INPHIC))
+        self.assertIsNone(I.parse_frame([0x95, 0x40], INPHIC))
+        self.assertIsNone(I.parse_frame([], INPHIC))
+        self.assertIsNone(I.parse_frame(None, INPHIC))
 
 
 class PollTest(unittest.TestCase):
@@ -156,8 +177,26 @@ class PollTest(unittest.TestCase):
                           for s in out],
                          [("inphic:fa65", "Inphic In9 Pro", 75, False, True,
                            "inphic", "mouse")])
-        self.assertEqual(self.provider._chosen, STATUS_PATH)
+        self.assertEqual(self.provider._chosen.get(0xFA65), STATUS_PATH)
         self.assertEqual(cols[STATUS_PATH].opened, 1)
+
+    def test_the_attack_shark_receiver_reads_its_own_frame(self):
+        entries = receiver_entries(pid=0xFA60, prefix=b"as")
+        cols = self.cols(entries, replies=(AS_31,), answer=AS_STATUS_PATH)
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.source, s.kind)
+                          for s in out],
+                         [("inphic:fa60", "Attack Shark X11 / R1", 31, False,
+                           "inphic", "mouse")])
+        self.assertEqual(self.provider._chosen.get(0xFA60), AS_STATUS_PATH)
+
+    def test_both_receivers_present_read_side_by_side(self):
+        entries = receiver_entries() + receiver_entries(pid=0xFA60, prefix=b"as")
+        cols = self.cols(entries, replies=(LEVEL75,), answer=STATUS_PATH)
+        cols[AS_STATUS_PATH].replies = [AS_31]
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.level) for s in out],
+                         [("inphic:fa65", 75), ("inphic:fa60", 31)])
 
     def test_the_charging_frame_then_a_level_frame_reads_75_charging_false(self):
         entries = receiver_entries()
@@ -245,7 +284,7 @@ class PollTest(unittest.TestCase):
         cols[VENDOR_PATH].replies = [LEVEL80]      # it comes back on the vendor page
         out = self.poll(entries, cols)
         self.assertEqual([s.level for s in out], [80])
-        self.assertEqual(self.provider._chosen, VENDOR_PATH)
+        self.assertEqual(self.provider._chosen.get(0xFA65), VENDOR_PATH)
 
     def test_a_heartbeat_without_a_level_refreshes_the_clock(self):
         entries = receiver_entries()

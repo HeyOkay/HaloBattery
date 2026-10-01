@@ -12,6 +12,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   frame map is mirrored from the vendor's own INPHIC HUB driver
   ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)). Confirmed on
   hardware in the reporter's run.
+- Attack Shark X11 / R1 (1d57:fa60): the same ODM family frame as the Inphic
+  row (`03 55 40 01 <level>` on `000a:0000`, read-only), caught by a
+  reporter's probe in [#163](https://github.com/HeyOkay/HaloBattery/issues/163).
+  Each receiver of the family only reads the model codes proven on it.
+  Unverified in the app so far - the reporter's run would settle it.
 
 ## [1.13.0] - 2026-09-29
 
