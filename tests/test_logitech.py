@@ -22,16 +22,18 @@ from providers import logitech as L  # noqa: E402
 class FakeHidpp:
     """One HID++ 2.0 device in a slot.
 
-    features: {feature id: (feature index, {function: reply params or "error"})}
-    error:    an error code that the receiver sends for every request (08, 09, 01 ...)
-    silent:   the device does not answer at all (asleep)
+    features:  {feature id: (feature index, {function: reply params or "error"})}
+    registers: {register: reply params list, or "error"} for HID++ 1.0 reads
+    error:     an error code that the receiver sends for every request (08, 09, 01 ...)
+    silent:    the device does not answer at all (asleep)
     """
 
-    def __init__(self, features=None, name=None, error=None, silent=False):
+    def __init__(self, features=None, name=None, error=None, silent=False, registers=None):
         self.features = features or {}
         self.name = name
         self.error = error
         self.silent = silent
+        self.registers = registers
 
 
 class FakeBus:
@@ -81,10 +83,35 @@ class FakeBus:
         else:
             self.queues[path].append([0x11, idx, 0xFF, feat, fn, code] + [0] * 14)
 
+    def _register_reply(self, path, idx, reg, params):
+        short = self.short_of.get(path) or path
+        if len(params) <= 3:            # register replies are short by default
+            self.queues.setdefault(short, []).append(
+                [0x10, idx, 0x81, reg] + list(params) + [0] * (3 - len(params)))
+        else:                           # more data comes back as a long reply
+            self.queues.setdefault(path, []).append(
+                [0x11, idx, 0x81, reg] + list(params) + [0] * (16 - len(params)))
+
+    def _register_error(self, path, idx, reg, code):
+        short = self.short_of.get(path) or path
+        self.queues.setdefault(short, []).append([0x10, idx, 0x8F, 0x81, reg, code, 0])
+
     def write(self, path, data):
         self.writes.append((path, data))
-        if path not in self.slots:
+        owner = next((lp for lp, sp in self.short_of.items() if sp == path), path)
+        if owner not in self.slots:
             return
+        if len(data) >= 4 and data[2] == 0x81:      # a HID++ 1.0 register read
+            idx, reg = data[1], data[3]
+            dev = self.slots[owner].get(idx)
+            if dev is None:
+                return self._register_error(owner, idx, reg, L.ERR_EMPTY_SLOT)
+            if dev.silent:
+                return
+            regs = dev.registers or {}
+            if regs.get(reg, "error") == "error":
+                return self._register_error(owner, idx, reg, 0x02)
+            return self._register_reply(owner, idx, reg, regs[reg])
         idx, feat, fn = data[1], data[2], data[3]
         prev, self.prev_swid = self.prev_swid, fn & 0x0F
         if self.late_replies and feat == 0 and fn >> 4 == 0 and prev is not None:
@@ -203,6 +230,43 @@ class ReceiverTests(LogitechTestCase):
         p = L.LogitechProvider()
         self.assertEqual(p.poll(), [])
         self.assertTrue(any("HID++ 1.0" in line for line in p.diagnostics()))
+
+    def test_a_keyboard_without_features_reads_its_register(self):
+        """An MK710-desk generation keyboard (issue #159): no feature table at
+        all, battery in the old 0x07 status register."""
+        dev = FakeHidpp(registers={0x07: [7, 0x00, 0x00, 0x00]})
+        bus = self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.name, st.level, st.approx, st.charging, st.key),
+                         ("Logitech device", 90, "about 90% (full)", False, "logitech:c52b:3"))
+        self.assertIn((b"short", [0x10, 3, 0x81, 0x07, 0, 0, 0]), bus.writes)
+
+    def test_the_status_register_charging_byte(self):
+        dev = FakeHidpp(registers={0x07: [5, 0x21, 0x00, 0x00]})
+        self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.level, st.approx, st.charging), (50, "about 50% (good)", True))
+
+    def test_the_charge_register_beats_the_status_one(self):
+        dev = FakeHidpp(registers={0x0D: [87, 0, 0x50, 0], 0x07: [7, 0x00, 0x00, 0x00]})
+        self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.level, st.approx, st.charging), (87, "", True))
+
+    def test_registers_are_read_even_when_the_ping_errors(self):
+        dev = FakeHidpp(error=L.ERR_OLD_PROTOCOL, registers={0x07: [3, 0x00, 0x00, 0x00]})
+        self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        p = L.LogitechProvider()
+        [st] = p.poll()
+        self.assertEqual((st.level, st.approx), (20, "about 20% (low)"))
+        self.assertTrue(any("HID++ 1.0" in line for line in p.diagnostics()))
+
+    def test_a_charging_only_register_reply_is_no_reading(self):
+        dev = FakeHidpp(registers={0x07: [0, 0x21, 0x00, 0x00]})
+        self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        p = L.LogitechProvider()
+        self.assertEqual(p.poll(), [])
+        self.assertTrue(any("no battery reading" in line for line in p.diagnostics()))
 
     def test_error_reply_for_another_app_is_ignored(self):
         """G HUB talks to the same receiver. Its error replies carry its own swid."""
@@ -350,6 +414,26 @@ class ParseTests(unittest.TestCase):
         for feature, params, expected in self.CASES:
             with self.subTest(feature=hex(feature), params=params):
                 self.assertEqual(L.parse_battery(feature, params), expected)
+
+    REG_CASES = [
+        # register, params, (level, charging, approximate text)
+        (L.REG_BATTERY_STATUS, [7, 0x00, 0, 0], (90, False, "about 90% (full)")),
+        (L.REG_BATTERY_STATUS, [5, 0x21, 0, 0], (50, True, "about 50% (good)")),
+        (L.REG_BATTERY_STATUS, [3, 0x22, 0, 0], (20, True, "about 20% (low)")),
+        (L.REG_BATTERY_STATUS, [1, 0x00, 0, 0], (5, False, "about 5% (critical)")),
+        (L.REG_BATTERY_STATUS, [0, 0x21, 0, 0], (None, True, "")),   # no level in the reply
+        (L.REG_BATTERY_STATUS, [4, 0x00, 0, 0], (None, False, "")),  # not a known level
+        (L.REG_BATTERY_CHARGE, [87, 0, 0x50, 0], (87, True, "")),    # recharging
+        (L.REG_BATTERY_CHARGE, [87, 0, 0x30, 0], (87, False, "")),   # discharging
+        (L.REG_BATTERY_CHARGE, [100, 0, 0x90, 0], (100, True, "")),  # full, on the charger
+        (L.REG_BATTERY_CHARGE, [0, 0, 0x30, 0], (None, False, "")),  # not a percentage
+        (L.REG_BATTERY_CHARGE, [200, 0, 0x50, 0], (None, False, "")),
+    ]
+
+    def test_parse_register_battery(self):
+        for reg, params, expected in self.REG_CASES:
+            with self.subTest(reg=hex(reg), params=params):
+                self.assertEqual(L.parse_register_battery(reg, params), expected)
 
     def test_voltage_curve_ends(self):
         self.assertEqual(L.voltage_to_percent(4300), 100)
