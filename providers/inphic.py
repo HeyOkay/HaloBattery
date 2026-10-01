@@ -34,8 +34,8 @@ the notes behind #69), so the family shapes agree with the vendor app's
 parse. Only 1d57:fa65 is claimed here - the dongle the diagnostics came from.
 
 The support is **confirmed on hardware**: the reporter's run of the test build
-(#160) shows the level. The charging frame (sub-command 0x03) rides the same
-read and has not been observed changing on hardware yet.
+(#160) shows the level, and the charging state too: the reporter watched the
+ring turn green while charging and return to normal after unplugging.
 
 The same frame serves this ODM family's other receiver: Attack Shark's X11/R1
 (1d57:fa60) was caught announcing `03 55 40 01 1f` (31 %) on the same
