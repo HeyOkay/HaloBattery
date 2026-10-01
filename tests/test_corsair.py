@@ -267,6 +267,14 @@ class FakeRefusingReceiver(FakeVoidReceiver):
         return -1
 
 
+class FakeRidOnlyReceiver(FakeVoidReceiver):
+    """A receiver that still takes only the old 65-byte rid-prefixed shape."""
+
+    def write(self, data):
+        self.writes.append(bytes(data))
+        return -1 if len(data) == 64 else len(data)
+
+
 HEARTBEAT_FRAME = [0x01, 0x02, 0x00] + [0x00] * 61
 
 
@@ -343,7 +351,7 @@ class VoidPollTest(unittest.TestCase):
         out, diag = self.poll({b"void-iface4-0001": fake}, probe=True)
         self.assertEqual(out, [])
         self.assertTrue(any("listening 6 s" in line for line in diag))
-        self.assertTrue(any("[w] 08/02/13 -> 65" in line for line in diag))
+        self.assertTrue(any("[w] 08/02/13 -> 64" in line for line in diag))
         self.assertTrue(any("headset heartbeat answered (" in line for line in diag))
         self.assertTrue(any(line.startswith("  attempt 1 reply (") for line in diag))
         self.assertTrue(any("01 01 06" in line for line in diag))
@@ -403,6 +411,7 @@ class VoidPollTest(unittest.TestCase):
         self.assertTrue(any("probe: first answer (" in line for line in diag))
         self.assertTrue(any("takes the write" in line for line in diag))
         self.assertEqual(len(sib.writes), 2)          # the accepted shape, then the re-ask
+        self.assertEqual(sib.writes[0], sib.writes[1])   # the re-ask reuses the accepted shape
 
     def test_the_normal_poll_never_asks_for_caps(self):
         called = []
@@ -411,6 +420,33 @@ class VoidPollTest(unittest.TestCase):
         out, _ = self.poll({b"void-iface4-0001": fake}, caps={})
         self.assertEqual([s.level for s in out], [55])
         self.assertEqual(called, [])
+
+    def test_the_frames_go_out_in_the_shape_windows_accepts(self):
+        # 64 bytes with no leading report id - the form the #28 receiver took
+        fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
+        out, _ = self.poll({b"void-iface4-0001": fake})
+        self.assertEqual([s.level for s in out], [55])
+        self.assertTrue(all(len(w) == 64 for w in fake.writes))
+        self.assertTrue(any(w[:4] == b"\x02\x09\x02\x0f" for w in fake.writes))
+
+    def test_a_receiver_that_wants_the_65_byte_shape_falls_back(self):
+        fake = FakeRidOnlyReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
+        out, _ = self.poll({b"void-iface4-0001": fake})
+        self.assertEqual([s.level for s in out], [55])
+        self.assertTrue(any(len(w) == 64 for w in fake.writes))   # tried first
+        self.assertTrue(any(len(w) == 65 for w in fake.writes))   # then accepted
+
+    def test_a_refused_heartbeat_write_is_said_to_be_refused(self):
+        fake = FakeRefusingReceiver(heartbeat=None, replies=[])
+        out, diag = self.poll({b"void-iface4-0001": fake}, probe=True)
+        self.assertEqual(out, [])
+        self.assertTrue(any("the write was refused before it left" in line
+                            for line in diag))
+
+    def test_the_reported_reply_from_28_reads_81(self):
+        # the exact frame the reporter's probe caught after the accepted write
+        frame = [0x01, 0x01, 0x02, 0x00, 0x2A, 0x03] + [0x00] * 58
+        self.assertEqual(C.parse_level(frame), 81)
 
 
 if __name__ == "__main__":
