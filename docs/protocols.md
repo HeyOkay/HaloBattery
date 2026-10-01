@@ -134,6 +134,12 @@ The same feature report exchange as the WLmouse mice (`00 00 02 02 00 83` out, `
 
 The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection `ff02:0002`: [sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery) mapped them from USB captures of Hitscan Utility 1.0.2 (command 0x04, level in byte 6, charging in byte 7, millivolts in bytes 8-9) and reads them on Linux. Note the vendor application's own battery indicator is broken - it showed 100 % while the device answered 75 - so the raw byte is the truth. **Unverified** here: no Hyperlight was on hand, [so #105's reporter confirming the level](https://github.com/HeyOkay/HaloBattery/issues/105) would settle it
 
+### Inphic In9 Pro
+
+**Connection:** 2.4 GHz dongle (1D57:FA65 - a mouse + keyboard combo receiver; the mouse shows up as 'Inphic KP 8K')
+
+The mouse announces its level and charging state by itself - nothing is ever sent to it. The frame map was decoded from the vendor's own Windows app (INPHIC HUB, the driver [linked in #160](https://github.com/HeyOkay/HaloBattery/issues/160)): it enumerates 1d57:fa65 with hidapi, reads the collection `000a:0000` (keeping `ff00:0001` for its writes) and parses a report whose first byte is the report id `03`, then the model code (`0x95` / `0x90` / `0x93` / `0x99`), the command byte `0x40`, the sub-command and the level - `03 95 40 01 4b` is 75 %, `... 40 03` is charging (the app runs a 30 ms animation and keeps its last level), `... 40 02` is full (the app shows 100 %). A level outside 1..100 is refused, never shown. **Unverified** here - no Inphic device was on hand, the mapping is a mirror of the vendor app's own read path, and [the reporter of #160](https://github.com/HeyOkay/HaloBattery/issues/160) confirming his level, and his charging animation, would settle it
+
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)
