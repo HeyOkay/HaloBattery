@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Inphic In9 Pro (1d57:fa65): the mouse announces its level and charging state
+  by itself on its dongle's status collection; nothing is ever sent to it. The
+  frame map is mirrored from the vendor's own INPHIC HUB driver
+  ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)). Unverified until
+  the reporter's run.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
