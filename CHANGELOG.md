@@ -14,6 +14,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   framing per collection, because a write Windows refuses never reaches the dongle. The
   tray's polling is unchanged.
 
+### Fixed
+- Corsair wireless headsets (Void v2 / Virtuoso Max / HS80 Max): the frames now go
+  out in the shape this family's receivers accept on Windows - 64 bytes, no leading
+  report id. The 65-byte form every earlier build wrote was refused by the USB layer
+  before reaching the device (seen as `-1`/0x57 in [#28](https://github.com/HeyOkay/HaloBattery/issues/28)'s
+  probe logs; the same wall as headsetcontrol#521), which is why the headset never
+  appeared. Unverified in the app until the reporter's run.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its

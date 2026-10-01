@@ -278,8 +278,19 @@ class CorsairProvider(Provider):
                                  f"{endpoint:02x}/{sub:02x}/{command:02x}")
 
     def _write_frame(self, dev, frame, label: str) -> int:
-        """One 65-byte write; probe mode logs what the write actually returned."""
-        n = dev.write(frame)
+        """One write, in the shape this family's receiver accepts on Windows.
+
+        Windows refuses a write whose length is not exactly the collection's
+        OutputReportByteLength (STATUS_INVALID_PARAMETER, 0x57) before it ever
+        reaches the device - headsetcontrol#521's wall, and #28's, where every
+        65-byte write came back -1. The reporter's probe logs show the shape
+        that is accepted: 64 bytes with no leading report id. The two shapes
+        cannot both be accepted on one collection, so the fallback picks the
+        right one by itself.
+        """
+        n = dev.write(frame[1:])          # 64 bytes: no leading report id
+        if isinstance(n, int) and n < 0:
+            n = dev.write(frame)          # 65 bytes: the old rid-prefixed form
         if in_probe():
             self._diag.append(f"  [w] {label} -> {n}{_error_note(dev, n)}")
         return n
@@ -395,6 +406,7 @@ class CorsairProvider(Provider):
                 continue
             try:
                 accepted = False
+                accepted_buf = None
                 for label, buf in shapes:
                     try:
                         n = dev.write(bytes(buf))
@@ -405,6 +417,7 @@ class CorsairProvider(Provider):
                     self._diag.append(f"  probe: {label} {where} -> {n}{note}")
                     if isinstance(n, int) and n >= 0:
                         accepted = True
+                        accepted_buf = bytes(buf)
                         break
                 if not accepted:
                     continue
@@ -413,7 +426,8 @@ class CorsairProvider(Provider):
                 self._diag.append(f"  probe: first answer "
                                   f"({(time.monotonic() - t0) * 1000:.0f} ms): "
                                   f"{hexdump(r, MSG_SIZE_READ) if r else 'none'}")
-                self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
+                n2 = dev.write(accepted_buf)
+                self._diag.append(f"  probe: re-ask -> {n2}{_error_note(dev, n2)}")
                 t0 = time.monotonic()
                 r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
                 self._diag.append(f"  probe: ask again "
@@ -442,17 +456,22 @@ class CorsairProvider(Provider):
             self._write(dev, RECEIVER_ENDPOINT, FW_SUB, CMD_FIRMWARE)
             self._write(dev, RECEIVER_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
             self._drain(dev)
-            self._write(dev, HEADSET_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
+            hb_n = self._write(dev, HEADSET_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
             hb_timeout = PROBE_HB_TIMEOUT_MS if in_probe() else READ_TIMEOUT_MS
             t0 = time.monotonic()
             hb = dev.read(MSG_SIZE_READ, hb_timeout)
             if not hb:
-                if in_probe():
+                if isinstance(hb_n, int) and hb_n < 0:
+                    self._diag.append("  headset heartbeat: the write was refused "
+                                      "before it left (nothing was sent)")
+                elif in_probe():
                     self._diag.append(f"  headset heartbeat: no reply after "
                                       f"{hb_timeout} ms (headset off or asleep)")
+                else:
+                    self._diag.append("  headset heartbeat: no reply "
+                                      "(headset off or asleep)")
+                if in_probe():
                     return self._probe_fallback(dev)
-                self._diag.append("  headset heartbeat: no reply "
-                                  "(headset off or asleep)")
                 return None
             if in_probe():
                 self._diag.append(f"  headset heartbeat answered "
