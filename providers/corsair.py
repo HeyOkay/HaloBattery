@@ -6,9 +6,13 @@ Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
   * the vendor collection on the receiver, which HeadsetControl identifies by
     interface 4 (it gives no usage page/usage for it, so the interface number is
     the only handle on that collection; a probe logs whatever it actually finds).
-  * commands are 65 bytes: [0] 0x00 report id, [1] 0x02, [2] endpoint,
-    [3] 0x02, [4] command. Endpoint 0x08 is the receiver itself, 0x09 the
-    headset behind it. Replies are 64 bytes.
+  * commands are 64 bytes with no leading report id: [0] 0x02, [1] endpoint,
+    [2] 0x02, [3] command. Endpoint 0x08 is the receiver itself, 0x09 the
+    headset behind it. Replies are 64 bytes. HeadsetControl writes the same
+    message with a 0x00 report id in front (65 bytes), which Windows refuses
+    on this family before it reaches the device (0x57, headsetcontrol#521) -
+    so the 64-byte shape goes out first and the rid-prefixed one is only a
+    fallback (see _write_frame).
   * talking to a sleeping headset needs the same minimal handshake
     HeadsetControl uses - receiver firmware query, receiver heartbeat, then a
     headset heartbeat - which is enough to read the battery without switching
@@ -16,7 +20,9 @@ Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
   * battery: command 0x0f to endpoint 0x09 -> reply[4] | reply[5] << 8 is a
     0..1000 value, ten times the percent. The receiver sometimes answers with
     the paired headset id instead of a level, so a reading of 0 or above 1000 is
-    retried a few times and then refused rather than shown.
+    retried a few times and then refused rather than shown. **Confirmed on
+    hardware**: #28's reporter's run of the fixed build shows the level (his
+    probe's accepted-write reply reads `01 01 02 00 2a 03` = 81 %).
 
 The reply carries no charging flag: HeadsetControl reports the level as
 available (not charging) for this family, and so does this provider.
