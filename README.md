@@ -18,7 +18,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 
 | Device | Connection | Verified on hardware |
 |---|---|---|
-| [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](docs/protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | no |
+| [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](docs/protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
 | [AM Infinity 8K (Angry Miao)](docs/protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](docs/protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](docs/protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz receiver or USB cable | no |
@@ -62,7 +62,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 
 **PlayStation controllers over Bluetooth:** a DualShock 4 or DualSense sends its battery level over Bluetooth only in its "full report" mode. Switching a controller into that mode makes it invisible to games that use DirectInput until it is turned off and on again (#96), so the app does not switch it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. If you do not play such games, turn on **Preferences > PlayStation full mode (Bluetooth)** to always see the level. Over USB the level is always shown.
 
-**8BitDo controllers in D-input mode:** the battery level is only in the controller's enhanced report. Switching the controller into that mode makes it invisible to DirectInput games until it is turned off and on (tested by the reporter of #101), so the app never switches it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. In XInput mode the level is always shown.
+**8BitDo controllers in D-input mode:** the battery level is only in the controller's enhanced report. Switching the controller into that mode makes it invisible to DirectInput games until it is turned off and on (tested by the reporter of #101), so the app never switches it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. The Pro 3 needs no switch: it always sends its level. In XInput mode the level is always shown.
 
 The devices marked `likely` are the same code paths with other models: the rest of the Razer list
 OpenRazer reads, the other WLmouse models, more Logitech HID++ 2.0 devices and G-series headsets,

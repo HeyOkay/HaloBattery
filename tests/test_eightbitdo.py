@@ -172,6 +172,20 @@ class ProviderTest(unittest.TestCase):
         self.assertEqual((out[0].level, out[0].charging), (90, True))
         self.assertEqual(out[0].via, "")
 
+    def test_pro3_over_bluetooth_uses_report_0x04(self):
+        # the Pro 3 (2dc8:6009) has one input report, 0x04, on both transports
+        path = BT_PATH.replace(b"pid_6006", b"pid_6009")
+        report = [0x04, 0x0F, 0x80, 0x7F, 0x7F, 0x80, 0, 0, 0, 0, 0, 0, 0x09, 0x60, 0x14,
+                  0xD7, 0xFB, 0xF6, 0xFF, 0xAA, 0x0F, 0x09, 0, 0x05, 0, 0x10, 0, 0xD0, 0x8E,
+                  0x75, 0x01, 0x66]                 # from a real Pro 3 over Bluetooth
+        out = self.poll([entry(path, pid=0x6009)], {path: FakePad([report])})
+        self.assertEqual((out[0].level, out[0].charging, out[0].via), (20, False, "bluetooth"))
+        self.assertEqual(out[0].name, "8BitDo Pro 3")
+
+    def test_pro2_over_bluetooth_ignores_report_0x04(self):
+        out = self.poll([entry(BT_PATH)], {BT_PATH: FakePad([enhanced(0x04, 0x4B)])})
+        self.assertIsNone(out[0].level)
+
     def test_unknown_pid_is_skipped(self):
         out = self.poll([entry(BT_PATH, pid=0x6012)], {BT_PATH: FakePad([enhanced()])})
         self.assertEqual(out, [])
