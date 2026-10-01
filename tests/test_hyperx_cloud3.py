@@ -24,6 +24,16 @@ PATH = b"\\\\?\\hid#vid_03f0&pid_05b7&mi_03&col01#8&1234abcd&0&0000#{4d1e55b2-f1
 # hidapi 0.14's Windows text for ERROR_INVALID_FUNCTION.
 INCORRECT_FUNCTION = "WriteFile: (0x00000001) Incorrect function."
 
+# The #155 capture's Core replies, verbatim: NGENUITY wrote `66 89` and the dongle
+# answered `66 89 0e d7 30 ...` (48 %); `66 8a` -> `66 8a 00 00` (off the cable).
+CAPTURED_BATTERY = [0x66, 0x89, 0x0E, 0xD7, 0x30] + [0] * 57
+CAPTURED_CHARGING_OFF = [0x66, 0x8A, 0x00, 0x00] + [0] * 58
+
+# The Core dongle's two interface-3 collections (consumer control + the vendor page),
+# same path shape as the Cloud III Wireless one above.
+CORE_PATH_CONSUMER = PATH.replace(b"05b7", b"0995")
+CORE_PATH_VENDOR = PATH.replace(b"05b7", b"0995").replace(b"col01", b"col02")
+
 
 class FakeDongle:
     """write / feature: how that call answers.
@@ -42,10 +52,11 @@ class FakeDongle:
         self.writes = []
         self.features = []
         self.pending = []
+        self.opened = []
 
     # hid.device API
     def open_path(self, path):
-        pass
+        self.opened.append(path)
 
     def close(self):
         pass
@@ -99,6 +110,12 @@ class Base(unittest.TestCase):
         out = p.poll()
         return out, p.diagnostics()
 
+    def poll_entries(self, dongle, entries):
+        H.hid = types.SimpleNamespace(device=lambda: dongle)
+        H.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
+        p = H.HyperXCloud3Provider()
+        return p.poll(), p.diagnostics()
+
 
 class WritePath(Base):
     def test_write_accepted(self):
@@ -150,6 +167,42 @@ class WritePath(Base):
         out, diag = self.poll(d)
         self.assertEqual(out, [])
         self.assertEqual(d.features, [])
+
+
+class Cloud2Core(Base):
+    """#155: NGENUITY's own exchange with the Cloud II Core dongle, pinned verbatim."""
+
+    def core_entries(self, pid=0x0995):
+        # the reporter's diagnostics: the dongle on interface 3 with the consumer-control
+        # and the vendor collection side by side - the vendor one is the battery endpoint
+        return [{"product_id": pid, "path": CORE_PATH_CONSUMER, "interface_number": 3,
+                 "usage_page": 0x000C, "usage": 0x0001},
+                {"product_id": pid, "path": CORE_PATH_VENDOR, "interface_number": 3,
+                 "usage_page": H.USAGE_PAGE, "usage": H.USAGE}]
+
+    def test_the_captured_battery_reply_reads_48(self):
+        self.assertEqual(H.parse_battery(CAPTURED_BATTERY), 48)
+
+    def test_the_captured_charging_reply_reads_not_charging(self):
+        self.assertIs(H.parse_charging(CAPTURED_CHARGING_OFF), False)
+
+    def test_the_core_ids_are_claimed_with_their_name(self):
+        self.assertEqual(H.PIDS[0x0995], "HyperX Cloud II Core Wireless")
+        self.assertEqual(H.PIDS[0x0795], "HyperX Cloud II Core Wireless")
+
+    def test_the_core_dongle_is_read_on_its_vendor_collection(self):
+        d = FakeDongle(level=48, charging=0)
+        out, diag = self.poll_entries(d, self.core_entries())
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.source, s.kind) for s in out],
+                         [("hyperx:0995", "HyperX Cloud II Core Wireless", 48, False,
+                           "hyperx", "headset")])
+        self.assertEqual(set(d.opened), {CORE_PATH_VENDOR})   # the consumer collection is left alone
+        self.assertEqual([w[1] for w in d.writes], [H.CMD_BATTERY, H.CMD_CHARGING])
+
+    def test_the_second_mode_is_read_the_same_way(self):
+        d = FakeDongle(level=48, charging=0)
+        out, _ = self.poll_entries(d, self.core_entries(pid=0x0795))
+        self.assertEqual([s.key for s in out], ["hyperx:0795"])
 
 
 if __name__ == "__main__":

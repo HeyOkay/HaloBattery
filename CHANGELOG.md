@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- HyperX Cloud II Core Wireless (03f0:0995 its dongle, 03f0:0795 its second mode): the
+  same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless, decoded
+  from the reporter's NGENUITY capture in [#155](https://github.com/HeyOkay/HaloBattery/issues/155).
+  Unverified until the reporter's run.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
