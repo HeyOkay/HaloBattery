@@ -14,6 +14,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   use English. Saved choices take precedence, and English remains the fallback.
   Diagnostics, protocol output and status-file text stay in English. Translation
   catalogs are bundled without additional runtime dependencies.
+  A single language registry supplies native names, catalogs, Windows detection
+  and plural rules; catalog checks cover every registered language, including
+  languages with additional plural forms.
 
 ## [1.13.0] - 2026-09-29
 

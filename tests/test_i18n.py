@@ -1,5 +1,6 @@
 """Localization and Windows UI detection without hardware or real desktop state."""
 import ctypes
+from collections.abc import Mapping
 import json
 import os
 from string import Formatter
@@ -19,29 +20,80 @@ def find(menu, text):
     return next(item for item in menu.items if item.text == text)
 
 
+def extra_language():
+    """A third language with three plural forms, registered only inside tests."""
+    catalog = {
+        key: dict(value, few=value["other"]) if isinstance(value, dict) else value
+        for key, value in en.MESSAGES.items()
+    }
+    catalog["menu.preferences"] = "Test preferences"
+    catalog["duration.hours"] = {"one": "{count} test-hour", "few": "{count} few-hours",
+                                 "other": "{count} test-hours"}
+    return i18n.Language(
+        "Test language", catalog,
+        plural_rule=lambda count: "one" if count == 1 else "few" if 2 <= count <= 4 else "other",
+        windows_primary_ids=(0x3FE,), plural_forms=("one", "few", "other"))
+
+
 class CatalogTests(unittest.TestCase):
     def test_complete_keys_parameters_and_plural_forms(self):
-        self.assertEqual(set(en.MESSAGES), set(fr.MESSAGES))
-        for key, reference in en.MESSAGES.items():
-            translated = fr.MESSAGES[key]
-            with self.subTest(key=key):
-                self.assertIsInstance(translated, type(reference))
-                if isinstance(reference, dict):
-                    self.assertEqual(set(reference), {"one", "other"})
-                    self.assertEqual(set(reference), set(translated))
-                    pairs = [(reference[form], translated[form]) for form in reference]
-                else:
-                    pairs = [(reference, translated)]
-                for english, french in pairs:
-                    self.assertTrue(english.strip())
-                    self.assertTrue(french.strip())
-                    self.assertEqual(english, english.strip())
-                    self.assertEqual(french, french.strip())
-                    fields = lambda text: {field for _, field, _, _ in Formatter().parse(text) if field}
-                    self.assertEqual(fields(english), fields(french))
+        self.check_catalogs()
+
+    def check_catalogs(self):
+        fields = lambda text: {field for _, field, _, _ in Formatter().parse(text) if field}
+        for code, language in i18n.LANGUAGES.items():
+            with self.subTest(language=code):
+                self.assertTrue(language.name.strip())
+                self.assertEqual(set(en.MESSAGES), set(language.catalog))
+                for key, reference in en.MESSAGES.items():
+                    translated = language.catalog[key]
+                    with self.subTest(language=code, key=key):
+                        if isinstance(reference, Mapping):
+                            self.assertIsInstance(translated, Mapping)
+                            self.assertEqual(set(translated), set(language.plural_forms))
+                            expected = fields(reference["other"])
+                            self.assertTrue(all(fields(text) == expected for text in reference.values()))
+                            messages = translated.values()
+                        else:
+                            self.assertIsInstance(translated, str)
+                            expected = fields(reference)
+                            messages = [translated]
+                        for text in messages:
+                            self.assertIsInstance(text, str)
+                            self.assertTrue(text.strip())
+                            self.assertEqual(text, text.strip())
+                            self.assertEqual(fields(text), expected)
+
+    def test_registered_languages_have_unambiguous_detection_and_plural_rules(self):
+        primary_ids = []
+        for code, language in i18n.LANGUAGES.items():
+            with self.subTest(language=code):
+                self.assertIn("other", language.plural_forms)
+                self.assertEqual(len(language.plural_forms), len(set(language.plural_forms)))
+                for count in range(201):
+                    self.assertIn(language.plural_rule(count), language.plural_forms)
+                for primary_id in language.windows_primary_ids:
+                    self.assertIsInstance(primary_id, int)
+                    self.assertGreater(primary_id, 0)
+                    self.assertLessEqual(primary_id, 0x3FF)
+                    primary_ids.append(primary_id)
+        self.assertEqual(len(primary_ids), len(set(primary_ids)))
+
+    def test_third_language_additional_plural_form_and_english_fallback(self):
+        language = extra_language()
+        with mock.patch.dict(i18n.LANGUAGES, {"test": language}):
+            self.check_catalogs()
+            for count, expected in ((1, "1 test-hour"), (3, "3 few-hours"), (5, "5 test-hours")):
+                self.assertEqual(i18n.translate("duration.hours", language="test", count=count), expected)
+            del language.catalog["duration.hours"]["few"]
+            self.assertEqual(i18n.translate("duration.hours", language="test", count=3),
+                             "about 3 h of use left")
+            del language.catalog["duration.days"]
+            self.assertEqual(i18n.translate("duration.days", language="test", count=0),
+                             "about 0 days of use left")
 
     def test_language_and_missing_translation_fallback(self):
-        self.assertEqual(i18n.translate("menu.preferences", language="de"), "Preferences")
+        self.assertEqual(i18n.translate("menu.preferences", language="not-registered"), "Preferences")
         with mock.patch.dict(fr.MESSAGES, {}, clear=True):
             self.assertEqual(i18n.translate("menu.exit", language="fr", version="1.2.3"), "Exit (v1.2.3)")
             # Fallback uses the English plural rule even for a French request.
@@ -91,13 +143,26 @@ class DetectionTests(unittest.TestCase):
                 self.assertEqual(self.detect(langid), "fr")
 
     def test_other_languages_invalid_results_and_api_failure(self):
-        for langid in (0x0409, 0x0407, 0, -1, 0x1000C, None, "fr"):
+        for langid in (0, -1, 0x1000C, None, "fr", True, 1.0):
             with self.subTest(langid=langid):
                 self.assertEqual(self.detect(langid), "en")
         self.assertEqual(self.detect(error=OSError("unavailable")), "en")
         with mock.patch.object(i18n.sys, "platform", "win32"), \
                 mock.patch.object(ctypes, "windll", types.SimpleNamespace(), create=True):
             self.assertEqual(i18n.detect_language(), "en")
+
+    def test_every_registered_windows_language_and_regional_variant(self):
+        for code, language in i18n.LANGUAGES.items():
+            for primary_id in language.windows_primary_ids:
+                for region in (1, 2, 3, 4, 63):
+                    with self.subTest(language=code, primary_id=primary_id, region=region):
+                        self.assertEqual(self.detect((region << 10) | primary_id), code)
+        self.assertEqual(self.detect(0x0400), "en")  # unregistered primary ID 0
+
+    def test_third_language_detection_uses_registry(self):
+        with mock.patch.dict(i18n.LANGUAGES, {"test": extra_language()}):
+            self.assertEqual(self.detect((1 << 10) | 0x3FE), "test")
+            self.assertEqual(self.detect((4 << 10) | 0x3FE), "test")
 
     def test_off_windows(self):
         with mock.patch.object(i18n.sys, "platform", "linux"):
@@ -143,13 +208,14 @@ class LanguageConfigTests(unittest.TestCase):
         self.assertEqual(hb.load_config(), cfg)
 
     def test_saved_languages_and_invalid_values_never_trigger_detection(self):
-        for value in ("en", "fr", "de", "FR", None, False, 1, {}, []):
+        for value in (*i18n.LANGUAGES, "not-registered", "FR", None, False, 1, {}, []):
             with self.subTest(value=value):
                 self.write({"language": value, "interval": 30})
                 with mock.patch.object(i18n, "detect_language") as detect:
                     cfg = hb.load_config(initialize_language=True)
                 detect.assert_not_called()
-                self.assertEqual(cfg["language"], value if value in ("en", "fr") else "en")
+                valid = isinstance(value, str) and value in i18n.LANGUAGES
+                self.assertEqual(cfg["language"], value if valid else "en")
                 self.assertEqual(cfg["interval"], 30)
 
     def test_damaged_config_keeps_existing_recovery_and_english_default(self):
@@ -166,6 +232,20 @@ class LanguageConfigTests(unittest.TestCase):
         with mock.patch.object(i18n, "detect_language", return_value="en") as detect:
             self.assertEqual(hb.load_config(initialize_language=True)["language"], "fr")
         detect.assert_not_called()
+
+    def test_third_language_is_selectable_persisted_and_kept_on_restart(self):
+        with mock.patch.dict(i18n.LANGUAGES, {"test": extra_language()}):
+            app = make_app()
+            prefs = find(app.build_menu(None), "Preferences").submenu
+            menu = find(prefs, "Language / Langue").submenu
+            find(menu, "Test language")(None)
+            self.assertEqual(app.cfg["language"], "test")
+            with mock.patch.object(i18n, "detect_language") as detect:
+                self.assertEqual(hb.load_config(initialize_language=True)["language"], "test")
+            detect.assert_not_called()
+            prefs = find(app.build_menu(None), "Test preferences").submenu
+            menu = find(prefs, "Language / Langue").submenu
+            self.assertTrue(find(menu, "Test language").checked)
 
 
 class PresentationTests(unittest.TestCase):
@@ -235,7 +315,8 @@ class PresentationTests(unittest.TestCase):
     def test_language_menu_selects_and_marks_saved_language(self):
         prefs = find(self.app.build_menu(None), "Préférences").submenu
         languages = find(prefs, "Language / Langue").submenu
-        self.assertEqual([item.text for item in languages], ["English", "Français"])
+        self.assertEqual([item.text for item in languages],
+                         [language.name for language in i18n.LANGUAGES.values()])
         self.assertTrue(find(languages, "Français").checked)
         with mock.patch.object(hb, "save_config"):
             find(languages, "English")(None)

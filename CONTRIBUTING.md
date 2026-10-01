@@ -90,18 +90,35 @@ Application messages live in `locales/en.py` (the reference and fallback) and
 `locales/fr.py`. They are ordinary Python modules, bundled by PyInstaller without
 additional dependencies or a translation compilation step.
 
-- Copy the English catalog for a new language, translate the complete messages,
-  and register an explicit import, catalog and native language name in `i18n.py`.
-  Extend the plural rule and Windows UI language detection there for that language.
+- Copy the English catalog into `locales/<code>.py` and translate the complete
+  messages. Import that module explicitly in `i18n.py` so PyInstaller bundles it.
+  Add one `Language` entry to `i18n.LANGUAGES` with the native name, catalog,
+  plural rule, plural forms and Windows primary language IDs. This single registry
+  drives rendering, initial detection, the preferences menu and configuration
+  validation; no provider or UI changes are needed to register a language.
+- The default `one_other` rule selects `one` for integer 1, otherwise `other`.
+  Supply a `plural_rule(count)` when the language differs, returning a category
+  from its declared `plural_forms`. Additional categories such as `few` or `many`
+  are supported. Counts in this application are nonnegative integers.
+  `windows_primary_ids` matches every regional variant; leave it empty for a
+  language available only by manual selection. English remains the default and
+  fallback regardless of registry order.
 - Keep message keys, named format parameters (`{name}`, `{level}`, etc.), and the
-  `one` / `other` plural forms consistent with English. Do not translate brands,
-  hardware names, user-provided names, device keys, protocols or paths.
+  parameters of every plural form consistent with English. Every plural message
+  must contain all categories declared in that language's `plural_forms`, including
+  `other`. A missing message or selected plural form falls back to English using
+  the English plural rule. Do not translate brands, hardware names, user-provided
+  names, device keys, protocols or paths.
 - Pass the language explicitly when rendering UI text. A missing translation falls
   back to English. Providers supply `ui_message` / `ui_params` for dynamic states;
   keep `approx`, protocol output, logs, diagnostics and status-file text in English.
-- Test both languages, fallback, format parameters, plural forms, configuration
+- Tests automatically check every registered catalog's keys, parameters and plural
+  forms, along with unambiguous Windows IDs. Add tests for the new plural rule's
+  boundaries. Test fallback, configuration
   persistence and notification behavior with `python -m unittest discover -s tests`.
   Review long labels, accents and device names in both classic and Fluent menus.
+  A right-to-left language also requires a separate review of text direction and
+  UI layout; registering its catalog alone does not enable right-to-left layout.
 
 The app detects the Windows **UI language**, not the regional format or keyboard,
 only when no language is saved. All French regional variants select `fr`; other

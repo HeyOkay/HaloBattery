@@ -6,56 +6,94 @@ translations without resource paths, gettext tooling or a mutable global locale.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 
 from locales import en, fr
 
-LANGUAGES = {"en": "English", "fr": "Français"}
-CATALOGS = {"en": en.MESSAGES, "fr": fr.MESSAGES}
+DEFAULT_LANGUAGE = "en"
+
+
+def one_other(count: int) -> str:
+    """Plural rule for languages with singular 1 and all other integer counts."""
+    return "one" if count == 1 else "other"
+
+
+def _french_plural(count: int) -> str:
+    return "one" if count in (0, 1) else "other"
+
+
+@dataclass(frozen=True)
+class Language:
+    """All metadata needed to add a language; counts are nonnegative integers.
+
+    Rules may return additional categories (e.g. few/many). Declare all of them
+    in plural_forms and supply each form in the catalog's plural messages.
+    Windows primary IDs match every regional variant; an empty tuple opts out
+    of automatic detection while keeping manual selection available.
+    """
+
+    name: str
+    catalog: Mapping[str, str | Mapping[str, str]]
+    plural_rule: Callable[[int], str] = one_other
+    windows_primary_ids: tuple[int, ...] = ()
+    plural_forms: tuple[str, ...] = ("one", "other")
+
+
+# Static imports above and this single registry also drive menus and validation.
+LANGUAGES = {
+    "en": Language("English", en.MESSAGES, windows_primary_ids=(0x09,)),
+    "fr": Language("Français", fr.MESSAGES, plural_rule=_french_plural,
+                   windows_primary_ids=(0x0C,)),
+}
 
 
 def detect_language() -> str:
     """The current user's Windows UI language, not their regional format/keyboard.
 
     GetUserDefaultUILanguage returns a LANGID. Its primary-language bits cover
-    all French variants (France, Canada, Belgium, Switzerland, ...).
+    all regional variants of a registered language.
     https://learn.microsoft.com/windows/win32/api/winnls/nf-winnls-getuserdefaultuilanguage
     """
     if sys.platform != "win32":
-        return "en"
+        return DEFAULT_LANGUAGE
     try:
         import ctypes
         get_language = ctypes.windll.kernel32.GetUserDefaultUILanguage
         get_language.argtypes = []
         get_language.restype = ctypes.c_ushort
         langid = get_language()
-        french = isinstance(langid, int) and 0 < langid <= 0xFFFF and (langid & 0x3FF) == 0x0C
-        return "fr" if french else "en"
+        if isinstance(langid, int) and not isinstance(langid, bool) and 0 < langid <= 0xFFFF:
+            primary_id = langid & 0x3FF
+            for code, language in LANGUAGES.items():
+                if primary_id in language.windows_primary_ids:
+                    return code
     except (AttributeError, OSError, TypeError, ValueError):
-        return "en"
+        pass
+    return DEFAULT_LANGUAGE
 
 
-def translate(key: str, *, language: str = "en", count=None, **params) -> str:
+def translate(key: str, *, language: str = DEFAULT_LANGUAGE, count=None, **params) -> str:
     """Render a catalog message; an unsupported language/missing entry uses English.
 
     An unknown reference key or missing argument is a programming error. Keeping
     these visible makes catalog mistakes testable instead of hiding them in the UI.
     """
-    catalog = CATALOGS.get(language, en.MESSAGES)
-    if key not in catalog:
-        catalog = en.MESSAGES
-    message = catalog.get(key)
+    fallback = LANGUAGES[DEFAULT_LANGUAGE]
+    selected = LANGUAGES.get(language, fallback)
+    if key not in selected.catalog:
+        selected = fallback
+    message = selected.catalog.get(key)
     if message is None:
         raise KeyError(key)
-    if isinstance(message, dict):
+    if isinstance(message, Mapping):
         if count is None:
             raise ValueError(f"{key} requires count")
-        # English: 1; French: 0 and 1. Counts here are nonnegative integers.
-        singular = count in (0, 1) if catalog is fr.MESSAGES else count == 1
-        form = "one" if singular else "other"
+        form = selected.plural_rule(count)
         if form in message:
             message = message[form]
         else:
-            message = en.MESSAGES[key]["one" if count == 1 else "other"]
+            message = fallback.catalog[key][fallback.plural_rule(count)]
         params = dict(params, count=count)
     return message.format(**params)
 
