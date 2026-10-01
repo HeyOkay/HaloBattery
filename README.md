@@ -32,7 +32,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [HyperX Cloud Alpha 2](docs/protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
 | [HyperX Cloud II Wireless](docs/protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
 | [HyperX Cloud III Wireless](docs/protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
-| [Inphic In9 Pro](docs/protocols.md#inphic-in9-pro) | 2.4 GHz dongle | no |
+| [Inphic In9 Pro](docs/protocols.md#inphic-in9-pro) | 2.4 GHz dongle | yes |
 | [JBL Quantum 910 Wireless](docs/protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](docs/protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](docs/protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
