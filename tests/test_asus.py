@@ -193,10 +193,197 @@ class PollTest(ProviderTest):
                          [("ROG Keris Wireless", 50, "about 50%")])
 
     def test_unknown_asus_devices_are_not_opened(self):
-        e = [dict(issue_81_entries()[0], product_id=0x1ACE)]    # OMNI receiver: not included
+        e = [dict(issue_81_entries()[0], product_id=0x1ACF)]
         mouse = FakeMouse()
         self.assertEqual(self.poll(e, {b"if0-ff01": mouse}), [])
         self.assertEqual(mouse.opened, 0)
+
+    def test_omni_receiver_interface_0_is_not_opened(self):
+        # the OMNI receiver's interface 0 has no 12 07 battery: only interface 2 is used
+        e = [dict(issue_81_entries()[0], product_id=A.OMNI_PID)]
+        mouse = FakeMouse()
+        self.assertEqual(self.poll(e, {b"if0-ff01": mouse}), [])
+        self.assertEqual(mouse.opened, 0)
+
+
+# --- ROG OMNI receiver -------------------------------------------------------------------
+
+# replies read from a ROG OMNI receiver with a Falchion RX Low Profile (1b06) and a Harpe
+# Ace Mini (1b65) paired: the keyboard at 66 %, the mouse at 55 %, neither charging
+OMNI_PAIRS_REPLY = [0x01, 0xA0, 0x00, 0x02, 0x00, 0x06, 0x1B, 0x02, 0x04,
+                    0x65, 0x1B, 0x03, 0x05] + [0] * 51
+OMNI_MOUSE_REPLY = [0x03, 0x12, 0x07, 0x00, 0x00, 0x37, 0x02, 0x0A, 0xED, 0x0E,
+                    0x00, 0x00, 0x01] + [0] * 51
+OMNI_KEYBOARD_REPLY = [0x02, 0x12, 0x01, 0x00, 0x00, 0x00, 0x42, 0x02, 0x01, 0x00,
+                       0x14, 0x42, 0x27, 0x0F] + [0] * 50
+
+
+def omni_mouse_reply(level, charging=0):
+    r = list(OMNI_MOUSE_REPLY)
+    r[5], r[10] = level, charging
+    return r
+
+
+def omni_keyboard_reply(level, charging=0, gauge=None):
+    r = list(OMNI_KEYBOARD_REPLY)
+    r[6] = level if gauge is None else gauge
+    r[11], r[9] = level, charging
+    return r
+
+
+class FakeCollection:
+    """Answers `request` (its first three bytes) with `replies`, one per request."""
+
+    def __init__(self, request, *replies, events=()):
+        self.request, self.replies, self.events = list(request[:3]), list(replies), list(events)
+        self.writes, self.queue, self.opened = [], [], 0
+        self.nonblocking = False
+
+    def on_write(self, data):
+        self.writes.append(list(data))
+        if list(data[:3]) == self.request and self.replies:
+            self.queue += self.events + [self.replies.pop(0)]
+
+    def on_read(self):
+        return self.queue.pop(0) if self.queue else []
+
+
+def omni_entries(instance="7&1111111&0"):
+    # the collections of one OMNI receiver: interface 0 is the keyboard, the vendor
+    # collections are on interface 2
+    def e(iface, col, page, usage):
+        path = f"\\\\?\\hid#vid_0b05&pid_1ace&mi_0{iface}&col0{col}#{instance}&000{col - 1}#{{4d1e}}"
+        return {"product_id": A.OMNI_PID, "interface_number": iface, "usage_page": page,
+                "usage": usage, "path": path.encode(), "product_string": "ROG OMNI RECEIVER"}
+    return [e(0, 1, 0x0001, 6), e(2, 1, 0xFF02, 1), e(2, 2, 0xFF00, 1), e(2, 3, 0xFF01, 1)]
+
+
+def omni_bus(entries, pairs=OMNI_PAIRS_REPLY, mouse=OMNI_MOUSE_REPLY,
+             keyboard=OMNI_KEYBOARD_REPLY):
+    by_page = {d["usage_page"]: d["path"] for d in entries if d["interface_number"] == 2}
+    return {
+        by_page[0xFF02]: FakeCollection(A.OMNI_PAIRS, pairs),
+        by_page[0xFF01]: FakeCollection(A.OMNI_MOUSE_REQUEST, mouse),
+        by_page[0xFF00]: FakeCollection(A.OMNI_KEYBOARD_REQUEST, keyboard),
+        [d["path"] for d in entries if d["interface_number"] == 0][0]: FakeCollection([0, 0, 0]),
+    }
+
+
+class OmniParseTest(unittest.TestCase):
+    def test_pair_list(self):
+        self.assertEqual(A.parse_pairs(OMNI_PAIRS_REPLY), [0x1B06, 0x1B65])
+        self.assertEqual(A.parse_pairs([0x01, 0xA0] + [0] * 62), [])
+        self.assertEqual(A.parse_pairs([0x03, 0x12, 0x07] + [0] * 61), [])
+
+    def test_mouse(self):
+        self.assertEqual(A.parse_omni_mouse(OMNI_MOUSE_REPLY), (55, False, ""))
+        self.assertEqual(A.parse_omni_mouse(omni_mouse_reply(20, 1)), (20, True, ""))
+        self.assertIsNone(A.parse_omni_mouse(omni_mouse_reply(0)))          # standby
+        self.assertIsNone(A.parse_omni_mouse(OMNI_KEYBOARD_REPLY))
+
+    def test_keyboard(self):
+        self.assertEqual(A.parse_omni_keyboard(OMNI_KEYBOARD_REPLY, 11), (66, False, ""))
+        self.assertEqual(A.parse_omni_keyboard(OMNI_KEYBOARD_REPLY, 6), (66, False, ""))
+        self.assertEqual(A.parse_omni_keyboard(omni_keyboard_reply(30, 1), 6), (30, True, ""))
+        self.assertIsNone(A.parse_omni_keyboard(omni_keyboard_reply(0), 6))   # standby
+        self.assertIsNone(A.parse_omni_keyboard(omni_keyboard_reply(101), 6))
+        self.assertIsNone(A.parse_omni_keyboard(OMNI_MOUSE_REPLY, 6))
+
+    def test_falchion_reads_the_percentage_not_the_gauge(self):
+        r = omni_keyboard_reply(73, gauge=7)
+        self.assertEqual(A.parse_omni_keyboard(r, A.OMNI_KEYBOARDS[0x1B06][1]), (73, False, ""))
+        self.assertEqual(A.parse_omni_keyboard(r, A.OMNI_KEYBOARDS[0x1A85][1]), (7, False, ""))
+
+    def test_instance(self):
+        a, b = omni_entries()[1]["path"], omni_entries()[3]["path"]
+        self.assertEqual(A._instance(a), A._instance(b))
+        self.assertNotEqual(A._instance(a), A._instance(omni_entries("7&2222222&0")[1]["path"]))
+
+
+class OmniPollTest(ProviderTest):
+    def test_mouse_and_keyboard(self):
+        entries = omni_entries()
+        bus = omni_bus(entries)
+        res = self.poll(entries, bus)
+        self.assertEqual(sorted((r.name, r.level, r.charging, r.kind, r.key) for r in res), [
+            ("ROG Falchion RX Low Profile", 66, False, "keyboard", "asus:rog-falchion-rx-low-profile"),
+            ("ROG Harpe Ace Mini", 55, False, "mouse", "asus:rog-harpe-ace-mini"),
+        ])
+        writes = {c.request[0]: c.writes for c in bus.values() if c.writes}
+        self.assertEqual(sorted(writes), [0x01, 0x02, 0x03])
+        for request in (A.OMNI_PAIRS, A.OMNI_MOUSE_REQUEST, A.OMNI_KEYBOARD_REQUEST):
+            w = writes[request[0]]
+            self.assertEqual(len(w), 1)
+            self.assertEqual(len(w[0]), 64)
+            self.assertEqual(w[0][:len(request)], request)
+            self.assertEqual(set(w[0][len(request):]), {0})
+
+    def test_interface_0_is_not_opened(self):
+        entries = omni_entries()
+        bus = omni_bus(entries)
+        self.poll(entries, bus)
+        self.assertEqual(bus[entries[0]["path"]].opened, 0)
+
+    def test_only_paired_devices_are_asked(self):
+        entries = omni_entries()
+        pairs = OMNI_PAIRS_REPLY[:9] + [0] * 55                   # the keyboard only
+        bus = omni_bus(entries, pairs=pairs)
+        res = self.poll(entries, bus)
+        self.assertEqual([(r.name, r.kind) for r in res], [("ROG Falchion RX Low Profile", "keyboard")])
+        mouse = next(c for c in bus.values() if c.request[0] == 0x03)
+        self.assertEqual(mouse.opened, 0)
+
+    def test_unknown_paired_pids_are_skipped(self):
+        entries = omni_entries()
+        pairs = [0x01, 0xA0, 0, 2, 0, 0x34, 0x12, 2, 4] + [0] * 55
+        bus = omni_bus(entries, pairs=pairs)
+        self.assertEqual(self.poll(entries, bus), [])
+        self.assertEqual(sum(c.opened for c in bus.values()), 1)        # the pair list only
+
+    def test_no_pair_list_reply_asks_nothing_else(self):
+        entries = omni_entries()
+        bus = omni_bus(entries, pairs=[0x01, 0xFF, 0xAA] + [0] * 61)
+        self.assertEqual(self.poll(entries, bus), [])
+        self.assertEqual(sum(c.opened for c in bus.values()), 1)
+
+    def test_sleeping_devices_give_no_icon(self):
+        entries = omni_entries()
+        bus = omni_bus(entries, mouse=[0x03] + [0] * 63, keyboard=omni_keyboard_reply(0))
+        self.assertEqual(self.poll(entries, bus), [])
+
+    def test_events_before_the_reply_are_skipped(self):
+        entries = omni_entries()
+        bus = omni_bus(entries)
+        mouse = next(c for c in bus.values() if c.request[0] == 0x03)
+        mouse.events = [[0x03, 0x12, 0x01, 0, 0, 0x02] + [0] * 58]
+        res = self.poll(entries, bus)
+        self.assertIn(("ROG Harpe Ace Mini", 55), [(r.name, r.level) for r in res])
+
+    def test_two_receivers_do_not_mix(self):
+        first, second = omni_entries("7&1111111&0"), omni_entries("7&2222222&0")
+        bus = omni_bus(first, pairs=OMNI_PAIRS_REPLY[:9] + [0] * 55)    # keyboard only
+        bus.update(omni_bus(second, pairs=[0x01, 0xA0, 0, 2, 0, 0x65, 0x1B, 3, 5] + [0] * 55,
+                            mouse=omni_mouse_reply(40)))                 # mouse only
+        res = self.poll(first + second, bus)
+        self.assertEqual(sorted((r.name, r.level) for r in res),
+                         [("ROG Falchion RX Low Profile", 66), ("ROG Harpe Ace Mini", 40)])
+
+    def test_omni_and_cable_share_one_icon(self):
+        # a Gladius III Aimpoint on the OMNI receiver and on its own cable
+        entries = omni_entries()
+        bus = omni_bus(entries, pairs=[0x01, 0xA0, 0, 2, 0, 0x72, 0x1A, 3, 5] + [0] * 55,
+                       mouse=omni_mouse_reply(70))
+        cable = dict(issue_81_entries(0x1A70)[0], path=b"cable")
+        bus[b"cable"] = FakeMouse(level=71, charging=1)
+        res = self.poll(entries + [cable], bus)
+        self.assertEqual([(r.name, r.level, r.charging) for r in res],
+                         [("ROG Gladius III Aimpoint", 71, True)])
+
+    def test_every_omni_device_has_a_name(self):
+        for pid, name in A.OMNI_MICE.items():
+            self.assertTrue(name.startswith("ROG "), hex(pid))
+        for pid, (name, byte) in A.OMNI_KEYBOARDS.items():
+            self.assertIn(byte, (6, 11), hex(pid))
 
 
 if __name__ == "__main__":

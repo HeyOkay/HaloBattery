@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- ASUS ROG OMNI receiver (0B05:1ACE): the battery of the mouse and the keyboard paired to
+  it, named from the receiver's pair list (protocol from G-Helper). Confirmed on a ROG
+  Harpe Ace Mini and a ROG Falchion RX Low Profile; the other ROG mice (Keris II Ace /
+  Origin, Harpe Ace Aim Lab / Extreme, Gladius III Aimpoint, Keris Wireless Aimpoint,
+  Strix Impact III Wireless) and keyboards (Azoth, Azoth Extreme, Strix Scope II 96) that
+  G-Helper knows on this receiver are unverified.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
