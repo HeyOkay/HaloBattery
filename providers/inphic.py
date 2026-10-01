@@ -41,8 +41,9 @@ The same frame serves this ODM family's other receiver: Attack Shark's X11/R1
 (1d57:fa60) was caught announcing `03 55 40 01 1f` (31 %) on the same
 `000a:0000` collection, read-only, by the reporter's probe in #163 - matching
 the `03 55 40 01 4b` frame in the notes behind #69. Both receivers live here,
-each gated on the model codes proven for it. The X11's level is confirmed in
-the reporter's run (#163); its charging state is still open.
+each gated on the model codes proven for it. The X11 is fully confirmed in
+the reporter's runs (#163): level and charging state both - his diagnostics
+caught the `40 03` frame on the cable.
 """
 from __future__ import annotations
 
