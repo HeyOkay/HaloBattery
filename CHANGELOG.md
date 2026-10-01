@@ -9,7 +9,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - The `--probe` run digs deeper for the Corsair receiver family (#28): every write's
   return value, every frame with its arrival time, a listen-only pass before anything
-  is written, and the vendor app's fuller software-mode sequence as a fallback. The
+  is written, and the vendor app's fuller software-mode sequence as a fallback. It also
+  lists each collection's declared report lengths and tries the battery frame in every
+  framing per collection, because a write Windows refuses never reaches the dongle. The
   tray's polling is unchanged.
 
 ## [1.14.0] - 2026-10-05

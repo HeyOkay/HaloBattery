@@ -259,6 +259,14 @@ class FakeVoidReceiver:
         return self.replies.pop(0) if self.replies else []
 
 
+class FakeRefusingReceiver(FakeVoidReceiver):
+    """Like the reporter's #28 dongle: every write refused at the USB layer (hidapi -1)."""
+
+    def write(self, data):
+        self.writes.append(bytes(data))
+        return -1
+
+
 HEARTBEAT_FRAME = [0x01, 0x02, 0x00] + [0x00] * 61
 
 
@@ -275,19 +283,20 @@ class FakeClock:
 
 class VoidPollTest(unittest.TestCase):
     def setUp(self):
-        self._saved = (C.hid, C.hidlist, C.time)
+        self._saved = (C.hid, C.hidlist, C.time, C.caps_for)
         self._env = os.environ.pop("HALO_PROBE", None)
         self.entries = void_entries()
 
     def tearDown(self):
-        C.hid, C.hidlist, C.time = self._saved
+        C.hid, C.hidlist, C.time, C.caps_for = self._saved
         os.environ.pop("HALO_PROBE", None)
         if self._env is not None:
             os.environ["HALO_PROBE"] = self._env
 
-    def poll(self, fakes, probe=False):
+    def poll(self, fakes, probe=False, caps=None):
         if probe:
             os.environ["HALO_PROBE"] = "1"
+            C.caps_for = lambda path: (64, 65, 65) if caps is None else caps.get(path)
         C.time = FakeClock()
 
         class Device:
@@ -349,7 +358,7 @@ class VoidPollTest(unittest.TestCase):
         fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(120)])
         out, diag = self.poll({b"void-iface4-0001": fake}, probe=True)
         self.assertEqual([s.level for s in out], [12])
-        self.assertFalse(any("sibling collection" in line for line in diag))
+        self.assertFalse(any("write shapes" in line for line in diag))
 
     def test_a_listen_frame_is_logged_with_its_clock(self):
         # the vendor app's own battery notification frame, if it is on the wire
@@ -360,15 +369,48 @@ class VoidPollTest(unittest.TestCase):
         self.assertTrue(any(line.lstrip().startswith("[") and "03 01 00 0f" in line
                             for line in diag))
 
-    def test_a_silent_receiver_gets_one_ask_on_a_sibling_collection(self):
-        main = FakeVoidReceiver(heartbeat=None, replies=[])
-        sib = FakeVoidReceiver(heartbeat=void_reply(999))
-        out, diag = self.poll({b"void-iface4-0001": main,
-                               b"void-iface4-0002": sib}, probe=True)
+    def test_the_probe_logs_caps_for_every_collection(self):
+        fake = FakeVoidReceiver(heartbeat=None, replies=[])
+        caps = {b"void-iface4-0001": (64, 65, 65),
+                b"void-iface4-0002": None,
+                b"void-iface3-ff13": (64, 0, 32)}
+        out, diag = self.poll({b"void-iface4-0001": fake}, probe=True, caps=caps)
         self.assertEqual(out, [])
-        self.assertTrue(any("probe: sibling collection" in line for line in diag))
-        self.assertTrue(any("    reply (" in line for line in diag))
-        self.assertEqual(sib.writes[0][:5], b"\x00\x02\x09\x02\x0f")   # the battery ask
+        self.assertTrue(any("caps: iface=4 ff42:0001 in/out/feat=64/65/65" in line
+                            for line in diag))
+        self.assertTrue(any("caps: iface=4 ff42:0002 ?" in line for line in diag))
+        self.assertTrue(any("caps: iface=3 ff13:0001 in/out/feat=64/0/32" in line
+                            for line in diag))
+
+    def test_the_probe_matrix_finds_the_collection_that_takes_the_write(self):
+        # the #28 shape: every write on the protocol collection refused with -1,
+        # while another collection of the same receiver accepts the same frame
+        main = FakeRefusingReceiver(heartbeat=None, replies=[])
+        sib = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME)
+        caps = {b"void-iface4-0001": (64, 63, 65),   # declares a 63-byte output report
+                b"void-iface4-0002": (64, 65, 65)}
+        out, diag = self.poll({b"void-iface4-0001": main,
+                               b"void-iface4-0002": sib}, probe=True, caps=caps)
+        self.assertEqual(out, [])
+        self.assertTrue(any("probe: write shapes, collection by collection" in line
+                            for line in diag))
+        self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0001 -> -1")
+                            for line in diag))
+        self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0002 -> 65")
+                            for line in diag))
+        self.assertTrue(any(line.startswith("  probe: write63-rid0 iface=4 ff42:0001 -> -1")
+                            for line in diag))
+        self.assertTrue(any("probe: first answer (" in line for line in diag))
+        self.assertTrue(any("takes the write" in line for line in diag))
+        self.assertEqual(len(sib.writes), 2)          # the accepted shape, then the re-ask
+
+    def test_the_normal_poll_never_asks_for_caps(self):
+        called = []
+        C.caps_for = lambda path: called.append(path) or (64, 65, 65)
+        fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
+        out, _ = self.poll({b"void-iface4-0001": fake}, caps={})
+        self.assertEqual([s.level for s in out], [55])
+        self.assertEqual(called, [])
 
 
 if __name__ == "__main__":

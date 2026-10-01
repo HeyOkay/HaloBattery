@@ -25,8 +25,11 @@ The `--probe` run (#28) digs deeper than the tray ever should: every write's
 return value, every frame with the time it took to arrive, a listen-only pass
 before writing anything (with the vendor app open it catches the vendor's own
 exchange), and - when the usual sequence yields nothing - the vendor app's
-fuller software-mode path. Normal polling keeps the short windows; a provider
-runs on the tray's timer and must never block it.
+fuller software-mode path. It also prints every collection's declared report
+lengths and tries the battery frame in each framing on every collection,
+because a write Windows refuses locally looks exactly like a switched-off
+device. Normal polling keeps the short windows; a provider runs on the tray's
+timer and must never block it.
 
 The Dark Core / Ironclaw mice and their dongles speak a second, unrelated
 protocol ("nxp" in ckb-next, which reads them): a single-field 64-byte packet
@@ -39,9 +42,11 @@ is reported, and the level is coarse, so it is shown as "about N%".
 """
 from __future__ import annotations
 
+import ctypes
 import os
+import sys
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import hid
 
@@ -80,12 +85,73 @@ PROBE_LISTEN_MS = 6000
 PROBE_HB_TIMEOUT_MS = 3000
 PROBE_ATTEMPT_TIMEOUT_MS = (2000, 4000, 4000)
 PROBE_SOFTWARE_TIMEOUT_MS = (2000, 4000)
-PROBE_SIBLINGS = 2               # other collections of the same receiver to try
 
 
 def in_probe() -> bool:
     """True inside `halo_battery.pyw --probe` (which sets HALO_PROBE)."""
     return os.environ.get("HALO_PROBE") == "1"
+
+
+class _HIDP_CAPS(ctypes.Structure):
+    _fields_ = [("Usage", ctypes.c_ushort), ("UsagePage", ctypes.c_ushort),
+                ("InputReportByteLength", ctypes.c_ushort),
+                ("OutputReportByteLength", ctypes.c_ushort),
+                ("FeatureReportByteLength", ctypes.c_ushort),
+                ("Reserved", ctypes.c_ushort * 17),
+                ("NumberLinkCollectionNodes", ctypes.c_ushort),
+                ("NumberInputButtonCaps", ctypes.c_ushort),
+                ("NumberInputValueCaps", ctypes.c_ushort),
+                ("NumberInputDataIndices", ctypes.c_ushort),
+                ("NumberOutputButtonCaps", ctypes.c_ushort),
+                ("NumberOutputValueCaps", ctypes.c_ushort),
+                ("NumberOutputDataIndices", ctypes.c_ushort),
+                ("NumberFeatureButtonCaps", ctypes.c_ushort),
+                ("NumberFeatureValueCaps", ctypes.c_ushort),
+                ("NumberFeatureDataIndices", ctypes.c_ushort)]
+
+
+def caps_for(path) -> Optional[Tuple[int, int, int]]:
+    """(input, output, feature) report byte lengths of one HID collection.
+
+    The handle is opened with no access rights (query only), so nothing is sent
+    to the device. Windows-only, like the rest of the probe machinery.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        p = path.decode("utf-8", "ignore") if isinstance(path, (bytes, bytearray)) else str(path)
+        k32, hidd = ctypes.windll.kernel32, ctypes.windll.hid
+        k32.CreateFileW.restype = ctypes.c_void_p
+        handle = k32.CreateFileW(p, 0, 3, None, 3, 0, None)   # no access, share r/w, open existing
+        if handle in (None, ctypes.c_void_p(-1).value):
+            return None
+        try:
+            pp = ctypes.c_void_p()
+            if not hidd.HidD_GetPreparsedData(ctypes.c_void_p(handle), ctypes.byref(pp)):
+                return None
+            try:
+                caps = _HIDP_CAPS()
+                if hidd.HidP_GetCaps(pp, ctypes.byref(caps)) != 0x00110000:   # HIDP_STATUS_SUCCESS
+                    return None
+                return (caps.InputReportByteLength, caps.OutputReportByteLength,
+                        caps.FeatureReportByteLength)
+            finally:
+                hidd.HidD_FreePreparsedData(pp)
+        finally:
+            k32.CloseHandle(ctypes.c_void_p(handle))
+    except Exception:            # a probe must never take the provider down
+        return None
+
+
+def _error_note(dev, n) -> str:
+    """The OS reason behind a refused write, when hidapi reports one."""
+    if not isinstance(n, int) or n >= 0:
+        return ""
+    try:
+        err = dev.error()
+    except Exception:
+        return ""
+    return f" ({err})" if err else ""
 
 PIDS = {
     0x2A08: "Corsair Void v2 Wireless",
@@ -215,7 +281,7 @@ class CorsairProvider(Provider):
         """One 65-byte write; probe mode logs what the write actually returned."""
         n = dev.write(frame)
         if in_probe():
-            self._diag.append(f"  [w] {label} -> {n}")
+            self._diag.append(f"  [w] {label} -> {n}{_error_note(dev, n)}")
         return n
 
     def _drain(self, dev, label: str = "") -> None:
@@ -282,30 +348,84 @@ class CorsairProvider(Provider):
             self._diag.append(f"  probe: error in the fuller sequence: {e}")
         return None
 
-    def _probe_sibling(self, path: bytes) -> None:
-        """Probe only: one battery ask on another collection of the same receiver."""
-        dev = hid.device()
-        try:
-            dev.open_path(path)
-        except (OSError, IOError) as e:
-            self._diag.append(f"    open: {e}")
-            return
-        try:
-            self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
-            t0 = time.monotonic()
-            r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
-            if not r:
-                self._diag.append(f"    no reply after {PROBE_HB_TIMEOUT_MS} ms")
-            else:
-                self._diag.append(f"    reply ({(time.monotonic() - t0) * 1000:.0f} ms): "
-                                  f"{hexdump(r, MSG_SIZE_READ)}")
-        except (OSError, IOError, ValueError) as e:
-            self._diag.append(f"    error: {e}")
-        finally:
+    def _probe_caps(self, infos: List[dict]) -> Dict[bytes, Optional[Tuple[int, int, int]]]:
+        """Probe only: what every collection of this receiver declares.
+
+        #28's logs showed every write refused with -1 before it could reach the
+        dongle - a refusal this layer makes locally, indistinguishable from a
+        silent device until the caps are on the table.
+        """
+        caps_by_path = {}
+        for d in infos:
+            path = d.get("path")
+            caps = caps_for(path)
+            caps_by_path[path] = caps
+            shown = "?" if caps is None else f"in/out/feat={caps[0]}/{caps[1]}/{caps[2]}"
+            self._diag.append(f"  caps: iface={d.get('interface_number')} "
+                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} {shown}")
+        return caps_by_path
+
+    def _probe_matrix(self, infos: List[dict],
+                      caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]]) -> None:
+        """Probe only: try the battery frame in each framing, on every collection.
+
+        The first collection that takes a write is reused for one more ask, so the
+        next build can start from it. A write Windows refuses never reaches the
+        dongle, which is the state #28's logs were stuck in.
+        """
+        self._diag.append("  probe: write shapes, collection by collection")
+        order = sorted(infos,
+                       key=lambda d: (0 if d.get("interface_number") == CONTROL_INTERFACE else 1,
+                                      0 if (d.get("usage_page") or 0) >= 0xFF00 else 1))
+        frame = make_request(HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
+        for d in order:
+            key = d.get("path")
+            key = bytes(key) if isinstance(key, (bytes, bytearray)) else None
+            caps = caps_by_path.get(key) if key is not None else None
+            where = (f"iface={d.get('interface_number')} "
+                     f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            shapes = [("write65-rid0", frame), ("write64-norid", frame[1:])]
+            if caps and caps[1] and caps[1] != len(frame):
+                shapes.append((f"write{caps[1]}-rid0", (frame + [0x00] * caps[1])[:caps[1]]))
+            dev = hid.device()
             try:
-                dev.close()
-            except Exception:
-                pass
+                dev.open_path(d.get("path"))
+            except (OSError, IOError) as e:
+                self._diag.append(f"  probe: open {where}: {e}")
+                continue
+            try:
+                accepted = False
+                for label, buf in shapes:
+                    try:
+                        n = dev.write(bytes(buf))
+                    except (OSError, IOError, ValueError) as e:
+                        n, note = -1, f" ({e})"
+                    else:
+                        note = _error_note(dev, n)
+                    self._diag.append(f"  probe: {label} {where} -> {n}{note}")
+                    if isinstance(n, int) and n >= 0:
+                        accepted = True
+                        break
+                if not accepted:
+                    continue
+                t0 = time.monotonic()
+                r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
+                self._diag.append(f"  probe: first answer "
+                                  f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(r, MSG_SIZE_READ) if r else 'none'}")
+                self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
+                t0 = time.monotonic()
+                r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
+                self._diag.append(f"  probe: ask again "
+                                  f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(r, MSG_SIZE_READ) if r else 'none'}")
+                self._diag.append("  probe: this collection takes the write - build on it")
+                break
+            finally:
+                try:
+                    dev.close()
+                except Exception:
+                    pass
 
     def _query(self, path: bytes) -> Optional[List[int]]:
         dev = hid.device()
@@ -398,17 +518,13 @@ class CorsairProvider(Provider):
             self._diag.append(f"[Corsair] pid={pid:04x} '{name}' "
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]] = {}
             if in_probe():
                 self._diag.append(f"  path: {d.get('path', b'')!r}")
+                caps_by_path = self._probe_caps(mine)
             reply = self._query(d["path"])
             if reply is None and in_probe():
-                others = [s for s in mine if s["path"] != d["path"]][:PROBE_SIBLINGS]
-                for sib in others:
-                    self._diag.append(f"  probe: sibling collection "
-                                      f"iface={sib.get('interface_number')} "
-                                      f"{sib.get('usage_page', 0):04x}:{sib.get('usage', 0):04x}")
-                    self._diag.append(f"    path: {sib.get('path', b'')!r}")
-                    self._probe_sibling(sib["path"])
+                self._probe_matrix(mine, caps_by_path)
             level = parse_level(reply)
             if level is None:
                 continue
