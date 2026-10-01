@@ -264,7 +264,8 @@ class CorsairProvider(Provider):
                     continue
                 level, label = parsed
                 out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
-                                        "corsair", approx=label, kind="mouse"))
+                                        "corsair", approx=label, kind="mouse", ui_message="state.approx",
+                                        ui_params={"level": level}))
                 break
         return out
 

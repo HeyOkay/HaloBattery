@@ -83,3 +83,29 @@ Bluetooth devices: Halo Battery shows the level that Windows itself reports. If 
    - which other open pull requests change the same files.
 
 Look at the open issues and pull requests first, so that two people do not do the same work.
+
+## 4. Add or update a translation
+
+Application messages live in `locales/en.py` (the reference and fallback) and
+`locales/fr.py`. They are ordinary Python modules, bundled by PyInstaller without
+additional dependencies or a translation compilation step.
+
+- Copy the English catalog for a new language, translate the complete messages,
+  and register an explicit import, catalog and native language name in `i18n.py`.
+  Extend the plural rule and Windows UI language detection there for that language.
+- Keep message keys, named format parameters (`{name}`, `{level}`, etc.), and the
+  `one` / `other` plural forms consistent with English. Do not translate brands,
+  hardware names, user-provided names, device keys, protocols or paths.
+- Pass the language explicitly when rendering UI text. A missing translation falls
+  back to English. Providers supply `ui_message` / `ui_params` for dynamic states;
+  keep `approx`, protocol output, logs, diagnostics and status-file text in English.
+- Test both languages, fallback, format parameters, plural forms, configuration
+  persistence and notification behavior with `python -m unittest discover -s tests`.
+  Review long labels, accents and device names in both classic and Fluent menus.
+
+The app detects the Windows **UI language**, not the regional format or keyboard,
+only when no language is saved. All French regional variants select `fr`; other
+languages or a failed detection select `en`. Preferences > Language / Langue
+overrides that initial selection immediately and persists `language` in
+`%APPDATA%\HaloBattery\config.json`. A stored invalid value falls back to English
+without triggering detection again. `--probe` never initializes the language.

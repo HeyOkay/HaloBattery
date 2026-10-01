@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 log = logging.getLogger("halo_battery")
@@ -21,6 +21,10 @@ class DeviceStatus:
     kind: str = ""               # headset / mouse / keyboard / gamepad when known
                                  # (picks the pictogram); "" = guess from the source
     via: str = ""                # "bluetooth": a controller connected over Bluetooth
+    # Presentation only: keep approx in English for diagnostics and status.json.
+    # Appended fields preserve existing positional constructors and protocol tests.
+    ui_message: str = ""
+    ui_params: dict = field(default_factory=dict)
 
 
 class Provider:

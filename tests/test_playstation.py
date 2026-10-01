@@ -146,6 +146,7 @@ class ProviderTest(unittest.TestCase):
         self.assertIsNone(out[0].level)
         self.assertTrue(out[0].approx)
         self.assertIn("Steam", out[0].approx)
+        self.assertEqual(out[0].ui_message, "state.playstation_basic")
 
     def test_bluetooth_basic_mode_does_not_start_the_fast_recheck(self):
         # the basic mode is the normal state now, not a controller that is still starting

@@ -186,7 +186,7 @@ class EightBitDoProvider(Provider):
             via = "bluetooth" if bluetooth else ""
             if res is None:
                 out.append(DeviceStatus(key, name, None, False, True, "8bitdo", NOT_SWITCHED,
-                                        kind="gamepad", via=via))
+                                        kind="gamepad", via=via, ui_message="state.8bitdo_basic"))
                 continue
             level, charging = res
             self._diag.append(f"  -> {level}%{' charging' if charging else ''}")

@@ -94,6 +94,7 @@ class XboxBluetoothTest(ProviderTest):
         self.assertIsNone(st.level)                 # not the 10% of remain=100 / full=1000
         self.assertEqual((st.via, st.name), ("bluetooth", "Xbox controller"))
         self.assertIn("Windows Bluetooth devices", st.approx)
+        self.assertEqual(st.ui_message, "state.bluetooth_hint")
         self.assertIn("[XInput] slot 0: connected over Bluetooth", p.diagnostics())
 
     def test_every_bluetooth_id(self):
