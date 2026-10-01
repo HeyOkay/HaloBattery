@@ -16,7 +16,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   row (`03 55 40 01 <level>` on `000a:0000`, read-only), caught by a
   reporter's probe in [#163](https://github.com/HeyOkay/HaloBattery/issues/163).
   Each receiver of the family only reads the model codes proven on it.
-  Unverified in the app so far - the reporter's run would settle it.
+  The level is confirmed in the reporter's run; the charging state is still open.
 
 ## [1.14.0] - 2026-10-05
 

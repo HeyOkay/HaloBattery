@@ -144,7 +144,7 @@ The mouse announces its level and charging state by itself - nothing is ever sen
 
 **Connection:** 2.4 GHz dongle (1D57:FA60)
 
-The same ODM family and the same passive frame as the Inphic row above: the mouse announces `03 <model> 40 <sub> <level>` by itself on the `000a:0000` collection, and nothing is ever sent to it. The `0x55` model byte was caught by a reporter's probe announcing `03 55 40 01 1f` (31 %), matching the `03 55 40 01 4b` frame in the notes behind [#69](https://github.com/HeyOkay/HaloBattery/issues/69). Each receiver of the family only reads the model codes proven on it. **Unverified so far** - the probe read the frame read-only on [#163](https://github.com/HeyOkay/HaloBattery/issues/163)'s reporter's desk; their run of the test build would settle it
+The same ODM family and the same passive frame as the Inphic row above: the mouse announces `03 <model> 40 <sub> <level>` by itself on the `000a:0000` collection, and nothing is ever sent to it. The `0x55` model byte was caught by a reporter's probe announcing `03 55 40 01 1f` (31 %), matching the `03 55 40 01 4b` frame in the notes behind [#69](https://github.com/HeyOkay/HaloBattery/issues/69). Each receiver of the family only reads the model codes proven on it. **Level confirmed on hardware** in the reporter's run of the test build ([#163](https://github.com/HeyOkay/HaloBattery/issues/163)): the icon shows the level. The charging state is still open - this mouse has not shown a charging frame while on the cable yet
 
 ### LAMZU Maya X
 
