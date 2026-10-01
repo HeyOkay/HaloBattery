@@ -30,6 +30,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](docs/protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [Hitscan Hyperlight](docs/protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
 | [HyperX Cloud Alpha 2](docs/protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
+| [HyperX Cloud II Core Wireless](docs/protocols.md#hyperx-cloud-ii-core-wireless) | 2.4 GHz dongle or USB cable | no |
 | [HyperX Cloud II Wireless](docs/protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
 | [HyperX Cloud III Wireless](docs/protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](docs/protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
@@ -138,6 +139,7 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery`.
 
 ## Credits
 
+- HyperX Cloud II Core Wireless protocol: @dantifrice ([#155](https://github.com/HeyOkay/HaloBattery/issues/155)), whose USBPcap capture of NGENUITY showed the same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless.
 - WLmouse protocol: @len0c ([incconutwo/mouse-battery-tray](https://github.com/incconutwo/mouse-battery-tray), MIT).
 - MCHOSE protocol: the write-up by @alexfrih ([alexfrih/mchose-linux](https://github.com/alexfrih/mchose-linux), recovered from MCHOSE's own web driver); the G7 from @kek353's monitor and the dump in [#8](https://github.com/HeyOkay/HaloBattery/issues/8).
 - Hitscan Hyperlight protocol: @sopparus ([sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery)), who mapped it from the vendor application's USB traffic and confirmed it in the [libratbag discussion](https://github.com/libratbag/libratbag/issues/1893).

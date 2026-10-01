@@ -20,6 +20,14 @@ product ids and was written from the vendor's own traffic):
     to send_feature_report, so this does too. The diagnostics say which path was used,
     because that is the difference between a reading and none at all.
 
+The Cloud II Core Wireless (03F0:0995 its dongle, 03F0:0795 the second mode the same
+reporter's diagnostics show) speaks the same exchange, decoded from his own USBPcap
+capture of NGENUITY in #155: NGENUITY wrote `66 89` to interface 3 as a 62-byte output
+report and the dongle answered `66 89 0e d7 30 ...` (48 %), and `66 8a` was answered
+`66 8a 00 00` (off the cable) - same report id, same commands, same vendor collection as
+the Cloud III Wireless. The plain output report is what NGENUITY itself uses here, so
+write() is the path in use; the feature fallback stays for the dongles that need it.
+
 A reply that does not carry the expected command or response id is ignored, and a level
 above 100 is refused rather than shown as a made-up number.
 """
@@ -53,9 +61,13 @@ READ_TIMEOUT_MS = 200
 WRITE_PAUSE = 0.1                  # the reference waits between request and read
 
 # Cloud III Wireless. 0x05B7 is the dongle here, 0x0C9D the other id the reference lists.
+# Cloud II Core Wireless (#155): 0x0995 is its dongle (the one in the capture), 0x0795 the
+# second mode the reporter's diagnostics show - same vendor collection, same exchange.
 PIDS = {
     0x05B7: "HyperX Cloud III Wireless",
     0x0C9D: "HyperX Cloud III Wireless",
+    0x0795: "HyperX Cloud II Core Wireless",
+    0x0995: "HyperX Cloud II Core Wireless",
 }
 
 # The two error spellings Windows gives when the dongle wants a feature report.
