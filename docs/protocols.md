@@ -184,7 +184,9 @@ Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used
 
 ### NZXT Lift Elite Wireless (1e71:2101)
 
-**Connection:** 2.4 GHz receiver (enumerates as "NZXT Lift Elite Dongle")
+**Connection:** 2.4 GHz receiver (enumerates as "NZXT Lift Elite Dongle"); the
+same mouse on its USB cable enumerates as `1e71:2129` and speaks the same
+protocol, so both ids are read.
 
 No open-source project reads this mouse's battery (OpenRGB covers the wired
 Lift's LEDs only), so the protocol comes from a USBPcap capture of NZXT CAM
@@ -194,9 +196,11 @@ interrupt OUT, `4e 02 81 00 b0 ..` (02 = the mouse behind the dongle, `81` =
 read a property, `b0` = the telemetry one), answered on interrupt IN with
 `4e 02 97 ..` about 25 ms later, after a `4e e5` acknowledgement. In the
 reply, bytes 17-18 little-endian are the battery percent (the captures hold
-77 then 78 across the reporter's charging session) and bytes 8-9 are the cell
-voltage in millivolts (4093 wireless, 4348 while charging); byte 22's low bit
-reads 1 while the mouse is on its charging cable. The flags byte 7 and the
+77 then 78 across the reporter's charging session, and 84 while wired) and
+bytes 8-9 are the cell voltage in millivolts (4093 wireless, 4348 while
+charging); byte 22's low bit reads 1 while the mouse is on its charging cable.
+The wired id (`1e71:2129`) carries the identical `ffca:0001` collection and
+was read by CAM with the very same request. The flags byte 7 and the
 rest of the frame are not decoded and nothing is guessed from them. The
 conversation rides the `ffca:0001` collection (the same page OpenRGB uses for
 the wired Lift), picked by usage page. **Confirmed on hardware** by @MrBeat93:

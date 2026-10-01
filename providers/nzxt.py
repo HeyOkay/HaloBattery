@@ -3,10 +3,10 @@
 No public protocol exists for this mouse - OpenRGB's NZXT controller covers the
 wired Lift's LEDs only, and CAM keeps the battery inside its closed native
 module. Every byte here is therefore taken from USBPcap captures of CAM
-4.76.5 talking to the reporter's own dongle (issue #148; two captures on
-2026-09-30 - one wireless at 76-77 %, one with the charging cable in). The
-conversation is a request in a 64-byte interrupt OUT report and a reply on
-interrupt IN, both starting with 0x4e:
+4.76.5 talking to the reporter's own mouse (issue #148 - four captures:
+wireless at 76-77 %, the charging cable in, and the mouse on its USB cable at
+84 %). The conversation is a request in a 64-byte interrupt OUT report and a
+reply on interrupt IN, both starting with 0x4e:
 
     request:  4e 02 81 00 b0 00 ...
               0x4e framing, 02 = the mouse behind the dongle, 81 = "read a
@@ -46,12 +46,18 @@ The dongle splits into six HID collections; the conversation rode the one on
 usage page ffca / usage 0001 - the same page the wired Lift's OpenRGB driver
 picks - chosen by usage page, never by interface number.
 
-Claimed for 1e71:2101 only, the receiver the captures came from; the 1e71:2131
-keyboard is wired and has no battery to read. Confirmed on hardware by the
-reporter of #148 (@MrBeat93): the level tracks, charging follows the cable.
-While NZXT CAM itself is open the dongle stops answering this request - the
-app then keeps the last value on a greyed icon (the same coexistence shape as
-other vendor tools).
+The mouse has two ids: 1e71:2101 for the receiver and 1e71:2129 for the same
+mouse on its USB cable. The wired one carries the identical ffca:0001
+collection with the same 64-byte report pair, and CAM read it with the very
+same request (that capture holds 84 % and the charging bit, cable in) - so
+both ids are asked.
+
+Claimed for the mouse's two ids: 1e71:2101 (the receiver) and 1e71:2129 (the
+mouse on its USB cable). The 1e71:2131 keyboard is wired and has no battery to
+read. Confirmed on hardware by the reporter of #148 (@MrBeat93): the level
+tracks, charging follows the cable. While NZXT CAM itself is open the dongle
+stops answering this request - the app then keeps the last value on a greyed
+icon (the same coexistence shape as other vendor tools).
 """
 from __future__ import annotations
 
@@ -68,7 +74,9 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 NZXT_VID = 0x1E71
 RECEIVER_PID = 0x2101
-PIDS = {RECEIVER_PID: "NZXT Lift Elite Wireless"}
+CABLE_PID = 0x2129
+PIDS = {RECEIVER_PID: "NZXT Lift Elite Wireless",
+        CABLE_PID: "NZXT Lift Elite (USB cable)"}
 
 VENDOR_PAGE = 0xFFCA
 VENDOR_USAGE = 0x0001

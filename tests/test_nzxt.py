@@ -1,10 +1,10 @@
 """Tests for providers/nzxt.py. No hardware and no CAM needed.
 
 The frames are the ones CAM 4.76.5 exchanged with the reporter's NZXT Lift
-Elite dongle in the USBPcap captures of issue #148 (2026-09-30). Six of the
-telemetry reads are fixtures here: three wireless (77 %, 76 %, and the last
-one with flags byte 82) and three from the charging session (byte 22's low
-bit set while the charging cable was in).
+Elite in the USBPcap captures of issue #148. Eight of the telemetry reads are
+fixtures here: three wireless (77 %, 76 %, and the last one with flags byte
+82), three from the charging session (byte 22's low bit set while the charging
+cable was in), and two with the mouse on its USB cable (id 1e71:2129, 84 %).
 The collection shape is the reporter's diagnostics dump (1e71:2101: the
 ffca:0001 vendor collection plus the mouse's and the dongle's others).
 
@@ -56,6 +56,10 @@ CAP_CHARGE_78 = bytes.fromhex("4e 02 97 00 01 40 01 31 10 2b 01 40 01 f9 00 43 0
                               " 64 00 1c 01 08 00 40 01") + bytes(37)
 CAP_78_FREE = bytes.fromhex("4e 02 97 00 01 40 01 9b 0f fc ff 40 01 f9 00 43 00 4e 00"
                             " 64 00 1e 00 08 00 40 01") + bytes(37)
+CAP_WIRED_84 = bytes.fromhex("4e 02 97 00 01 40 01 ac 0f fc ff 40 01 0c 01 43 00 54 00"
+                             " 64 00 1f 01 08 00 40 01") + bytes(37)
+CAP_WIRED_CHARGE_84 = bytes.fromhex("4e 02 97 00 01 40 01 31 10 fc ff 40 01 0c 01 43 00 54 00"
+                                    " 64 00 1f 01 08 00 40 01") + bytes(37)
 
 ACK = bytes([0x4E, 0xE5] + [0x00] * 62)
 
@@ -108,6 +112,15 @@ def receiver_entries(prefix=b"dev"):
             for n, (i, p, u) in enumerate(shape)]
 
 
+def wired_entries(prefix=b"wdev"):
+    # the mouse on its USB cable: the same collection shape, id 1e71:2129
+    shape = [(0, 0x0001, 0x02), (1, 0xFFCA, 0x0001), (2, 0x000C, 0x0001)]
+    return [{"product_id": N.CABLE_PID, "interface_number": i, "usage_page": p,
+             "usage": u, "path": prefix + b"-%d-%04x-%d" % (i, p, n),
+             "product_string": "NZXT Lift Elite"}
+            for n, (i, p, u) in enumerate(shape)]
+
+
 class PollTest(unittest.TestCase):
     def setUp(self):
         self._saved = (N.hid, N.hidlist, N.time)
@@ -141,6 +154,10 @@ class PollTest(unittest.TestCase):
         self.assertEqual(N.parse_telemetry(CAP_CHARGE_78), (78, 4139, True))
         self.assertEqual(N.parse_telemetry(CAP_78_FREE), (78, 4092, False))
 
+    def test_the_wired_frames_decode(self):
+        self.assertEqual(N.parse_telemetry(CAP_WIRED_84), (84, 4092, True))
+        self.assertEqual(N.parse_telemetry(CAP_WIRED_CHARGE_84), (84, 4348, True))
+
     def test_the_fixtures_are_the_captured_bytes(self):
         self.assertEqual(CAP_77, telem(level=77, mv=0x0FFD, flags=0x86, extra=0x00F6))
         self.assertEqual(CAP_76, telem(level=76, mv=0x0FFD, flags=0x86, extra=0x00F3))
@@ -152,6 +169,12 @@ class PollTest(unittest.TestCase):
                                charge=0x01, b21=0x1C, b10=0x01))
         self.assertEqual(CAP_78_FREE,
                          telem(level=78, mv=0x0FFC, flags=0x9B, extra=0x00F9))
+        self.assertEqual(CAP_WIRED_84,
+                         telem(level=84, mv=0x0FFC, flags=0xAC, extra=0x010C,
+                               charge=0x01, b21=0x1F))
+        self.assertEqual(CAP_WIRED_CHARGE_84,
+                         telem(level=84, mv=0x10FC, flags=0x31, extra=0x010C,
+                               charge=0x01, b21=0x1F))
 
     def test_the_request_is_the_captured_request(self):
         self.assertEqual(N.REQUEST, bytes([0x4E, 0x02, 0x81, 0x00, 0xB0]) + bytes(59))
@@ -188,6 +211,22 @@ class PollTest(unittest.TestCase):
         cols = self.cols(entries, post=(ACK, CAP_CHARGE_77))
         out = self.poll(entries, cols)
         self.assertEqual((out[0].level, out[0].charging), (77, True))
+
+    def test_the_wired_mouse_reads_too(self):
+        entries = wired_entries()
+        cols = self.cols(entries, post=(ACK, CAP_WIRED_84))
+        out = self.poll(entries, cols)
+        self.assertEqual((out[0].key, out[0].level, out[0].charging),
+                         ("nzxt:2129", 84, True))
+
+    def test_both_ids_at_once_each_get_a_status(self):
+        entries = wired_entries() + receiver_entries()
+        cols = {e["path"]: FakeCollection(post=(ACK, CAP_WIRED_84 if
+                                                e["product_id"] == N.CABLE_PID else CAP_76))
+                for e in entries}
+        out = self.poll(entries, cols)
+        self.assertEqual(sorted((s.key, s.level) for s in out),
+                         [("nzxt:2101", 76), ("nzxt:2129", 84)])
 
     def test_the_ack_is_skipped_and_junk_ignored(self):
         entries = receiver_entries()
