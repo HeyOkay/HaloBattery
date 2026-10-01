@@ -33,9 +33,9 @@ recordings of this chip family's receivers (the `03 55 40 01 4b` frame in
 the notes behind #69), so the family shapes agree with the vendor app's
 parse. Only 1d57:fa65 is claimed here - the dongle the diagnostics came from.
 
-The support is **unverified**: no Inphic device was on hand, the mapping is
-a mirror of the vendor app's own read path, and the reporter's run in #160
-is the live confirmation.
+The support is **confirmed on hardware**: the reporter's run of the test build
+(#160) shows the level. The charging frame (sub-command 0x03) rides the same
+read and has not been observed changing on hardware yet.
 """
 from __future__ import annotations
 
