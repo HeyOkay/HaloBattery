@@ -37,7 +37,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [LAMZU Maya X](docs/protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
 | [Lofree Hyzen](docs/protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
 | [Logitech G502 LIGHTSPEED, G502 X PLUS](docs/protocols.md#logitech-g502-lightspeed-g502-x-plus) | Lightspeed receiver | yes |
-| [Logitech (more HID++ 2.0 devices and G-series headsets)](docs/protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
+| [Logitech (more HID++ 2.0 devices, older HID++ 1.0 keyboards and mice, G-series headsets)](docs/protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
 | [MCHOSE A7 V2 Ultra](docs/protocols.md#mchose-a7-v2-ultra) | 2.4 GHz receiver | no |
 | [MCHOSE G7](docs/protocols.md#mchose-g7) | USB (chip 'YJX-CHIP') | yes |
 | [MCHOSE M7 Ultra](docs/protocols.md#mchose-m7-ultra) | 2.4 GHz receiver | yes |

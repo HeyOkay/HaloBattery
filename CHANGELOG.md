@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Logitech: devices with no HID++ 2.0 feature table (the older HID++ 1.0 generation - for example the M710 keyboard of the MK710 wireless desktop in [#159](https://github.com/HeyOkay/HaloBattery/issues/159)) are read through the old battery registers (`0x0D`/`0x07`), mirrored from Solaar. Unverified on that keyboard until the reporter's test-build run.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
