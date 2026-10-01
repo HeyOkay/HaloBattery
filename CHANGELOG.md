@@ -20,7 +20,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   report id. The 65-byte form every earlier build wrote was refused by the USB layer
   before reaching the device (seen as `-1`/0x57 in [#28](https://github.com/HeyOkay/HaloBattery/issues/28)'s
   probe logs; the same wall as headsetcontrol#521), which is why the headset never
-  appeared. Unverified in the app until the reporter's run.
+  appeared. Confirmed on hardware in the reporter's run.
 
 ## [1.14.0] - 2026-10-05
 
