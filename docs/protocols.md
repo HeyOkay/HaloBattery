@@ -140,6 +140,12 @@ The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection 
 
 The mouse announces its level and charging state by itself - nothing is ever sent to it. The frame map was decoded from the vendor's own Windows app (INPHIC HUB, the driver [linked in #160](https://github.com/HeyOkay/HaloBattery/issues/160)): it enumerates 1d57:fa65 with hidapi, reads the collection `000a:0000` (keeping `ff00:0001` for its writes) and parses a report whose first byte is the report id `03`, then the model code (`0x95` / `0x90` / `0x93` / `0x99`), the command byte `0x40`, the sub-command and the level - `03 95 40 01 4b` is 75 %, `... 40 03` is charging (the app runs a 30 ms animation and keeps its last level), `... 40 02` is full (the app shows 100 %). A level outside 1..100 is refused, never shown. **Verified on hardware** in the reporter's run of the test build ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)): the level shows. The charging frame rides the same read and has not been observed changing on hardware yet
 
+### Attack Shark X11 / R1
+
+**Connection:** 2.4 GHz dongle (1D57:FA60)
+
+The same ODM family and the same passive frame as the Inphic row above: the mouse announces `03 <model> 40 <sub> <level>` by itself on the `000a:0000` collection, and nothing is ever sent to it. The `0x55` model byte was caught by a reporter's probe announcing `03 55 40 01 1f` (31 %), matching the `03 55 40 01 4b` frame in the notes behind [#69](https://github.com/HeyOkay/HaloBattery/issues/69). Each receiver of the family only reads the model codes proven on it. **Unverified so far** - the probe read the frame read-only on [#163](https://github.com/HeyOkay/HaloBattery/issues/163)'s reporter's desk; their run of the test build would settle it
+
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)

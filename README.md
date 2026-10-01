@@ -114,6 +114,7 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in
 - AM Infinity 8K protocol: the AJAZZ Control Center project ([Aiacos/ajazz-control-center](https://github.com/Aiacos/ajazz-control-center), GPL-3.0), which reads the same USB id on its own AJ159 APEX unit.
 - BlackShark V2 Pro 2023: the OpenRazer driver ([PR #2862](https://github.com/openrazer/openrazer/pull/2862)). Razer PIDs and transaction ids: OpenRazer and [RazerBatteryTaskbar](https://github.com/Tekk-Know/RazerBatteryTaskbar).
 - Inphic In9 Pro protocol: the vendor's INPHIC HUB driver, linked by @KwasimodoZA in [#160](https://github.com/HeyOkay/HaloBattery/issues/160).
+- Attack Shark X11 / R1 frame: caught by @Ur1Sam's probe run in [#163](https://github.com/HeyOkay/HaloBattery/issues/163).
 - The reference implementations behind individual devices - HeadsetControl, rivalcfg, Solaar, G-Helper, HyperHeadset, mouse.xyz, [`@openmouse/protocol`](https://github.com/OpenMouse-Project/openmouse), keychron-battery-dkms, JBL_Baterry_Monitor and others - are credited next to the device they were used for in [docs/protocols.md](docs/protocols.md).
 
 ## License

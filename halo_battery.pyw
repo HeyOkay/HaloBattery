@@ -166,7 +166,7 @@ PROVIDER_LABELS = {
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_cloud3": "HyperX Cloud III Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
-    "inphic": "Inphic mice",
+    "inphic": "Inphic / Attack Shark mice",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",

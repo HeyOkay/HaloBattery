@@ -36,11 +36,17 @@ parse. Only 1d57:fa65 is claimed here - the dongle the diagnostics came from.
 The support is **confirmed on hardware**: the reporter's run of the test build
 (#160) shows the level. The charging frame (sub-command 0x03) rides the same
 read and has not been observed changing on hardware yet.
+
+The same frame serves this ODM family's other receiver: Attack Shark's X11/R1
+(1d57:fa60) was caught announcing `03 55 40 01 1f` (31 %) on the same
+`000a:0000` collection, read-only, by the reporter's probe in #163 - matching
+the `03 55 40 01 4b` frame in the notes behind #69. Both receivers live here,
+each gated on the model codes proven for it.
 """
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import hid
@@ -51,12 +57,16 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x1D57
-PID = 0xFA65
-NAME = "Inphic In9 Pro"
-KEY = f"inphic:{PID:04x}"
+# The ODM family's receivers, each with the model codes proven on it: the Inphic
+# codes are INPHIC HUB's own accept list (#160), and 0x55 is the Attack Shark
+# code its reporter's probe caught announcing 31 % on X11/R1 hardware (#69
+# notes, #163).
+PIDS = {
+    0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99)),
+    0xFA60: ("Attack Shark X11 / R1", (0x55,)),
+}
 
 REPORT_ID = 0x03                    # hidapi hands it back first on Windows
-MODELS = (0x95, 0x90, 0x93, 0x99)   # the model codes INPHIC HUB accepts
 CMD_BATTERY = 0x40
 SUB_FULL = 0x02                     # charge complete: the app shows 100 %
 SUB_CHARGING = 0x03                 # on the cable: the app runs its animation
@@ -77,9 +87,11 @@ MOUSE_USAGE = (0x0001, 0x0002)      # never opened: the OS owns the pointer stre
 KEYBOARD_USAGE = (0x0001, 0x0006)   # the keyboard collections are left to it too
 
 
-def parse_frame(frame) -> Optional[Tuple[Optional[int], bool]]:
+def parse_frame(frame, models) -> Optional[Tuple[Optional[int], bool]]:
     """(level, charging) from a device report, or None when it is not one.
 
+    models: the model codes proven for the receiver at hand - each receiver of
+    the family only reads the codes seen on it.
     level is None when the frame only carries the charging state - the level
     from the last full report stays on screen, as in the vendor app.
     """
@@ -90,7 +102,7 @@ def parse_frame(frame) -> Optional[Tuple[Optional[int], bool]]:
         f = f[1:]
     if len(f) < 4:
         return None
-    if f[0] not in MODELS or f[1] != CMD_BATTERY:
+    if f[0] not in models or f[1] != CMD_BATTERY:
         return None
     if f[2] == SUB_CHARGING:
         return None, True
@@ -132,11 +144,12 @@ class InphicProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[Optional[int], float]] = None   # (level, when)
-        self._charging = False
-        self._chosen: Optional[bytes] = None
+        self._last: Dict[int, Tuple[Optional[int], float]] = {}    # pid -> (level, when)
+        self._charging: Dict[int, bool] = {}
+        self._chosen: Dict[int, bytes] = {}                        # pid -> collection path
 
-    def _listen(self, d: dict, attempts: int) -> Optional[Tuple[Optional[int], bool]]:
+    def _listen(self, d: dict, attempts: int,
+                models: Tuple[int, ...]) -> Optional[Tuple[Optional[int], bool]]:
         dev = hid.device()
         try:
             dev.open_path(d["path"])
@@ -148,7 +161,7 @@ class InphicProvider(Provider):
                 r = dev.read(READ_SIZE, READ_TIMEOUT_MS)
                 if not r:
                     continue             # the frames come by themselves
-                got = parse_frame(r)
+                got = parse_frame(r, models)
                 self._diag.append(f"    report: {hexdump(r, 20)}"
                                   + (f"  -> level {got[0]}, "
                                      f"{'charging' if got[1] else 'on battery'}" if got
@@ -167,6 +180,58 @@ class InphicProvider(Provider):
             except Exception:
                 pass
 
+    def _poll_pid(self, pid: int, name: str, models: Tuple[int, ...],
+                  mine: List[dict]) -> Optional[DeviceStatus]:
+        key = f"inphic:{pid:04x}"
+        self._diag.append(f"[Inphic] pid={pid:04x} '{name}' "
+                          f"product='{(mine[0].get('product_string') or '').strip()}'")
+
+        order = candidates(mine)
+        chosen = self._chosen.get(pid)
+        if chosen is not None:
+            order = sorted(order, key=lambda d: d["path"] != chosen)
+        last = self._last.get(pid)
+        stale = last is None or time.time() - last[1] >= ASLEEP_KEEP
+        got = None
+        for d in order[:MAX_CANDIDATES]:
+            is_chosen = d["path"] == chosen
+            if chosen is not None and not stale and not is_chosen:
+                break                 # a fresh reading: the known collection is enough
+            # The vendor app's own collection gets the full window while looking
+            # for it; the rest only get a short listen before moving on.
+            patience = (d.get("usage_page"), d.get("usage")) == STATUS_USAGE
+            attempts = READ_ATTEMPTS if is_chosen or patience else SWEEP_ATTEMPTS
+            self._diag.append(f"  listening on iface={d.get('interface_number')} "
+                              f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            got = self._listen(d, attempts, models)
+            if got is not None:
+                if chosen != d["path"]:
+                    self._chosen[pid] = d["path"]
+                break
+
+        if got is not None:
+            level, charging = got
+            ts = time.time()
+            if level is not None:
+                self._last[pid] = (level, ts)
+            elif last is not None:
+                self._last[pid] = (last[0], ts)       # a frame with no level: heartbeat
+            else:
+                self._last[pid] = (None, ts)          # charging before any level was seen
+            self._charging[pid] = charging
+            return DeviceStatus(key, name, self._last[pid][0], charging, True,
+                                "inphic", kind="mouse")
+
+        # No frame in the window. The pushes come every couple of seconds, so a
+        # single miss says nothing yet: the last level stays lit for a while,
+        # then greys out, then the icon is hidden until the next frame.
+        if last is not None:
+            age = time.time() - last[1]
+            if age < ASLEEP_KEEP:
+                return DeviceStatus(key, name, last[0], self._charging.get(pid, False),
+                                    age < ONLINE_FRESH, "inphic", kind="mouse")
+        return None
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         if hid is None:
@@ -176,55 +241,15 @@ class InphicProvider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(inphic): %s", e)
             return []
-        mine = [d for d in infos if d.get("product_id") == PID]
-        if not mine:
-            return []
-        self._diag.append(f"[Inphic] pid={PID:04x} '{NAME}' "
-                          f"product='{(mine[0].get('product_string') or '').strip()}'")
-
-        order = candidates(mine)
-        if self._chosen is not None:
-            order = sorted(order, key=lambda d: d["path"] != self._chosen)
-        stale = self._last is None or time.time() - self._last[1] >= ASLEEP_KEEP
-        got = None
-        for d in order[:MAX_CANDIDATES]:
-            is_chosen = d["path"] == self._chosen
-            if self._chosen is not None and not stale and not is_chosen:
-                break                 # a fresh reading: the known collection is enough
-            # The vendor app's own collection gets the full window while looking
-            # for it; the rest only get a short listen before moving on.
-            patience = (d.get("usage_page"), d.get("usage")) == STATUS_USAGE
-            attempts = READ_ATTEMPTS if is_chosen or patience else SWEEP_ATTEMPTS
-            self._diag.append(f"  listening on iface={d.get('interface_number')} "
-                              f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-            got = self._listen(d, attempts)
-            if got is not None:
-                if self._chosen != d["path"]:
-                    self._chosen = d["path"]
-                break
-
-        if got is not None:
-            level, charging = got
-            ts = time.time()
-            if level is not None:
-                self._last = (level, ts)
-            elif self._last is not None:
-                self._last = (self._last[0], ts)      # a frame with no level: heartbeat
-            else:
-                self._last = (None, ts)               # charging before any level was seen
-            self._charging = charging
-            return [DeviceStatus(KEY, NAME, self._last[0], charging, True, "inphic",
-                                 kind="mouse")]
-
-        # No frame in the window. The pushes come every couple of seconds, so a
-        # single miss says nothing yet: the last level stays lit for a while,
-        # then greys out, then the icon is hidden until the next frame.
-        if self._last is not None:
-            age = time.time() - self._last[1]
-            if age < ASLEEP_KEEP:
-                return [DeviceStatus(KEY, NAME, self._last[0], self._charging,
-                                     age < ONLINE_FRESH, "inphic", kind="mouse")]
-        return []
+        out = []
+        for pid, (name, models) in PIDS.items():
+            mine = [d for d in infos if d.get("product_id") == pid]
+            if not mine:
+                continue
+            st = self._poll_pid(pid, name, models, mine)
+            if st is not None:
+                out.append(st)
+        return out
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
