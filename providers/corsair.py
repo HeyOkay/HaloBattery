@@ -21,6 +21,13 @@ Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
 The reply carries no charging flag: HeadsetControl reports the level as
 available (not charging) for this family, and so does this provider.
 
+The `--probe` run (#28) digs deeper than the tray ever should: every write's
+return value, every frame with the time it took to arrive, a listen-only pass
+before writing anything (with the vendor app open it catches the vendor's own
+exchange), and - when the usual sequence yields nothing - the vendor app's
+fuller software-mode path. Normal polling keeps the short windows; a provider
+runs on the tray's timer and must never block it.
+
 The Dark Core / Ironclaw mice and their dongles speak a second, unrelated
 protocol ("nxp" in ckb-next, which reads them): a single-field 64-byte packet
 `{CMD_GET 0x0e, FIELD_BATTERY 0x50}` answered with the level as an index into a
@@ -32,6 +39,7 @@ is reported, and the level is coarse, so it is shown as "about N%".
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import List, Optional, Tuple
 
@@ -65,6 +73,20 @@ ATTEMPTS = 3
 READ_TIMEOUT_MS = 500
 FLUSH_TIMEOUT_MS = 30
 
+# The --probe run (#28): this family's answers can arrive late, and the vendor
+# app's own traffic is part of the picture, so the probe listens first and then
+# talks with longer windows. The tray keeps the short ones above.
+PROBE_LISTEN_MS = 6000
+PROBE_HB_TIMEOUT_MS = 3000
+PROBE_ATTEMPT_TIMEOUT_MS = (2000, 4000, 4000)
+PROBE_SOFTWARE_TIMEOUT_MS = (2000, 4000)
+PROBE_SIBLINGS = 2               # other collections of the same receiver to try
+
+
+def in_probe() -> bool:
+    """True inside `halo_battery.pyw --probe` (which sets HALO_PROBE)."""
+    return os.environ.get("HALO_PROBE") == "1"
+
 PIDS = {
     0x2A08: "Corsair Void v2 Wireless",
     0x2A02: "Corsair Virtuoso Max Wireless",
@@ -74,6 +96,17 @@ PIDS = {
 
 def make_request(endpoint: int, sub: int, command: int) -> List[int]:
     frame = [0x00, 0x02, endpoint, sub, command]
+    return frame + [0x00] * (MSG_SIZE_WRITE - len(frame))
+
+
+def make_software_mode(endpoint: int) -> List[int]:
+    """`01 03 00 02` to an endpoint - the vendor app's software-mode switch.
+
+    HeadsetControl's initializeDevice() and OpenLinkHub's Connect() both send it
+    before commands work on a cold device. The headset can pop audibly when the
+    mode changes, which is why normal polling avoids it.
+    """
+    frame = [0x00, 0x02, endpoint, 0x01, 0x03, 0x00, 0x02]
     return frame + [0x00] * (MSG_SIZE_WRITE - len(frame))
 
 
@@ -174,15 +207,105 @@ class CorsairProvider(Provider):
             except Exception:
                 pass
 
-    def _write(self, dev, endpoint: int, sub: int, command: int) -> bool:
-        dev.write(make_request(endpoint, sub, command))
-        return True
+    def _write(self, dev, endpoint: int, sub: int, command: int) -> int:
+        return self._write_frame(dev, make_request(endpoint, sub, command),
+                                 f"{endpoint:02x}/{sub:02x}/{command:02x}")
 
-    def _drain(self, dev) -> None:
+    def _write_frame(self, dev, frame, label: str) -> int:
+        """One 65-byte write; probe mode logs what the write actually returned."""
+        n = dev.write(frame)
+        if in_probe():
+            self._diag.append(f"  [w] {label} -> {n}")
+        return n
+
+    def _drain(self, dev, label: str = "") -> None:
         """Drop replies that are still queued, so the next read is ours."""
         for _ in range(4):
-            if not dev.read(MSG_SIZE_READ, FLUSH_TIMEOUT_MS):
+            r = dev.read(MSG_SIZE_READ, FLUSH_TIMEOUT_MS)
+            if not r:
                 return
+            if in_probe():
+                self._diag.append(f"  [drain{label}] {hexdump(r, MSG_SIZE_READ)}")
+
+    def _listen(self, dev) -> None:
+        """Probe only: read whatever arrives, without writing anything.
+
+        With the vendor app open this catches the vendor's own exchange with the
+        headset - the ground truth for what a working answer looks like.
+        """
+        self._diag.append(f"  listening {PROBE_LISTEN_MS // 1000} s without writing anything")
+        t0 = time.monotonic()
+        while (time.monotonic() - t0) * 1000 < PROBE_LISTEN_MS:
+            r = dev.read(MSG_SIZE_READ, 250)
+            if r:
+                ms = (time.monotonic() - t0) * 1000
+                self._diag.append(f"  [{ms / 1000:6.2f}s] {hexdump(r, MSG_SIZE_READ)}")
+
+    def _probe_fallback(self, dev) -> Optional[List[int]]:
+        """Probe only: what is left to try when the usual sequence yields nothing.
+
+        The vendor app's Connect() takes the fuller path - software mode on the
+        receiver and the headset first - and the desktop software may leave the
+        device in a state only that path talks to. The headset can pop audibly
+        when the mode changes; that is expected in this run.
+        """
+        self._diag.append("  probe: trying the vendor app's fuller sequence "
+                          "(software mode; the headset may pop)")
+        try:
+            self._write(dev, RECEIVER_ENDPOINT, FW_SUB, CMD_FIRMWARE)
+            self._write_frame(dev, make_software_mode(RECEIVER_ENDPOINT), "08|01/03/00/02")
+            self._write(dev, RECEIVER_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
+            self._write_frame(dev, make_software_mode(HEADSET_ENDPOINT), "09|01/03/00/02")
+            self._drain(dev)
+            self._write(dev, HEADSET_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
+            t0 = time.monotonic()
+            r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
+            if r:
+                self._diag.append(f"  probe: heartbeat answered "
+                                  f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(r, MSG_SIZE_READ)}")
+            else:
+                self._diag.append("  probe: no heartbeat after software mode either")
+            for i, timeout in enumerate(PROBE_SOFTWARE_TIMEOUT_MS):
+                self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
+                t0 = time.monotonic()
+                r = dev.read(MSG_SIZE_READ, timeout)
+                if not r:
+                    self._diag.append(f"  probe: attempt {i + 1}: no reply after {timeout} ms")
+                    continue
+                self._diag.append(f"  probe: attempt {i + 1} reply "
+                                  f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(r, MSG_SIZE_READ)}")
+                if parse_level(r) is not None:
+                    return list(r)
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"  probe: error in the fuller sequence: {e}")
+        return None
+
+    def _probe_sibling(self, path: bytes) -> None:
+        """Probe only: one battery ask on another collection of the same receiver."""
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return
+        try:
+            self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
+            t0 = time.monotonic()
+            r = dev.read(MSG_SIZE_READ, PROBE_HB_TIMEOUT_MS)
+            if not r:
+                self._diag.append(f"    no reply after {PROBE_HB_TIMEOUT_MS} ms")
+            else:
+                self._diag.append(f"    reply ({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(r, MSG_SIZE_READ)}")
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"    error: {e}")
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
 
     def _query(self, path: bytes) -> Optional[List[int]]:
         dev = hid.device()
@@ -192,27 +315,58 @@ class CorsairProvider(Provider):
             self._diag.append(f"  open: {e}")
             return None
         try:
+            if in_probe():
+                self._listen(dev)
+
             # The handshake that wakes a sleeping headset without an audible pop.
             self._write(dev, RECEIVER_ENDPOINT, FW_SUB, CMD_FIRMWARE)
             self._write(dev, RECEIVER_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
             self._drain(dev)
             self._write(dev, HEADSET_ENDPOINT, HB_SUB, CMD_HEARTBEAT)
-            if not dev.read(MSG_SIZE_READ, READ_TIMEOUT_MS):
+            hb_timeout = PROBE_HB_TIMEOUT_MS if in_probe() else READ_TIMEOUT_MS
+            t0 = time.monotonic()
+            hb = dev.read(MSG_SIZE_READ, hb_timeout)
+            if not hb:
+                if in_probe():
+                    self._diag.append(f"  headset heartbeat: no reply after "
+                                      f"{hb_timeout} ms (headset off or asleep)")
+                    return self._probe_fallback(dev)
                 self._diag.append("  headset heartbeat: no reply "
                                   "(headset off or asleep)")
                 return None
+            if in_probe():
+                self._diag.append(f"  headset heartbeat answered "
+                                  f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                  f"{hexdump(hb, MSG_SIZE_READ)}")
             self._drain(dev)
 
             for attempt in range(ATTEMPTS):
                 self._write(dev, HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
-                r = dev.read(MSG_SIZE_READ, READ_TIMEOUT_MS)
+                if in_probe():
+                    timeout = PROBE_ATTEMPT_TIMEOUT_MS[min(attempt, len(PROBE_ATTEMPT_TIMEOUT_MS) - 1)]
+                else:
+                    timeout = READ_TIMEOUT_MS
+                t0 = time.monotonic()
+                r = dev.read(MSG_SIZE_READ, timeout)
                 if not r:
-                    self._diag.append(f"  attempt {attempt + 1}: no reply")
+                    if in_probe():
+                        self._diag.append(f"  attempt {attempt + 1}: no reply after {timeout} ms")
+                    else:
+                        self._diag.append(f"  attempt {attempt + 1}: no reply")
                     continue
-                self._diag.append(f"  attempt {attempt + 1} reply: {hexdump(r)}")
+                if in_probe():
+                    self._diag.append(f"  attempt {attempt + 1} reply "
+                                      f"({(time.monotonic() - t0) * 1000:.0f} ms): "
+                                      f"{hexdump(r, MSG_SIZE_READ)}")
+                else:
+                    self._diag.append(f"  attempt {attempt + 1} reply: {hexdump(r)}")
                 if parse_level(r) is not None:
                     return list(r)
+                if in_probe():
+                    self._drain(dev, " between attempts")
             self._diag.append("  no usable level in the replies")
+            if in_probe():
+                return self._probe_fallback(dev)
             return None
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
@@ -244,7 +398,17 @@ class CorsairProvider(Provider):
             self._diag.append(f"[Corsair] pid={pid:04x} '{name}' "
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            if in_probe():
+                self._diag.append(f"  path: {d.get('path', b'')!r}")
             reply = self._query(d["path"])
+            if reply is None and in_probe():
+                others = [s for s in mine if s["path"] != d["path"]][:PROBE_SIBLINGS]
+                for sib in others:
+                    self._diag.append(f"  probe: sibling collection "
+                                      f"iface={sib.get('interface_number')} "
+                                      f"{sib.get('usage_page', 0):04x}:{sib.get('usage', 0):04x}")
+                    self._diag.append(f"    path: {sib.get('path', b'')!r}")
+                    self._probe_sibling(sib["path"])
             level = parse_level(reply)
             if level is None:
                 continue

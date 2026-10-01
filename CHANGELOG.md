@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The `--probe` run digs deeper for the Corsair receiver family (#28): every write's
+  return value, every frame with its arrival time, a listen-only pass before anything
+  is written, and the vendor app's fuller software-mode sequence as a fallback. The
+  tray's polling is unchanged.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

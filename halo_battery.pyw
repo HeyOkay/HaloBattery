@@ -1847,6 +1847,9 @@ def dump_hid() -> List[str]:
 
 def probe():
     """Console mode: a single poll with verbose output."""
+    # providers can deepen their diagnostics for this run (the Corsair receiver
+    # family logs every write and every frame; see #28)
+    os.environ["HALO_PROBE"] = "1"
     # device names come from Windows and may contain any characters; a cp1252
     # console would otherwise crash on them
     for stream in (sys.stdout, sys.stderr):
