@@ -16,7 +16,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   row (`03 55 40 01 <level>` on `000a:0000`, read-only), caught by a
   reporter's probe in [#163](https://github.com/HeyOkay/HaloBattery/issues/163).
   Each receiver of the family only reads the model codes proven on it.
-  The level is confirmed in the reporter's run; the charging state is still open.
+  Level and charging are both confirmed in the reporter's runs - his diagnostics
+  caught the charging frame (`03 55 40 03 ...`) while on the cable.
 
 ## [1.13.0] - 2026-09-29
 
