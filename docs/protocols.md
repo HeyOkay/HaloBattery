@@ -204,10 +204,10 @@ was read by CAM with the very same request. The flags byte 7 and the
 rest of the frame are not decoded and nothing is guessed from them. The
 conversation rides the `ffca:0001` collection (the same page OpenRGB uses for
 the wired Lift), picked by usage page. **Confirmed on hardware** by @MrBeat93:
-the level tracks CAM (one step above its smoothed panel) and charging follows
-the cable. While NZXT CAM itself is open the dongle stops answering this
-request - the app keeps the last value on a greyed icon, so live readings want
-CAM closed.
+both connections read (2.4 GHz and USB cable); the level tracks CAM (one step
+above its smoothed panel) and charging follows the cable. While NZXT CAM
+itself is open the dongle stops answering this request - the app keeps the
+last value on a greyed icon, so live readings want CAM closed.
 
 ## Mice and keyboards
 

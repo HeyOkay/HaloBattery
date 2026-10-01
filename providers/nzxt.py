@@ -55,9 +55,9 @@ both ids are asked.
 Claimed for the mouse's two ids: 1e71:2101 (the receiver) and 1e71:2129 (the
 mouse on its USB cable). The 1e71:2131 keyboard is wired and has no battery to
 read. Confirmed on hardware by the reporter of #148 (@MrBeat93): the level
-tracks, charging follows the cable. While NZXT CAM itself is open the dongle
-stops answering this request - the app then keeps the last value on a greyed
-icon (the same coexistence shape as other vendor tools).
+tracks, charging follows the cable, and both ids read. While NZXT CAM itself
+is open the dongle stops answering this request - the app then keeps the last
+value on a greyed icon (the same coexistence shape as other vendor tools).
 """
 from __future__ import annotations
 
