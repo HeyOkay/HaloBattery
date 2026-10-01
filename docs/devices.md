@@ -7,7 +7,7 @@
 | Device | Connection | Verified on hardware |
 |---|---|---|
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | no |
-| [AJAZZ AJ179 V2 MAX](protocols.md#ajazz-aj179-v2-max) | 2.4 GHz receiver | no |
+| [AJAZZ AJ179 V2 MAX](protocols.md#ajazz-aj179-v2-max) | 2.4 GHz receiver | yes |
 | [AM Infinity 8K (Angry Miao)](protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz receiver or USB cable | no |
