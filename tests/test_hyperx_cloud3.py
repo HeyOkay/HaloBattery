@@ -116,6 +116,36 @@ class Base(unittest.TestCase):
         p = H.HyperXCloud3Provider()
         return p.poll(), p.diagnostics()
 
+    def poll_fakes(self, fakes, entries):
+        """One fake per path, for the polls where two connection ids answer at once."""
+        holder = {}
+
+        class MultiDevice:
+            def open_path(self, path):
+                if path not in fakes:
+                    raise OSError("cannot open")
+                holder["impl"] = fakes[path]
+
+            def write(self, packet):
+                return holder["impl"].write(packet)
+
+            def send_feature_report(self, packet):
+                return holder["impl"].send_feature_report(packet)
+
+            def read(self, n, timeout_ms=0):
+                return holder["impl"].read(n, timeout_ms)
+
+            def error(self):
+                return holder["impl"].error()
+
+            def close(self):
+                pass
+
+        H.hid = types.SimpleNamespace(device=MultiDevice)
+        H.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
+        p = H.HyperXCloud3Provider()
+        return p.poll(), p.diagnostics()
+
 
 class WritePath(Base):
     def test_write_accepted(self):
@@ -172,12 +202,12 @@ class WritePath(Base):
 class Cloud2Core(Base):
     """#155: NGENUITY's own exchange with the Cloud II Core dongle, pinned verbatim."""
 
-    def core_entries(self, pid=0x0995):
+    def core_entries(self, pid=0x0995, tag=b""):
         # the reporter's diagnostics: the dongle on interface 3 with the consumer-control
         # and the vendor collection side by side - the vendor one is the battery endpoint
-        return [{"product_id": pid, "path": CORE_PATH_CONSUMER, "interface_number": 3,
+        return [{"product_id": pid, "path": CORE_PATH_CONSUMER + tag, "interface_number": 3,
                  "usage_page": 0x000C, "usage": 0x0001},
-                {"product_id": pid, "path": CORE_PATH_VENDOR, "interface_number": 3,
+                {"product_id": pid, "path": CORE_PATH_VENDOR + tag, "interface_number": 3,
                  "usage_page": H.USAGE_PAGE, "usage": H.USAGE}]
 
     def test_the_captured_battery_reply_reads_48(self):
@@ -199,10 +229,44 @@ class Cloud2Core(Base):
         self.assertEqual(set(d.opened), {CORE_PATH_VENDOR})   # the consumer collection is left alone
         self.assertEqual([w[1] for w in d.writes], [H.CMD_BATTERY, H.CMD_CHARGING])
 
-    def test_the_second_mode_is_read_the_same_way(self):
+    def test_the_second_mode_alone_keeps_the_shared_icon(self):
+        # one headset, one icon: the cable mode alone still reports under the shared key
         d = FakeDongle(level=48, charging=0)
         out, _ = self.poll_entries(d, self.core_entries(pid=0x0795))
-        self.assertEqual([s.key for s in out], ["hyperx:0795"])
+        self.assertEqual([s.key for s in out], ["hyperx:0995"])
+
+    def test_both_modes_answering_at_once_share_one_icon(self):
+        # #155's test-build diagnostics: while charging, both ids answer with the same
+        # values - the tray showed two identical icons, one per id
+        d595 = FakeDongle(level=49, charging=1)
+        d795 = FakeDongle(level=49, charging=1)
+        entries = self.core_entries(0x0995) + self.core_entries(0x0795, tag=b"-cable")
+        fakes = {CORE_PATH_VENDOR: d595, CORE_PATH_VENDOR + b"-cable": d795}
+        out, diag = self.poll_fakes(fakes, entries)
+        self.assertEqual([(s.key, s.name, s.level, s.charging) for s in out],
+                         [("hyperx:0995", "HyperX Cloud II Core Wireless", 49, True)])
+        self.assertTrue(any("two connection ids answered; one icon" in line
+                            for line in diag))
+
+    def test_the_charging_reading_wins_when_both_modes_answer(self):
+        # whichever id answers first, the charging reading is the one kept: the first
+        # fake here answers "not charging", the second says "charging" - the second wins
+        d795 = FakeDongle(level=40, charging=0)
+        d595 = FakeDongle(level=49, charging=1)
+        entries = self.core_entries(0x0995) + self.core_entries(0x0795, tag=b"-cable")
+        fakes = {CORE_PATH_VENDOR: d595, CORE_PATH_VENDOR + b"-cable": d795}
+        out, _ = self.poll_fakes(fakes, entries)
+        self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                         [("hyperx:0995", 49, True)])
+
+    def test_the_cloud_iii_ids_share_one_icon_too(self):
+        d = FakeDongle(level=80, charging=0)
+        entries = [{"product_id": 0x05B7, "path": PATH, "interface_number": 3,
+                    "usage_page": H.USAGE_PAGE, "usage": H.USAGE},
+                   {"product_id": 0x0C9D, "path": b"other-path", "interface_number": 3,
+                    "usage_page": H.USAGE_PAGE, "usage": H.USAGE}]
+        out, _ = self.poll_entries(d, entries)
+        self.assertEqual([s.key for s in out], ["hyperx:05b7"])
 
 
 if __name__ == "__main__":
