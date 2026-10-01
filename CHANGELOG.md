@@ -7,7 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Pulsar X2 CrazyLight Mini (`3710:5406` on its dongle, `3710:3414` on the cable): the same 17-byte command-0x04 power exchange as the other Pulsar/ATK mice, mirrored from the frames the reporter of [#164](https://github.com/HeyOkay/HaloBattery/issues/164) tested on their own hardware on both transports. The app-side reading is unverified until their test build run.
+- Pulsar X2 CrazyLight Mini (`3710:5406` on its dongle, `3710:3414` on the cable): the same 17-byte command-0x04 power exchange as the other Pulsar/ATK mice, mirrored from the frames the reporter of [#164](https://github.com/HeyOkay/HaloBattery/issues/164) tested on their own hardware on both transports. Confirmed on hardware - their run of the branch read both transports.
 
 ## [1.13.0] - 2026-09-29
 
