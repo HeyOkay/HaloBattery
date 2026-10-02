@@ -72,6 +72,12 @@ Its receiver publishes two collections and neither answers the standard Razer mo
 
 The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging)
 
+### Skullcandy PLYR, Crusher PLYR 720
+
+**Connection:** 2.4 GHz dongle (34F0:3210, 34F0:5310)
+
+Airoha's RACE protocol on the dongle's vendor collection (`ff13:0001`), from the Headroom project (patalbansishashank/Headroom, `bin/headroom_race.py`, commit 87a9892 - recovered from the Airoha SDK inside Skull-HQ's Electron bundle and confirmed on the Crusher PLYR 720) and cross-checked byte for byte against the Skull-HQ capture of the PLYR dongle in [#104](https://github.com/HeyOkay/HaloBattery/issues/104), where the app showed 70 % and the capture carries `0x46`. The battery ask is a 62-byte output report `06 07 80 05 5A 03 00 D6 0C 00`: report id 6, length 7, recipient `0x80` - the headset behind the dongle; `0x00` would address the dongle, which has no battery and refuses (the recipient byte reads as zero for dongle traffic, which is why the mistake hides) - then the RACE frame `05 5A <len> <opcode 0x0CD6> <role 0x00>`. The reply is read back as report 7: a byte stream of `05 <type> <u16le len> <u16le opcode>` frames, where the answer is a `0x5D` indication with payload `[status, role, percent]`, carried in the same report as its `0x5B` acknowledgement - so the frames after the first have to be read too. The reply carries no charging state. **Unverified** - the bytes are the two sources' own; the reporter's run is the confirmation
+
 ### SteelSeries Arctis and GameBuds (other models)
 
 **Connection:** wireless base station or dongle

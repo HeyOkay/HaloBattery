@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Skullcandy PLYR (34F0:3210) and Crusher PLYR 720 (34F0:5310): the level over their
+  dongles' Airoha RACE channel, from the Headroom project and cross-checked against the
+  Skull-HQ capture attached to [#104](https://github.com/HeyOkay/HaloBattery/issues/104).
+  Unverified until the reporter's run.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
