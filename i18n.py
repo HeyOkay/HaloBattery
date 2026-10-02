@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from locales import en, fr
+from locales import en, fr, ja, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -17,6 +17,11 @@ DEFAULT_LANGUAGE = "en"
 def one_other(count: int) -> str:
     """Plural rule for languages with singular 1 and all other integer counts."""
     return "one" if count == 1 else "other"
+
+
+def other_only(count: int) -> str:
+    """Plural rule for languages without singular/plural grammatical changes."""
+    return "other"
 
 
 def _french_plural(count: int) -> str:
@@ -30,7 +35,8 @@ class Language:
     Rules may return additional categories (e.g. few/many). Declare all of them
     in plural_forms and supply each form in the catalog's plural messages.
     Windows primary IDs match every regional variant; an empty tuple opts out
-    of automatic detection while keeping manual selection available.
+    of primary-ID detection. Exact windows_language_ids can select specific
+    regional variants while keeping manual selection available.
     """
 
     name: str
@@ -38,6 +44,7 @@ class Language:
     plural_rule: Callable[[int], str] = one_other
     windows_primary_ids: tuple[int, ...] = ()
     plural_forms: tuple[str, ...] = ("one", "other")
+    windows_language_ids: tuple[int, ...] = ()
 
 
 # Static imports above and this single registry also drive menus and validation.
@@ -45,6 +52,11 @@ LANGUAGES = {
     "en": Language("English", en.MESSAGES, windows_primary_ids=(0x09,)),
     "fr": Language("Français", fr.MESSAGES, plural_rule=_french_plural,
                    windows_primary_ids=(0x0C,)),
+    "zh-TW": Language("繁體中文", zh_TW.MESSAGES, plural_rule=other_only,
+                      plural_forms=("other",),
+                      windows_language_ids=(0x0404, 0x0C04, 0x1404, 0x7C04)),
+    "ja": Language("日本語", ja.MESSAGES, plural_rule=other_only,
+                   windows_primary_ids=(0x11,), plural_forms=("other",)),
 }
 
 
@@ -52,7 +64,8 @@ def detect_language() -> str:
     """The current user's Windows UI language, not their regional format/keyboard.
 
     GetUserDefaultUILanguage returns a LANGID. Its primary-language bits cover
-    all regional variants of a registered language.
+    all regional variants of a registered language. Exact LANGIDs allow scripts
+    such as Traditional Chinese to be selected without matching Simplified Chinese.
     https://learn.microsoft.com/windows/win32/api/winnls/nf-winnls-getuserdefaultuilanguage
     """
     if sys.platform != "win32":
@@ -66,7 +79,7 @@ def detect_language() -> str:
         if isinstance(langid, int) and not isinstance(langid, bool) and 0 < langid <= 0xFFFF:
             primary_id = langid & 0x3FF
             for code, language in LANGUAGES.items():
-                if primary_id in language.windows_primary_ids:
+                if langid in language.windows_language_ids or primary_id in language.windows_primary_ids:
                     return code
     except (AttributeError, OSError, TypeError, ValueError):
         pass
