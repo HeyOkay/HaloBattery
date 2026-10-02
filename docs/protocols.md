@@ -252,6 +252,12 @@ The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfa
 
 Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. In XInput mode these controllers are read as Xbox controllers. **Unverified** - no 8BitDo controller was on hand, so a level of 0 or above 100 is refused rather than shown
 
+### FlyDigi Vader 5 Pro
+
+**Connection:** 2.4 GHz dongle (shows up as an Xbox 360 controller) or USB cable
+
+Neither API has the level: XInput reports the battery type as "wired" for the dongle, and Windows.Gaming.Input's report is the constant remain=full=1000 placeholder, so the pad's own vendor channel is read instead. It is the collection SDL's hidapi driver keeps (usage page 0xFFA0, `37d7:2401`): a write of `00 5A A5 01 02 00` (first byte zeroed - the Vader 5 uses unnumbered reports) is answered by 32-byte reports starting `5A A5 01`, whose byte 5 is the device id (130), byte 6 the connection, bytes 15-16 the firmware and byte 11 the battery: high nibble the state (0 on battery, 1 charging, 2 charged) and low nibble the level step, x20 - the same number SDL reports for the pad. The pad's input stream shares the collection, so reads drain until the answer arrives, and a reply whose state or level step is out of range is refused rather than shown. Once the write shape this firmware answers to is confirmed on a reporter's unit, the fallback shapes are dropped. **Unverified** - no Vader was on hand; the packet shapes are SDL's driver's (SDL_hidapi_flydigi.c)
+
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)

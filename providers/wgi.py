@@ -70,6 +70,11 @@ class WgiController:
         self.level: Optional[int] = None
         if isinstance(remain, (int, float)) and isinstance(full, (int, float)) and full > 0:
             self.level = max(0, min(100, round(remain * 100 / full)))
+        # Windows synthesizes remain=full=1000 mWh for a pad whose battery it only knows
+        # as "full": the #110 dock and the Vader 4 Pro (#191, really low battery) both
+        # reported exactly this. A placeholder, not a measurement - the provider checks
+        # this before showing it as a level.
+        self.placeholder = bool(remain == 1000 and full == 1000 and raw.get("rate") is None)
         name = (raw.get("name") or "").strip()
         # "HID-compliant game controller" and its translations: a generic HID name
         if "hid" in name.lower():
