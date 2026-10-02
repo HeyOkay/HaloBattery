@@ -10,8 +10,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - MCHOSE A5 Pro Max (2023:f013 1K receiver, 2023:f015 4K receiver, 2023:f019 wired):
   a third MCHOSE exchange on a third vendor id - 64-byte feature reports, battery on
   page 0 command 0x83 - from the community web driver for this model
-  ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)). Unverified until the
-  reporter's run.
+  ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)). Confirmed by the
+  reporter's run on his 1K receiver: the level and the charging state, matching the
+  MCHOSE software.
 
 ## [1.13.0] - 2026-09-29
 
