@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The device menu's alert level now reads "Low battery alert at (this device)", so it is
+  clear that the chosen value applies to that device only and Preferences keeps the
+  default for the others ([#184](https://github.com/HeyOkay/HaloBattery/issues/184)).
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
