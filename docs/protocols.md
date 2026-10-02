@@ -208,6 +208,15 @@ HID++ 2.0 on the receiver's vendor interface: the device name (feature 0x0005) a
 
 The standard Razer commands: class `0x07` id `0x80` for the level (0-255, shown as a percentage) and id `0x84` for charging. The keyboard answers on its own control collection, not a `ff00` vendor page - the probe order's ranking is a preference, not a filter, so it reaches any collection that answers. From OpenRazer's keyboard driver: `razer_attr_read_charge_level()` reads the wireless id with transaction id `0x9F` and the wired id with `0x3F`, and `razer_get_report_params()` puts both on USB interface 2. **Unverified** - no Razer keyboard was on hand; the diagnostics name every interface/usage they try, so a dump from the reporter of #56 settles it
 
+### Razer Pro Type Ultra
+
+**Connection:** 2.4 GHz receiver (1532:027B)
+
+The standard Razer keyboard commands (see the BlackWidow V3 Pro above), read with the
+wireless keyboards' transaction id `0x9F`. Confirmed on the reporter's own unit (#196):
+the level and its own tray icon, next to a Razer Cobra Pro. The wired id (`0x0277`) is
+not read - its only external source is an open OpenRazer pull request (#2739)
+
 ## Controllers
 
 ### 8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode
