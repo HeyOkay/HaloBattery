@@ -42,14 +42,15 @@ The Redragon M991 (#183) speaks the same stack: vendor id 0x3554 is Compx's ODM
 id, shared across ATK/VXE, GravaStar, Lamzu's Atlantis generation, Teevolution/VGN
 and the Pulsar receivers - the OpenMouse package documents them as one report-8
 framing - and the reporter's dump lists the same collection shape as the R1 Pro Max
-receiver, ff02:0002 included. His receiver read is confirmed on hardware: the icon
-showed 95 %. On its cable the mouse appears as 3554:f55e ('3-mode mouse') and is
-claimed too, the way the R1 Pro Max cable id is: it lists the same vendor
-collections (the charging dump adds ff05:0000) and answers the same command 0x04
-frame, which is where the charging flag comes from while the cable is in - on the
-cable the mouse leaves the 2.4 GHz link and the receiver goes quiet, so without the
-wired id the icon simply disappeared (#183). The wired read itself is unverified
-until the reporter's re-run.
+receiver, ff02:0002 included. Both of his transports are confirmed on hardware: the
+receiver showed the level (95 %, matching his own software) and, after the cable fix,
+the icon switches to the wired mouse with the charging ring at the same level while
+the cable is in, and returns to the receiver's reading when it is unplugged. On its
+cable the mouse appears as 3554:f55e ('3-mode mouse') and is claimed the way the
+R1 Pro Max cable id is: it lists the same vendor collections (the charging dump adds
+ff05:0000) and answers the same command 0x04 frame, which is where the charging flag
+comes from - on the cable the mouse leaves the 2.4 GHz link and the receiver goes
+quiet, so without the wired id the icon simply disappeared (#183).
 
 Frames are 17 bytes, big-endian, report id 0x08:
 
