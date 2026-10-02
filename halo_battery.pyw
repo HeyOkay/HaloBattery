@@ -116,7 +116,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
-                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
+                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider, TurtleBeachProvider,
                        WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -179,6 +179,7 @@ PROVIDER_LABELS = {
     "razer": "Razer mice and headsets",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
+    "turtlebeach": "Turtle Beach headsets",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
 }
@@ -193,7 +194,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
-            SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider()]
+            SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), TurtleBeachProvider()]
 
 
 # ---------------------------------------------------------------- config

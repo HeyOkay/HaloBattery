@@ -96,6 +96,12 @@ A read-only status request `01 b0` (a 64-byte output report, report id `01`) goe
 
 The same `b0` exchange as the other Nova headsets, asked for with report id `06` instead of `00`, as HeadsetControl asks for these base stations: the level is a nine-step code in byte 6 (shown as "about NN%") and the state in byte 15 (`01` off / out of range, `02` cable charging, `08` on battery). A reply with any other state byte, a level code above 8 or fewer than 16 bytes is refused rather than shown. The request goes only to a vendor collection of these two ids; the diagnostics in #41 show `1038:12e5` exposing `ffc0:0001` on interface 4 (plus a second vendor collection `ff00:0001` there), so both are tried and the answering one is remembered. The reply layout is HeadsetControl's - not yet seen on hardware here
 
+### Turtle Beach Stealth Pro II
+
+**Connection:** 2.4 GHz transmitter (the charging dock; the headset has no USB id of its own)
+
+The same 62-byte vendor-report family as the Audeze Maxwell - output report 0x06, input report 0x07, usage page 0xFF13 - but the records are JSON documents with hex-numbered keys. The protocol is taken from a capture of Turtle Beach's own Swarm II (issue #173): the app asks for each record by name with a 62-byte output report, and the "GSI" (general status info) record - the request ends in the ASCII name `a\0SGSI` - answers with `{"OR":"GSI","KVP":{...}}` split over the next input reports, each framed `07 <len> 00 <len bytes>`. Key `240` is the battery percentage (86 in the capture, at the moment Swarm II's screen showed "86%" for the same headset) and key `220` is the headset's name. The transmitter also pushes key updates by itself (`{"UP":"GSI",...}`). **Unverified** - no Stealth Pro II was on hand; the request is the vendor app's frame byte for byte. The charging flag is not identified yet: Diagnostics prints every status record received, so a reading taken with the headset on the charging cable pins it
+
 ## Mice
 
 ### AM Infinity 8K (Angry Miao)

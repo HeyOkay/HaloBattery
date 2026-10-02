@@ -69,6 +69,12 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   the headset to speak and held back the icons of all other devices. The app now listens
   to the receiver all the time in the background, so polls do not wait, and a level the
   headset sends between polls is no longer missed.
+- Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) with
+  the protocol captured from Turtle Beach's own Swarm II (#173) - the general status
+  record's key `240` is the percentage (86 in the capture, at the moment the vendor app's
+  screen said "86%" for the same headset) and `220` the headset's name. The charging
+  flag is not identified yet; Diagnostics prints every status record received, so one
+  reading with the headset on the charging cable pins it. Unverified on hardware.
 
 ## [1.13.0] - 2026-09-29
 
