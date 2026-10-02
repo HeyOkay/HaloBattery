@@ -1863,8 +1863,45 @@ def dump_hid() -> List[str]:
     return lines
 
 
+def _probe_emit(sections):
+    """Show the probe's output.
+
+    In a console this prints. Without one - a windowed build started plainly,
+    where `print()` goes nowhere - the text goes to `HaloBattery-probe.txt`
+    next to the executable and is opened with the default editor, so a probe
+    run is never silent (this is how the first probe build looked blank in #28).
+    """
+    text = "\n".join(sections)
+    if sys.stdout is not None:
+        try:
+            print(text)
+            return None
+        except (OSError, ValueError):
+            pass
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base = os.getcwd()
+    path = os.path.join(base, "HaloBattery-probe.txt")
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    except OSError:
+        path = os.path.join(tempfile.gettempdir(), "HaloBattery-probe.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    try:
+        os.startfile(path)
+    except OSError:
+        pass
+    return path
+
+
 def probe():
     """Console mode: a single poll with verbose output."""
+    # providers can deepen their diagnostics for this run (the Corsair receiver
+    # family logs every write and every frame; see #28)
+    os.environ["HALO_PROBE"] = "1"
     # device names come from Windows and may contain any characters; a cp1252
     # console would otherwise crash on them
     for stream in (sys.stdout, sys.stderr):
@@ -1877,20 +1914,22 @@ def probe():
     app.providers = make_providers()
     app.bt = BluetoothProvider()
     res = []
+    sections = []
     for p in app.providers + [app.bt]:
         if isinstance(p, PlayStationProvider):
             p.switch_bluetooth = bool(app.cfg.get("playstation_full_mode", False))
         res += p.poll()
-        print("\n".join(p.diagnostics()))
-    print("\n=== Summary ===")
+        sections.append("\n".join(p.diagnostics()))
+    sections.append("\n=== Summary ===")
     for s in res:
-        print(describe(s))
+        sections.append(describe(s))
     if not res:
-        print("Nothing found.")
+        sections.append("Nothing found.")
     # always list every HID device: the case worth dumping is a device that did
     # not answer while others did, and that never reaches the branch above
-    print("\nAll HID devices:")
-    print("\n".join(dump_hid()))
+    sections.append("\nAll HID devices:")
+    sections.append("\n".join(dump_hid()))
+    _probe_emit(sections)
 
 
 def main():
