@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A sleeping Pulsar / ATK / VXE mouse keeps its place in the tray (the last reading,
+  greyed out) instead of leaving it, and it is re-read as soon as the PC is used again -
+  on the first input after a pause, and also while input keeps coming, which is what
+  touchpad use looks like (#87). Reported with hardware measurements by @huyxs2005.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
