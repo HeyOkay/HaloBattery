@@ -109,7 +109,7 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 
 - **Rename…**: give the device your own name (for example, two controllers with the same name). **Reset name** goes back to the device's own name.
 - **Icon**: pick the pictogram of this device (Automatic, Mouse, Keyboard, Headset, Controller or Bluetooth), for example a controller over Bluetooth that shows the Bluetooth pictogram.
-- **Low battery alert at**: an alert level for this device only (off, 10–30%), or **Default** to follow Preferences. The red ring follows it too.
+- **Low battery alert at (this device)**: an alert level for this device only (off, 10–30%), or **Default** to follow Preferences. The red ring follows it too.
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**
 - **Preferences**:
