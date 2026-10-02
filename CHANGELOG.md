@@ -7,6 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- The device menu's alert level now reads "Low battery alert at (this device)", so it is
+  clear that the chosen value applies to that device only and Preferences keeps the
+  default for the others ([#184](https://github.com/HeyOkay/HaloBattery/issues/184)).
+
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
   and CONTRIBUTING.md into `.github/`. The README now fits on one screen; the full list of
