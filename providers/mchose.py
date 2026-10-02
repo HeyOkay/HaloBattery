@@ -60,10 +60,11 @@ length 2 at byte 3, page 0 at byte 4 and command 0x83 at byte 5; the reply is th
 back, starting with the 0xA1 marker and echoing page and command at its bytes 4 and 5, with
 charging in byte 6 (non-zero) and the level in byte 7 - clamped to 100, exactly as the
 reference clamps it. The reference writes once, waits its 34 ms, then reads back up to eight
-times with one re-send in the middle; silent means the mouse is asleep. **Unverified until the
-reporter of #149 runs it** - his diagnostics pin the receiver (2023:f013, product string
-'MCHOSE A5 2.4G', vendor collections ffa0:0001 and ffff:0001 on interface 1, ffff:0000 on
-interface 2).
+times with one re-send in the middle; silent means the mouse is asleep. **Confirmed on the
+reporter's hardware** (@Pekish992, #149): his run showed 22 % and then 25 % while charging,
+matching the MCHOSE software and its charging animation. His diagnostics pinned the receiver
+(2023:f013, product string 'MCHOSE A5 2.4G', vendor collections ffa0:0001 and ffff:0001 on
+interface 1, ffff:0000 on interface 2); the 4K receiver and the wired ids are still untried.
 
 Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
