@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from locales import en, fr, ja, zh_TW
+from locales import en, fr, ja, zh_CN, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -55,6 +55,9 @@ LANGUAGES = {
     "zh-TW": Language("繁體中文", zh_TW.MESSAGES, plural_rule=other_only,
                       plural_forms=("other",),
                       windows_language_ids=(0x0404, 0x0C04, 0x1404, 0x7C04)),
+    "zh-CN": Language("简体中文", zh_CN.MESSAGES, plural_rule=other_only,
+                      plural_forms=("other",),
+                      windows_language_ids=(0x0804, 0x1004, 0x0004, 0x7804)),
     "ja": Language("日本語", ja.MESSAGES, plural_rule=other_only,
                    windows_primary_ids=(0x11,), plural_forms=("other",)),
 }

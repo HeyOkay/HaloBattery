@@ -87,7 +87,7 @@ Look at the open issues and pull requests first, so that two people do not do th
 ## 4. Add or update a translation
 
 Application messages live in `locales/en.py` (the reference and fallback) and
-`locales/fr.py`, `locales/zh_TW.py` and `locales/ja.py`. They are ordinary Python
+`locales/fr.py`, `locales/zh_TW.py`, `locales/zh_CN.py` and `locales/ja.py`. They are Python
 modules, bundled by PyInstaller without additional dependencies or a translation
 compilation step.
 
@@ -105,7 +105,8 @@ compilation step.
   language available only by manual selection. Use `windows_language_ids` for
   exact LANGIDs when only specific regional variants should match. Traditional
   Chinese matches Taiwan, Hong Kong, Macao and Traditional Chinese neutral IDs;
-  Simplified Chinese remains unsupported and falls back to English. Chinese and
+  Simplified Chinese matches China, Singapore and Simplified Chinese neutral IDs.
+  Chinese and
   Japanese declare only `other`, using the `other_only` plural rule. English remains
   the default and fallback regardless of registry order.
 - Keep message keys, named format parameters (`{name}`, `{level}`, etc.), and the
@@ -127,7 +128,8 @@ compilation step.
 
 The app detects the Windows **UI language**, not the regional format or keyboard,
 only when no language is saved. French regional variants select `fr`, Japanese
-selects `ja`, and supported Traditional Chinese LANGIDs select `zh-TW`. Unsupported
+selects `ja`, Traditional Chinese LANGIDs select `zh-TW`, and Simplified Chinese
+LANGIDs select `zh-CN`. Unsupported
 languages or a failed detection select `en`. Preferences > Language / Langue
 overrides that initial selection immediately and persists `language` in
 `%APPDATA%\HaloBattery\config.json`. A stored invalid value falls back to English
