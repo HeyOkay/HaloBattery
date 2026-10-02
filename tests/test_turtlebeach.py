@@ -48,6 +48,16 @@ PUSH_290 = bytes.fromhex("073b00000000000061186232ef2101ff"
 
 EMPTY = bytes([0x07] + [0] * 61)
 
+# The request Swarm II sent for the GSI record, byte for byte (packet 616 of the capture):
+# output report 6, 62 bytes. Byte 1 counts the 24 content bytes from byte 3 up to and
+# including the record name at bytes 21-26 - the first test build had the name one byte
+# early, and the transmitter ignored it (idle frames only).
+CAPTURE_ASK = bytes.fromhex(
+    "061800055a1400029948014414040000"
+    "00000000006100534753490000000000"
+    "00000000000000000000000000000000"
+    "0000000000000000000000000000")
+
 
 def frame(payload: bytes) -> bytes:
     """A reply as the transmitter frames one: 07 <len> 00 <payload>, padded to 62."""
@@ -95,18 +105,17 @@ class TurtleBeachTests(unittest.TestCase):
     def test_the_capture_answers_86_percent(self):
         res = self.p.poll()
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.kind) for s in res],
-                         [("turtlebeach:SN123", "Turtle Beach Stealth Pro II",
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II",
                            86, False, True, "headset")])
 
-    def test_the_ask_is_the_vendor_apps_frame(self):
+    def test_the_ask_is_the_capture_request_byte_for_byte(self):
+        self.assertEqual(turtlebeach.ASK_GSI, CAPTURE_ASK)
+        self.assertEqual(CAPTURE_ASK[0], 0x06)                   # output report 6
+        self.assertEqual(CAPTURE_ASK[1], 24)                     # length, bytes 3..26
+        self.assertEqual(CAPTURE_ASK[12:14], bytes([0x14, 0x04]))   # the request token
+        self.assertEqual(CAPTURE_ASK[21:27], b"a\x00SGSI")      # the record name
         self.p.poll()
-        self.assertEqual(len(self.transmitter.written), 1)
-        ask = self.transmitter.written[0]
-        self.assertEqual(len(ask), 62)
-        self.assertEqual(ask[0], 0x06)                      # output report 6
-        self.assertEqual(ask[12:14], bytes([0x14, 0x04]))    # the request token
-        self.assertEqual(ask[20:27], bytes.fromhex("61005347534900"))   # "a\0SGSI\0"
-        self.assertEqual(ask, turtlebeach.ASK_GSI)
+        self.assertEqual(self.transmitter.written, [CAPTURE_ASK])
 
     def test_the_frames_of_the_capture_strip_and_parse(self):
         blob = turtlebeach.strip_frames(GSI_REPLY)
@@ -139,7 +148,7 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
 
     def test_an_unknown_product_id_is_not_talked_to(self):
-        self.infos = ifaces(pid=0x229E)
+        self.infos = ifaces(pid=0x229C)
         self.assertEqual(self.p.poll(), [])
         self.assertEqual(self.transmitter.written, [])
         self.assertTrue(any("not a known model" in line for line in self.p.diagnostics()))
@@ -150,6 +159,34 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
         self.assertEqual(self.transmitter.written, [])
         self.assertTrue(any("no vendor collection" in line for line in self.p.diagnostics()))
+
+    def test_the_cable_and_the_transmitter_share_one_icon(self):
+        # both attached: the transmitter answers first (pid order) and there is one icon
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II", 86)])
+
+    def test_the_cable_alone_is_enough(self):
+        self.infos = ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level, s.kind) for s in res],
+                         [("turtlebeach:stealthpro2", 86, "headset")])
+
+    def test_a_silent_pair_shows_the_headset_without_a_level(self):
+        self.transmitter.queue = []
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level, s.online) for s in res],
+                         [("turtlebeach:stealthpro2", None, True)])
+
+    def test_a_silent_transmitter_still_shows_the_cables_reading(self):
+        # the transmitter is muted (the headset is off its link) but the cable answers
+        self.transmitter.queue = [EMPTY] * turtlebeach.MAX_READS + GSI_REPLY
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level) for s in res],
+                         [("turtlebeach:stealthpro2", 86)])
 
 
 class ParserTests(unittest.TestCase):

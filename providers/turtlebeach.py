@@ -21,12 +21,18 @@ renamed it to in Swarm II; "My Headset" out of the box). Each input report is fr
 the JSON scan. The transmitter also pushes key updates by itself (``{"UP":"GSI",...}``
 with only the changed keys), so a poll that reads a push carries it as well.
 
-Reading sends the app's own GSI request, byte for byte; the request token after ``01 44``
-(the capture's is ``14 04``) comes back echoed in the answer's envelope. The write is only
-ever sent to the product ids in KNOWN and only to a vendor collection.
+Reading sends the app's own GSI request, byte for byte: its length byte counts the 24
+content bytes from byte 3 up to and including the record name at bytes 21-26, and the
+request token after ``01 44`` comes back echoed in the answer's envelope. The transmitter
+answered within a few 60 ms polls in the capture. The write is only ever sent to the
+product ids in KNOWN and only to a vendor collection.
 
-Unverified on hardware: no Stealth Pro II here, and the request is only known to have been
-sent by the vendor's app so far. The tests pin the parser to the capture's frames.
+The headset itself, plugged in by its USB cable, enumerates as 10f5:229e with the same
+vendor collection and is read the same way; both are one icon (FAMILY_KEY).
+
+Unverified on hardware: no Stealth Pro II here. The first test build's request was one byte
+short of the capture's and the transmitter ignored it - idle frames only, exactly what the
+reporter saw. The constant is now byte-identical to packet 616, pinned by a test.
 
 The charging flag is not identified yet: the capture has the headset off the cable, and
 none of the other GSI keys can be told apart as a charging state from one reading.
@@ -48,10 +54,16 @@ TURTLEBEACH_VID = 0x10F5
 
 # PID -> name. 0x229B is the Stealth Pro II's transmitter; during a plug-in it enumerates
 # twice (the first pass, dev 14 in the capture, has no ff13 collection yet), and only the
-# full enumeration is read.
+# full enumeration is read. 0x229E is the headset itself on its USB cable - the same
+# records over the same collection.
 KNOWN = {
     0x229B: "Turtle Beach Stealth Pro II",
+    0x229E: "Turtle Beach Stealth Pro II",
 }
+
+# One icon for the model: the transmitter and the headset on its own cable are the same
+# headset (the rule the Cloud II / Cloud III work set), and either source alone is enough.
+FAMILY_KEY = "turtlebeach:stealthpro2"
 
 VENDOR_USAGE_PAGE = 0xFF13
 VENDOR_USAGE = 0x0001
@@ -61,11 +73,13 @@ REPORT_ID_IN = 0x07
 PACKET_DELAY = 0.060      # the cadence of the vendor app's own asks (and HeadsetControl's)
 MAX_READS = 16            # the GSI record arrived within 4-5 replies in the capture
 
-# Swarm II's request for the GSI record, as captured; the tail is the ASCII name the app
-# addresses records by ("a\0SGSI" = ask SGSI). Only ever sent to the product ids in KNOWN.
+# Swarm II's request for the GSI record, as captured (packet 616): output report 6, 62
+# bytes. Byte 1 is the content length (24), counted from byte 3 up to and including the
+# record name; the name sits at bytes 21-26 ("a\0SGSI" = ask SGSI) and byte 27 is 0.
+# Only ever sent to the product ids in KNOWN.
 ASK_GSI = bytes.fromhex(
     "061800055a1400029948014414040000"
-    "00000000610053475349000000000000"
+    "00000000006100534753490000000000"
     "00000000000000000000000000000000"
     "0000000000000000000000000000"
 )
@@ -194,10 +208,12 @@ class TurtleBeachProvider(Provider):
         name = None
         try:
             try:
-                dev.write(ASK_GSI)
+                sent = dev.write(ASK_GSI)
             except (OSError, ValueError) as e:
                 self._diag.append(f"    write: {e}")
                 return None, None
+            if sent != len(ASK_GSI):
+                self._diag.append(f"    write returned {sent} of {len(ASK_GSI)} bytes")
             for _ in range(MAX_READS):
                 time.sleep(PACKET_DELAY)
                 try:
@@ -243,7 +259,7 @@ class TurtleBeachProvider(Provider):
                 continue
             groups.setdefault((pid, d.get("serial_number") or ""), []).append(d)
 
-        out: List[DeviceStatus] = []
+        levels: List[Optional[int]] = []
         for (pid, serial), ifaces in sorted(groups.items()):
             name = KNOWN.get(pid) or (ifaces[0].get("product_string") or
                                       f"TurtleBeach {pid:04x}").strip()
@@ -267,12 +283,20 @@ class TurtleBeachProvider(Provider):
                     level, _ = self._read_status(d["path"])
                     if level is not None:
                         break
-            # No charging flag yet (see the module docstring), so the icon never claims a
-            # charge. A None level shows the headset without a percentage - the signal
-            # that it was seen but its level could not be read.
-            out.append(DeviceStatus(f"turtlebeach:{serial}", name, level, False, True,
-                                    "turtlebeach", kind="headset"))
-        return out
+            levels.append(level)
+
+        if not levels:
+            return []
+        # One icon for the model (#155/#192): whether the transmitter or the headset's own
+        # cable answers, it is the same headset; the first (in pid order) that carries a
+        # level wins. No charging flag yet (see the module docstring), so the icon never
+        # claims a charge. A None level shows the headset without a percentage - the
+        # signal that it was seen but its level could not be read.
+        shown = next((lv for lv in levels if lv is not None), None)
+        self._diag.append("  -> " + FAMILY_KEY + (f": {shown}%" if shown is not None
+                                                   else ": no level from any source"))
+        return [DeviceStatus(FAMILY_KEY, "Turtle Beach Stealth Pro II", shown, False, True,
+                             "turtlebeach", kind="headset")]
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
