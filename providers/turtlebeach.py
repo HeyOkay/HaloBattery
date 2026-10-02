@@ -21,18 +21,23 @@ renamed it to in Swarm II; "My Headset" out of the box). Each input report is fr
 the JSON scan. The transmitter also pushes key updates by itself (``{"UP":"GSI",...}``
 with only the changed keys), so a poll that reads a push carries it as well.
 
-Reading sends the app's own GSI request, byte for byte: its length byte counts the 24
-content bytes from byte 3 up to and including the record name at bytes 21-26, and the
-request token after ``01 44`` comes back echoed in the answer's envelope. The transmitter
-answered within a few 60 ms polls in the capture. The write is only ever sent to the
-product ids in KNOWN and only to a vendor collection.
+Reading replays the app's own asks, byte for byte: first the session opener (the "SInf"
+ask, capture packet 150) - the device answers it with its whole state dump within about
+30 ms (packets 151-168), and a record ask outside that session is met with idle frames
+only, which is exactly what the first test builds saw on real hardware. Then the GSI ask
+(packet 616): its length byte counts the 24 content bytes from byte 3 up to and
+including the record name at bytes 21-26, and the request token after ``01 44`` comes
+back echoed in the answer's envelope. The write is only ever sent to the product ids in
+KNOWN and only to a vendor collection.
 
 The headset itself, plugged in by its USB cable, enumerates as 10f5:229e with the same
 vendor collection and is read the same way; both are one icon (FAMILY_KEY).
 
-Unverified on hardware: no Stealth Pro II here. The first test build's request was one byte
-short of the capture's and the transmitter ignored it - idle frames only, exactly what the
-reporter saw. The constant is now byte-identical to packet 616, pinned by a test.
+Unverified on hardware: no Stealth Pro II here. Two test builds on the reporter's unit
+changed what is known: build 1's request was one byte short of the capture's, and build
+2's byte-identical ask still got idle frames only - because it went out cold, without the
+SInf opener. Both asks are now byte-identical to the capture, and a test pins their
+offsets and tokens.
 
 The charging flag is not identified yet: the capture has the headset off the cable, and
 none of the other GSI keys can be told apart as a charging state from one reading.
@@ -72,6 +77,7 @@ MSG_SIZE = 62
 REPORT_ID_IN = 0x07
 PACKET_DELAY = 0.060      # the cadence of the vendor app's own asks (and HeadsetControl's)
 MAX_READS = 16            # the GSI record arrived within 4-5 replies in the capture
+SINF_READS = 10           # the state dump came as 8 frames within 30 ms in the capture
 
 # Swarm II's request for the GSI record, as captured (packet 616): output report 6, 62
 # bytes. Byte 1 is the content length (24), counted from byte 3 up to and including the
@@ -80,6 +86,22 @@ MAX_READS = 16            # the GSI record arrived within 4-5 replies in the cap
 ASK_GSI = bytes.fromhex(
     "061800055a1400029948014414040000"
     "00000000006100534753490000000000"
+    "00000000000000000000000000000000"
+    "0000000000000000000000000000"
+)
+
+# The same ask with the token a fresh session would use: the capture's 44-type asks
+# carry (0x10 + n, n) with n counting them (280 is the first, `11 01`; packet 616 is
+# the fourth, `14 04`), so when the captured token is not the one a new session takes,
+# this is the shape it starts at. Both were tried against the device in turn.
+ASK_GSI_FRESH = ASK_GSI[:12] + bytes([0x11, 0x01]) + ASK_GSI[14:]
+
+# Swarm II's first ask, "SInf" (session info), byte for byte from capture packet 150;
+# the device answers it with its whole state dump, and without it a record ask is met
+# with idle frames only (#173, test builds 1 and 2).
+ASK_SINF = bytes.fromhex(
+    "061800055a140002994801c04a010000"
+    "0000000000610053496e660000000000"
     "00000000000000000000000000000000"
     "0000000000000000000000000000"
 )
@@ -207,28 +229,38 @@ class TurtleBeachProvider(Provider):
         level = None
         name = None
         try:
-            try:
-                sent = dev.write(ASK_GSI)
-            except (OSError, ValueError) as e:
-                self._diag.append(f"    write: {e}")
-                return None, None
-            if sent != len(ASK_GSI):
-                self._diag.append(f"    write returned {sent} of {len(ASK_GSI)} bytes")
-            for _ in range(MAX_READS):
-                time.sleep(PACKET_DELAY)
-                try:
-                    frame = dev.get_input_report(REPORT_ID_IN, MSG_SIZE)
-                except (OSError, ValueError) as e:
-                    self._diag.append(f"    read: {e}")
-                    break
-                if frame:
-                    frames.append(bytes(frame))
-                level, name = status_from_documents(json_documents(strip_frames(frames)))
+            # the session opener first, then the GSI ask; the dump may already carry
+            # the level (a pushed 240), in which case no record ask is needed
+            for tag, request, reads in (("SInf", ASK_SINF, SINF_READS),
+                                        ("GSI", ASK_GSI, MAX_READS),
+                                        ("GSI fresh token", ASK_GSI_FRESH, MAX_READS)):
                 if level is not None:
                     break
+                try:
+                    sent = dev.write(request)
+                except (OSError, ValueError) as e:
+                    self._diag.append(f"    {tag} write: {e}")
+                    return level, name
+                if sent != len(request):
+                    self._diag.append(f"    {tag} write returned {sent} of {len(request)} bytes")
+                    continue
+                got = 0
+                for _ in range(reads):
+                    time.sleep(PACKET_DELAY)
+                    try:
+                        frame = dev.get_input_report(REPORT_ID_IN, MSG_SIZE)
+                    except (OSError, ValueError) as e:
+                        self._diag.append(f"    {tag} read: {e}")
+                        break
+                    if frame:
+                        frames.append(bytes(frame))
+                        got += 1
+                    level, name = status_from_documents(json_documents(strip_frames(frames)))
+                    if level is not None:
+                        break
+                self._diag.append(f"    {tag}: {got} replies")
             if level is not None:
-                self._diag.append(f"    {len(frames)} replies, "
-                                  f"{name or 'the headset'!r}: {level}%")
+                self._diag.append(f"    -> {name or 'the headset'!r}: {level}%")
             else:
                 self._diag.append(f"    no GSI record in {len(frames)} replies"
                                   + (f", last: {hexdump(frames[-1])}" if frames else ""))
