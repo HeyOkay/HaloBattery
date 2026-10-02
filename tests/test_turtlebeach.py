@@ -186,6 +186,15 @@ class TurtleBeachTests(unittest.TestCase):
                                             EMPTY, GSI_REPLY[2], GSI_REPLY[3]]}
         self.assertEqual([s.level for s in self.p.poll()], [86])
 
+    def test_the_status_record_is_printed_for_the_diagnostics(self):
+        # round 4: the whole record on a successful read, so a run on the cable can
+        # be compared key by key with one on battery (#173)
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        self.p.poll()
+        lines = [l for l in self.p.diagnostics() if "status record" in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn('"240":"86"', lines[0])
+
     def test_a_pushed_update_carries_the_level_too(self):
         self.transmitter.queues = {(1, 2): [frame(b'{"UP":"GSI","KVP":{"240":"84"}}')]}
         self.assertEqual([s.level for s in self.p.poll()], [84])
