@@ -206,6 +206,18 @@ def status_from_documents(docs) -> Tuple[Optional[int], Optional[str]]:
     return level, name
 
 
+def _status_record(frames) -> Optional[dict]:
+    """The newest status document of a read, for the diagnostics: printing the whole
+    record on a successful read is what lets two runs - on battery and on the cable -
+    be compared key by key, so the charging key can be told apart from the rest."""
+    docs = json_documents(strip_frames(frames))
+    for doc in reversed(docs):
+        kvp = doc.get("KVP")
+        if isinstance(kvp, dict) and (GSI_KEY_LEVEL in kvp or GSI_KEY_NAME in kvp):
+            return doc
+    return docs[-1] if docs else None
+
+
 def is_vendor_interface(d: dict) -> bool:
     return d.get("usage_page") == VENDOR_USAGE_PAGE and d.get("usage", 0) == VENDOR_USAGE
 
@@ -261,6 +273,10 @@ class TurtleBeachProvider(Provider):
                 self._diag.append(f"    {tag}: {got} replies")
             if level is not None:
                 self._diag.append(f"    -> {name or 'the headset'!r}: {level}%")
+                record = _status_record(frames)
+                if record is not None:
+                    self._diag.append("    status record: "
+                                      + json.dumps(record, separators=(",", ":")))
             else:
                 self._diag.append(f"    no GSI record in {len(frames)} replies"
                                   + (f", last: {hexdump(frames[-1])}" if frames else ""))
