@@ -244,6 +244,15 @@ The standard Razer commands (class `0x07` id `0x80` for the level, 0-255 shown a
 
 The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfaces from OpenRazer's keyboard driver: DeathStalker V2 Pro 1532:0290 (receiver, `0x9F`, interface 2) and 1532:0292 (cable, `0x1F`, interface 3); BlackWidow V3 Mini HyperSpeed 1532:0271 / 0258 and BlackWidow V4 Mini HyperSpeed 1532:02BA / 02B9 (`0x9F` / `0x1F`, both on interface 3); BlackWidow V4 Tenkeyless HyperSpeed 1532:02D5 (receiver, `0x9F`, interface 2) and 1532:02D7 (cable, `0x1F`, interface 3). **Unverified** - only the DeathStalker V2 Pro TKL has been tested on hardware so far
 
+### Razer Pro Type Ultra
+
+**Connection:** 2.4 GHz receiver (1532:027B)
+
+The standard Razer keyboard commands (see the BlackWidow V3 Pro above), read with the
+wireless keyboards' transaction id `0x9F`. Confirmed on the reporter's own unit (#196):
+the level and its own tray icon, next to a Razer Cobra Pro. The wired id (`0x0277`) is
+not read - its only external source is an open OpenRazer pull request (#2739)
+
 ## Controllers
 
 ### 8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode
