@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import hidlist, wgi
+from . import flydigi, hidlist, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -287,6 +287,19 @@ class XInputProvider(Provider):
                                   f"{len(slots)} slot(s): not paired, the XInput levels are used")
             reports = []
 
+        # FlyDigi pads answer neither API well: over its 2.4 GHz dongle the Vader 5 Pro's
+        # XInput battery type is "wired" (the dongle looks like a cable) and its
+        # Windows.Gaming.Input report is the constant remain=full=1000 placeholder, so
+        # both paths had nothing real (#191). The pad itself answers on its 0xFFA0
+        # vendor collection - the channel SDL's driver keeps - read that. Only when one
+        # pad and one slot are involved, where the pairing is exact.
+        flydigi_reading = None
+        if len(slots) == 1:
+            try:
+                flydigi_reading = flydigi.read_connected(self._diag)
+            except Exception as e:     # a broken pad path must not blind XInput
+                self._diag.append(f"[Flydigi] {e}")
+
         # separately: one of them failing must not blind the other
         try:
             paths = hidlist.interface_paths()
@@ -317,6 +330,11 @@ class XInputProvider(Provider):
         vias = {}
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
+            if rep is not None and rep.placeholder and not rep.charging:
+                # remain=full=1000 is Windows' placeholder for "the pad reports full", not
+                # a measurement: it said 100% for a Vader 4 Pro whose battery light was
+                # flashing low (#191). Fall through to what actually answers.
+                rep = None
             if rep is None and base_vid is not None and base_vid in bt_only:
                 # Windows.Gaming.Input said nothing, but every HID interface this vendor
                 # has sits on a Bluetooth path: the controller is on Bluetooth, which
@@ -327,6 +345,15 @@ class XInputProvider(Provider):
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
             name = (rep.name if rep and rep.name else None) or base_name
+            if flydigi_reading is not None:
+                # the pad's own report: level, charging state and its name
+                name = flydigi_reading.name
+                self._waiting.pop(slot, None)
+                if not flydigi_reading.charging:
+                    self._last[slot] = flydigi_reading.level
+                connected.append((slot, name, flydigi_reading.level, flydigi_reading.charging,
+                                  flydigi_reading.approx))
+                continue
             # the path test alone missed an Xbox One S (045e:02fd) whose path had no
             # Bluetooth service guid: its report (remain=100 of full=1000) then showed as
             # "10%" whenever "Windows Bluetooth devices" was off (#97, #108)
