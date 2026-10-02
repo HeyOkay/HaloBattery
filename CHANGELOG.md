@@ -24,7 +24,9 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   folder in use.
 - Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) or
   the headset's own USB cable, with the protocol captured from Turtle Beach's own Swarm II
-  (#173) - the general status record's key `240` is the percentage (86 in the capture, at
+  (#173); the transmitter's own session opener is replayed first - a record ask outside
+  that session gets idle frames only, as two test builds on real hardware showed - and
+  the general status record's key `240` is the percentage (86 in the capture, at
   the moment the vendor app's screen said "86%" for the same headset) and `220` the
   headset's name; the two share one icon. The charging flag is not identified yet;
   Diagnostics prints every status record received, so one reading with the headset on the
