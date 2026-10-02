@@ -115,6 +115,10 @@ KNOWN = {
     # goes only to 0x025A.
     0x025A: ("Razer BlackWidow V3 Pro", 0x3F),
     0x025C: ("Razer BlackWidow V3 Pro", 0x9F),
+    # The Pro Type Ultra's 2.4 GHz receiver (#196): level and icon confirmed on the
+    # reporter's own unit with the wireless keyboards' id 0x9F. Its wired id (0x0277)
+    # is not listed - the only source for it is an open OpenRazer pull request (#2739).
+    0x027B: ("Razer Pro Type Ultra", 0x9F),
 }
 
 TRANSACTION_IDS = (0x1F, 0x3F, 0xFF, 0x9F, 0x08)

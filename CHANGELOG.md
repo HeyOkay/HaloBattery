@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Razer Pro Type Ultra (`0x027B`): battery level on its 2.4 GHz receiver, confirmed on
+  @dawn-shao's own unit (#196).
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
