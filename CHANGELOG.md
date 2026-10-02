@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- HyperX Cloud II Wireless, the Kingston-branded revision (`0951:1718`): the same
+  headset speaks a longer exchange than the HP-branded dongles (62-byte
+  `06 00 02 00 9A ... BB <cmd>` requests, report `0x0B` replies), from three reference
+  projects that agree byte for byte
+  ([#192](https://github.com/HeyOkay/HaloBattery/issues/192)). Confirmed on the
+  reporter's hardware.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

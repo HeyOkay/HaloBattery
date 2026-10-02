@@ -30,7 +30,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](docs/protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [Hitscan Hyperlight](docs/protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
 | [HyperX Cloud Alpha 2](docs/protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
-| [HyperX Cloud II Wireless](docs/protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
+| [HyperX Cloud II Wireless](docs/protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle (`03F0:0696`, `03F0:018B`; Kingston `0951:1718`) | yes |
 | [HyperX Cloud III Wireless](docs/protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](docs/protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](docs/protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
