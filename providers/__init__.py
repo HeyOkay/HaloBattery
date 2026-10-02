@@ -24,3 +24,4 @@ from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
 from .lamzu import LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
+from .skullcandy import SkullcandyProvider  # noqa: F401
