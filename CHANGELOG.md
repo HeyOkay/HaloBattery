@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Rapoo VT7 (Gen-2) mouse on its 2.4 GHz receiver (`24AE:1413`) and Rapoo V700DIY-98 keyboard (`24AE:4824`): both push their own status on input report 7 - state in byte 6 (1 on battery, 2 charging) and the level in byte 7 - and nothing is ever written to them. The report shape is from Rapoo's own web driver (hub.rapoo.com, the VT Gen-2 series driver); the app itself is **Unverified** until the reporter's test build run in [#193](https://github.com/HeyOkay/HaloBattery/issues/193)
+- MCHOSE V9 Turbo+ headset (`3837:6008` dongle, `3837:600A` headset): M HUB's own audio read - an AA-framed request on output report 0x55, command 0x0B - with the `65 01` status frame as the fallback, both status reads only, and the headset and its dongle sharing one icon. From M HUB's bundle (decoded for [#189](https://github.com/HeyOkay/HaloBattery/issues/189)) and a community V9 driver; **Unverified** until the reporter's run in [#193](https://github.com/HeyOkay/HaloBattery/issues/193)
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its

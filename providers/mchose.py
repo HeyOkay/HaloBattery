@@ -51,9 +51,22 @@ than by model list, which is what this provider does as well. The diagnostics in
 0xFF01:0x01 on interface 2) have exactly that shape, and the reference documents the status
 read on the *short* 0x11 report, so both report ids are tried before a poll gives up.
 
-Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
+The V9 Turbo+ headset (issue #193) is an audio product on the same 0x3837 vendor id, and
+M HUB's own driver reads it differently from the mice: for names on its audio list it sends an
+AA-framed request on output report 0x55 (cmd 0x0B) and decodes the reply's payload as
+``sleepState, bit7 charging | percent``; the non-audio devices get the 63-byte ``65 01`` frame
+on the same report reported as level byte 1 / state byte 2 (2 discharging, 3 charging, 4 full,
+26 asleep) in issue #189. A community driver for a V9 headset (github.com/JoaoKSS/
+MCHOSE_v9_PRO_Controller) reads its battery with that same ``65 01`` frame, one 64-byte write
+and one read, so both are tried here, the AA frame first as in M HUB. The headset presents as
+two devices over one product - the headset itself (3837:600A, C-Media strings) and its dongle
+(3837:6008, WCH strings) - so both sides of that pair share one icon.
+
+Not verified: the 0x3837 family (the device in issue #4 is not here), other models, the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
-in every reading so far).
+in every reading so far), and the V9 Turbo+ itself - the audio exchange is from M HUB's own
+driver and a sister-model community project, but the headset has not run against this
+provider yet.
 """
 from __future__ import annotations
 
@@ -86,6 +99,26 @@ G7_LEVEL_BYTE = 8
 G7_CHARGE_BYTE = 9
 G7_READS = 25                 # a non-blocking read loop, ~0.5 s at G7_READ_GAP
 G7_READ_GAP = 0.02
+
+# The V9 Turbo+ headset (issue #193): one product over two USB devices.
+HEADSET_DONGLE_PID = 0x6008
+HEADSET_BODY_PID = 0x600A
+HEADSET_PIDS = (HEADSET_DONGLE_PID, HEADSET_BODY_PID)
+HEADSET_PAIR = {0x6008: 0x6008, 0x600A: 0x6008}   # a dongle and a headset, one icon
+AUDIO_REPORT = 0x55
+AUDIO_LEN = 63                # payload bytes; the report id rides in front of them
+AUDIO_CMD_BATTERY = 0x0B
+# M HUB's own request for the battery: start 0xAA, version 1, checksum off (flags 0),
+# length (payload + 1) 1, cmdType Request [0, 1], cmd 0x0B, checksum slot 0
+AUDIO_REQUEST = bytes([0xAA, 0x01, 0x00, 0x01, 0x00, 0x01, AUDIO_CMD_BATTERY, 0x00]).ljust(AUDIO_LEN, b"\x00")
+# the status read the sister-model community driver uses, same report
+STATUS_REQUEST = bytes([0x65, 0x01]).ljust(AUDIO_LEN, b"\x00")
+STATUS_DISCHARGING = 2
+STATUS_CHARGING = 3
+STATUS_FULL = 4
+STATUS_ASLEEP = 26
+HEADSET_ATTEMPTS = 2
+HEADSET_READ_MS = 400         # a tucked-in device answers in milliseconds
 
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
@@ -168,15 +201,92 @@ def parse_g7(resp) -> Optional[Tuple[int, bool]]:
     return level, bool(r[G7_CHARGE_BYTE])
 
 
+def audio_checksum_ok(frame: bytes) -> bool:
+    """M HUB's frame check: flags, length, cmdType, cmd and payload XORed together.
+
+    The reference computes the checksum only when the frame's flags say it is on
+    (flags == 1); a frame that says it is off must carry 0 there.
+    """
+    if len(frame) < 8:
+        return False
+    flags, length = frame[2], frame[3]
+    if length < 1 or len(frame) < 7 + length:
+        return False
+    acc = flags ^ length ^ frame[4] ^ frame[5] ^ frame[6]
+    for b in frame[7:7 + length - 1]:
+        acc ^= b
+    expected = acc if flags == 1 else 0
+    return frame[7 + length - 1] == expected
+
+
+def parse_audio(resp) -> Optional[Tuple[Optional[int], bool]]:
+    """(level, charging) from an AA-framed battery reply on report 0x55, or None.
+
+    Layout from M HUB's own senders (cmdType Response [0, 1], cmd 0x0B) and its
+    battery parser: the payload is ``sleepState`` then ``bit7 charging | percent``.
+    A sleeping headset answers with sleepState 0, which comes back as a level of
+    None so the caller can grey the icon out instead of showing a number.
+    """
+    if not resp or len(resp) < 11:
+        return None
+    data = bytes(resp)
+    if data[0] != AUDIO_REPORT or data[1] != 0xAA:
+        return None
+    if data[5] != 0x00 or data[6] != 0x01 or data[7] != AUDIO_CMD_BATTERY:
+        return None
+    if not audio_checksum_ok(data[1:]):
+        return None
+    length = data[4]
+    if length < 3:
+        return None
+    payload = data[8:8 + length - 1]
+    if payload[0] == 0:
+        return None, False
+    percent = payload[1] & 0x7F
+    if percent > 100:
+        return None
+    return percent, (payload[1] >> 7) == 1
+
+
+def parse_status_55(resp) -> Optional[Tuple[Optional[int], bool]]:
+    """(level, charging) from the '65 01' status reply on report 0x55, or None.
+
+    The reply echoes 0x65 in its first data byte; level is byte 2 and the state
+    byte 3 - 2 discharging, 3 charging, 4 full, 26 asleep - exactly what M HUB's
+    charge-status listener reads on the non-audio 0x3837 devices (issue #189),
+    and what github.com/JoaoKSS/MCHOSE_v9_PRO_Controller reads on a V9 headset.
+    An asleep headset comes back as a level of None.
+    """
+    if not resp or len(resp) < 4:
+        return None
+    data = bytes(resp)
+    if data[0] != AUDIO_REPORT or data[1] != 0x65:
+        return None
+    level, state = data[2], data[3]
+    if state == STATUS_ASLEEP:
+        return None, False
+    if state not in (STATUS_DISCHARGING, STATUS_CHARGING, STATUS_FULL):
+        return None
+    if level > 100:
+        return None
+    return level, state == STATUS_CHARGING
+
+
 def device_key(vid: int, pid: int) -> str:
-    """One icon per device: the dongle and the cable of the same mouse share a key.
+    """One icon per device: the dongle and the cable of the same product share a key.
 
     Only the family measured here (0x5253) keeps the plain "mchose" key it has always
     used, so an existing icon does not move. Anything else gets a key of its own - the
-    G7's 0xA8A5, and the newer 0x3837 receivers (the A7 V2 Ultra in issue #4) - which is
-    what keeps two MCHOSE devices on one machine off a single shared icon.
+    G7's 0xA8A5 and the newer 0x3837 receivers (the A7 V2 Ultra in issue #4) - which is
+    what keeps two MCHOSE devices on one machine off a single shared icon. The V9
+    Turbo+ presents as two devices over one product (the headset 0x600A and its dongle
+    0x6008), so both sides of that pair deliberately share their key.
     """
-    return "mchose" if vid == MEASURED_VID else f"mchose:{vid:04x}"
+    if vid == MEASURED_VID:
+        return "mchose"
+    if pid in HEADSET_PAIR:
+        return f"mchose:{vid:04x}:{HEADSET_PAIR[pid]:04x}"
+    return f"mchose:{vid:04x}:{pid:04x}"
 
 
 class MchoseProvider(Provider):
@@ -187,6 +297,7 @@ class MchoseProvider(Provider):
         self._last: Dict[str, Tuple[int, bool, float]] = {}
         self._names: Dict[str, str] = {}
         self._models: Dict[str, int] = {}
+        self._kinds: Dict[str, str] = {}
 
     def _read_collection(self, path: bytes) -> Optional[Tuple[int, int, int, int]]:
         dev = hid.device()
@@ -265,6 +376,51 @@ class MchoseProvider(Provider):
             except Exception:
                 pass
 
+    def _read_headset(self, path: bytes) -> Optional[Tuple[Optional[int], bool]]:
+        """Ask the headset for its status the way M HUB does, on output report 0x55.
+
+        The AA frame (cmd 0x0B) is the audio path in M HUB's own driver; the
+        '65 01' frame is what the sister-model community driver uses and what the
+        non-audio family answers to. Both are status reads - nothing else is ever
+        sent - and a collection that cannot take report 0x55 refuses the write at
+        once, which just moves on to the next candidate.
+        """
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            for label, request, parser in (
+                    ("AA frame", AUDIO_REQUEST, parse_audio),
+                    ("65 01 frame", STATUS_REQUEST, parse_status_55)):
+                for attempt in range(HEADSET_ATTEMPTS):
+                    try:
+                        wrote = dev.write(bytes([AUDIO_REPORT]) + request)
+                    except (OSError, ValueError) as e:
+                        self._diag.append(f"    {label} write: {e}")
+                        break
+                    if wrote is None or wrote < 0:
+                        self._diag.append(f"    {label} write refused ({wrote})")
+                        break
+                    resp = dev.read(64, HEADSET_READ_MS)
+                    if resp:
+                        got = parser(resp)
+                        if got is not None:
+                            self._diag.append(f"    answered on {label}: {hexdump(resp, 12)}")
+                            return got
+                        self._diag.append(f"    {label}: {hexdump(resp, 12)} (not a reply)")
+                    elif attempt + 1 < HEADSET_ATTEMPTS:
+                        self._diag.append(f"    {label}: nothing, asking again")
+            self._diag.append("    no reply")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def poll(self) -> List[DeviceStatus]:
         """One icon per device, whether it is on the dongle, on the cable or on radio."""
         self._diag = []
@@ -286,8 +442,11 @@ class MchoseProvider(Provider):
         found: Dict[str, List[Tuple[int, bool, int, int]]] = {}   # key -> readings
         for (vid, pid), ifaces in groups.items():
             key = device_key(vid, pid)
+            self._kinds[key] = "headset" if pid in HEADSET_PIDS else "mouse"
             product = (ifaces[0].get("product_string") or "").strip()
-            if product:
+            if product and (key not in self._names or "+" in product):
+                # over one product the more informative string wins: the dongle
+                # says "V9 Turbo", the headset itself says "MCHOSE V9 Turbo+"
                 self._names[key] = product
             if vid == G7_VID and pid != G7_PID:
                 # 0xA8A5 is a chip maker's vendor id ("YJX-CHIP"), not a model, so other
@@ -302,6 +461,10 @@ class MchoseProvider(Provider):
                 # the G7 answers on 0xFF01 only; the other vendor collections are left
                 # alone (nothing off the documented path is written to)
                 cols = [d for d in cols if (d.get("usage_page") or 0) == CONFIG_PAGE]
+            elif pid in HEADSET_PIDS:
+                # the dongle's 0xFF00 page first; on the headset none of its pages is
+                # known to carry the report yet, so the dump order is kept otherwise
+                cols.sort(key=lambda d: (d.get("usage_page") or 0) != 0xFF00)
             else:
                 # the configuration collection first; 0xFF0B is dead on the M7 Ultra
                 cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))
@@ -318,6 +481,14 @@ class MchoseProvider(Provider):
                     got_g7 = self._read_g7(d["path"])
                     if got_g7:
                         found.setdefault(key, []).append((got_g7[0], got_g7[1], pid, 0))
+                elif pid in HEADSET_PIDS:
+                    got = self._read_headset(d["path"])
+                    if got is not None:
+                        if got[0] is None:
+                            self._diag.append("    heard: asleep")
+                        else:
+                            found.setdefault(key, []).append((got[0], bool(got[1]), pid, 0))
+                        break     # one answer per product; the pair shares an icon
                 else:
                     got = self._read_collection(d["path"])
                     if got:
@@ -337,7 +508,7 @@ class MchoseProvider(Provider):
                               + f": {level}%{' (charging)' if charge else ''}")
             self._last[key] = (level, charge, time.time())
             out.append(DeviceStatus(key, self._display_name(key), level, charge, True,
-                                    "mchose", kind="mouse"))
+                                    "mchose", kind=self._kinds.get(key, "mouse")))
 
         # silent: a receiver cannot tell a switched-off mouse from one that went to sleep
         # a few seconds ago, so keep the last value greyed out for a while
@@ -346,7 +517,7 @@ class MchoseProvider(Provider):
             if key in found or now - last[2] >= ASLEEP_KEEP:
                 continue
             out.append(DeviceStatus(key, self._display_name(key), last[0], last[1],
-                                    False, "mchose", kind="mouse"))
+                                    False, "mchose", kind=self._kinds.get(key, "mouse")))
         return out
 
     def _display_name(self, key: str) -> str:
