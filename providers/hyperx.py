@@ -33,8 +33,8 @@ Agustin-Jerusalinsky/hyperx-cloud-II-battery, a script for this exact id:
 A reply that does not echo the command is ignored, and a level above 100 is
 refused rather than shown as a made-up number.
 
-Unverified on hardware: the reporter's diagnostics in #192 pin the Kingston dongle
-(0951:1718, vendor collections on interface 3) and his run is the confirmation.
+Confirmed on hardware: @rickymohk's run of the test build in #192 showed the level
+and the charging indication following the cable, on the Kingston dongle he reported.
 """
 from __future__ import annotations
 

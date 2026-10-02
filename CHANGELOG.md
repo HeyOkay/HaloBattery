@@ -11,8 +11,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   headset speaks a longer exchange than the HP-branded dongles (62-byte
   `06 00 02 00 9A ... BB <cmd>` requests, report `0x0B` replies), from three reference
   projects that agree byte for byte
-  ([#192](https://github.com/HeyOkay/HaloBattery/issues/192)). Unverified until the
-  reporter's run.
+  ([#192](https://github.com/HeyOkay/HaloBattery/issues/192)). Confirmed on the
+  reporter's hardware.
 
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
