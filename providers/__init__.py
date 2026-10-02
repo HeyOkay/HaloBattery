@@ -7,6 +7,7 @@ from .mchose import MchoseProvider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401
+from .logitech_centurion import LogitechCenturionProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
