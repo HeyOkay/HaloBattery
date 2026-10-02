@@ -252,6 +252,39 @@ class UserReturnTests(HideRenameTestCase):
             app.wait_next(sig=None)
         self.assertGreater(len(waits), 25, "quiet mode must not start polling on input")
 
+    def test_touchpad_activity_re_reads_a_greyed_device_too(self):
+        # the mouse can fall asleep while the hand is on the touchpad, so when the
+        # hand comes back the input never paused for the gate above to see (#87)
+        app = make_app({"interval": 60})
+        app.providers = []
+        app.apply([mouse(40, online=False)])
+        self.game(False)
+        inputs = iter(range(1000, 100000, 1000))   # input on every pass, never a pause
+        clock = iter(range(0, 100000))
+        waits = self.loop(app, inputs)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.wait_next(sig=None)
+        self.assertLessEqual(len(waits), hb.INPUT_WAKE_GAP + 1,
+                             "continuous input re-reads a greyed device within the rate limit")
+
+    def test_the_continuous_re_read_is_rate_limited(self):
+        app = make_app({"interval": 60})
+        app.providers = []
+        app.apply([mouse(40, online=False)])
+        self.game(False)
+        inputs = iter(range(1000, 100000, 1000))
+        clock = iter(range(0, 100000))
+        self.loop(app, inputs)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.wait_next(sig=None)
+        first = app.input_wake_at
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.wait_next(sig=None)
+        second = app.input_wake_at
+        self.assertGreater(second, first, "input-driven polls happen while input comes")
+        self.assertGreaterEqual(second - first, hb.INPUT_WAKE_GAP,
+                                "the next input-driven poll waited out the rate limit")
+
 
 # ---------------------------------------------------------------- status file
 class StatusFileTests(HideRenameTestCase):

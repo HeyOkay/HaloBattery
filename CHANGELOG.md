@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A sleeping Pulsar / ATK / VXE mouse keeps its place in the tray (the last reading,
+  greyed out) instead of leaving it, and it is re-read as soon as the PC is used again -
+  on the first input after a pause, and also while input keeps coming, which is what
+  touchpad use looks like (#87). Reported with hardware measurements by @huyxs2005.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
