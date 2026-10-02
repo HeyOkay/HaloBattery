@@ -10,6 +10,7 @@ Supported:
   * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
   * HyperX (Cloud II and Cloud III Wireless), JBL Quantum 910, Corsair, Astro A50 Gen 5,
     Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF, G-Wolves, LAMZU Maya X and AM Infinity 8K mice
+    (and ASUS ROG keyboards on the OMNI receiver)
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
   * PlayStation controllers (DualShock 4, DualSense): directly over USB/HID
   * 8BitDo controllers in D-input mode (Pro 2, Pro 3, SN30 / SF30 Pro), while Steam
@@ -135,7 +136,7 @@ PROVIDER_LABELS = {
     "8bitdo": "8BitDo controllers",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
     "astro": "Astro A50",
-    "asus": "ASUS ROG / TUF mice",
+    "asus": "ASUS ROG / TUF mice and keyboards",
     "audeze": "Audeze Maxwell",
     "barracuda": "Razer Barracuda Pro",
     "corsair": "Corsair headsets",

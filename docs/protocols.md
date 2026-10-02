@@ -184,6 +184,12 @@ Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used
 
 ## Mice and keyboards
 
+### ASUS ROG OMNI receiver: ROG Harpe Ace Mini, Falchion RX Low Profile and other ROG mice and keyboards
+
+**Connection:** ROG OMNI receiver (0B05:1ACE)
+
+From G-Helper's OMNI support (PeripheralsProvider.cs and the `*Omni` model classes). The receiver's interface 0 is only a keyboard; the vendor collections are on interface 2. Output report 1 `01 a0` on `ff02` returns the pair list: from byte 5, four bytes per slot, the paired device's pid little-endian, 0 ends the list. A known mouse is then asked `03 12 07` on `ff01` (the same reply as the mice above, behind report id 3: battery in byte 5, charging in byte 10), and a known keyboard `02 12 01` on `ff00` (battery in byte 6, or byte 11 on the Falchion family where byte 6 is a 0-10 gauge; charging in byte 9). 64-byte reports. 0 without charging is standby and shows nothing; a keyboard asleep on battery answers `ff aa`, which shows nothing either. The collections of one receiver are matched by device instance, so two receivers do not mix, and a mouse on the OMNI receiver shares its icon with the same mouse on its cable. Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile paired to one OMNI receiver; the other pids in the list come from G-Helper and are unverified
+
 ### Keychron Ultra-Link 8K, Keychron M5
 
 **Connection:** 2.4 GHz receiver (3434:D028) and USB cable (3434:D048)
