@@ -55,6 +55,17 @@ HITSCAN_SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the Redragon M991 receiver (3554:f5d5) as #183's diagnostics list its collections
+REDRAGON_SHAPE = [
+    (0, 0x0001, 0x0006),
+    (1, 0x0001, 0x0002),
+    (1, 0xFF03, 0x0000),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0xFF02, 0x0002),
+    (1, 0xFF04, 0x0002),
+]
+
 
 def reply(level, power=0, mv=0, command=P.CMD_POWER, header=P.PAYLOAD_HEADER,
           break_checksum=False):
@@ -340,6 +351,28 @@ class PulsarTest(unittest.TestCase):
             frame = bytes.fromhex(raw)
             self.assertEqual((level, False), P.parse_power(frame))
             self.assertEqual(mv, P.voltage_mv(frame))
+
+    def test_the_redragon_m991_receiver_is_read(self):
+        # #183: the receiver's own dump lists this collection shape, and the
+        # family's command 0x04 read answers on ff02:0002
+        bus = self.one_receiver(vid=0x3554, pid=0xF5D5, replies=[reply(57, 1, 4010)],
+                                shape=REDRAGON_SHAPE)
+        provider = P.PulsarProvider()
+        found = provider.poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f5d5", d.key)
+        self.assertEqual("Redragon M991 (2.4 GHz)", d.name)
+        self.assertEqual(57, d.level)
+        self.assertTrue(d.charging)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written(),
+                         "the request goes to the vendor collection, as for the other ids")
+        self.assertIn("'Redragon M991 (2.4 GHz)'", "\n".join(provider.diagnostics()))
+
+    def test_the_redragon_m991_reply_needs_the_checksum(self):
+        self.one_receiver(vid=0x3554, pid=0xF5D5, shape=REDRAGON_SHAPE,
+                          replies=[reply(57, 1, 4010, break_checksum=True)])
+        self.assertEqual([], P.PulsarProvider().poll())
 
 
 if __name__ == "__main__":

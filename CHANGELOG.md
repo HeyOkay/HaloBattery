@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Redragon M991 (3554:f5d5): the same Compx report-0x08 stack as the Pulsar / ATK /
+  VXE mice ([#183](https://github.com/HeyOkay/HaloBattery/issues/183)). Unverified
+  until the reporter's run.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
