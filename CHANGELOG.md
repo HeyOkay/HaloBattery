@@ -22,6 +22,14 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   folder instead of `%APPDATA%\HaloBattery`. If that folder cannot be written, the app
   falls back to `%APPDATA%` and says so in the log. The diagnostics report shows the data
   folder in use.
+- Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) or
+  the headset's own USB cable, with the protocol captured from Turtle Beach's own Swarm II
+  (#173) - the general status record's key `240` is the percentage (86 in the capture, at
+  the moment the vendor app's screen said "86%" for the same headset) and `220` the
+  headset's name; the two share one icon. The charging flag is not identified yet;
+  Diagnostics prints every status record received, so one reading with the headset on the
+  charging cable pins it. Unverified on hardware.
+
 - **Preferences > Sound with the low battery alert** (off by default), for full-screen
   games where the notification is not seen (#66). The low battery alert then also plays
   Windows' own "Battery Low" sound ("Battery Critical" at 5% or less), and plays it again
@@ -69,12 +77,6 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   the headset to speak and held back the icons of all other devices. The app now listens
   to the receiver all the time in the background, so polls do not wait, and a level the
   headset sends between polls is no longer missed.
-- Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) with
-  the protocol captured from Turtle Beach's own Swarm II (#173) - the general status
-  record's key `240` is the percentage (86 in the capture, at the moment the vendor app's
-  screen said "86%" for the same headset) and `220` the headset's name. The charging
-  flag is not identified yet; Diagnostics prints every status record received, so one
-  reading with the headset on the charging cable pins it. Unverified on hardware.
 
 ## [1.13.0] - 2026-09-29
 
