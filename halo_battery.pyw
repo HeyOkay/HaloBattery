@@ -1014,7 +1014,7 @@ class App:
             Item("Reset name", lambda i, it: self.reset_name(owner), visible=renamed),
             Item("Icon", Menu(*[Item(label, pick(value), checked=picked(value), radio=True)
                                 for value, label in PICTOGRAM_CHOICES])),
-            Item("Low battery alert at", Menu(
+            Item("Low battery alert at (this device)", Menu(
                 Item(default_low_text, pick_device_low(None), checked=device_low_picked(None), radio=True),
                 *[Item(t, pick_device_low(p), checked=device_low_picked(p), radio=True)
                   for p, t in lows])),
@@ -1189,7 +1189,8 @@ class App:
         return self.cfg["low"] if own is None else own
 
     def set_device_low(self, owner: Optional[DeviceIcon], value: Optional[int]) -> None:
-        """"Low battery alert at" in the device menu: None goes back to the default."""
+        """"Low battery alert at (this device)" in the device menu: None goes back to
+        the default."""
         if owner is None or owner.status is None:
             return
         key = owner.status.key
