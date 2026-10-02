@@ -38,11 +38,18 @@ field this file already reads. Its own warning also applies: the vendor applicat
 battery indicator is broken (it showed 100 % while the device answered 75), so the raw
 byte is the truth, which is what this file reports.
 
-The Redragon M991 (#183, 3554:f5d5) speaks the same stack: vendor id 0x3554 is
-Compx's ODM id, shared across ATK/VXE, GravaStar, Lamzu's Atlantis generation,
-Teevolution/VGN and the Pulsar receivers - the OpenMouse package documents them as
-one report-8 framing - and the reporter's dump lists the same collection shape as
-the R1 Pro Max receiver, ff02:0002 included. Unverified until the reporter's run.
+The Redragon M991 (#183) speaks the same stack: vendor id 0x3554 is Compx's ODM
+id, shared across ATK/VXE, GravaStar, Lamzu's Atlantis generation, Teevolution/VGN
+and the Pulsar receivers - the OpenMouse package documents them as one report-8
+framing - and the reporter's dump lists the same collection shape as the R1 Pro Max
+receiver, ff02:0002 included. His receiver read is confirmed on hardware: the icon
+showed 95 %. On its cable the mouse appears as 3554:f55e ('3-mode mouse') and is
+claimed too, the way the R1 Pro Max cable id is: it lists the same vendor
+collections (the charging dump adds ff05:0000) and answers the same command 0x04
+frame, which is where the charging flag comes from while the cable is in - on the
+cable the mouse leaves the 2.4 GHz link and the receiver goes quiet, so without the
+wired id the icon simply disappeared (#183). The wired read itself is unverified
+until the reporter's re-run.
 
 Frames are 17 bytes, big-endian, report id 0x08:
 
@@ -153,6 +160,7 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58A: "VXE R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
         0xF5D5: "Redragon M991 (2.4 GHz)",
+        0xF55E: "Redragon M991 (wired)",
     },
     0x373B: {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",

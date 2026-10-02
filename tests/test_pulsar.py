@@ -66,6 +66,19 @@ REDRAGON_SHAPE = [
     (1, 0xFF04, 0x0002),
 ]
 
+# the same mouse on its cable (3554:f55e, '3-mode mouse') as #183's charging report
+# lists it - the receiver's collections plus ff05:0000
+REDRAGON_WIRED_SHAPE = [
+    (0, 0x0001, 0x0006),
+    (1, 0xFF05, 0x0000),
+    (1, 0xFF03, 0x0000),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0xFF02, 0x0002),
+    (1, 0xFF04, 0x0002),
+    (2, 0x0001, 0x0002),
+]
+
 
 def reply(level, power=0, mv=0, command=P.CMD_POWER, header=P.PAYLOAD_HEADER,
           break_checksum=False):
@@ -373,6 +386,60 @@ class PulsarTest(unittest.TestCase):
         self.one_receiver(vid=0x3554, pid=0xF5D5, shape=REDRAGON_SHAPE,
                           replies=[reply(57, 1, 4010, break_checksum=True)])
         self.assertEqual([], P.PulsarProvider().poll())
+
+    def test_the_redragon_m991_on_its_cable_is_read(self):
+        # #183's charging report: the wired mouse is 3554:f55e with the same vendor
+        # collections as the receiver, and answers the same command 0x04 frame
+        bus = self.one_receiver(vid=0x3554, pid=0xF55E, shape=REDRAGON_WIRED_SHAPE,
+                                replies=[reply(95, 1, 4020)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f55e", d.key)
+        self.assertEqual("Redragon M991 (wired)", d.name)
+        self.assertEqual(95, d.level)
+        self.assertTrue(d.charging)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written(),
+                         "the request goes to the vendor collection, as for the other ids")
+
+    def test_while_charging_only_the_wired_mouse_is_shown(self):
+        # on the cable the mouse leaves the 2.4 GHz link: the receiver answers
+        # nothing, so the wired id is the one that keeps the icon - with charging
+        dongle = FakeBus(0x3554, 0xF5D5, [], shape=REDRAGON_SHAPE)
+        wired = FakeBus(0x3554, 0xF55E, [reply(95, 1, 4020)], shape=REDRAGON_WIRED_SHAPE)
+        cols = dongle.cols + wired.cols
+
+        class FakeDevice:
+            def open_path(self, path):
+                self.c = next(c for c in cols if c.info["path"] == path)
+                self.c.opened += 1
+
+            def write(self, frame):
+                self.c.sent.append(list(frame))
+
+            def read(self, length, timeout_ms=0):
+                return self.c.read(length)
+
+            def close(self):
+                pass
+
+        def enumerate_(vid=0):
+            if vid != 0x3554:
+                return []
+            out = []
+            for c in cols:
+                pid = dongle.pid if any(c is d for d in dongle.cols) else wired.pid
+                out.append(dict(c.info, product_id=pid, vendor_id=vid))
+            return out
+
+        P.output_length = lambda path: None
+        P.hidlist = types.SimpleNamespace(enumerate=enumerate_)
+        P.hid = types.SimpleNamespace(device=FakeDevice)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found), "only one icon: the wired mouse, since it charges")
+        self.assertEqual("pulsar:3554f55e", found[0].key)
+        self.assertEqual(95, found[0].level)
+        self.assertTrue(found[0].charging)
 
 
 if __name__ == "__main__":
