@@ -138,6 +138,7 @@ class NxpPollTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         st = out[0]
         self.assertEqual((st.key, st.level, st.approx, st.kind), ("corsair:1b7f", 50, "about 50%", "mouse"))
+        self.assertEqual((st.ui_message, st.ui_params), ("state.approx", {"level": 50}))
         self.assertFalse(st.charging)
         self.assertTrue(st.online)
         self.assertEqual(bus.opened, [b"dongle-ff420001"])

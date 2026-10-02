@@ -466,7 +466,7 @@ class AudezeProvider(Provider):
             if n >= STUCK_POLLS and stuck is None:
                 self._diag.append(f"    stuck for {n} polls in a row: showing \"{STUCK_TEXT}\"")
                 stuck = DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
-                                     "audeze", STUCK_TEXT, kind="headset")
+                                     "audeze", STUCK_TEXT, kind="headset", ui_message="state.audeze_stuck")
             if level is None:
                 # A switched-off headset is a routine state, not a fault. Log the
                 # outage once per headset and stay quiet until it answers again:
@@ -489,7 +489,7 @@ class AudezeProvider(Provider):
                                   f"not measured yet, re-checking in a few seconds")
                 self.pending = True
                 out.append(DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
-                                        "audeze", WAKING_TEXT, kind="headset"))
+                                        "audeze", WAKING_TEXT, kind="headset", ui_message="state.pending"))
                 break
             if len(order) > 1:
                 self._diag.append(f"  {name} answered, the other endpoint is not read")

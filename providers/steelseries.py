@@ -569,7 +569,9 @@ class SteelSeriesProvider(Provider):
                     if online and level is not None:
                         approx = f"about {level}%" if pid in COARSE_MODELS else ""
                         out.append(DeviceStatus(f"steelseries:{pid:04x}", name, level, chg, True,
-                                                "steelseries", approx=approx, kind="headset"))
+                                                "steelseries", approx=approx, kind="headset",
+                                                ui_message="state.approx" if approx else "",
+                                                ui_params={"level": level} if approx else {}))
                     else:
                         self._diag.append("  the headset is off or out of range")
                     break

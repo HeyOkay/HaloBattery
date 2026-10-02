@@ -6,6 +6,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- French localization for tray menus, preferences, tooltips, device states, rename
+  dialogs and notifications (#162). **Language / Langue** in Preferences switches
+  between English and Français immediately and saves the selection. On the first
+  run without a saved language, a French Windows UI selects French; other languages
+  use English. Saved choices take precedence, and English remains the fallback.
+  Diagnostics, protocol output and status-file text stay in English. Translation
+  catalogs are bundled without additional runtime dependencies.
+  A single language registry supplies native names, catalogs, Windows detection
+  and plural rules; catalog checks cover every registered language, including
+  languages with additional plural forms.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

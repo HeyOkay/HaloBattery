@@ -331,7 +331,8 @@ class LogitechProvider(Provider):
                     self._last.pop(old, None)
                 self._slot_key[slot] = key
                 return DeviceStatus(key, name, level, chg, True, "logitech", approx=approx,
-                                    kind=kind)
+                                    kind=kind, ui_message="state.approx_grade" if approx else "",
+                                    ui_params={"level": level, "grade": APPROX_LEVELS[r[1]][1]} if approx else {})
         self._diag.append(f"  idx={idx} '{name}': no battery reading")
         return None
 
@@ -403,7 +404,8 @@ class LogitechProvider(Provider):
                 continue
             if now - t < ASLEEP_KEEP and groups:
                 out.append(DeviceStatus(key, st.name, st.level, st.charging, False, "logitech",
-                                        approx=st.approx, kind=st.kind))
+                                        approx=st.approx, kind=st.kind,
+                                        ui_message=st.ui_message, ui_params=dict(st.ui_params)))
             else:
                 del self._last[key]
         return out
