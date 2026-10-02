@@ -1,4 +1,4 @@
-"""Pulsar, ATK, VXE and Hitscan wireless mice over USB/HID, without vendor software.
+"""Pulsar, ATK, VXE, Hitscan and Redragon wireless mice over USB/HID, without software.
 
 Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
 "HID: pulsar" driver in review for the Linux kernel and lists these ids:
@@ -50,6 +50,12 @@ own deep stop-mode (10-15 idle minutes) the reading took a long time to come bac
 later screen-off report showed that dropping the icon also cost it its tray position
 (Windows puts a re-created icon at a new spot), so the greyed value no longer
 expires on a timer.
+
+The Redragon M991 (#183, 3554:f5d5) speaks the same stack: vendor id 0x3554 is
+Compx's ODM id, shared across ATK/VXE, GravaStar, Lamzu's Atlantis generation,
+Teevolution/VGN and the Pulsar receivers - the OpenMouse package documents them as
+one report-8 framing - and the reporter's dump lists the same collection shape as
+the R1 Pro Max receiver, ff02:0002 included. Unverified until the reporter's run.
 
 Frames are 17 bytes, big-endian, report id 0x08:
 
@@ -159,6 +165,7 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
+        0xF5D5: "Redragon M991 (2.4 GHz)",
     },
     0x373B: {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
