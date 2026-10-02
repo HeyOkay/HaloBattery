@@ -1,4 +1,5 @@
-"""Tests for "Percentage in the icon", "Quiet while gaming" and the status file.
+"""Tests for "Percentage in the icon", "Quiet while gaming", the status file, and the
+re-read when the user comes back to a greyed (asleep) device (#87).
 No tray, no hardware: the app module is loaded with the fake icons of
 test_hide_rename.py, and the real App methods are called.
 
@@ -191,6 +192,65 @@ class QuietTests(HideRenameTestCase):
 
 
 REAL_FULLSCREEN = hb.fullscreen_app_running
+
+
+# ------------------------------------------------ coming back to the PC (#87)
+class UserReturnTests(HideRenameTestCase):
+    """A sleeping mouse is awake by the time its first movement lands in
+    GetLastInputInfo, so a greyed device should be re-read on that tick."""
+
+    def game(self, on):
+        p = mock.patch.object(hb, "fullscreen_app_running", lambda: on)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def loop(self, app, inputs, stop_after=10 ** 6):
+        app.stop_evt = mock.Mock(is_set=lambda: False)
+        app.change_signature = lambda: None
+        waits = []
+        app.wake = mock.Mock(wait=lambda t: waits.append(t) or len(waits) >= stop_after)
+        p = mock.patch.object(hb, "last_input_ms", lambda: next(inputs, None))
+        p.start()
+        self.addCleanup(p.stop)
+        return waits
+
+    def test_returning_to_a_greyed_device_polls_at_once(self):
+        app = make_app({"interval": 60})
+        app.providers = []
+        app.apply([mouse(40, online=False)])        # a sleeping mouse, kept greyed
+        self.game(False)
+        inputs = iter([1000, 1000, 1000, 61000])    # ... and the user comes back
+        clock = iter(range(0, 100000, 3))
+        waits = self.loop(app, inputs)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.wait_next(sig=None)
+        self.assertEqual(3, len(waits), "the poll starts on the tick the input returns")
+
+    def test_nothing_greyed_keeps_the_normal_cadence(self):
+        app = make_app({"interval": 600})
+        app.providers = []
+        app.apply([mouse(77)])                      # every reading fresh
+        self.game(False)
+        inputs = iter([1000, 1000, 61000] * 100)
+        clock = iter(range(0, 100000, 3))
+        waits = self.loop(app, inputs, stop_after=10 ** 6)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.stop_evt = mock.Mock(is_set=lambda: len(waits) > 30)
+            app.wait_next(sig=None)
+        self.assertGreater(len(waits), 25, "no early poll when nothing is greyed")
+
+    def test_quiet_mode_keeps_the_slow_cadence(self):
+        app = make_app({"interval": 60})
+        app.providers = []
+        app.apply([mouse(40, online=False)])
+        self.game(True)                             # a game is full screen
+        inputs = iter([1000, 1000, 61000] * 100)
+        clock = iter(range(0, 600000, 3))
+        waits = self.loop(app, inputs, stop_after=10 ** 6)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.stop_evt = mock.Mock(is_set=lambda: len(waits) > 30)
+            app.wait_next(sig=None)
+        self.assertGreater(len(waits), 25, "quiet mode must not start polling on input")
 
 
 # ---------------------------------------------------------------- status file
