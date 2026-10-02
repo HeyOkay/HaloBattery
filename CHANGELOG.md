@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- ASUS TX Gaming Mouse Mini Miku on its 2.4 GHz receiver (`0B05:1C5A`),
+  using the existing ASUS percentage-battery exchange. Verified on real hardware
+  with a 46% reading and covered by a captured-reply regression test.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
