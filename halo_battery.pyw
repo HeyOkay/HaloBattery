@@ -141,7 +141,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
-                       WLmouseProvider, XInputProvider, SteamProvider)
+                       WLmouseProvider, XInputProvider, SteamProvider, TurtleBeachProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -206,6 +206,7 @@ PROVIDER_LABELS = {
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
+    "turtlebeach": "Turtle Beach headsets",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
 }
@@ -221,7 +222,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider()]
+            SteamProvider(), TurtleBeachProvider]
 
 
 # ---------------------------------------------------------------- config
