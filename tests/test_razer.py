@@ -226,6 +226,18 @@ class TableTest(unittest.TestCase):
         self.assertEqual(R.KNOWN[0x025C][0], "Razer BlackWidow V3 Pro")
         self.assertIn(R.KNOWN[0x025C][1], R.TRANSACTION_IDS)
 
+    def test_the_pro_type_ultra_receiver_is_known(self):
+        # #196: the reporter's unit confirmed the level on the 2.4 GHz receiver with
+        # 0x9F, the wireless keyboards' transaction id of this generation.
+        self.assertEqual(R.KNOWN[0x027B], ("Razer Pro Type Ultra", 0x9F))
+
+    def test_the_pro_type_ultra_wired_id_stays_out(self):
+        # 0x0277's only source is an open OpenRazer pull request (#2739); until a
+        # unit can be tested it is not listed, so it is left alone like any other
+        # unknown wired device.
+        self.assertNotIn(0x0277, R.KNOWN)
+        self.assertFalse(R.maybe_wireless(0x0277, "Razer Pro Type Ultra"))
+
 
 class PollRazerTest(PollTest):
     def test_pro_click_v2_vertical_issue_58(self):
@@ -264,6 +276,17 @@ class PollRazerTest(PollTest):
         res = self.poll([entry(0x0078, b"if0", "Razer Viper")], {b"if0": mouse})
         self.assertEqual(res, [])
         self.assertEqual(mouse.tids, [])
+
+    def test_pro_type_ultra_answers_on_the_wireless_tid(self):
+        # #196: the reporter's receiver answered with 0x9F; the fake refuses every
+        # other transaction id, so the preferred one must be tried first. The
+        # collection itself is not pinned here (the fake answers on any path).
+        e = entry(0x027B, b"kbd", "Razer Pro Type Ultra", iface=3, page=0x0059)
+        kbd = FakeMouse(tid=0x9F, raw_level=0xB5, charging=1)      # 0xB5 -> 71%
+        out = self.poll([e], {b"kbd": kbd})
+        self.assertEqual([(s.name, s.level, s.charging) for s in out],
+                         [("Razer Pro Type Ultra", round(0xB5 / 255 * 100), True)])
+        self.assertEqual(kbd.tids[0], 0x9F)
 
 
 # ------------------------------------------------------------------ receiver + cable
