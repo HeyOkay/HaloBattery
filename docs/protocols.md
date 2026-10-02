@@ -214,7 +214,7 @@ The standard Razer commands: class `0x07` id `0x80` for the level (0-255, shown 
 
 **Connection:** Bluetooth (2DC8:6006 and the other ids in `providers/eightbitdo.py`) or USB
 
-Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. In XInput mode these controllers are read as Xbox controllers. **Unverified** - no 8BitDo controller was on hand, so a level of 0 or above 100 is refused rather than shown
+Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. The Pro 3 (2DC8:6009) is the exception: its descriptor declares one input report, 0x04, on both transports, and it carries the level in byte 14 at all times, so the Pro 3 shows its level without Steam - **confirmed on a real Pro 3 over Bluetooth**, with Steam closed and the controller freshly turned on. In XInput mode these controllers are read as Xbox controllers. The other models are **unverified**, so a level of 0 or above 100 is refused rather than shown
 
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
