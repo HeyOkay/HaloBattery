@@ -453,6 +453,9 @@ def single_instance() -> bool:
 # game, 4 = presentation mode. 5 = normal; 1, 6 and 7 are not about the screen.
 QUNS_FULLSCREEN = (2, 3, 4)
 QUIET_INTERVAL = 300       # s between polls while a game is full screen
+RETURN_GAP_MS = 15000       # no input this long, then input = the user came back:
+                            # a greyed (asleep) device is re-read at once, not a
+                            # minute later (see wait_next and #87)
 
 
 def fullscreen_app_running() -> bool:
@@ -705,6 +708,31 @@ def drop_bluetooth_duplicates(results: List[DeviceStatus],
             logged.discard(st.key)
         kept.append(st)
     return kept
+
+
+def last_input_ms() -> Optional[int]:
+    """The tick of the last keyboard or mouse input anywhere on Windows, or None.
+
+    Used to notice the user coming back to the PC: a sleeping mouse is awake by the
+    time its first movement lands here, so a device whose reading is greyed out
+    (asleep) can be re-read right then instead of at the next scheduled poll - see
+    wait_next(). A few seconds of accuracy are irrelevant; only "there was a pause,
+    then input" matters."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+
+        class LASTINPUTINFO(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info)):
+            return None
+        return int(info.dwTime)
+    except Exception:            # a probe must never take the app down
+        return None
 
 
 def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "") -> str:
@@ -1644,6 +1672,18 @@ class App:
                     xs = None
         return (self.usb_signature(), xs)
 
+    def stale_device_shown(self) -> bool:
+        """True while some device's reading is greyed out (asleep) or it just went
+        missing. wait_next() uses this to decide whether the user coming back is worth
+        a poll at once: with every reading fresh there is nothing to gain."""
+        if any(self.missing.values()):
+            return True
+        for ic in list(self.icons.values()):
+            st = getattr(ic, "status", None)
+            if st is not None and not st.online:
+                return True
+        return False
+
     def wait_next(self, sig=None):
         """Wait for the next scheduled poll, but wake up early when a device is
         plugged in, unplugged, switched on or off."""
@@ -1661,6 +1701,7 @@ class App:
         deadline = time.time() + interval
         if sig is None:
             sig = self.change_signature()
+        prev_input = last_input_ms()
         while not self.stop_evt.is_set():
             left = deadline - time.time()
             if left <= 0 or self.wake.wait(min(2.5, left)):
@@ -1671,6 +1712,17 @@ class App:
                 return
             if quiet and not self.quiet():
                 return                   # the game is closed: poll now and show what was held
+            if not quiet:
+                # the user came back to the PC: a sleeping mouse is awake by the time
+                # its first movement lands here, so re-read a greyed device at once
+                # instead of up to a minute later (#87). All fresh - nothing to gain.
+                in_now = last_input_ms()
+                if in_now is not None and prev_input is not None \
+                        and (in_now - prev_input) & 0xFFFFFFFF >= RETURN_GAP_MS \
+                        and self.stale_device_shown():
+                    return
+                if in_now is not None:
+                    prev_input = in_now
 
     def anim_loop(self):
         """Advances the "breathing" frames of charging devices; other icons are left alone."""
