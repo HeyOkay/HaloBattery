@@ -14,6 +14,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   query, receiver heartbeat, headset heartbeat), and the headset reports the charge state
   on property 0x10 (1 charging, 2 on battery). Measured end to end with @jeffpeng3's
   on-hardware runs ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
+- The rest of the Corsair Virtuoso family, on the same routed exchange: the SE's own
+  receiver `1B1C:0A3E` and cable `1B1C:0A3D`, the XT's receiver `1B1C:0A64` and cable
+  `1B1C:0A62` (HeadsetControl's reworked XT/SE device,
+  [#570](https://github.com/Sapd/HeadsetControl/pull/570) - the wired ids try target
+  `0x08` first and the receivers `0x09`, each with the other as the fallback, and reads
+  need neither a session nor software mode). A product's receiver and cable ids share
+  one icon, and a reading that reports charging wins the merge. The four ids are
+  HeadsetControl's, run on its author's hardware; **unverified in the app** until an
+  XT/SE owner runs a build.
 
 ### Fixed
 - Corsair Dark Core RGB Pro SE: read the battery the way the dongle actually answers (#56). The
