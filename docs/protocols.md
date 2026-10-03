@@ -261,3 +261,13 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 **Connection:** Lightspeed, Unifying or Bolt receiver
 
 The provider reads HID++ 2.0 generically from the receiver's `ff00` vendor collections (slots 1-6), so most other HID++ 2.0 mice and keyboards on a Lightspeed, Unifying or Bolt receiver should answer the same `0x1004` unified battery request. The G-series headsets - G533, G535, G633, G635, G733, G933, G935, G PRO, G PRO X - are in the headset pid table and use feature `0x1F20` (the G535 on its consumer collection). Only the models listed in the support table above are confirmed so far.
+
+### Turtle Beach Stealth 700 Gen 3
+
+**Connection:** USB transmitter
+
+The transmitter (`10F5:2251`, with the `2250` / `2253` siblings) is an Airoha chip exposing the RACE protocol on its vendor collection (usage page 0xFF13 / usage 0x0001), picked by usage rather than interface number. Unlike the Audeze Maxwell, the direct battery attribute 0x0CD6 is refused on this transmitter (status 0x02); battery is read instead from the chip's CoAP server, the way Swarm II does it.
+
+Framing: HID output report id 0x06 = `06 <len16> <race>`; replies come back as input report id 0x07 with the same prefix. A RACE command is `05 5A <len16> <id16> <payload>` (0x5A expects a response, the length counts the two id bytes); the response starts `05 5B`.
+
+Read: enable the CoAP client (RACE id 0x9942), then send a CoAP `GET /GSI` tunnelled in RACE id 0x9902 (`05 5A 05 00 02 99` + `40 01 00 01 B3 "GSI"`). The reply payload is JSON; key `240` of the `GSI` resource is the battery percent, `230` the connection flag. Only the CoAP client is enabled - nothing is written to the device. The name comes from the transmitter's USB product string (e.g. "Stealth 700X Gen 3"), not the on-device nickname (which defaults to "My Headset"). **Verified** on a Stealth 700X Gen 3. Full write-up: https://github.com/PaulRichez/halobattery-stealth700
