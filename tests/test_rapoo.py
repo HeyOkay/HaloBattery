@@ -173,6 +173,45 @@ class PollTest(unittest.TestCase):
         self.assertEqual(kinds["rapoo:1413"], "mouse")
         self.assertEqual(kinds["rapoo:4824"], "keyboard")
 
+    def test_the_mouse_on_its_cable_reads_under_the_same_icon(self):
+        # 2026-10-03: while the VT7 charges its receiver id disappears and
+        # 24ae:4613 shows up instead - one icon either way
+        entries = receiver_entries(pid=R.VT7_CABLE, prefix=b"cable")
+        out = self.poll(entries, first_vendor(entries))
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.kind) for s in out],
+                         [("rapoo:1413", "Rapoo VT7 (Gen-2)", 100, False, "mouse")])
+
+    def test_the_keyboard_receiver_reads_under_the_same_icon(self):
+        # the keyboard wireless presents as 24ae:1924 (2026-10-03)
+        entries = keyboard_entries(pid=R.V700DIY_RECEIVER, prefix=b"kbrecv")
+        out = self.poll(entries, first_vendor(entries))
+        self.assertEqual([(s.key, s.name, s.kind) for s in out],
+                         [("rapoo:4824", "Rapoo V700DIY-98", "keyboard")])
+
+    def test_a_cable_reading_carries_the_charging_state(self):
+        frame = REFERENCE.copy()
+        frame[R.STATUS_INDEX] = 0x02
+        frame[R.LEVEL_INDEX] = 0x50
+        entries = receiver_entries(pid=R.VT7_CABLE, prefix=b"cable")
+        out = self.poll(entries, first_vendor(entries, frame=frame))
+        self.assertEqual([(s.level, s.charging) for s in out], [(80, True)])
+
+    def test_one_icon_when_both_ids_answer_and_charging_wins(self):
+        recv = receiver_entries()
+        cable = receiver_entries(pid=R.VT7_CABLE, prefix=b"cable")
+        charge = REFERENCE.copy()
+        charge[R.STATUS_INDEX] = 0x02
+        charge[R.LEVEL_INDEX] = 0x50
+        cols = dict(first_vendor(recv))
+        cols.update(first_vendor(cable, frame=charge))
+        out = self.poll(recv + cable, cols)
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in out],
+                         [("rapoo:1413", 80, True, True)])
+
+    def test_the_pinned_ids(self):
+        self.assertEqual((R.VT7_RECEIVER, R.VT7_CABLE, R.V700DIY_KEYBOARD,
+                          R.V700DIY_RECEIVER), (0x1413, 0x4613, 0x4824, 0x1924))
+
     def test_junk_before_the_frame_is_skipped(self):
         junk = [0x06, 0x02, 0x01, 0xD0, 0x07, 0xD0, 0x07, 0x01, 0x64]
         invalid = REFERENCE.copy()
