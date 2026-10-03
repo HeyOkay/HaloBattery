@@ -98,6 +98,12 @@ The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the ven
 
 The Dark Core / Ironclaw "nxp" protocol from ckb-next: a 64-byte packet `CMD_GET 0x0e` + `FIELD_BATTERY 0x50` answered with a level index into the five-step table {0, 15, 30, 50, 100}, so the level is shown as a gauge ("about 50%") and no charging state is reported. The wired id 1B1C:1B7E is left out. **Unverified** - no Corsair mouse was on hand; the collection (`ff42:0001`) comes from the reporter's dump in #56
 
+### G-Wolves HSK Pro ACE and the other models with a receiver of their own
+
+**Connection:** the model's own receiver (e.g. 33E4:5803 for the HSK Pro ACE, #105) or USB cable
+
+HSK Pro / Plus / Lite, HSK Plus ACE, HTX, HTX ACE, HTX Mini, HTS Plus, HTS Plus ACE, HTS Ultra, HTR, HTR Pro, HT-S2, HT-S2 Pro, Fenrir, Fenrir Max, VUK; HTM Plus, HSK Pro 2.0, HTXU, Fenrir Pro. The ids and the exchange per model come from G-Wolves' web driver list (mouse.xyz, `Config/env-models.json`). Models with "IsNewProtocol" 0 use the web driver's getOldBattery: feature report `00 02 8f 01` (00 on the cable), reply `a1 02 8f .. <charging> <battery %>`; the others use the exchange of the 8K receiver below. Same 64-byte feature report collection; receiver and cable of one model share an icon. **Unverified** - no such mouse was on hand
+
 ### G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini
 
 **Connection:** 8K receiver or USB cable

@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- G-Wolves HSK Pro ACE on its receiver (33E4:5803, #105), and the other 21 G-Wolves models
+  with a receiver of their own, from the model list of G-Wolves' web driver (mouse.xyz). The
+  older models use the web driver's other battery request (getOldBattery). **Unverified** on
+  hardware.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

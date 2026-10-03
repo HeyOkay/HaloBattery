@@ -160,7 +160,7 @@ class PollTest(ProviderTest):
                          (None, None))
 
     def test_other_vendors_ids_are_ignored(self):
-        e = [dict(issue_82_entries()[5], product_id=0x3808)]    # a G-Wolves pid not in the list
+        e = [dict(issue_82_entries()[5], product_id=0x3899)]    # a G-Wolves pid in no list
         cols = {e[0]["path"]: FakeCollection(G.FEATURE_LENGTH)}
         self.assertEqual(self.poll(e, cols), [])
         self.assertEqual(cols[e[0]["path"]].opened, 0)
