@@ -201,7 +201,7 @@ class PollTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         s = out[0]
         self.assertEqual((s.key, s.name, s.level, s.charging, s.online, s.source, s.kind),
-                         ("nzxt:2101", "NZXT Lift Elite Wireless", 76, False, True,
+                         ("nzxt:2101", "NZXT Lift Elite", 76, False, True,
                           "nzxt", "mouse"))
         first = N.candidates(entries)[0]
         self.assertEqual(cols[first["path"]].written, [N.REQUEST])
@@ -213,20 +213,49 @@ class PollTest(unittest.TestCase):
         self.assertEqual((out[0].level, out[0].charging), (77, True))
 
     def test_the_wired_mouse_reads_too(self):
+        # the same mouse on the cable is the same icon: keyed on the receiver id
         entries = wired_entries()
         cols = self.cols(entries, post=(ACK, CAP_WIRED_84))
         out = self.poll(entries, cols)
         self.assertEqual((out[0].key, out[0].level, out[0].charging),
-                         ("nzxt:2129", 84, True))
+                         ("nzxt:2101", 84, True))
 
-    def test_both_ids_at_once_each_get_a_status(self):
+    def test_both_ids_at_once_are_one_icon_preferring_charging(self):
         entries = wired_entries() + receiver_entries()
         cols = {e["path"]: FakeCollection(post=(ACK, CAP_WIRED_84 if
                                                 e["product_id"] == N.CABLE_PID else CAP_76))
                 for e in entries}
         out = self.poll(entries, cols)
-        self.assertEqual(sorted((s.key, s.level) for s in out),
-                         [("nzxt:2101", 76), ("nzxt:2129", 84)])
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in out],
+                         [("nzxt:2101", "NZXT Lift Elite", 84, True, True)])
+
+    def test_one_silent_id_does_not_add_a_greyed_twin(self):
+        # the mouse is on its cable: the receiver stays silent while the cable
+        # answers - one icon, not a fresh one plus a greyed twin (review by
+        # @ahmedkhursheed23)
+        entries = wired_entries() + receiver_entries()
+
+        def fresh_cols():
+            return {e["path"]: FakeCollection(post=(ACK, CAP_CHARGE_77)
+                                              if e["product_id"] == N.CABLE_PID else ())
+                    for e in entries}
+
+        self.poll(entries, fresh_cols())             # the first poll sets the kept value
+        out = self.poll(entries, fresh_cols())
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in out],
+                         [("nzxt:2101", 77, True, True)])
+        self.assertTrue(any("pid=2101: no reply" in line
+                            for line in self.provider.diagnostics()))
+
+    def test_both_silent_keeps_one_greyed_icon(self):
+        entries = wired_entries() + receiver_entries()
+        live = {e["path"]: FakeCollection(post=(ACK, CAP_76))
+                if e["product_id"] == N.RECEIVER_PID else FakeCollection()
+                for e in entries}
+        self.poll(entries, live)
+        out = self.poll(entries, {e["path"]: FakeCollection() for e in entries})
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("nzxt:2101", 76, False)])
 
     def test_the_ack_is_skipped_and_junk_ignored(self):
         entries = receiver_entries()

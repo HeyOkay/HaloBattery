@@ -50,7 +50,10 @@ The mouse has two ids: 1e71:2101 for the receiver and 1e71:2129 for the same
 mouse on its USB cable. The wired one carries the identical ffca:0001
 collection with the same 64-byte report pair, and CAM read it with the very
 same request (that capture holds 84 % and the charging bit, cable in) - so
-both ids are asked.
+both ids are asked. They are ONE device to the tray: one icon, keyed on the
+receiver's id (the family convention - the wireless id is the shared key), and
+the charging reading wins when both answer. A silent id never adds a greyed
+twin while the other one is answering (review by @ahmedkhursheed23).
 
 Claimed for the mouse's two ids: 1e71:2101 (the receiver) and 1e71:2129 (the
 mouse on its USB cable). The 1e71:2131 keyboard is wired and has no battery to
@@ -62,7 +65,7 @@ value on a greyed icon (the same coexistence shape as other vendor tools).
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import hid
@@ -77,6 +80,11 @@ RECEIVER_PID = 0x2101
 CABLE_PID = 0x2129
 PIDS = {RECEIVER_PID: "NZXT Lift Elite Wireless",
         CABLE_PID: "NZXT Lift Elite (USB cable)"}
+
+# One icon for the mouse on both of its ids, keyed on the receiver id - a silent
+# id must not put a greyed twin beside the one that answers.
+SHARED_KEY = f"nzxt:{RECEIVER_PID:04x}"
+NAME = "NZXT Lift Elite"
 
 VENDOR_PAGE = 0xFFCA
 VENDOR_USAGE = 0x0001
@@ -139,7 +147,7 @@ class NzxtProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Optional[Tuple[int, int, bool, float]] = None
-        self._chosen: Optional[bytes] = None
+        self._chosen: Dict[int, bytes] = {}          # pid -> the collection that answered
 
     def _read(self, path: bytes) -> Optional[Reading]:
         """Ask the dongle for the mouse's telemetry and read the reply."""
@@ -199,26 +207,28 @@ class NzxtProvider(Provider):
             log.warning("hid.enumerate(nzxt): %s", e)
             return []
         out: List[DeviceStatus] = []
-        for pid, name in PIDS.items():
+        answered: List[Tuple[int, int, bool, int]] = []   # level, mV, charging, pid
+        for pid in sorted(PIDS):
+            label = PIDS[pid]
             mine = [d for d in infos if d["product_id"] == pid]
             if not mine:
                 continue
-            key = f"nzxt:{pid:04x}"
-            self._diag.append(f"[NZXT] pid={pid:04x} '{name}' "
+            self._diag.append(f"[NZXT] pid={pid:04x} '{label}' "
                               f"'{str(mine[0].get('product_string') or '').strip()}'")
             order = candidates(mine)
             if not order:
-                self._diag.append("  no ffca:0001 collection on the dongle - not asked")
+                self._diag.append("  no ffca:0001 collection on the device - not asked")
                 continue
-            if self._chosen is not None:
-                order = sorted(order, key=lambda d: d["path"] != self._chosen)
+            chosen = self._chosen.get(pid)
+            if chosen is not None:
+                order = sorted(order, key=lambda d: d["path"] != chosen)
             got = None
             for d in order[:MAX_CANDIDATES]:
                 self._diag.append(f"  asking on iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 got = self._read(d["path"])
                 if got is not None:
-                    self._chosen = d["path"]
+                    self._chosen[pid] = d["path"]
                     break
             if got is not None:
                 level, mv, charging = got
@@ -226,15 +236,21 @@ class NzxtProvider(Provider):
                 self._diag.append(f"  {level} % (cell {mv} mV"
                                   + (", on the charging cable" if charging else "")
                                   + ")")
-                out.append(DeviceStatus(key, name, level, charging, True, "nzxt",
-                                        kind="mouse"))
-                continue
-            if self._last and time.time() - self._last[3] < ASLEEP_KEEP:
-                self._diag.append("  no reply; keeping the last level, greyed out")
-                out.append(DeviceStatus(key, name, self._last[0], self._last[2], False,
-                                        "nzxt", kind="mouse"))
+                answered.append((level, mv, charging, pid))
             else:
-                self._diag.append("  no reply yet and no earlier level")
+                self._diag.append(f"  pid={pid:04x}: no reply")
+        if answered:
+            # One icon for the mouse: when both ids answer, the charging reading
+            # wins (the wired one is the one on its cable); otherwise the first.
+            level, mv, charging, pid = next((a for a in answered if a[2]), answered[0])
+            out.append(DeviceStatus(SHARED_KEY, NAME, level, charging, True, "nzxt",
+                                    kind="mouse"))
+        elif self._last and time.time() - self._last[3] < ASLEEP_KEEP:
+            self._diag.append("  no reply from either id; keeping the last level, greyed out")
+            out.append(DeviceStatus(SHARED_KEY, NAME, self._last[0], self._last[2], False,
+                                    "nzxt", kind="mouse"))
+        else:
+            self._diag.append("  no reply yet and no earlier level")
         return out
 
     def diagnostics(self) -> List[str]:
