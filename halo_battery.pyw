@@ -774,7 +774,7 @@ class DeviceIcon:
         self.status: Optional[DeviceStatus] = None
         self.frames: Optional[list] = None      # "breathing" frames while charging
         self._state = None                      # to avoid redrawing when nothing changed
-        self._images: Dict[tuple, object] = {}  # state -> image or frames, both colours
+        self._images: Dict[tuple, object] = {}  # state -> image or frames, per colour
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
                               icons.render(None, False, False, light_taskbar=app.light_taskbar),
                               APP_TITLE, app.build_menu(self))
@@ -829,19 +829,24 @@ class DeviceIcon:
                 pass
 
     def _art(self, state: tuple):
-        """The image (or the charging frames) for a state. The same state in the
-        other colour is drawn at the same time, so when the bar colour flips the
-        icon switches without rendering anything."""
-        if state not in self._images:
-            self._images.clear()
+        """The image (or the charging frames) for a state. Only the colour in use is
+        drawn; the other colour is drawn the first time the bar flips to it and then
+        kept with the state, so a MyDockFinder bar that flips back and forth does not
+        draw anything again. The cache holds one state, in at most both colours."""
+        art = self._images.get(state)
+        if art is None:
             level, charging, online, low, light, badge, animate, text = state
-            for lt in (light, not light):
-                if animate:
-                    art = icons.charging_frames(level, online, low, lt, badge, text=text)
-                else:
-                    art = icons.render(level, charging, online, low, lt, badge, text=text)
-                self._images[(level, charging, online, low, lt, badge, animate, text)] = art
-        return self._images[state]
+            other = (level, charging, online, low, not light, badge, animate, text)
+            kept = self._images.get(other)
+            self._images.clear()
+            if kept is not None:
+                self._images[other] = kept      # the same state in the other colour
+            if animate:
+                art = icons.charging_frames(level, online, low, light, badge, text=text)
+            else:
+                art = icons.render(level, charging, online, low, light, badge, text=text)
+            self._images[state] = art
+        return art
 
     def tick(self, i: int) -> None:
         with self.app.lock:

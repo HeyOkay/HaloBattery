@@ -13,12 +13,14 @@ import os
 import sys
 import threading
 import time
+import types
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_hide_rename import FakeTrayIcon, HideRenameTestCase, dev, hb, make_app  # noqa: E402
+from providers.base import DeviceStatus  # noqa: E402
 
 
 class PlaceholderTests(HideRenameTestCase):
@@ -130,6 +132,92 @@ class DeviceIconStartTests(unittest.TestCase):
             ic = hb.DeviceIcon(app, "logitech:C15E09CD")
             ic.update(dev())
         self.assertEqual(order, [("window", True), ("visible", True)])
+
+
+class RenderOnceTests(unittest.TestCase):
+    """A new state draws only the colour in use; the other colour is drawn once, when
+    the bar colour flips to it (MyDockFinder or a theme change)."""
+
+    def setUp(self):
+        self.calls = []
+        self.texts = []
+
+        def fake_render(*a, **k):
+            self.calls.append(a[4] if len(a) > 4 else k.get("light_taskbar"))
+            self.texts.append(k.get("text", ""))
+            return object()
+
+        p = mock.patch.object(hb.icons, "render", fake_render)
+        p.start()
+        self.addCleanup(p.stop)
+        self.app = make_app()
+        self.app.anim_tick = 0
+        ic = hb.DeviceIcon.__new__(hb.DeviceIcon)
+        ic.app = self.app
+        ic.key, ic.status, ic.frames, ic._state, ic._images = "logitech:C15E09CD", None, None, None, {}
+        ic.icon = types.SimpleNamespace(title="", icon=None, visible=True, update_menu=lambda: None)
+        self.ic = ic
+
+    @staticmethod
+    def charging(level):
+        return DeviceStatus("logitech:C15E09CD", "G502 LIGHTSPEED", level, True, True, "logitech",
+                            kind="mouse")
+
+    def test_a_charging_level_change_draws_one_colour(self):
+        self.ic.update(self.charging(50))
+        self.assertEqual(self.calls, [False] * hb.icons.BREATH_FRAMES)
+        self.calls.clear()
+        self.ic.update(self.charging(51))
+        self.assertEqual(self.calls, [False] * hb.icons.BREATH_FRAMES)
+
+    def test_a_still_icon_draws_one_colour(self):
+        self.ic.update(dev())
+        self.assertEqual(self.calls, [False])
+
+    def test_the_other_colour_is_drawn_once_on_the_first_flip(self):
+        self.ic.update(self.charging(50))
+        dark = self.ic.frames
+        self.calls.clear()
+        self.app.light_taskbar = True
+        self.ic.update(self.charging(50))
+        self.assertEqual(self.calls, [True] * hb.icons.BREATH_FRAMES)
+        light = self.ic.frames
+        self.assertIsNot(light, dark)
+        self.calls.clear()
+        for flip in (False, True, False):     # MyDockFinder flipping back and forth
+            self.app.light_taskbar = flip
+            self.ic.update(self.charging(50))
+            self.assertIs(self.ic.frames, light if flip else dark)
+        self.assertEqual(self.calls, [])
+
+    def test_an_unchanged_state_draws_nothing(self):
+        self.ic.update(self.charging(50))
+        self.calls.clear()
+        self.ic._state = None                 # even past the state check in _update
+        self.ic.update(self.charging(50))
+        self.ic.update(self.charging(50))
+        self.assertEqual(self.calls, [])
+
+    def test_the_percentage_in_the_icon_is_drawn_in_both_colours(self):
+        self.app.cfg["percent_in_icon"] = True
+        self.ic.update(dev())
+        self.app.light_taskbar = True
+        self.ic.update(dev())
+        self.assertEqual(self.calls, [False, True])
+        self.assertEqual(self.texts, [str(dev().level)] * 2)
+        self.app.light_taskbar = False
+        self.ic.update(dev())
+        self.assertEqual(len(self.calls), 2)   # the other colour was kept
+
+    def test_the_cache_keeps_one_state(self):
+        self.ic.update(self.charging(50))
+        self.app.light_taskbar = True
+        self.ic.update(self.charging(50))
+        self.ic.update(self.charging(51))
+        self.assertEqual(len(self.ic._images), 1)
+        self.app.light_taskbar = False
+        self.ic.update(self.charging(51))
+        self.assertEqual(len(self.ic._images), 2)
 
 
 if __name__ == "__main__":
