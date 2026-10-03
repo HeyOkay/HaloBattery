@@ -1,4 +1,4 @@
-"""Rapoo gaming devices that report their battery on input report 7.
+"""Rapoo gaming devices that push their battery by themselves.
 
 Rapoo's own web driver at hub.rapoo.com ("RAPOO HUB - VT Generation 2 Series
 Web Driver") reads the battery of every device it supports without ever asking
@@ -34,13 +34,20 @@ ids it appears under, so one icon covers both of its states:
 
 The mouse is the same generation the web driver is named for, so the push is
 expected there - charging included: both ids feed the same icon, and a reading
-that reports charging wins over one that does not. The keyboard is claimed
-from the family's convention - the same report-7 status carried by the Telink
-keyboard protocols in the driver - so it is listened for and its frames are
-logged raw; the 2026-10-03 runs never heard it (its receiver id was not
-claimed then), so its answer is still open.
+that reports charging wins over one that does not.
 
-Unverified: neither device has answered this provider yet.
+The keyboard does not use the report-7 shape: its receiver pushes a 0xBD
+status frame - marker 0xBD, status variant 0x01, the state byte (1 on battery,
+2 charging) at index 7 and the level at index 8. That layout is read from
+Rapoo's own A HUB device layer (RapooDevice.dll, the KBForV700DIY status path,
+which clamps index 8 to at most 100 and publishes it as the device's
+Electricity property), and the reporter's two captures carry it verbatim:
+`bd 01 00 07 00 46 00 01 54 ..` - state 1, level 84 - twenty minutes apart.
+Both shapes are accepted on every claimed id, as the vendor layer's own
+receiver dispatch does.
+
+Verified on the reporter's hardware: the mouse - level and charging. The
+keyboard has not answered this provider yet; the next test build is the check.
 """
 from __future__ import annotations
 
@@ -81,6 +88,13 @@ INVALID = 0x00
 ON_BATTERY = 0x01
 CHARGING = 0x02
 
+# the V700DIY-98 keyboard's receiver pushes its status on marker 0xBD variant 1:
+# the state byte rides index 7 and the level index 8 (#193, measured).
+BD_MARKER = 0xBD
+BD_VARIANT = 0x01
+BD_STATE_INDEX = 7
+BD_LEVEL_INDEX = 8
+
 READ_ATTEMPTS = 12                    # ~3 s per collection: the push comes every ~1-3 s
 READ_TIMEOUT_MS = 250
 MAX_CANDIDATES = 3                    # the dumps show this many vendor collections and up
@@ -90,8 +104,36 @@ ASLEEP_KEEP = 300                     # s, as in the other receiver providers
 Reading = Tuple[int, bool]
 
 
+def parse_bd(r) -> Optional[Reading]:
+    """(level, charging) from the keyboard's 0xBD status push, or None.
+
+    Marker 0xBD with status variant 1, the state byte (1 on battery, 2 charging)
+    at index 7 and the level at index 8 - the layout the vendor's own device
+    layer decodes (it clamps index 8 to at most 100 before publishing it as the
+    Electricity property). The reporter's captures carry it verbatim:
+    `bd 01 00 07 00 46 00 01 54 ..`.
+    """
+    if not r or len(r) <= BD_LEVEL_INDEX:
+        return None
+    if r[0] != BD_MARKER or r[1] != BD_VARIANT:
+        return None
+    state = r[BD_STATE_INDEX]
+    if state not in (ON_BATTERY, CHARGING):
+        return None
+    level = r[BD_LEVEL_INDEX]
+    if not 0 <= level <= 100:
+        return None
+    return level, state == CHARGING
+
+
 def parse_report(r) -> Optional[Reading]:
-    """(level, charging) from a report-7 status push, or None when it is not one."""
+    """(level, charging) from a battery push, or None when it is not one.
+
+    Two shapes answer: the report-7 status the mouse pushes and the keyboard's
+    0xBD status - see parse_bd.
+    """
+    if r and r[0] == BD_MARKER:
+        return parse_bd(r)
     if not r or len(r) <= LEVEL_INDEX:
         return None
     if r[0] != REPORT_ID:
@@ -161,7 +203,7 @@ class RapooProvider(Provider):
                     continue              # quiet until the next push
                 reading = parse_report(r)
                 self._diag.append(f"    report: {hexdump(r, 12)}"
-                                  + ("" if reading else "  (not the report-7 battery shape)"))
+                                  + ("" if reading else "  (not a battery shape)"))
                 if reading is not None:
                     return reading
                 time.sleep(0.02)
