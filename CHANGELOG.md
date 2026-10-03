@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Preferences > Sound with the low battery alert** (off by default), for full-screen
+  games where the notification is not seen (#66). The low battery alert then also plays
+  Windows' own "Battery Low" sound ("Battery Critical" at 5% or less), and plays it again
+  every 5 minutes while the device stays low, awake and off the charger.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

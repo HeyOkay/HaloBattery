@@ -82,6 +82,10 @@ try:
     import hid  # noqa: E402
 except ImportError:
     hid = None
+try:
+    import winsound  # noqa: E402
+except ImportError:
+    winsound = None
 import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
@@ -107,6 +111,7 @@ DEFAULTS = {
     "interval": 60,      # seconds between polls
     "low": 20,           # low battery notification threshold, %
     "full_alert": True,  # notification when a charging device reaches 100 %
+    "low_sound": False,  # also play a Windows sound with the low battery alert (#66)
     "notify": True,
     "bluetooth": True,   # Windows Bluetooth devices
     "badges": True,      # device pictogram inside the ring
@@ -731,6 +736,43 @@ def device_state(st: DeviceStatus, left: str = "") -> str:
     return state
 
 
+# ------------------------------------------------------------- low battery sound
+LOW_SOUND_REPEAT = 300     # seconds between low battery sounds while the device stays low
+CRITICAL_LEVEL = 5         # at or below this %, the "critical" sound instead of the "low" one
+# Windows' own sounds in %WINDIR%\Media, and the system sound used when the file is missing
+LOW_SOUNDS = {"low": ("Windows Battery Low.wav", "SystemExclamation"),
+              "critical": ("Windows Battery Critical.wav", "SystemHand")}
+
+
+def low_battery_sound(level: Optional[int], charging: bool, online: bool, low: int,
+                      last: Optional[float], now: float) -> Optional[str]:
+    """The sound to play now for a device, "low" or "critical", or None for no sound.
+
+    A device at or below the alert level `low`, awake and not charging, gets a sound
+    at once (`last` is None) and then again every LOW_SOUND_REPEAT seconds. `last` and
+    `now` are time.monotonic() values."""
+    if not low or level is None or not online or charging or level > low:
+        return None
+    if last is not None and now - last < LOW_SOUND_REPEAT:
+        return None
+    return "critical" if level <= CRITICAL_LEVEL else "low"
+
+
+def play_low_sound(kind: str) -> None:
+    """Play the sound in the background (SND_ASYNC), so the poll thread does not wait."""
+    if winsound is None:
+        return
+    name, alias = LOW_SOUNDS[kind]
+    path = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Media", name)
+    try:
+        if os.path.isfile(path):
+            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        else:
+            winsound.PlaySound(alias, winsound.SND_ALIAS | winsound.SND_ASYNC)
+    except Exception as e:
+        log.warning("low battery sound: %s", e)
+
+
 # ------------------------------------------------------------- hide / rename
 def ask_name(current: str) -> Optional[str]:
     """Show a Windows input box for a new device name.
@@ -886,6 +928,7 @@ class App:
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
         self.alerted: Dict[str, bool] = {}
+        self.low_sound_at: Dict[str, float] = {}   # key -> time.monotonic() of the last sound
         self.full_state: Dict[str, str] = {}   # key -> charging / full / idle
         self.missing: Dict[str, int] = {}
         self.bt_cache: List[DeviceStatus] = []
@@ -1032,6 +1075,9 @@ class App:
                  checked=lambda it: self.cfg.get("time_left", True)),
             Item("Quiet while gaming", toggle("quiet_fullscreen"),
                  checked=lambda it: self.cfg.get("quiet_fullscreen", True)),
+            # for full-screen games, where the notification is not seen (#66)
+            Item("Sound with the low battery alert", toggle("low_sound"),
+                 checked=lambda it: self.cfg.get("low_sound", False)),
             Menu.SEPARATOR,
             Item("Windows Bluetooth devices", toggle("bluetooth"),
                  checked=lambda it: self.cfg["bluetooth"]),
@@ -1101,6 +1147,7 @@ class App:
             ic = self.icons.pop(st.key, None)
             self.missing.pop(st.key, None)
             self.alerted.pop(st.key, None)
+            self.low_sound_at.pop(st.key, None)
         log.info("hidden: %s [%s]", self.display_name(st), st.key)
         if ic is not None:
             # stop the icon from another thread: this runs in the icon's own menu callback
@@ -1201,6 +1248,7 @@ class App:
                 lows[key] = value
             save_config(self.cfg)
             self.alerted.pop(key, None)       # the new level may alert at once
+            self.low_sound_at.pop(key, None)  # and sound at once
         log.info("low battery alert of [%s]: %s", key, "default" if value is None else f"{value}%")
         owner.update(owner.status)            # the ring turns red at the new level
         self.refresh_menus()
@@ -1232,6 +1280,7 @@ class App:
                 ic = self.icons.pop(key, None)
                 self.missing.pop(key, None)
                 self.alerted.pop(key, None)
+                self.low_sound_at.pop(key, None)
                 if ic is not None:
                     stopped.append(ic)
         log.info("device type %s: %s", name, "off" if name in off else "on")
@@ -1548,6 +1597,7 @@ class App:
             return
         if st.charging or st.level > low + 5:
             self.alerted[st.key] = False
+            self.low_sound_at.pop(st.key, None)
             return
         if st.level <= low and not self.alerted.get(st.key):
             self.alerted[st.key] = True
@@ -1557,6 +1607,20 @@ class App:
                             "Low battery")
             except Exception as e:
                 log.warning("notify: %s", e)
+        self.check_low_sound(st, low)
+
+    def check_low_sound(self, st: DeviceStatus, low: int) -> None:
+        """"Sound with the low battery alert": a Windows sound with the notification, and
+        again every 5 minutes while the device stays low, awake and off the charger."""
+        if not self.cfg.get("low_sound", False):
+            self.low_sound_at.pop(st.key, None)
+            return
+        now = time.monotonic()
+        kind = low_battery_sound(st.level, st.charging, st.online, low,
+                                 self.low_sound_at.get(st.key), now)
+        if kind:
+            self.low_sound_at[st.key] = now
+            play_low_sound(kind)
 
     def check_full(self, ic: DeviceIcon, st: DeviceStatus):
         """A notification when a charging device reaches 100 %, once per charge.
