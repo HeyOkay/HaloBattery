@@ -354,12 +354,14 @@ class PulsarTest(unittest.TestCase):
             first = provider.poll()
         self.assertEqual(1, len(first))
         self.assertTrue(first[0].online)
+        self.assertFalse(first[0].wake_on_input, "a fresh reading is not a wake candidate")
         with mock.patch.object(P.time, "time", return_value=1060.0):
             kept = provider.poll()          # idle now: the receiver goes quiet
         self.assertEqual(1, len(kept), "the reading stays while the mouse is enumerated")
         self.assertFalse(kept[0].online, "a held reading is greyed out")
         self.assertEqual((64, True), (kept[0].level, kept[0].charging))
         self.assertEqual("pulsar:3554f58a", kept[0].key)
+        self.assertTrue(kept[0].wake_on_input, "the kept reading can be woken by input")
 
     def test_the_kept_reading_does_not_expire_while_the_receiver_is_present(self):
         # the 2026-10-03 report: a screen-off let the greyed reading expire and the

@@ -14,7 +14,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and confirmed on his mouse after the second test build. A later screen-off report
   showed the greyed reading still expired after five minutes, and the re-created icon
   came back at a new tray position - the reading now stays for as long as the mouse's
-  receiver is plugged in, however long the mouse sleeps.
+  receiver is plugged in, however long the mouse sleeps. On review (@ahmedkhursheed23)
+  the input wake was narrowed to readings whose provider marks them wake-on-input: a
+  greyed icon for a device that is simply off no longer re-polls the whole app on
+  every keystroke, and the input class is defined once instead of on every tick.
 
 ## [1.13.0] - 2026-09-29
 

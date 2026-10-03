@@ -25,8 +25,9 @@ REAL_DEVICE_ICON = hb.DeviceIcon          # setUp swaps it for the fake one
 KEY = "razer:00c8:1"
 
 
-def mouse(level, charging=False, online=True, key=KEY, name="Viper", approx=""):
-    return DeviceStatus(key, name, level, charging, online, "razer", approx, kind="mouse")
+def mouse(level, charging=False, online=True, key=KEY, name="Viper", approx="", wake=False):
+    return DeviceStatus(key, name, level, charging, online, "razer", approx, kind="mouse",
+                        wake_on_input=wake)
 
 
 def item(menu, text):
@@ -217,7 +218,7 @@ class UserReturnTests(HideRenameTestCase):
     def test_returning_to_a_greyed_device_polls_at_once(self):
         app = make_app({"interval": 60})
         app.providers = []
-        app.apply([mouse(40, online=False)])        # a sleeping mouse, kept greyed
+        app.apply([mouse(40, online=False, wake=True)])        # a sleeping mouse, kept greyed
         self.game(False)
         inputs = iter([1000, 1000, 1000, 61000])    # ... and the user comes back
         clock = iter(range(0, 100000, 3))
@@ -239,10 +240,26 @@ class UserReturnTests(HideRenameTestCase):
             app.wait_next(sig=None)
         self.assertGreater(len(waits), 25, "no early poll when nothing is greyed")
 
+    def test_a_greyed_icon_no_input_can_wake_is_left_alone(self):
+        # an off device is greyed too, but input cannot wake it: it must not re-poll
+        # the whole app on every keystroke, all day (review by @ahmedkhursheed23, #202)
+        app = make_app({"interval": 600})
+        app.providers = []
+        app.apply([mouse(40, online=False)])        # greyed, but nothing wakes it
+        self.game(False)
+        inputs = iter([1000, 1000, 61000] * 100)
+        clock = iter(range(0, 1000000, 3))
+        waits = self.loop(app, inputs, stop_after=10 ** 6)
+        with mock.patch.object(hb.time, "time", lambda: next(clock)):
+            app.stop_evt = mock.Mock(is_set=lambda: len(waits) > 30)
+            app.wait_next(sig=None)
+        self.assertGreater(len(waits), 25,
+                           "a greyed icon no input can wake must not re-poll the app")
+
     def test_quiet_mode_keeps_the_slow_cadence(self):
         app = make_app({"interval": 60})
         app.providers = []
-        app.apply([mouse(40, online=False)])
+        app.apply([mouse(40, online=False, wake=True)])
         self.game(True)                             # a game is full screen
         inputs = iter([1000, 1000, 61000] * 100)
         clock = iter(range(0, 600000, 3))
@@ -257,7 +274,7 @@ class UserReturnTests(HideRenameTestCase):
         # hand comes back the input never paused for the gate above to see (#87)
         app = make_app({"interval": 60})
         app.providers = []
-        app.apply([mouse(40, online=False)])
+        app.apply([mouse(40, online=False, wake=True)])
         self.game(False)
         inputs = iter(range(1000, 100000, 1000))   # input on every pass, never a pause
         clock = iter(range(0, 100000))
@@ -270,7 +287,7 @@ class UserReturnTests(HideRenameTestCase):
     def test_the_continuous_re_read_is_rate_limited(self):
         app = make_app({"interval": 60})
         app.providers = []
-        app.apply([mouse(40, online=False)])
+        app.apply([mouse(40, online=False, wake=True)])
         self.game(False)
         inputs = iter(range(1000, 100000, 1000))
         clock = iter(range(0, 100000))
