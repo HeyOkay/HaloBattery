@@ -56,7 +56,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [SteelSeries Arctis Nova 7](docs/protocols.md#steelseries-arctis-nova-7) | 2.4 GHz dongle | yes |
 | [SteelSeries Arctis Nova Pro Wireless (`1038:12E0`, `1038:12E5` X)](docs/protocols.md#steelseries-arctis-nova-pro-wireless-103812e0-103812e5-x) | Wireless base station, interface 3 or 4 | no |
 | [SteelSeries Rival 3 Wireless](docs/protocols.md#steelseries-rival-3-wireless) | 2.4 GHz dongle | no |
-| [Turtle Beach Stealth Pro II](docs/protocols.md#turtle-beach-stealth-pro-ii) | 2.4 GHz transmitter (the charging dock) or USB cable | no |
+| [Turtle Beach Stealth Pro II](docs/protocols.md#turtle-beach-stealth-pro-ii) | 2.4 GHz transmitter (the charging dock) or USB cable | yes |
 | [WLmouse Beast X and Beast X Mini Pro](docs/protocols.md#wlmouse-beast-x-and-beast-x-mini-pro) | 8K or 1K receiver, or USB cable | likely |
 | [WLmouse Beast X Max](docs/protocols.md#wlmouse-beast-x-max) | 8K receiver and USB cable | yes |
 | [Xbox-compatible controllers (other models)](docs/protocols.md#xbox-compatible-controllers-other-models) | USB or the Xbox wireless adapter | likely |

@@ -105,6 +105,7 @@ class FakeTransmitter:
         self.written = []
         self.opens = 0
         self.write_n = 0
+        self.reads = 0
 
     def open_path(self, path):
         self.opens += 1
@@ -116,6 +117,7 @@ class FakeTransmitter:
         return len(data)
 
     def get_input_report(self, report_id, size):
+        self.reads += 1
         key = (self.opens, self.write_n)
         q = self.queues.get(key) or []
         i = self.pos.get(key, 0)
@@ -173,6 +175,30 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([s.level for s in res], [86])
         self.assertEqual(self.transmitter.written[2], turtlebeach.ASK_GSI_FRESH)
         self.assertTrue(any("GSI fresh token" in line for line in self.p.diagnostics()))
+
+    def test_the_fallback_goes_out_short_after_a_silent_opener(self):
+        # the opener and the record ask gave idle frames only: the fallback still goes
+        # out - it is the ask that answers on the reporter's unit - but short, so a
+        # dead channel's read cannot burn the full budgets (#194 review)
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
+        self.assertEqual(self.transmitter.written,
+                         [turtlebeach.ASK_SINF, turtlebeach.ASK_GSI,
+                          turtlebeach.ASK_GSI_FRESH])
+        self.assertEqual(self.transmitter.reads,
+                         turtlebeach.SINF_READS + turtlebeach.MAX_READS
+                         + turtlebeach.FRESH_SHORT_READS)
+        self.assertTrue(any("goes out short" in line for line in self.p.diagnostics()))
+
+    def test_the_total_read_budget_caps_a_level_less_channel(self):
+        # the opener answers with payload but the record ask does not: the fallback runs
+        # at its normal length, yet the read as a whole never passes the cap (#194 review)
+        self.transmitter.queues = {(1, 1): SINF_DUMP}
+        res = self.p.poll()
+        self.assertEqual([s.level for s in res], [None])
+        self.assertEqual(self.transmitter.reads, turtlebeach.TOTAL_READS)
+        self.assertTrue(any("read budget is spent" in line
+                            for line in self.p.diagnostics()))
 
     def test_the_cable_record_reads_as_charging(self):
         self.transmitter.queues = {(1, 2): CABLE_REPLY}
