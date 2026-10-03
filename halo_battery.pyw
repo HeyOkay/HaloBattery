@@ -7,7 +7,8 @@ Supported:
   * Logitech (HID++ 2.0 mice, keyboards and headsets: Lightspeed / Unifying / Bolt receivers, G HUB not needed)
   * SteelSeries (Arctis Nova, Arctis 1 / 7 / 9 / Pro Wireless / 7+ headsets, GameBuds, Aerox mice,
     GG not needed)
-  * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
+  * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver; the V9
+    Pro headset, 291D:385D, over the 2.4 GHz receiver or a USB cable)
   * HyperX (Cloud II and Cloud III Wireless), JBL Quantum 910, Corsair, Astro A50 Gen 5,
     Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF, G-Wolves, LAMZU Maya X and AM Infinity 8K mice
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
@@ -115,7 +116,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
-                       MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
+                       MchoseProvider, MchoseV9Provider, NintendoProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
@@ -173,6 +174,7 @@ PROVIDER_LABELS = {
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "mchose": "MCHOSE mice",
+    "mchose_v9": "MCHOSE V9 Pro",
     "nintendo": "Nintendo Switch controllers",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE mice",
@@ -187,6 +189,7 @@ PROVIDER_LABELS = {
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+            MchoseV9Provider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),

@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- MCHOSE V9 Pro headset (291D:385D): the battery over the 2.4 GHz receiver or the USB
+  cable, through the `55 65` request used by
+  [JoaoKSS/MCHOSE_v9_PRO_Controller](https://github.com/JoaoKSS/MCHOSE_v9_PRO_Controller)
+  (`mchose_qt.py`, `HIDService.query_status`). Confirmed on hardware: the reporter's
+  real polls track the charge (20 % → 60 %) and match M HUB. The status byte's meaning
+  is not in the source; measured on the reporter's headset (0x02 off the cable,
+  0x00 on the cable at 60%), 0x00 is shown as charging.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its

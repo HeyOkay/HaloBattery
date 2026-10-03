@@ -60,6 +60,14 @@ The receiver exposes one vendor collection, `ff13:0001` (interface 5 on a real u
 
 Not HID++ on ff43: Logitech's "Centurion" transport on the vendor collection `ffa0:0001`, report 0x51. The app lists the receiver's features, reaches the headset through the receiver's bridge feature (0x0003), lists the headset's features and reads its battery feature 0x0104 (percent, charging state), all with read-only functions. From Solaar (tested on this headset) and HeadsetControl; firmware without 0x0104 gets HeadsetControl's fixed request. Confirmed on hardware in #103 (75 %, level and charging equal to G HUB)
 
+### MCHOSE V9 Pro
+
+**Connection:** 2.4 GHz receiver or USB cable (291D:385D)
+
+A different protocol from the MCHOSE mice: a 64-byte output report `55 65 01 00...` goes to the headset's vendor collection and the reply is a 64-byte report whose first two bytes echo `55 65`, byte 2 is the level (0..100) and byte 3 a status code. It is the exchange in [JoaoKSS/MCHOSE_v9_PRO_Controller](https://github.com/JoaoKSS/MCHOSE_v9_PRO_Controller) (`mchose_qt.py`, `HIDService.query_status`, lines 146-179), which opens `291D:385D`; the same method's second request `55 11 ...` reads the EQ mode and is not sent here. On Windows the packet may be accepted only as a **feature report** (`write()` fails with "Incorrect function" and it is retried with `send_feature_report`, which the diagnostics say either way). A reply whose header is not `55 65`, or whose level is outside 0..100, is refused rather than shown. The receiver and the USB cable are one headset and share one icon.
+
+The status byte's meaning is not documented in the reference (its UI ignores it). Measured on the reporter's own V9 Pro: 0x02 while running off the cable, 0x00 while on the cable at 60% - so 0x00 is shown as charging and anything else as not charging. (The sibling 3837 ids use different codes - 2 discharging, 3 charging, 4 full per M HUB's driver as decoded in open PR #215 - so this mapping is for 291D:385D only.) The diagnostics always print the raw status byte. **Confirmed on hardware**: the reporter's real polls track the charge (20 % → 60 %) and match M HUB. The V9 Turbo / Turbo+ (`3837:6008`, `3837:600A`) share the same `65 01` frame but are read another way and are covered by the open PR #215 (passive `AA 0x0B` read plus a `65 01` fallback, confirmed on hardware); the Turbo+ is requested in [#193](https://github.com/HeyOkay/HaloBattery/issues/193). This provider does not claim them.
+
 ### Razer Barracuda Pro (2.4 GHz)
 
 **Connection:** 2.4 GHz dongle (1532:053a)
