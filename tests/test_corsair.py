@@ -68,6 +68,10 @@ class FakeDongle:
             return []
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
+    def write(self, data):
+        self.writes.append(bytes(data))
+        return len(data)
+
 
 class FakeBus:
     def __init__(self, dongles):
@@ -86,8 +90,7 @@ class FakeBus:
                 bus.opened.append(path)
 
             def write(self, data):
-                self.dongle.writes.append(bytes(data))
-                return len(data)
+                return self.dongle.write(data)
 
             def read(self, size, timeout_ms):
                 return self.dongle.read(size, timeout_ms)
@@ -281,6 +284,69 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(bus.opened, [])
         self.assertEqual(bus.dongles[b"c1"].reads, 0)
 
+    def test_the_virtuoso_se_receiver_reads_level_and_charge(self):
+        # the #204 exchange: the session (firmware query + two heartbeats), the
+        # level asked twice, then the charge property - every accepted write bare,
+        # since this receiver refuses the framed form (Windows 0x57)
+        class SeDongle(FakeDongle):
+            """Refuses the 65-byte framed write; answers by accepted-write count."""
+
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {
+                    3: [bragi_reply(2623)],      # headset heartbeat (fw version)
+                    4: [bragi_reply(550)],       # level
+                    5: [bragi_reply(550)],       # level, confirmed
+                    6: [bragi_reply(1)],         # charge property: 1 = charging
+                }
+
+            def write(self, data):
+                if len(data) == C.BRAGI_MSG_SIZE + 1:   # the framed form is refused
+                    return -1
+                self.writes.append(bytes(data))
+                return len(data)
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        dongle = SeDongle()
+        out, _ = self.poll([entry(0x0A40, b"se", 3, 0xFF42, 0x0001)], {b"se": dongle})
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.kind) for s in out],
+                         [("corsair:0a40", "Corsair Virtuoso RGB Wireless SE", 55,
+                           True, "headset")])
+        # the session went first; every accepted write is the bare 64-byte form
+        self.assertEqual([len(w) for w in dongle.writes], [64] * 6)
+        self.assertEqual(dongle.writes[0], bytes([0x02, 0x08, 0x02, 0x13]) + bytes(60))
+        self.assertEqual(dongle.writes[1], bytes([0x02, 0x08, 0x02, 0x12]) + bytes(60))
+        self.assertEqual(dongle.writes[2], bytes([0x02, 0x09, 0x02, 0x12]) + bytes(60))
+        self.assertEqual(dongle.writes[3], bytes([0x02, 0x09, 0x02, 0x0F]) + bytes(60))
+        self.assertEqual(dongle.writes[5], bytes([0x02, 0x09, 0x02, 0x10]) + bytes(60))
+
+    def test_the_se_charge_state_reads_on_battery_too(self):
+        # property 0x10: 2 = on battery (the unplugged probe run, #204)
+        class SeDongle(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {3: [bragi_reply(2623)], 4: [bragi_reply(960)],
+                               5: [bragi_reply(960)], 6: [bragi_reply(2)]}
+
+            def write(self, data):
+                if len(data) == C.BRAGI_MSG_SIZE + 1:
+                    return -1
+                self.writes.append(bytes(data))
+                return len(data)
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        out, _ = self.poll([entry(0x0A40, b"se", 3, 0xFF42, 0x0001)],
+                           {b"se": SeDongle()})
+        self.assertEqual([(s.level, s.charging) for s in out], [(96, False)])
+
     def test_a_non_ff42_collection_is_not_substituted_when_ff42_exists(self):
         # a silent ff42 collection must give no reading, not a try on the keyboard page
         e = [entry(0x1B7F, b"vendor", 1, 0xFF42, 0x0001),
@@ -302,8 +368,10 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(C.PIDS, {0x2A08: "Corsair Void v2 Wireless",
                                   0x2A02: "Corsair Virtuoso Max Wireless",
                                   0x0A97: "Corsair HS80 Max Wireless"})
-        self.assertEqual(C.BRAGI_PIDS, {0x1B7F: "Corsair Dark Core RGB Pro SE"})
+        self.assertEqual(C.BRAGI_PIDS, {0x1B7F: "Corsair Dark Core RGB Pro SE",
+                                        0x0A40: "Corsair Virtuoso RGB Wireless SE"})
         self.assertNotIn(0x1B7F, C.PIDS)
+        self.assertNotIn(0x0A40, C.PIDS)
 
 
 if __name__ == "__main__":

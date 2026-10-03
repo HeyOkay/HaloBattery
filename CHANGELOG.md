@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Corsair Virtuoso RGB Wireless SE over its Slipstream Multi-Device receiver (1B1C:0A40):
+  the same routed exchange as the Dark Core with the receiver's measured differences - the
+  frame carries a leading 0x02 (`02 09 02 0f`), Windows takes it only bare (every
+  report-id-prefixed form is refused with 0x57), the full session runs first (firmware
+  query, receiver heartbeat, headset heartbeat), and the headset reports the charge state
+  on property 0x10 (1 charging, 2 on battery). Measured end to end with @jeffpeng3's
+  on-hardware runs ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
+
 ### Fixed
 - Corsair Dark Core RGB Pro SE: read the battery the way the dongle actually answers (#56). The
   1.13.0 build asked with ckb-next's "nxp" packet, which this dongle never answers; it speaks the
