@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The **Poll interval** was not kept while Bluetooth was on: each Bluetooth update (once a
+  minute, and several times after a device connects) also polled every mouse, keyboard
+  and headset, so a 5-minute interval became about one minute. A Bluetooth update now
+  only refreshes the Bluetooth icons; the other devices are polled at the chosen interval.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

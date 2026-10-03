@@ -32,7 +32,7 @@ import threading
 import time
 import zlib
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
@@ -864,6 +864,37 @@ class DeviceIcon:
             forget()                            # free the cached icon handles
 
 
+class WakeEvent(threading.Event):
+    """Wakes the poll thread. set() asks for a full poll of every device ("Refresh
+    now", a changed setting, diagnostics). bluetooth() only asks to show new
+    Bluetooth results: the watcher sends one at least once a minute and several
+    after each connect, and a full poll for each of them would query the HID
+    devices far more often than the user's "Poll interval"."""
+
+    def __init__(self):
+        super().__init__()
+        self._full = False
+        self._full_lock = threading.Lock()
+
+    def set(self):
+        with self._full_lock:
+            self._full = True
+        super().set()
+
+    def bluetooth(self):
+        super().set()
+
+    def clear(self):
+        self.take()
+
+    def take(self) -> bool:
+        """Clear the event. True when a full poll was asked for since the last clear."""
+        with self._full_lock:
+            full, self._full = self._full, False
+            super().clear()
+        return full
+
+
 class App:
     def __init__(self):
         self.cfg = load_config()
@@ -882,13 +913,14 @@ class App:
         self.placeholder: Optional[pystray.Icon] = None
         self.lock = threading.RLock()
         self._bt_dup_logged: Set[str] = set()   # Bluetooth copies already reported
-        self.wake = threading.Event()
+        self.wake = WakeEvent()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
         self.alerted: Dict[str, bool] = {}
         self.full_state: Dict[str, str] = {}   # key -> charging / full / idle
         self.missing: Dict[str, int] = {}
         self.bt_cache: List[DeviceStatus] = []
+        self.hid_results: List[DeviceStatus] = []   # the last poll, before the Bluetooth merge
         self.anim_tick = 0
         self.bt_wake = threading.Event()      # "poll Bluetooth now"
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
@@ -1424,6 +1456,10 @@ class App:
             for st in found:
                 self.key_provider[st.key] = p.name
             results += found
+        self.hid_results = results
+        return self.merge_bluetooth(results)
+
+    def merge_bluetooth(self, results: List[DeviceStatus]) -> List[DeviceStatus]:
         if self.cfg["bluetooth"]:
             # Bluetooth is polled in its own thread (bt_loop); only the cache is used here
             bt = list(self.bt_cache)
@@ -1431,12 +1467,27 @@ class App:
             results = drop_bluetooth_duplicates(results, self._bt_dup_logged)
         return results
 
+    def show_bluetooth(self):
+        """New Bluetooth results between two polls: merge them with the last poll's
+        HID results and show them. No HID device is queried."""
+        hid = list(self.hid_results)
+        polled = {s.key for s in hid}
+        # A Bluetooth device can go at once, and so can a HID reading that the merge
+        # now drops for its Bluetooth copy. A device the last poll did not see is
+        # counted as missing by the polls only, not again by each snapshot.
+        results = self.merge_bluetooth(hid)
+        self.apply(results, may_go=lambda key: key.startswith("bt:") or key in polled)
+        try:
+            self.write_status(results)      # the status file follows the icons
+        except Exception:
+            log.exception("status file")
+
     def _bt_update(self, res: List[DeviceStatus]):
         """A snapshot from the Bluetooth watcher: show it right away."""
         if self.cfg["bluetooth"]:
             self.bt_cache = res
         self.bt_fresh.set()
-        self.wake.set()
+        self.wake.bluetooth()
 
     def bt_loop(self):
         """Separate thread: PowerShell can take a few seconds and must not delay
@@ -1468,14 +1519,15 @@ class App:
                 if self.cfg["bluetooth"]:
                     self.bt_cache = res
                 self.bt_fresh.set()
-                self.wake.set()                 # show the result right away
+                self.wake.bluetooth()           # show the result right away
             else:
                 self.bt_cache = []
                 self.bt_fresh.set()
             self.bt_wake.wait(60)
             self.bt_wake.clear()
 
-    def apply(self, results: List[DeviceStatus]):
+    def apply(self, results: List[DeviceStatus], may_go: Optional[Callable[[str], bool]] = None):
+        """Show the results. `may_go` limits which missing devices count as gone."""
         seen = set()
         hidden = self._settings_map("hidden")
         now = time.time()
@@ -1501,7 +1553,7 @@ class App:
         # the cable-only and Bluetooth forms when a cable is added to a BT pad),
         # so those go at once
         for key in list(self.icons):
-            if key not in seen:
+            if key not in seen and (may_go is None or may_go(key)):
                 self.missing[key] = self.missing.get(key, 0) + 1
                 limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                 if self.missing[key] >= limit:
@@ -1663,8 +1715,17 @@ class App:
             sig = self.change_signature()
         while not self.stop_evt.is_set():
             left = deadline - time.time()
-            if left <= 0 or self.wake.wait(min(2.5, left)):
+            if left <= 0:
                 return
+            if self.wake.wait(min(2.5, left)):
+                if self.wake.take():
+                    return
+                # only new Bluetooth results: show them and keep the poll interval
+                try:
+                    self.show_bluetooth()
+                except Exception:
+                    log.exception("apply")
+                continue
             now = self.change_signature()
             if now != sig:
                 time.sleep(1.0)          # give Windows time to finish setting up the device
