@@ -86,6 +86,7 @@ def make_app(cfg=None):
     app.cfg = dict(hb.DEFAULTS, **(cfg or {}))
     app.lock = threading.RLock()
     app.icons, app.missing, app.alerted, app.full_state = {}, {}, {}, {}
+    app.input_wake_at = 0.0                 # wait_next's input-driven re-read (#87)
     app.placeholder = None
     app.wake = threading.Event()
     app.light_taskbar = False
