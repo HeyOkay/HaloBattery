@@ -20,6 +20,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -59,8 +60,10 @@ class FakeDongle:
         self.replies = [list(r) for r in replies]
         self.silent = silent
         self.writes = []
+        self.reads = 0
 
     def read(self, size, timeout_ms):
+        self.reads += 1
         if self.silent or not self.replies:
             return []
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
@@ -216,6 +219,67 @@ class BragiPollTest(unittest.TestCase):
                            {b"d": FakeDongle([bragi_reply(550, route=0x00, cmd=0x12),
                                               bragi_reply(550)])})
         self.assertEqual(out[0].level, 55)
+
+    def test_the_two_asks_must_agree(self):
+        # the answer is not property-attributed; a foreign answer (another app
+        # asking the dongle for something else) would otherwise pass as a level
+        # (review by @ahmedkhursheed23)
+        class TwoAnswers(FakeDongle):
+            """The first ask is answered with 55 %, the second with 90 %."""
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                return list(bragi_reply(550 if len(self.writes) < 2 else 900))
+
+        dongle = TwoAnswers()
+        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)], {b"d": dongle})
+        self.assertEqual(out, [])
+        self.assertEqual(len(dongle.writes), 2)   # both asks went out
+
+    def test_a_busy_channel_does_not_end_the_wait(self):
+        # 12 traffic frames used to eat the old 10-read budget before the answer
+        traffic = [bragi_reply(0, route=0x00, cmd=0x12)] * 12
+        out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
+                           {b"d": FakeDongle(traffic + [bragi_reply(550)])})
+        self.assertEqual(out[0].level, 55)
+
+    def test_the_answer_window_is_a_time_window(self):
+        # frames arriving early used to eat a read-count budget; the window is
+        # the clock now (review by @ahmedkhursheed23) - here the clock passes
+        # it after a single read
+        record = bragi_reply(0, route=0x00, cmd=0x12)
+        st = {"t": 0.0}
+
+        def clock():
+            st["t"] += 2.0
+            return st["t"]
+
+        with mock.patch.object(C.time, "monotonic", clock):
+            out, bus = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
+                                 {b"d": FakeDongle(record)})
+        self.assertEqual(out, [])
+        # 4 drain reads + one read inside the window; a read-count budget would
+        # have kept reading up to the attempt cap
+        self.assertEqual(bus.dongles[b"d"].reads, 5)
+        self.assertEqual(len(bus.dongles[b"d"].writes), 1)
+
+    def test_a_spent_budget_skips_the_remaining_collections(self):
+        # the per-dongle budget bounds the try-every-collection fallback
+        # (review by @ahmedkhursheed23); the clock jumps so it is spent at once
+        e = [entry(0x1B7F, b"c1", 1, 0x0001, 0x0002),
+             entry(0x1B7F, b"c2", 2, 0x0001, 0x0003)]
+        st = {"t": 0.0}
+
+        def clock():
+            st["t"] += 10.0
+            return st["t"]
+
+        with mock.patch.object(C.time, "monotonic", clock):
+            out, bus = self.poll(e, {b"c1": FakeDongle(silent=True),
+                                     b"c2": FakeDongle(bragi_reply(765))})
+        self.assertEqual(out, [])
+        self.assertEqual(bus.opened, [])
+        self.assertEqual(bus.dongles[b"c1"].reads, 0)
 
     def test_a_non_ff42_collection_is_not_substituted_when_ff42_exists(self):
         # a silent ff42 collection must give no reading, not a try on the keyboard page

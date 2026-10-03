@@ -34,8 +34,14 @@ the reporter's runs in #56 showed it never answers that one, and that one of
 its *other* frames parsed as a level was the 0 % flash. The request above and
 its `01 02 00 26 02 ...` answer (55 %) were captured from the reporter's
 dongle, and the exchange is confirmed on hardware: KKiruano's test build run
-showed the same level SignalRGB does. Only the dongle is claimed: a wired
-1b1c:1b7e exists and nothing here can prove it answers.
+showed the same level SignalRGB does. The answer echoes the command, not the
+property, so a second app on the same dongle (iCUE, SignalRGB) can put an
+answer for another property on the channel that parses as a level; the ask is
+therefore repeated and only two equal answers are taken, the wait is a time
+window (traffic frames end a 500 ms read early), and a per-dongle budget
+bounds the try-every-collection fallback (review by @ahmedkhursheed23). Only
+the dongle is claimed: a wired 1b1c:1b7e exists and nothing here can prove it
+answers.
 """
 from __future__ import annotations
 
@@ -99,7 +105,12 @@ BRAGI_ROUTE_CHILD = 0x01         # the route the mouse's answers come back with
 BRAGI_CMD_GET = 0x02             # ckb-next: CMD_GET
 BRAGI_PROP_BATTERY = 0x0F        # ckb-next: BRAGI_BATTERY_LEVEL
 BRAGI_LEVEL_MAX = 1000           # tenths of a percent (765 -> 76 %)
-BRAGI_READS = 10                 # x READ_TIMEOUT_MS: the answer measured ~4.7 s after the write
+BRAGI_WINDOW_S = 6.0             # the answer measured ~4.7 s after the write (#56); a
+                                 # time window, not a read count - traffic frames end a
+                                 # 500 ms read early and used to eat the old budget
+BRAGI_CONFIRM_WINDOW_S = 3.0     # the confirming ask; the mouse is awake by then
+BRAGI_READ_ATTEMPTS = 96         # a hard stop so a busy channel cannot spin
+BRAGI_POLL_BUDGET_S = 7.0        # total per dongle, across its collections
 
 
 def bragi_request(prop: int = BRAGI_PROP_BATTERY) -> bytes:
@@ -176,12 +187,33 @@ class CorsairProvider(Provider):
         return sorted(vend, key=lambda d: (0 if d.get("usage") == BRAGI_USAGE else 1,
                                            d.get("interface_number") or 99))
 
-    def _query_bragi(self, path: bytes) -> Optional[int]:
+    def _ask_bragi(self, dev, window: float) -> Optional[int]:
+        """One ask's answer within a time window; the level, or None."""
+        deadline = time.monotonic() + window
+        for _ in range(BRAGI_READ_ATTEMPTS):
+            if time.monotonic() >= deadline:
+                return None
+            r = dev.read(BRAGI_MSG_SIZE + 1, READ_TIMEOUT_MS)
+            if not r:
+                continue
+            self._diag.append(f"  reply: {hexdump(r)}")
+            level = parse_bragi(r)
+            if level is not None:
+                return level
+        return None
+
+    def _query_bragi(self, path: bytes, deadline: float) -> Optional[int]:
         """One battery question to the dongle; the level, or None.
 
         The answer arrives late - measured ~4.7 s on the reporter's dongle with
-        the mouse resting (#56) - so the reads wait up to BRAGI_READS *
-        READ_TIMEOUT_MS and take the first frame that is really an answer.
+        the mouse resting (#56) - so the wait is a time window (review by
+        @ahmedkhursheed23: traffic frames end a 500 ms read early and used to
+        eat a read-count budget). The answer does not echo which property it
+        answers, and Windows delivers input reports to every open handle, so a
+        second app polling the same dongle could put a foreign answer on the
+        channel that parses as a level - the ask is repeated and the two answers
+        must agree (a confirming ask that stays silent is noted and the single
+        reading taken; a disagreement is refused rather than shown).
         """
         dev = hid.device()
         try:
@@ -192,15 +224,22 @@ class CorsairProvider(Provider):
         try:
             self._drain(dev)
             dev.write(bragi_request())
-            for attempt in range(BRAGI_READS):
-                r = dev.read(BRAGI_MSG_SIZE + 1, READ_TIMEOUT_MS)
-                if not r:
-                    continue
-                self._diag.append(f"  reply {attempt + 1}: {hexdump(r)}")
-                level = parse_bragi(r)
-                if level is not None:
-                    return level
-            self._diag.append("  no battery answer")
+            first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
+                                             deadline - time.monotonic()))
+            if first is None:
+                self._diag.append("  no battery answer")
+                return None
+            dev.write(bragi_request())
+            second = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
+                                              deadline - time.monotonic()))
+            if second is None:
+                self._diag.append("  (the confirming ask stayed silent; taking the "
+                                  "single reading)")
+                return first
+            if second == first:
+                return first
+            self._diag.append(f"  the two answers disagree ({first} % / {second} %) - "
+                              f"refused")
             return None
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
@@ -292,11 +331,16 @@ class CorsairProvider(Provider):
             if not mine:
                 continue
             self._diag.append(f"[Corsair bragi] pid={pid:04x} '{name}'")
+            deadline = time.monotonic() + BRAGI_POLL_BUDGET_S
             for d in self._pick_bragi(mine):
+                if time.monotonic() >= deadline:
+                    self._diag.append("  (the read budget is spent; the remaining "
+                                      "collections are skipped)")
+                    break
                 self._diag.append(f"  iface={d.get('interface_number')} "
                                   f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 seen.add(d["path"])
-                level = self._query_bragi(d["path"])
+                level = self._query_bragi(d["path"], deadline)
                 if level is None:
                     continue
                 out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
