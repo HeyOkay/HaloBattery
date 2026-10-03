@@ -181,13 +181,26 @@ class PollTest(ProviderTest):
         # and the value is gone too: a silent poll shows nothing, not a greyed icon
         self.assertEqual(self.poll(e, {path_for(PUCK, 2): puck}), [])
 
-    def test_silent_slot_keeps_the_last_value_greyed_then_drops_it(self):
+    def test_silent_slot_keeps_the_last_value_greyed_without_a_timer(self):
+        # an icon removed and re-created comes back at a new tray position (#87,
+        # #202 review): the greyed value stays while the puck is there
         puck = FakePuck([battery(1, 80)])
         e = [entry(PUCK, 2)]
         self.poll(e, {path_for(PUCK, 2): puck})
         res = self.poll(e, {path_for(PUCK, 2): puck})
         self.assertEqual([(r.level, r.charging, r.online) for r in res], [(80, False, False)])
-        self.clock.now += S.ASLEEP_KEEP
+        self.clock.now += 6 * 3600
+        res = self.poll(e, {path_for(PUCK, 2): puck})
+        self.assertEqual([(r.level, r.charging, r.online) for r in res], [(80, False, False)])
+
+    def test_a_puck_that_leaves_clears_the_kept_value(self):
+        puck = FakePuck([battery(1, 80)])
+        e = [entry(PUCK, 2)]
+        self.assertEqual([r.level for r in self.poll(e, {path_for(PUCK, 2): puck})], [80])
+        self.assertEqual(self.poll([], {}), [])          # the puck is unplugged
+        self.assertEqual(self.provider._last, {})        # and nothing is kept
+        # plugging it back shows nothing until a report arrives again
+        puck.queue = []
         self.assertEqual(self.poll(e, {path_for(PUCK, 2): puck}), [])
 
     def test_refused_level_shows_the_controller_without_a_level(self):
@@ -195,6 +208,33 @@ class PollTest(ProviderTest):
         res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck})
         self.assertEqual([(r.level, r.online, r.approx) for r in res],
                          [(None, True, S.NOT_REPORTED)])
+
+    def test_a_vendor_collection_with_another_usage_still_listens(self):
+        # no ff00:0001 on the interface: SDL matches the interface alone, so a
+        # vendor page is the next pick and the choice is logged (#202 review)
+        puck = FakePuck([battery(1, 66)])
+        res = self.poll([entry(PUCK, 2, usage_page=0xFF00, usage=0x0002)],
+                        {path_for(PUCK, 2): puck})
+        self.assertEqual([r.level for r in res], [66])
+        self.assertIn("picked vendor page ff00", "\n".join(self.provider.diagnostics()))
+
+    def test_the_gamepad_face_is_the_last_resort(self):
+        puck = FakePuck([battery(1, 42)])
+        res = self.poll([entry(PUCK, 2, usage_page=0x0001, usage=0x0005)],
+                        {path_for(PUCK, 2): puck})
+        self.assertEqual([r.level for r in res], [42])
+
+    def test_a_puck_without_a_usable_collection_lists_what_it_has(self):
+        cases = [entry(PUCK, 3, usage_page=0x0001, usage=0x0002),
+                 entry(PUCK, 3, usage_page=0x0001, usage=0x0006)]
+        pucks = {d["path"]: FakePuck([battery(1, 50)]) for d in cases}
+        res = self.poll(cases, pucks)
+        self.assertEqual(res, [])
+        self.assertTrue(all(p.opened == 0 for p in pucks.values()))
+        diag = "\n".join(self.provider.diagnostics())
+        self.assertIn("no slot collection", diag)
+        self.assertIn("usage=0001:0002", diag)
+        self.assertIn("usage=0001:0006", diag)
 
     def test_only_the_slot_collections_are_opened(self):
         # old dongle, other interfaces, the mouse / keyboard collections and the
