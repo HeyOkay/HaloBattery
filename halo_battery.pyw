@@ -31,6 +31,7 @@ import tempfile
 import threading
 import time
 import zlib
+from dataclasses import replace
 from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Optional, Set
 
@@ -126,6 +127,7 @@ DEFAULTS = {
     "time_left": True,      # "about N h of use left" in the tooltip (history.py)
     "percent_in_icon": False,  # the level as a number in the ring, instead of the pictogram
     "quiet_fullscreen": True,  # while a game is full screen: hold alerts, poll every 5 min
+    "keep_disconnected": False,  # keep a gone device's icon, greyed with its last level, until restart (#151)
     "status_file": False,      # write status.json for Rainmeter, Stream Deck, scripts
 }
 
@@ -1032,6 +1034,8 @@ class App:
                  checked=lambda it: self.cfg.get("time_left", True)),
             Item("Quiet while gaming", toggle("quiet_fullscreen"),
                  checked=lambda it: self.cfg.get("quiet_fullscreen", True)),
+            Item("Keep disconnected devices until restart", toggle("keep_disconnected"),
+                 checked=lambda it: self.cfg.get("keep_disconnected", False)),
             Menu.SEPARATOR,
             Item("Windows Bluetooth devices", toggle("bluetooth"),
                  checked=lambda it: self.cfg["bluetooth"]),
@@ -1500,11 +1504,19 @@ class App:
         # presence comes from the reliable HID list (and its key switches between
         # the cable-only and Bluetooth forms when a cable is added to a BT pad),
         # so those go at once
+        keep = bool(self.cfg.get("keep_disconnected", False))
         for key in list(self.icons):
             if key not in seen:
+                st = self.icons[key].status
+                if keep and st is not None and not st.online:
+                    continue      # already kept: greyed with its last level
                 self.missing[key] = self.missing.get(key, 0) + 1
                 limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
-                if self.missing[key] >= limit:
+                if self.missing[key] >= limit and keep and st is not None:
+                    # "keep disconnected devices": grey icon, last level, no alerts
+                    self.icons[key].update(replace(st, online=False, charging=False))
+                    self.missing.pop(key, None)
+                elif self.missing[key] >= limit:
                     self.icons.pop(key).stop()
                     # the icon is gone: stop counting, otherwise the quick
                     # 3-second re-check in wait_next() would go on forever

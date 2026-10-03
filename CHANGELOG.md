@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Preferences > "Keep disconnected devices until restart" (off by default): the icon of a controller, headset or Bluetooth device that disconnects stays in the tray, greyed, with its last level, until the device comes back or the app restarts (#151).
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
