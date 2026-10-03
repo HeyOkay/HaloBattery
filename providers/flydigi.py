@@ -22,8 +22,13 @@ whose state or level step is out of range is refused rather than shown.
 The pad's own input stream shares the collection, so the reads drain reports until the
 answer shows up; the first write shape that provokes one is remembered in the
 diagnostics, and the other shapes are only tried after a variant produced nothing (the
-ZEROED one is what SDL sends for this model). Unverified on hardware here: a test build
-for the reporters of #191 settles the exact write shape and the level mapping.
+ZEROED one is what SDL sends for this model). SDL sends its check-architecture request
+(``00 5A A5 07 00 00``) before the info request, and this follows that order; the
+answer is not needed for the reading and only shows up in the diagnostics. A write's
+return value is a failure only when negative: Windows hidapi pads a short write to the
+collection's output report length and returns that padded length (33 for this 6-byte
+request), so comparing it to the buffer's own length - as the first test build did -
+skipped the read and reported "no info reply" while the pad was answering (#191).
 """
 from __future__ import annotations
 
@@ -52,6 +57,10 @@ INFO_REQUEST = bytes([0x00, 0x5A, 0xA5, 0x01, 0x02, 0x00])
 INFO_REQUEST_PADDED = INFO_REQUEST + bytes(32 - len(INFO_REQUEST))
 INFO_REQUEST_NUMBERED = bytes([0x03]) + INFO_REQUEST[1:]
 INFO_REQUEST_NUMBERED_PADDED = bytes([0x03]) + INFO_REQUEST_PADDED[1:]
+
+# SDL's check-architecture request (``07``), sent first like SDL sends it; its answer
+# decides nothing here and only feeds the diagnostics.
+ARCH_REQUEST = bytes([0x00, 0x5A, 0xA5, 0x07, 0x00, 0x00])
 
 DRAIN_READS = 40          # queued input-stream reports dropped before the request
 DRAIN_TIMEOUT_MS = 2
@@ -121,6 +130,13 @@ def read_battery(path, diag: List[str], name: str) -> Optional[Reading]:
                     break
             except (OSError, ValueError):
                 break
+        try:
+            sent = dev.write(ARCH_REQUEST)
+        except (OSError, ValueError) as e:
+            diag.append(f"[Flydigi] write: {e}")
+            return None
+        if sent is not None and sent < 0:
+            diag.append(f"[Flydigi] architecture write failed ({sent})")
         seen: List[bytes] = []
         wrote = ""
         for shape, request in (("", INFO_REQUEST), (" (padded)", INFO_REQUEST_PADDED),
@@ -131,9 +147,14 @@ def read_battery(path, diag: List[str], name: str) -> Optional[Reading]:
             except (OSError, ValueError) as e:
                 diag.append(f"[Flydigi] write: {e}")
                 return None
-            if sent != len(request):
-                diag.append(f"[Flydigi] write{shape} returned {sent} of {len(request)} bytes")
+            if sent is not None and sent < 0:
+                diag.append(f"[Flydigi] write{shape} failed ({sent})")
                 continue
+            if sent != len(request):
+                # hidapi pads a short write to the collection's output report length
+                # and returns that length (33 for this 6-byte request): the write
+                # landed, so keep reading instead of skipping the shape.
+                diag.append(f"[Flydigi] write{shape} padded to {sent} bytes")
             wrote = shape
             for _ in range(READS):
                 try:

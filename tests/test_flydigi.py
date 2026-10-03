@@ -5,7 +5,10 @@ The protocol is SDL's (SDL_hidapi_flydigi.c): a 32-byte report protocol on the p
 is answered by a report whose byte 11 carries the battery - high nibble the state
 (0 on battery, 1 charging, 2 charged), low nibble the level step, x20. The case from
 #191: a Vader 5 Pro on its 2.4 GHz dongle whose XInput type says "wired" and whose
-Windows.Gaming.Input report is the constant remain=full=1000 placeholder.
+Windows.Gaming.Input report is the constant remain=full=1000 placeholder. SDL's
+check-architecture request goes first, then the info request; the fake returns the
+padded length for every short write, which is what Windows hidapi does (the first
+test build mistook that for a failed write and never read the answer).
 
 Run from the repository root:
 
@@ -45,11 +48,12 @@ INPUT = bytes([0x03, 0x5A, 0xA5, 0xEF]) + bytes(28)
 class FakePad:
     """Serves queued reports once something was written; records the writes."""
 
-    def __init__(self, frames=(), short=False, answer_on=1):
+    def __init__(self, frames=(), padded=True, fail=False, answer_on=2):
         self.queue = list(frames)
         self.written = []
-        self.short = short
-        self.answer_on = answer_on             # the 1-based write the pad answers to
+        self.padded = padded   # Windows pads a short write and returns the length
+        self.fail = fail
+        self.answer_on = answer_on   # the 1-based write the pad answers to (#1 = arch)
         self.closed = False
 
     def open_path(self, path):
@@ -57,7 +61,9 @@ class FakePad:
 
     def write(self, data):
         self.written.append(bytes(data))
-        return len(data) - 3 if self.short else len(data)
+        if self.fail:
+            return -1
+        return 33 if self.padded else len(data)
 
     def read(self, size, timeout_ms):
         if len(self.written) < self.answer_on:   # nothing arrives before the request
@@ -119,15 +125,17 @@ class FlydigiTests(unittest.TestCase):
                 self.assertIn("unexpected battery byte", "\n".join(self.diag))
 
     # ---- the write ------------------------------------------------------
-    def test_the_first_write_is_the_uncaptured_zeroed_request(self):
+    def test_the_architecture_check_comes_first_then_the_info_request(self):
         self.pad.queue = [info_frame()]
         self.read()
-        self.assertEqual(self.pad.written[0], b"\x00\x5a\xa5\x01\x02\x00")
+        self.assertEqual(self.pad.written[0], b"\x00\x5a\xa5\x07\x00\x00")
+        self.assertEqual(self.pad.written[1], b"\x00\x5a\xa5\x01\x02\x00")
 
     def test_no_answer_tries_every_write_shape(self):
         self.pad.queue = []
         self.assertIsNone(self.read())
-        self.assertEqual(self.pad.written, [flydigi.INFO_REQUEST,
+        self.assertEqual(self.pad.written, [flydigi.ARCH_REQUEST,
+                                            flydigi.INFO_REQUEST,
                                             flydigi.INFO_REQUEST_PADDED,
                                             flydigi.INFO_REQUEST_NUMBERED,
                                             flydigi.INFO_REQUEST_NUMBERED_PADDED])
@@ -135,18 +143,26 @@ class FlydigiTests(unittest.TestCase):
 
     def test_the_shape_that_answered_is_named_in_the_diagnostics(self):
         # the first shape gets no answer, the padded one does: the log says which
-        self.pad = FakePad(frames=[info_frame()], answer_on=2)
+        self.pad = FakePad(frames=[info_frame()], answer_on=3)
         self.assertEqual(self.read().level, 60)
         joined = "\n".join(self.diag)
         self.assertIn("info reply (padded)", joined)
-        self.assertEqual(self.pad.written[1], flydigi.INFO_REQUEST_PADDED)
+        self.assertEqual(self.pad.written[2], flydigi.INFO_REQUEST_PADDED)
 
-    def test_a_short_write_is_refused_rather_than_trusted(self):
-        self.pad = FakePad(short=True, frames=[info_frame()])
+    def test_a_padded_write_still_reads_the_reply(self):
+        # the first #191 test build compared the write's return value to the
+        # buffer's length; Windows hidapi answers with the padded length (33), so
+        # the read was skipped and a pad that was answering looked silent
+        self.pad.queue = [info_frame(state=0, step=3)]
+        self.assertEqual(self.read().level, 60)
+        self.assertIn("padded to 33", "\n".join(self.diag))
+
+    def test_a_failed_write_is_logged_and_the_next_shape_tried(self):
+        self.pad = FakePad(frames=[info_frame()], fail=True)
         self.assertIsNone(self.read())
         joined = "\n".join(self.diag)
-        self.assertIn("returned", joined)          # the write's return value is logged
-        self.assertIn("of 6 bytes", joined)
+        self.assertIn("failed", joined)
+        self.assertEqual(len(self.pad.written), 5)  # the arch check + four info shapes
 
     # ---- collection picking ---------------------------------------------
     def test_collections_keeps_only_the_vendor_page_of_known_ids(self):
