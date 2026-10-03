@@ -793,8 +793,7 @@ class DeviceIcon:
     def _update(self, st: DeviceStatus) -> None:
         self.status = st
         badge = self.app.pictogram(st) if self.app.cfg["badges"] else ""
-        animate = (self.app.cfg["animation"] and st.charging and st.online
-                   and st.level is not None)
+        animate = self.app.cfg["animation"] and st.charging and st.online
         # the number replaces the pictogram; a device that only reports rough steps
         # (st.approx) keeps its pictogram rather than showing a made-up exact number
         text = (str(st.level) if self.app.cfg.get("percent_in_icon") and st.level is not None

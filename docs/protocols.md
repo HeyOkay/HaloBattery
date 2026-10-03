@@ -54,6 +54,28 @@ The receiver exposes one vendor collection, `ff13:0001` (interface 5 on a real u
 
 Its receiver publishes two collections and neither answers the standard Razer mouse request this app sends. The headset speaks the "PA" protocol instead: 64-byte vendor frames, `P`,`A` out and `P`,`I` back, battery command `0x21` with the level in the reply's data byte, charging `0x2A`. Decoded from a USBPcap capture of Razer Synapse on a real unit (it read 34%), then confirmed on hardware with @phl23's own Barracuda Pro: the level tracks (27% at the test), charging follows the charger, and a switched-off headset reports "no link" rather than a stale value. Over Bluetooth Windows reports the level itself.
 
+### Razer BlackShark V2 Pro (2020)
+
+**Connection:** 2.4 GHz receiver (1532:0528)
+
+Uses a 64-byte feature report `0xFF` on usage page `0xFF00`, with request
+`FF 0A 00 FD 04 12 F1 02 05`. Reads the device-reported level and power state.
+Observed states are on battery (`0x01`), low battery (`0x02`), then very low battery (`0x03`),
+charging (`0x09`) and charge complete (`0x06`). An unknown state keeps a fresh
+battery reading visible and marks the charging state as unknown. Stale replies
+are rejected. The charging cable (1532:052E) is skipped to keep one icon;
+the receiver must remain plugged in.
+
+**The device-reported battery percentage is imprecise and should be treated as
+a rough indication of charge, not an exact measurement.** Observed discharge
+levels were 100 -> 80 -> 50 -> 30 -> 10, with no intermediate values.
+The full set of levels and their thresholds have not been established.
+Connecting the charger produced an immediate jump from 10 to 80, so the reported
+percentage during charging is unreliable. At charge completion the receiver
+reported 100, which remained 100 after unplugging. The application currently
+hides the unreliable level during active charging and shows the charging state.
+On battery and after charge completion, it displays the reported level unchanged.
+
 ### Razer BlackShark V2 Pro (2023)
 
 **Connection:** 2.4 GHz receiver (1532:0555)
