@@ -22,6 +22,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [AM Infinity 8K (Angry Miao)](docs/protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](docs/protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](docs/protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz receiver or USB cable | no |
+| [Attack Shark X11 / R1](docs/protocols.md#attack-shark-x11--r1) | 2.4 GHz dongle | yes |
 | [Audeze Maxwell](docs/protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](docs/protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
 | [Corsair Dark Core RGB Pro SE](docs/protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | no |
@@ -32,6 +33,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [HyperX Cloud Alpha 2](docs/protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
 | [HyperX Cloud II Wireless](docs/protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
 | [HyperX Cloud III Wireless](docs/protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
+| [Inphic In9 Pro](docs/protocols.md#inphic-in9-pro) | 2.4 GHz dongle | yes |
 | [JBL Quantum 910 Wireless](docs/protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](docs/protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](docs/protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
@@ -138,6 +140,8 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery`.
 
 ## Credits
 
+- Inphic In9 Pro protocol: the vendor's INPHIC HUB driver, linked by @KwasimodoZA in [#160](https://github.com/HeyOkay/HaloBattery/issues/160).
+- Attack Shark X11 / R1 frames: the X11's caught by @Ur1Sam's probe run in [#163](https://github.com/HeyOkay/HaloBattery/issues/163); the R1 generation's by @SyedAounHaiderNaqvi's probe run and confirmed by his run of the test build in [#69](https://github.com/HeyOkay/HaloBattery/issues/69).
 - WLmouse protocol: @len0c ([incconutwo/mouse-battery-tray](https://github.com/incconutwo/mouse-battery-tray), MIT).
 - MCHOSE protocol: the write-up by @alexfrih ([alexfrih/mchose-linux](https://github.com/alexfrih/mchose-linux), recovered from MCHOSE's own web driver); the G7 from @kek353's monitor and the dump in [#8](https://github.com/HeyOkay/HaloBattery/issues/8).
 - Hitscan Hyperlight protocol: @sopparus ([sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery)), who mapped it from the vendor application's USB traffic and confirmed it in the [libratbag discussion](https://github.com/libratbag/libratbag/issues/1893).

@@ -94,7 +94,8 @@ from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
-                       GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXProvider, JblProvider,
+                       GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXProvider,
+                       InphicProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesProvider, WLmouseProvider, XInputProvider)
@@ -143,6 +144,7 @@ PROVIDER_LABELS = {
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_cloud3": "HyperX Cloud III Wireless",
+    "inphic": "Inphic / Attack Shark mice",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
@@ -166,7 +168,8 @@ def make_providers() -> list:
             JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider()]
+            LamzuProvider(), AmInfinityProvider(),
+            InphicProvider()]
 
 
 # ---------------------------------------------------------------- config
