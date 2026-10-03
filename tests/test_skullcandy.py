@@ -29,15 +29,26 @@ CAPTURE_REPORT = bytes.fromhex(
 # The acknowledgement alone: what a reader that looks only at the first frame sees.
 ACK_ONLY = bytes.fromhex("070780" "055b0300d60c00") + bytes(52)
 
+# The previous poll's snapshot: the capture's report with 65 % in it - what report 7
+# still holds when the next ask goes out.
+_STALE = bytearray(CAPTURE_REPORT)
+_STALE[18] = 65
+STALE_REPORT = bytes(_STALE)
+
 
 class FakeDongle:
-    """mode: "answer" (a stale report first, then the capture's), "ack" (the
-    acknowledgement only), "silent"."""
+    """mode: "answer" (the capture's report after the ask), "ack", "silent", or
+    "same" (the report never changes: a steady level). `before` is what report 7
+    holds before and just after the ask - the previous poll's snapshot; the fresh
+    one replaces it `pending` reads later."""
 
-    def __init__(self, mode="answer"):
+    def __init__(self, mode="answer", before=None, pending=2):
         self.mode = mode
+        self.before = before
+        self.default_pending = pending
+        self.pending = None
+        self.fresh = None
         self.writes = []
-        self.queue = []
         self.opened = 0
 
     def open_path(self, path):
@@ -46,13 +57,23 @@ class FakeDongle:
     def write(self, data):
         self.writes.append(list(data))
         if self.mode == "answer":
-            self.queue = [[0x07] + [0] * 61, CAPTURE_REPORT]
+            self.fresh = CAPTURE_REPORT
+        elif self.mode == "same":
+            self.fresh = self.before
         elif self.mode == "ack":
-            self.queue = [ACK_ONLY]
+            self.fresh = ACK_ONLY
+        else:
+            self.fresh = None
+        self.pending = self.default_pending if self.mode != "silent" else None
         return len(data)
 
     def get_input_report(self, report_id, size):
-        return self.queue.pop(0) if self.queue else []
+        if self.pending is None:                      # before the ask (or silent)
+            return list(self.before) if self.before else []
+        if self.pending > 0:
+            self.pending -= 1
+            return list(self.before) if self.before else []
+        return list(self.fresh) if self.fresh else []
 
 
 class FakeBus:
@@ -113,10 +134,24 @@ class CaptureTest(ProviderTest):
         self.assertEqual([(r.key, r.name, r.level, r.charging, r.online, r.kind) for r in res],
                          [("skullcandy:3210", "Skullcandy PLYR", 70, False, True, "headset")])
 
-    def test_a_stale_report_before_the_answer_is_skipped(self):
-        # the fake hands out one empty report first; the answer follows
+    def test_an_empty_report_before_the_answer_is_skipped(self):
+        # nothing in report 7 yet: the empty reads are not taken for an answer
         self.assertEqual([r.level for r in
                           self.poll(dongle_entries(), {b"dongle": FakeDongle()})], [70])
+
+    def test_a_stale_indication_is_not_taken_for_the_answer(self):
+        # the previous poll's 65 % still sits in report 7 when the ask goes out:
+        # it must not be shown as the fresh answer (review, @ahmedkhursheed23)
+        dongle = FakeDongle(before=STALE_REPORT)
+        self.assertEqual([r.level for r in
+                          self.poll(dongle_entries(), {b"dongle": dongle})], [70])
+
+    def test_a_steady_level_is_still_reported(self):
+        # the report never changes because the level really is the same: the last
+        # read is still parsed, so a steady value cannot leave the icon empty
+        dongle = FakeDongle(mode="same", before=STALE_REPORT)
+        self.assertEqual([r.level for r in
+                          self.poll(dongle_entries(), {b"dongle": dongle})], [65])
 
     def test_the_acknowledgement_alone_is_not_a_reading(self):
         # the trap: the 0x5B ack sits in the same report, before the indication

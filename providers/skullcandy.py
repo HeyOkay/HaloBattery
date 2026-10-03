@@ -116,7 +116,14 @@ class SkullcandyProvider(Provider):
     def _read(self, path) -> Optional[int]:
         """One battery query: the ask as an output report, then poll report 7 -
         each read returns the dongle's most recent report, and the fresh one
-        arrives a few reads after the ask."""
+        arrives a few reads after the ask.
+
+        Report 7 still holds the previous poll's snapshot when the ask goes out
+        (Headroom's read_battery drains before it sends; review by
+        @ahmedkhursheed23), so it is read once first and reads identical to it are
+        skipped - taking one would show the old value for one more poll. The last
+        read is parsed even if it never changed, so a steady level cannot leave the
+        icon empty."""
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -124,6 +131,13 @@ class SkullcandyProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
+            before = None
+            try:
+                pre = dev.get_input_report(RPT_IN, RPT_SIZE)
+                if pre:
+                    before = bytes(pre)
+            except (OSError, ValueError):
+                pass
             try:
                 sent = dev.write(ASK + bytes(RPT_SIZE - len(ASK)))
             except (OSError, ValueError) as e:
@@ -132,7 +146,8 @@ class SkullcandyProvider(Provider):
             if sent != RPT_SIZE:
                 self._diag.append(f"    write returned {sent} of {RPT_SIZE} bytes")
                 return None
-            for _ in range(READ_ATTEMPTS):
+            skipped = 0
+            for attempt in range(READ_ATTEMPTS):
                 time.sleep(READ_DELAY)
                 try:
                     report = dev.get_input_report(RPT_IN, RPT_SIZE)
@@ -141,8 +156,14 @@ class SkullcandyProvider(Provider):
                     return None
                 if not report:
                     continue
-                level = battery_percent(bytes(report))
+                data = bytes(report)
+                if before is not None and data == before and attempt + 1 < READ_ATTEMPTS:
+                    skipped += 1
+                    continue
+                level = battery_percent(data)
                 if level is not None:
+                    if skipped:
+                        self._diag.append(f"    ({skipped} unchanged report(s) skipped)")
                     self._diag.append(f"    -> {level}%")
                     return level
             self._diag.append("    no battery indication (headset off or asleep?)")
