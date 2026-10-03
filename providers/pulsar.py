@@ -334,7 +334,7 @@ class PulsarProvider(Provider):
                                   f"{' (charging)' if charging else ''} greyed "
                                   f"(its receiver is still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
-                                        kind="mouse"))
+                                        kind="mouse", wake_on_input=True))
             else:
                 del self._last[key]
         return out
