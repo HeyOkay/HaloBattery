@@ -3,8 +3,8 @@
 The frames are the ones in Sapd/HeadsetControl, lib/devices/corsair_virtuoso_xt.hpp
 at commit 8292ac41: write 02 00 to the collection ff42:0001; the reply is 64 bytes,
 [0] 0x01, [1] status (0xF0 normal, 0x00 headset offline), [2] battery 0..100; unasked
-volume reports start with 0x0E. Product id 0A40 (#204) is not in that file, so no
-test here can say that it answers.
+volume reports start with 0x0E. Product id 0A40 (#204) is not supported: it answers
+02 00 with 01 f0 00, so byte 2 is not the level.
 
 Run from the repository root:
 
@@ -170,12 +170,12 @@ class PollTest(unittest.TestCase):
         self.assertEqual((out, bus.opened), ([], []))
 
     def test_the_diagnostics_hexdump_the_reply(self):
-        _, _, p = self.poll([entry(0x0A40, b"r")], {b"r": FakeHeadset([reply(55)])})
+        _, _, p = self.poll([entry(0x0A3E, b"se")], {b"se": FakeHeadset([reply(55)])})
         self.assertTrue(any("reply: 01 f0 37 00" in line for line in p.diagnostics()))
 
-    def test_the_unverified_0a40_receiver_is_read_like_0a3e(self):
+    def test_0a40_device_is_not_polled(self):
         out, bus, _ = self.poll([entry(0x0A40, b"r")], {b"r": FakeHeadset([reply(55)])})
-        self.assertEqual((out[0].key, out[0].level), ("corsair_virtuoso:se", 55))
+        self.assertEqual((out, bus.opened), ([], []))
 
     def test_every_sourced_pid_is_listed(self):
         for pid in (0x0A3E, 0x0A3D, 0x0A64, 0x0A62):

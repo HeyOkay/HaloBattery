@@ -16,9 +16,10 @@ Protocol from Sapd/HeadsetControl, lib/devices/corsair_virtuoso_xt.hpp at commit
   * charging is not decoded in the reference ("TBD"), so charging is always False.
 
 Product ids from that file: 0A3E (SE, receiver), 0A3D (SE, cable), 0A64 (XT,
-receiver), 0A62 (XT, cable). 0A40 is the id of the "Slipstream Multi-Device
-Receiver" in issue #204. It is NOT in HeadsetControl, so it is treated like the
-0A3E receiver and is unverified until the reporter has tried it.
+receiver), 0A62 (XT, cable). 0A40 (the "Slipstream Multi-Device Receiver" of
+issue #204) is not included: it answers 02 00 with 01 f0 00, so byte 2 is not
+the level there. It probably needs the newer property exchange (HeadsetControl
+PR #570); it waits for the reporter's probe.
 """
 from __future__ import annotations
 
@@ -49,7 +50,6 @@ PIDS = {
     0x0A3D: ("Corsair Virtuoso SE", "cable"),
     0x0A64: ("Corsair Virtuoso XT", "receiver"),
     0x0A62: ("Corsair Virtuoso XT", "cable"),
-    0x0A40: ("Corsair Virtuoso SE", "receiver"),   # from #204, not in HeadsetControl; unverified
 }
 KEYS = {"Corsair Virtuoso SE": "corsair_virtuoso:se",
         "Corsair Virtuoso XT": "corsair_virtuoso:xt"}

@@ -9,8 +9,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Corsair Virtuoso SE and Virtuoso XT: the battery over the Slipstream receiver or the USB
   cable (#204), from HeadsetControl (`corsair_virtuoso_xt.hpp`, commit 8292ac41). Charging
-  is not shown, as HeadsetControl does not decode it. **Unverified** on hardware; the
-  receiver id 1B1C:0A40 from #204 is not in HeadsetControl and needs the reporter's test.
+  is not shown, as HeadsetControl does not decode it. 0A40 is not included: it answers
+  without the level (see the comment from casparas123).
 
 ## [1.13.0] - 2026-09-29
 
