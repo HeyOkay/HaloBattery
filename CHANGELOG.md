@@ -32,8 +32,13 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   the moment the vendor app's screen said "86%" for the same headset) and `220` the
   headset's name; the two share one icon. The level and the name are confirmed on the
   reporter's hardware. The charging state is the record's key `250` - the one strict
-  0/1 key that flips between his on-battery and on-cable runs (#173) - shown from the
-  next test build on. On review (@ahmedkhursheed23) the fallback's token is marked
+  0/1 key that flips between his on-battery and on-cable runs (#173) - and his
+  five-state run followed it on hardware both ways (charging with the cable in, not
+  charging off it, the icon's charging indication following). A transmitter that is
+  present but answers no record now keeps its last level greyed out for five minutes
+  instead of dropping to "no link" at once - measured on his unit with Swarm II open,
+  which holds the headset's channel: 40+ idle frames, no record, and the reading back
+  the moment it was closed. On review (@ahmedkhursheed23) the fallback's token is marked
   inferred in these docs and the read loop is bounded: a total read cap, and the
   fallback's budget shortened after a silent opener and record ask.
 
