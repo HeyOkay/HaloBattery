@@ -74,6 +74,14 @@ CAPTURE_GSI = bytes.fromhex(
     "00000000000000000000000000000000"
     "0000000000000000000000000000")
 
+# The reporter's on-cable run (#173, test 4 diagnostics): the same record as the
+# capture except 230 (2 -> 0), 250 (0 -> 1), 280 (1 -> 2) and 290 (2 -> 4); 250 is
+# the one strict 0/1 key, and that is the charging state.
+CABLE_JSON = (b'{"OR":"GSI","KVP":{"200":"1","210":"0","220":"My Headset","230":"0",'
+              b'"240":"78","250":"1","260":"100","270":"0","280":"2","290":"4",'
+              b'"2a0":"35","2b0":"60","2c0":"50","2d0":"78","2e0":"1"}}')
+CABLE_REPLY = [frame(CABLE_JSON[i:i + 59]) for i in range(0, len(CABLE_JSON), 59)]
+
 # The first frames of the state dump the SInf ask answers with (packets 151 and 154):
 # key updates, none of them carrying 240.
 SINF_DUMP = [frame(b"\x00\x00\x00\x00\x00\x61\x18\x62\x32\xef\x21\x01\xff"
@@ -166,6 +174,11 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual(self.transmitter.written[2], turtlebeach.ASK_GSI_FRESH)
         self.assertTrue(any("GSI fresh token" in line for line in self.p.diagnostics()))
 
+    def test_the_cable_record_reads_as_charging(self):
+        self.transmitter.queues = {(1, 2): CABLE_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.charging) for s in res], [(78, True)])
+
     def test_the_dump_alone_can_carry_the_level(self):
         self.transmitter.queues = {(1, 1): [frame(b'{"UP":"GSI","KVP":{"240":"72"}}')]}
         res = self.p.poll()
@@ -255,6 +268,22 @@ class TurtleBeachTests(unittest.TestCase):
 
 
 class ParserTests(unittest.TestCase):
+    def test_the_charging_key(self):
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}}]), True)
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "0"}}]), False)
+        self.assertIsNone(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"240": "77"}}]))
+        # a partial update without the key does not clear the state
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}},
+             {"UP": "GSI", "KVP": {"240": "77"}}]), True)
+        # the newest document carrying the key wins
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}},
+             {"OR": "GSI", "KVP": {"250": "0"}}]), False)
+
     def test_strip_frames_skips_short_and_unframed_replies(self):
         self.assertEqual(turtlebeach.strip_frames([b"", b"\x07\x3b"]),
                          b"")
