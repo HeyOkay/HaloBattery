@@ -90,6 +90,10 @@ FRESH_SHORT_READS = 5     # after a silent opener and record ask the fallback st
                           # out, but short: where it answered on the reporter's unit, it
                           # did so within 3 reads (#173 diagnostics, #194 review)
 TOTAL_READS = 32          # hard cap across the asks of one read (~1.9 s at 60 ms)
+ASLEEP_KEEP = 300         # s: a transmitter that is present but answers no record
+                          # (Swarm II holds the headset's channel while it is open)
+                          # keeps its last level greyed out, as the other receiver
+                          # providers do - measured on the reporter's unit (#173)
 
 # Swarm II's request for the GSI record, as captured (packet 616): output report 6, 62
 # bytes. Byte 1 is the content length (24), counted from byte 3 up to and including the
@@ -258,6 +262,7 @@ class TurtleBeachProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Dict[str, Tuple[int, bool, float]] = {}
 
     # ---- low level -------------------------------------------------------
     def _read_status(self, path) -> Tuple[Optional[int], Optional[str], Optional[bool]]:
@@ -392,6 +397,17 @@ class TurtleBeachProvider(Provider):
         # level could not be read.
         shown = next((lv for lv, _ in results if lv is not None), None)
         charging = next((ch for lv, ch in results if lv is not None), None)
+        if shown is not None:
+            self._last[FAMILY_KEY] = (shown, bool(charging), time.time())
+        elif FAMILY_KEY in self._last:
+            level, chg, when = self._last[FAMILY_KEY]
+            if time.time() - when < ASLEEP_KEEP:
+                # present but silent (Swarm II holding the channel, the headset between
+                # charge cycles): keep the last level greyed out, as the other providers do
+                self._diag.append(f"  -> {FAMILY_KEY}: no fresh record; keeping {level}% "
+                                  "greyed out")
+                return [DeviceStatus(FAMILY_KEY, "Turtle Beach Stealth Pro II", level,
+                                     chg, False, "turtlebeach", kind="headset")]
         self._diag.append("  -> " + FAMILY_KEY + (f": {shown}%" if shown is not None
                                                    else ": no level from any source")
                           + (", charging" if charging else ""))
