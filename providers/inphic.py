@@ -95,6 +95,10 @@ MAX_CANDIDATES = 4
 ONLINE_FRESH = 90                   # s: how long one observed frame keeps the
                                     # icon lit even if a poll misses the next one
 ASLEEP_KEEP = 300                   # s: then greyed, then gone
+RESWEEP_AFTER = 600                 # s: a known collection quiet this long gets the
+                                    # other candidates swept again - at most once
+                                    # per window, so an off mouse does not sweep
+                                    # every poll (#181 review, @ahmedkhursheed23)
 
 STATUS_USAGE = (0x000A, 0x0000)     # where INPHIC HUB reads the frames
 VENDOR_USAGE = (0xFF00, 0x0001)     # its second handle (writes); tried second
@@ -174,6 +178,7 @@ class InphicProvider(Provider):
         self._last: Dict[int, Tuple[Optional[int], float]] = {}    # pid -> (level, when)
         self._charging: Dict[int, bool] = {}
         self._chosen: Dict[int, bytes] = {}                        # pid -> collection path
+        self._swept: Dict[int, float] = {}                         # pid -> last sweep
 
     def _listen(self, d: dict, attempts: int,
                 models: Tuple[int, ...]) -> Optional[Tuple[Optional[int], bool]]:
@@ -215,15 +220,32 @@ class InphicProvider(Provider):
 
         order = candidates(mine)
         chosen = self._chosen.get(pid)
+        known = chosen is not None and any(d["path"] == chosen for d in order)
+        last = self._last.get(pid)
+        now = time.time()
+        since_heard = now - last[1] if last else None
+        since_sweep = now - self._swept.get(pid, 0.0)
+        # A known collection is listened to alone; the others are swept again only
+        # while there is none, when the known one has left the enumeration, or once
+        # the known one has been quiet for RESWEEP_AFTER - not on every poll, or a
+        # mouse that is off overnight would sweep every collection each time
+        # (review by @ahmedkhursheed23).
+        if chosen is None:
+            sweep = True
+        elif not known:
+            sweep = since_sweep >= RESWEEP_AFTER
+        else:
+            sweep = (since_heard is not None and since_heard >= RESWEEP_AFTER
+                     and since_sweep >= RESWEEP_AFTER)
+        if sweep:
+            self._swept[pid] = now
         if chosen is not None:
             order = sorted(order, key=lambda d: d["path"] != chosen)
-        last = self._last.get(pid)
-        stale = last is None or time.time() - last[1] >= ASLEEP_KEEP
         got = None
         for d in order[:MAX_CANDIDATES]:
             is_chosen = d["path"] == chosen
-            if chosen is not None and not stale and not is_chosen:
-                break                 # a fresh reading: the known collection is enough
+            if not sweep and not is_chosen:
+                break                 # the known collection alone is enough
             # The vendor app's own collection gets the full window while looking
             # for it; the rest only get a short listen before moving on.
             patience = (d.get("usage_page"), d.get("usage")) == STATUS_USAGE
