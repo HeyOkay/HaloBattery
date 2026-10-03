@@ -54,6 +54,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [SteelSeries Aerox 3 Wireless](docs/protocols.md#steelseries-aerox-3-wireless) | 2.4 GHz dongle | no |
 | [SteelSeries Arctis and GameBuds (other models)](docs/protocols.md#steelseries-arctis-and-gamebuds-other-models) | wireless base station or dongle | likely |
 | [SteelSeries Arctis Nova 7](docs/protocols.md#steelseries-arctis-nova-7) | 2.4 GHz dongle | yes |
+| [SteelSeries Arctis Nova Elite](docs/protocols.md#steelseries-arctis-nova-elite) | Wireless base station | yes |
 | [SteelSeries Arctis Nova Pro Wireless (`1038:12E0`, `1038:12E5` X)](docs/protocols.md#steelseries-arctis-nova-pro-wireless-103812e0-103812e5-x) | Wireless base station, interface 3 or 4 | no |
 | [SteelSeries Rival 3 Wireless](docs/protocols.md#steelseries-rival-3-wireless) | 2.4 GHz dongle | no |
 | [WLmouse Beast X and Beast X Mini Pro](docs/protocols.md#wlmouse-beast-x-and-beast-x-mini-pro) | 8K or 1K receiver, or USB cable | likely |
