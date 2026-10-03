@@ -375,12 +375,13 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(1, len(found))
         d = found[0]
         self.assertEqual("pulsar:3554f5d5", d.key)
-        self.assertEqual("Redragon M991 (2.4 GHz)", d.name)
+        # the row covers both models on this receiver: #183 (M991), #197 (K1NG Max)
+        self.assertEqual("Redragon M991 / K1NG Max (2.4 GHz)", d.name)
         self.assertEqual(57, d.level)
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written(),
                          "the request goes to the vendor collection, as for the other ids")
-        self.assertIn("'Redragon M991 (2.4 GHz)'", "\n".join(provider.diagnostics()))
+        self.assertIn("'Redragon M991 / K1NG Max (2.4 GHz)'", "\n".join(provider.diagnostics()))
 
     def test_the_redragon_m991_reply_needs_the_checksum(self):
         self.one_receiver(vid=0x3554, pid=0xF5D5, shape=REDRAGON_SHAPE,
