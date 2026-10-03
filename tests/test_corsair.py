@@ -314,7 +314,7 @@ class BragiPollTest(unittest.TestCase):
         dongle = SeDongle()
         out, _ = self.poll([entry(0x0A40, b"se", 3, 0xFF42, 0x0001)], {b"se": dongle})
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.kind) for s in out],
-                         [("corsair:0a40", "Corsair Virtuoso RGB Wireless SE", 55,
+                         [("corsair:virtuoso-se", "Corsair Virtuoso RGB Wireless SE", 55,
                            True, "headset")])
         # the session went first; every accepted write is the bare 64-byte form
         self.assertEqual([len(w) for w in dongle.writes], [64] * 6)
@@ -368,10 +368,121 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(C.PIDS, {0x2A08: "Corsair Void v2 Wireless",
                                   0x2A02: "Corsair Virtuoso Max Wireless",
                                   0x0A97: "Corsair HS80 Max Wireless"})
-        self.assertEqual(C.BRAGI_PIDS, {0x1B7F: "Corsair Dark Core RGB Pro SE",
-                                        0x0A40: "Corsair Virtuoso RGB Wireless SE"})
+        self.assertEqual(C.BRAGI_PIDS, {
+            0x1B7F: "Corsair Dark Core RGB Pro SE",
+            0x0A40: "Corsair Virtuoso RGB Wireless SE",
+            0x0A3E: "Corsair Virtuoso RGB Wireless SE",
+            0x0A3D: "Corsair Virtuoso RGB Wireless SE",
+            0x0A64: "Corsair Virtuoso RGB Wireless XT",
+            0x0A62: "Corsair Virtuoso RGB Wireless XT",
+        })
+        # a headset's receiver and cable ids share one icon; the session the
+        # 0A40 was measured with stays scoped to it
+        self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3E])
+        self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3D])
+        self.assertEqual(C.BRAGI_KEYS[0x0A64], C.BRAGI_KEYS[0x0A62])
+        self.assertEqual(C.BRAGI_SESSION_PIDS, {0x0A40})
         self.assertNotIn(0x1B7F, C.PIDS)
         self.assertNotIn(0x0A40, C.PIDS)
+
+
+class VirtuosoFamilyTests(unittest.TestCase):
+    """The four XT/SE ids HeadsetControl's reworked device covers (#570): the same
+    exchange, no session, and the target hint flipping for the wired ids."""
+
+    def setUp(self):
+        self._saved = (C.hid, C.hidlist)
+        self.bus = None
+
+    def tearDown(self):
+        C.hid, C.hidlist = self._saved
+
+    def poll(self, entries, dongles):
+        self.bus = FakeBus(dongles)
+        C.hid = types.SimpleNamespace(device=self.bus.device_class())
+        C.hidlist = types.SimpleNamespace(enumerate=lambda vid: list(entries))
+        return C.CorsairProvider().poll()
+
+    def test_the_wired_se_reads_without_a_session_on_target_08(self):
+        class CableDongle(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {1: [bragi_reply(784)],   # level (target 0x08)
+                               2: [bragi_reply(784)],   # level, confirmed
+                               3: [bragi_reply(1)]}     # charge: 1 = charging
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        d = CableDongle()
+        out = self.poll([entry(0x0A3D, b"se-cable", 3, 0xFF42, 0x0001)],
+                        {b"se-cable": d})
+        self.assertEqual([(s.key, s.name, s.level, s.charging) for s in out],
+                         [("corsair:virtuoso-se", "Corsair Virtuoso RGB Wireless SE",
+                           78, True)])
+        # no session: the first write is the level ask itself, on target 0x08
+        self.assertEqual(len(d.writes), 3)
+        self.assertEqual(d.writes[0], bytes([0x02, 0x08, 0x02, 0x0F]) + bytes(60))
+        self.assertEqual(d.writes[2], bytes([0x02, 0x08, 0x02, 0x10]) + bytes(60))
+
+    def test_a_receiver_answering_on_the_other_target_is_still_read(self):
+        # the XT receiver's hint is 0x09; a unit answering on 0x08 is retried
+        class AltDongle(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.answers = {(2, 0x08): bragi_reply(871),
+                                (3, 0x08): bragi_reply(871),
+                                (4, 0x08): bragi_reply(2)}
+
+            def read(self, size, timeout_ms):
+                if not self.writes:
+                    return []
+                key = (len(self.writes), self.writes[-1][1])
+                r = self.answers.pop(key, None)
+                return list(r) if r else []
+
+        d = AltDongle()
+        out = self.poll([entry(0x0A64, b"xt", 3, 0xFF42, 0x0001)], {b"xt": d})
+        self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                         [("corsair:virtuoso-xt", 87, False)])
+        self.assertEqual([w[1] for w in d.writes], [0x09, 0x08, 0x08, 0x08])
+
+    def test_the_se_receiver_and_cable_share_one_icon(self):
+        class One(FakeDongle):
+            def __init__(self, level, charge=None):
+                super().__init__(replies=[])
+                self.script = {1: [bragi_reply(level)], 2: [bragi_reply(level)]}
+                if charge is not None:
+                    self.script[3] = [bragi_reply(charge)]
+
+            def read(self, size, timeout_ms):
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        recv = One(871)                       # receiver: 87 %, not charging
+        cable = One(784, charge=1)            # cable: 78 %, charging
+        out = self.poll([entry(0x0A3E, b"recv", 3, 0xFF42, 0x0001),
+                         entry(0x0A3D, b"cable", 3, 0xFF42, 0x0001)],
+                        {b"recv": recv, b"cable": cable})
+        # one icon; the cable's charging reading wins the merge
+        self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                         [("corsair:virtuoso-se", 78, True)])
+
+    def test_the_xt_receiver_reads_under_its_model_key(self):
+        class One(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {1: [bragi_reply(550)], 2: [bragi_reply(550)]}
+
+            def read(self, size, timeout_ms):
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        out = self.poll([entry(0x0A64, b"xt", 3, 0xFF42, 0x0001)], {b"xt": One()})
+        self.assertEqual([(s.key, s.name, s.level) for s in out],
+                         [("corsair:virtuoso-xt", "Corsair Virtuoso RGB Wireless XT", 55)])
 
 
 if __name__ == "__main__":

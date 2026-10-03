@@ -45,9 +45,18 @@ measured differences (#204, jeffpeng3's Linux proof-of-concept and the Windows
 probe): Windows refuses every report-id-prefixed write on it and takes the bare
 64-byte frame - which also carries a leading 0x02 the Dark Core's frame does not
 have (`02 09 02 0f` against `09 02 0f`) - and its headset reports the charge
-state on property 0x10 (1 charging, 2 on battery). It is read with the full session that was measured on it - firmware
-query, receiver heartbeat, headset heartbeat, then the properties. Only the
-dongles are claimed: a wired 1b1c:1b7e exists and nothing here can prove it
+state on property 0x10 (1 charging, 2 on battery). It is read with the full
+session that was measured on it - firmware query, receiver heartbeat, headset
+heartbeat, then the properties.
+
+The rest of the Virtuoso family is the same exchange on the ids HeadsetControl's
+reworked Virtuoso XT/SE device covers (#570): the SE's own receiver 1b1c:0a3e and
+its cable 1b1c:0a3d, the XT's receiver 1b1c:0a64 and its cable 1b1c:0a62. The wired
+ids read with target 0x08 first and the receivers with 0x09, each with the other as
+the fallback, and reads need neither the session nor software mode (HeadsetControl
+notes only writes need software mode). Those four ran on HeadsetControl's author's
+hardware (#568/#570 discussion) and have not answered a build here; the 0a40 is
+measured. The Dark Core's wired id 1b1c:1b7e stays out - nothing can prove it
 answers.
 """
 from __future__ import annotations
@@ -103,6 +112,19 @@ def make_request(endpoint: int, sub: int, command: int) -> List[int]:
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
     0x0A40: "Corsair Virtuoso RGB Wireless SE",
+    0x0A3E: "Corsair Virtuoso RGB Wireless SE",
+    0x0A3D: "Corsair Virtuoso RGB Wireless SE",
+    0x0A64: "Corsair Virtuoso RGB Wireless XT",
+    0x0A62: "Corsair Virtuoso RGB Wireless XT",
+}
+# one icon per product: a headset's receiver and cable ids share the key
+BRAGI_KEYS = {
+    0x1B7F: "corsair:1b7f",
+    0x0A40: "corsair:virtuoso-se",
+    0x0A3E: "corsair:virtuoso-se",
+    0x0A3D: "corsair:virtuoso-se",
+    0x0A64: "corsair:virtuoso-xt",
+    0x0A62: "corsair:virtuoso-xt",
 }
 BRAGI_VENDOR_PAGE = 0xFF42       # the dongle's two vendor collections, from the #56 dump
 BRAGI_USAGE = 0x0001             # the one that answers; 0x0002 is its notice channel
@@ -123,13 +145,19 @@ BRAGI_CONFIRM_WINDOW_S = 3.0     # the confirming ask; the mouse is awake by the
 BRAGI_READ_ATTEMPTS = 96         # a hard stop so a busy channel cannot spin
 BRAGI_POLL_BUDGET_S = 7.0        # total per dongle, across its collections
 
-# The Virtuoso SE receiver is its own framing, session and charge property,
-# all measured on it (#204): it takes only the bare 64-byte frame with a
-# leading 0x02, it runs the full session (firmware query + two heartbeats),
-# and it reports the charge state. The Dark Core takes the framed write and
-# needs none of the rest (its hardware runs confirmed the bare ask), so all
-# three stay scoped to the receiver they were measured on.
-BRAGI_SE_PIDS = {0x0A40}
+# The Virtuoso family reads through the bare 64-byte frame with the leading 0x02
+# and reports the charge state on property 0x10: measured on the 0A40 receiver
+# (#204), and the same exchange on the four XT/SE ids from HeadsetControl's
+# reworked device (#570). The Dark Core takes the framed write and reports no
+# charge, so each stays scoped to the ids measured with it.
+BRAGI_BARE_PIDS = {0x0A40, 0x0A3E, 0x0A3D, 0x0A64, 0x0A62}
+# the session was measured on the 0A40 alone; HeadsetControl reads the family's
+# properties without one (#570), so the new ids mirror that
+BRAGI_SESSION_PIDS = {0x0A40}
+# the wired ids resolve their target the other way round: HeadsetControl's
+# resolveTarget tries 0x08 first on a wired id and 0x09 on a receiver, with the
+# other as the fallback (#570)
+BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62}
 
 
 def bragi_request(prop: int = BRAGI_PROP_BATTERY,
@@ -262,7 +290,7 @@ class CorsairProvider(Provider):
         refuses every report-id-prefixed form with Windows' 0x57 and takes its
         own bare 64-byte frame, extra leading 0x02 included (#204, measured).
         """
-        if pid in BRAGI_SE_PIDS:
+        if pid in BRAGI_BARE_PIDS:
             forms = [bragi_se_request(prop, route)]
         else:
             req = bragi_request(prop, route)
@@ -312,12 +340,22 @@ class CorsairProvider(Provider):
                 return
             self._read_window(dev, min(0.8, max(0.0, deadline - time.monotonic())), label)
 
-    def _bragi_charge(self, dev, deadline: float, pid: int) -> Optional[bool]:
+    @staticmethod
+    def _routes(pid: int) -> Tuple[int, ...]:
+        """The target order for a pid: the wired ids try themselves first (HSC #570)."""
+        if pid in BRAGI_WIRED_PIDS:
+            return (BRAGI_ROUTE_DONGLE, BRAGI_ROUTE_MOUSE)
+        if pid in (0x0A3E, 0x0A64):
+            return (BRAGI_ROUTE_MOUSE, BRAGI_ROUTE_DONGLE)
+        return (BRAGI_ROUTE_MOUSE,)
+
+    def _bragi_charge(self, dev, deadline: float, pid: int,
+                      route: int = BRAGI_ROUTE_MOUSE) -> Optional[bool]:
         """The charge state on the receivers that report one (property 0x10),
         or None."""
-        if pid not in BRAGI_SE_PIDS or time.monotonic() >= deadline:
+        if pid not in BRAGI_BARE_PIDS or time.monotonic() >= deadline:
             return None
-        if not self._write_bragi(dev, BRAGI_PROP_CHARGE, pid=pid):
+        if not self._write_bragi(dev, BRAGI_PROP_CHARGE, route=route, pid=pid):
             return None
         value = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                          deadline - time.monotonic()),
@@ -352,16 +390,25 @@ class CorsairProvider(Provider):
             return None
         try:
             self._drain(dev)
-            if pid in BRAGI_SE_PIDS:
+            if pid in BRAGI_SESSION_PIDS:
                 self._bragi_session(dev, deadline, pid)
-            if not self._write_bragi(dev, pid=pid):
-                return None
-            first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
-                                             deadline - time.monotonic()))
+            routes = self._routes(pid)
+            first = None
+            route = routes[0]
+            for i, route in enumerate(routes):
+                if not self._write_bragi(dev, route=route, pid=pid):
+                    return None
+                first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
+                                                 deadline - time.monotonic()))
+                if first is not None:
+                    break
+                if i + 1 < len(routes):
+                    self._diag.append(f"  no answer on target {route:02x}; "
+                                      "trying the other")
             if first is None:
                 self._diag.append("  no battery answer")
                 return None
-            if not self._write_bragi(dev, pid=pid):
+            if not self._write_bragi(dev, route=route, pid=pid):
                 return None
             second = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                               deadline - time.monotonic()))
@@ -372,7 +419,7 @@ class CorsairProvider(Provider):
                 self._diag.append(f"  the two answers disagree ({first} % / {second} %) - "
                                   f"refused")
                 return None
-            return first, self._bragi_charge(dev, deadline, pid)
+            return first, self._bragi_charge(dev, deadline, pid, route)
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
             return None
@@ -458,6 +505,7 @@ class CorsairProvider(Provider):
                 continue
             out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
                                     "corsair", kind="headset"))
+        found: Dict[str, Tuple[int, bool, str, str]] = {}
         for pid, name in BRAGI_PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
@@ -476,10 +524,17 @@ class CorsairProvider(Provider):
                 if got is None:
                     continue
                 level, charging = got
-                out.append(DeviceStatus(f"corsair:{pid:04x}", name, level,
-                                        bool(charging), True, "corsair",
-                                        kind="mouse" if pid == 0x1B7F else "headset"))
+                key = BRAGI_KEYS[pid]
+                kind = "mouse" if pid == 0x1B7F else "headset"
+                kept = found.get(key)
+                # a receiver and a cable of one headset are one icon; when both
+                # answer, the one that reports charging wins (the cable state)
+                if kept is None or (charging and not kept[1]):
+                    found[key] = (level, bool(charging), name, kind)
                 break
+        for key, (level, charging, name, kind) in found.items():
+            out.append(DeviceStatus(key, name, level, charging, True, "corsair",
+                                    kind=kind))
         return out
 
     def diagnostics(self) -> List[str]:
