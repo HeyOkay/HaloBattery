@@ -52,6 +52,11 @@ ff05:0000) and answers the same command 0x04 frame, which is where the charging 
 comes from - on the cable the mouse leaves the 2.4 GHz link and the receiver goes
 quiet, so without the wired id the icon simply disappeared (#183).
 
+The same receiver also carries the Redragon K1NG Max (M918) (#197), and it answers
+the same frames: both the level and the charging flag come through the receiver
+itself while its cable is in (45 % wireless and 100 % charging, both on the
+reporter's hardware), so this row's name now covers both mice.
+
 Frames are 17 bytes, big-endian, report id 0x08:
 
     [0] 0x08      header, which is also the report id
@@ -160,7 +165,7 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
-        0xF5D5: "Redragon M991 (2.4 GHz)",
+        0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",
     },
     0x373B: {

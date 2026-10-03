@@ -11,7 +11,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   VXE mice ([#183](https://github.com/HeyOkay/HaloBattery/issues/183)); the level is
   confirmed on the reporter's receiver. The wired id (3554:f55e) is claimed too, so
   the icon keeps showing (with charging) while the mouse is on its cable. Both
-  transports and the charging flag are confirmed on the reporter's hardware.
+  transports and the charging flag are confirmed on the reporter's hardware. The
+  same receiver also carries the Redragon K1NG Max (M918)
+  ([#197](https://github.com/HeyOkay/HaloBattery/issues/197)), confirmed on the
+  reporter's hardware in both states, and the tray label now covers both mice.
 
 ## [1.13.0] - 2026-09-29
 

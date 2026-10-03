@@ -49,7 +49,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [Razer BlackWidow V3 Pro](docs/protocols.md#razer-blackwidow-v3-pro) | 2.4 GHz receiver or USB cable | no |
 | [Razer DeathAdder V4 Pro](docs/protocols.md#razer-deathadder-v4-pro) | 2.4 GHz receiver | yes |
 | [Razer wireless mice (other OpenRazer models)](docs/protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | likely |
-| [Redragon M991](docs/protocols.md#redragon-m991) | 2.4 GHz receiver and USB cable | yes |
+| [Redragon M991 / K1NG Max](docs/protocols.md#redragon-m991--k1ng-max) | 2.4 GHz receiver and USB cable | yes |
 | [Sony DualSense (PS5)](docs/protocols.md#sony-dualsense-ps5) | USB or Bluetooth | yes |
 | [Sony DualShock 4 (PS4)](docs/protocols.md#sony-dualshock-4-ps4) | USB cable and Bluetooth | yes |
 | [SteelSeries Aerox 3 Wireless](docs/protocols.md#steelseries-aerox-3-wireless) | 2.4 GHz dongle | no |
