@@ -39,14 +39,21 @@ property, so a second app on the same dongle (iCUE, SignalRGB) can put an
 answer for another property on the channel that parses as a level; the ask is
 therefore repeated and only two equal answers are taken, the wait is a time
 window (traffic frames end a 500 ms read early), and a per-dongle budget
-bounds the try-every-collection fallback (review by @ahmedkhursheed23). Only
-the dongle is claimed: a wired 1b1c:1b7e exists and nothing here can prove it
+bounds the try-every-collection fallback (review by @ahmedkhursheed23). The
+Virtuoso RGB Wireless SE receiver (1b1c:0a40) runs the same exchange with two
+measured differences (#204, jeffpeng3's Linux proof-of-concept and the Windows
+probe): Windows refuses every report-id-prefixed write on it and takes the bare
+64-byte frame - which also carries a leading 0x02 the Dark Core's frame does not
+have (`02 09 02 0f` against `09 02 0f`) - and its headset reports the charge
+state on property 0x10 (1 charging, 2 on battery). It is read with the full session that was measured on it - firmware
+query, receiver heartbeat, headset heartbeat, then the properties. Only the
+dongles are claimed: a wired 1b1c:1b7e exists and nothing here can prove it
 answers.
 """
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import hid
 
@@ -95,6 +102,7 @@ def make_request(endpoint: int, sub: int, command: int) -> List[int]:
 # dongle is read.
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
+    0x0A40: "Corsair Virtuoso RGB Wireless SE",
 }
 BRAGI_VENDOR_PAGE = 0xFF42       # the dongle's two vendor collections, from the #56 dump
 BRAGI_USAGE = 0x0001             # the one that answers; 0x0002 is its notice channel
@@ -104,6 +112,9 @@ BRAGI_ROUTE_MOUSE = 0x09         # 0x08 | child 1: the paired mouse
 BRAGI_ROUTE_CHILD = 0x01         # the route the mouse's answers come back with
 BRAGI_CMD_GET = 0x02             # ckb-next: CMD_GET
 BRAGI_PROP_BATTERY = 0x0F        # ckb-next: BRAGI_BATTERY_LEVEL
+BRAGI_PROP_CHARGE = 0x10         # 1 = charging, 2 = on battery (#204, measured)
+BRAGI_PROP_HEARTBEAT = 0x12      # the session heartbeats (#204)
+BRAGI_PROP_FIRMWARE = 0x13       # the session's firmware query (#204)
 BRAGI_LEVEL_MAX = 1000           # tenths of a percent (765 -> 76 %)
 BRAGI_WINDOW_S = 6.0             # the answer measured ~4.7 s after the write (#56); a
                                  # time window, not a read count - traffic frames end a
@@ -112,25 +123,46 @@ BRAGI_CONFIRM_WINDOW_S = 3.0     # the confirming ask; the mouse is awake by the
 BRAGI_READ_ATTEMPTS = 96         # a hard stop so a busy channel cannot spin
 BRAGI_POLL_BUDGET_S = 7.0        # total per dongle, across its collections
 
+# The Virtuoso SE receiver is its own framing, session and charge property,
+# all measured on it (#204): it takes only the bare 64-byte frame with a
+# leading 0x02, it runs the full session (firmware query + two heartbeats),
+# and it reports the charge state. The Dark Core takes the framed write and
+# needs none of the rest (its hardware runs confirmed the bare ask), so all
+# three stay scoped to the receiver they were measured on.
+BRAGI_SE_PIDS = {0x0A40}
 
-def bragi_request(prop: int = BRAGI_PROP_BATTERY) -> bytes:
-    """A get-property question to the mouse: report id 0, route 0x09, cmd 0x02."""
+
+def bragi_request(prop: int = BRAGI_PROP_BATTERY,
+                  route: int = BRAGI_ROUTE_MOUSE) -> bytes:
+    """The Dark Core's get-property frame: report id 0, the route, cmd, property."""
     payload = bytearray(BRAGI_MSG_SIZE)
-    payload[0] = BRAGI_ROUTE_MOUSE
+    payload[0] = route
     payload[1] = BRAGI_CMD_GET
     payload[2] = prop
     return b"\x00" + bytes(payload)
 
 
-def parse_bragi(reply) -> Optional[int]:
-    """The level in percent from a get-property answer, or None when it is not one.
+def bragi_se_request(prop: int = BRAGI_PROP_BATTERY,
+                     route: int = BRAGI_ROUTE_MOUSE) -> bytes:
+    """The Virtuoso SE receiver's get-property frame: `02 <route> 02 <property>`.
+
+    Its data begins with the extra 0x02 (`02 09 02 0f` against the Dark Core's
+    `09 02 0f`), and the whole 64 bytes go out bare - Windows refuses every
+    report-id-prefixed form on this receiver (#204, measured).
+    """
+    head = bytes([0x02, route, BRAGI_CMD_GET, prop])
+    return head + bytes(BRAGI_MSG_SIZE - len(head))
+
+
+def parse_bragi_raw(reply) -> Optional[int]:
+    """The raw 16-bit value of a get-property answer, or None when it is not one.
 
     An answer is `[route][0x02][err][value]...`: 0x01 is the mouse's route, err 0
-    means OK, and bytes 3-4 hold the value little-endian, in tenths of a percent.
-    The dongle sends other frames as well (device-list records on the same
-    channel, notices on its sibling collection), so a frame counts only when
-    every field above matches - one of those frames parsed as a level was the
-    0 % flash the earlier release showed.
+    means OK, and bytes 3-4 hold the value little-endian. The dongle sends other
+    frames as well (device-list records on the same channel, notices on its
+    sibling collection), so a frame counts only when every field above matches -
+    one of those frames parsed as a level was the 0 % flash the earlier release
+    showed.
     """
     if not reply:
         return None
@@ -141,10 +173,29 @@ def parse_bragi(reply) -> Optional[int]:
         return None
     if data[0] != BRAGI_ROUTE_CHILD or data[1] != BRAGI_CMD_GET or data[2] != 0x00:
         return None
-    value = data[3] | (data[4] << 8)
-    if value == 0 or value > BRAGI_LEVEL_MAX:
+    return data[3] | (data[4] << 8)
+
+
+def parse_bragi(reply) -> Optional[int]:
+    """The battery level in percent from a get-property answer, or None."""
+    value = parse_bragi_raw(reply)
+    if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
         return None
     return value // 10
+
+
+def parse_bragi_charge(reply) -> Optional[bool]:
+    """True while charging, False on battery, None when not a charge answer.
+
+    Property 0x10: 1 = charging, 2 = on battery (measured on the Virtuoso SE
+    receiver's headset, #204); anything else is not taken as a state.
+    """
+    value = parse_bragi_raw(reply)
+    if value == 1:
+        return True
+    if value == 2:
+        return False
+    return None
 
 
 def parse_level(r) -> Optional[int]:
@@ -187,8 +238,8 @@ class CorsairProvider(Provider):
         return sorted(vend, key=lambda d: (0 if d.get("usage") == BRAGI_USAGE else 1,
                                            d.get("interface_number") or 99))
 
-    def _ask_bragi(self, dev, window: float) -> Optional[int]:
-        """One ask's answer within a time window; the level, or None."""
+    def _ask_bragi(self, dev, window: float, parse=parse_bragi) -> Optional[int]:
+        """One ask's answer within a time window; the parsed value, or None."""
         deadline = time.monotonic() + window
         for _ in range(BRAGI_READ_ATTEMPTS):
             if time.monotonic() >= deadline:
@@ -197,13 +248,89 @@ class CorsairProvider(Provider):
             if not r:
                 continue
             self._diag.append(f"  reply: {hexdump(r)}")
-            level = parse_bragi(r)
-            if level is not None:
-                return level
+            value = parse(r)
+            if value is not None:
+                return value
         return None
 
-    def _query_bragi(self, path: bytes, deadline: float) -> Optional[int]:
-        """One battery question to the dongle; the level, or None.
+    def _write_bragi(self, dev, prop: int = BRAGI_PROP_BATTERY,
+                     route: int = BRAGI_ROUTE_MOUSE, pid: int = 0x1B7F) -> bool:
+        """Send a get-property ask in the framing the receiver takes.
+
+        The Dark Core's dongle takes the 65-byte report-id-0 frame (confirmed on
+        hardware), with the bare form as a fallback; the Virtuoso SE receiver
+        refuses every report-id-prefixed form with Windows' 0x57 and takes its
+        own bare 64-byte frame, extra leading 0x02 included (#204, measured).
+        """
+        if pid in BRAGI_SE_PIDS:
+            forms = [bragi_se_request(prop, route)]
+        else:
+            req = bragi_request(prop, route)
+            forms = [req, req[1:]]
+        framed = True
+        for buf in forms:
+            try:
+                wrote = dev.write(buf)
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  write: {e}")
+                wrote = None
+            if isinstance(wrote, int) and wrote > 0:
+                if not framed:
+                    self._diag.append("  (the framed write was refused; "
+                                      "the bare form took it)")
+                return True
+            framed = False
+        self._diag.append(f"  prop {prop:02x}: the write was refused")
+        return False
+
+    def _read_window(self, dev, window: float, label: str) -> None:
+        """Read and log whatever arrives in a short window (session replies)."""
+        deadline = time.monotonic() + window
+        for _ in range(BRAGI_READ_ATTEMPTS):
+            if time.monotonic() >= deadline:
+                return
+            try:
+                r = dev.read(BRAGI_MSG_SIZE + 1, READ_TIMEOUT_MS)
+            except (OSError, IOError, ValueError):
+                return
+            if r:
+                self._diag.append(f"  {label}: {hexdump(r)}")
+
+    def _bragi_session(self, dev, deadline: float, pid: int) -> None:
+        """The session the SE receiver was measured with (#204): firmware query,
+        receiver heartbeat (route 0x08), headset heartbeat (route 0x09)."""
+        for prop, route, label in ((BRAGI_PROP_FIRMWARE, BRAGI_ROUTE_DONGLE,
+                                    "firmware query"),
+                                   (BRAGI_PROP_HEARTBEAT, BRAGI_ROUTE_DONGLE,
+                                    "receiver heartbeat"),
+                                   (BRAGI_PROP_HEARTBEAT, BRAGI_ROUTE_MOUSE,
+                                    "headset heartbeat")):
+            if time.monotonic() >= deadline:
+                return
+            if not self._write_bragi(dev, prop, route, pid):
+                self._diag.append(f"  {label}: not sent")
+                return
+            self._read_window(dev, min(0.8, max(0.0, deadline - time.monotonic())), label)
+
+    def _bragi_charge(self, dev, deadline: float, pid: int) -> Optional[bool]:
+        """The charge state on the receivers that report one (property 0x10),
+        or None."""
+        if pid not in BRAGI_SE_PIDS or time.monotonic() >= deadline:
+            return None
+        if not self._write_bragi(dev, BRAGI_PROP_CHARGE, pid=pid):
+            return None
+        value = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
+                                         deadline - time.monotonic()),
+                                parse=parse_bragi_charge)
+        if value is None:
+            self._diag.append("  no charge-state answer")
+            return None
+        self._diag.append("  charge state: " + ("charging" if value else "on battery"))
+        return bool(value)
+
+    def _query_bragi(self, path: bytes, deadline: float,
+                     pid: int) -> Optional[Tuple[int, Optional[bool]]]:
+        """One battery question to the dongle; (level, charging or None), or None.
 
         The answer arrives late - measured ~4.7 s on the reporter's dongle with
         the mouse resting (#56) - so the wait is a time window (review by
@@ -213,7 +340,9 @@ class CorsairProvider(Provider):
         second app polling the same dongle could put a foreign answer on the
         channel that parses as a level - the ask is repeated and the two answers
         must agree (a confirming ask that stays silent is noted and the single
-        reading taken; a disagreement is refused rather than shown).
+        reading taken; a disagreement is refused rather than shown). The SE
+        receivers run the measured session first and answer the charge property
+        after the level (#204).
         """
         dev = hid.device()
         try:
@@ -223,24 +352,27 @@ class CorsairProvider(Provider):
             return None
         try:
             self._drain(dev)
-            dev.write(bragi_request())
+            if pid in BRAGI_SE_PIDS:
+                self._bragi_session(dev, deadline, pid)
+            if not self._write_bragi(dev, pid=pid):
+                return None
             first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
                                              deadline - time.monotonic()))
             if first is None:
                 self._diag.append("  no battery answer")
                 return None
-            dev.write(bragi_request())
+            if not self._write_bragi(dev, pid=pid):
+                return None
             second = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                               deadline - time.monotonic()))
             if second is None:
                 self._diag.append("  (the confirming ask stayed silent; taking the "
                                   "single reading)")
-                return first
-            if second == first:
-                return first
-            self._diag.append(f"  the two answers disagree ({first} % / {second} %) - "
-                              f"refused")
-            return None
+            elif second != first:
+                self._diag.append(f"  the two answers disagree ({first} % / {second} %) - "
+                                  f"refused")
+                return None
+            return first, self._bragi_charge(dev, deadline, pid)
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
             return None
@@ -340,11 +472,13 @@ class CorsairProvider(Provider):
                 self._diag.append(f"  iface={d.get('interface_number')} "
                                   f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 seen.add(d["path"])
-                level = self._query_bragi(d["path"], deadline)
-                if level is None:
+                got = self._query_bragi(d["path"], deadline, pid)
+                if got is None:
                     continue
-                out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
-                                        "corsair", kind="mouse"))
+                level, charging = got
+                out.append(DeviceStatus(f"corsair:{pid:04x}", name, level,
+                                        bool(charging), True, "corsair",
+                                        kind="mouse" if pid == 0x1B7F else "headset"))
                 break
         return out
 
