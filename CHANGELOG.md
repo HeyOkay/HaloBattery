@@ -6,6 +6,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Steam Controller (2025) over its puck (#58): the battery is read from the controller's
+  own input reports - the charge state and level in report 0x43, a connect and disconnect
+  in reports 0x79 / 0x46 - listen-only, nothing is sent to the controller, so its lizard
+  mode and rumble stay as the user's games set them. On review (@ahmedkhursheed23) the
+  greyed value no longer expires on a timer while the puck is there (a removed icon comes
+  back at a new tray position, #87), the collection under each slot interface is picked
+  by usage with a logged fallback when 0xFF00:0001 is not present, and the diagnostics
+  list the puck's collections when nothing matches. Unit tests. Unverified on hardware
+  here.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

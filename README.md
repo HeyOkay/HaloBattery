@@ -51,6 +51,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [Razer wireless mice (other OpenRazer models)](docs/protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | likely |
 | [Sony DualSense (PS5)](docs/protocols.md#sony-dualsense-ps5) | USB or Bluetooth | yes |
 | [Sony DualShock 4 (PS4)](docs/protocols.md#sony-dualshock-4-ps4) | USB cable and Bluetooth | yes |
+| [Steam Controller (2025) with its puck](docs/protocols.md#steam-controller-2025-with-its-puck) | 2.4 GHz puck | no |
 | [SteelSeries Aerox 3 Wireless](docs/protocols.md#steelseries-aerox-3-wireless) | 2.4 GHz dongle | no |
 | [SteelSeries Arctis and GameBuds (other models)](docs/protocols.md#steelseries-arctis-and-gamebuds-other-models) | wireless base station or dongle | likely |
 | [SteelSeries Arctis Nova 7](docs/protocols.md#steelseries-arctis-nova-7) | 2.4 GHz dongle | yes |
