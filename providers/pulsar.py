@@ -1,5 +1,13 @@
 """Pulsar, ATK, VXE and Hitscan wireless mice over USB/HID, without vendor software.
 
+The X2 V3 Mini uses Pulsar's newer Sonix-style 64-byte feature protocol instead of
+the 17-byte Compx protocol below. The ids and interface were captured from the
+reporter's mouse (3710:3402 on its cable, 3710:5403 on the 8K receiver). The packet
+layout and battery command are independently documented by jonkristian/pulsar-x3-python:
+feature report 0, command 08 81 01, a little-endian 16-bit sum in bytes 62-63, and
+the returned percentage in byte 6. That project lists 3710:5403 among its wireless
+ids and sends the transfer on interface 3.
+
 Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
 "HID: pulsar" driver in review for the Linux kernel and lists these ids:
 
@@ -73,6 +81,17 @@ VOLTAGE_SLICE = (8, 10)
 
 CONTROL_INTERFACE = 1           # the tool reads its 17-byte replies on interface 1
 CONTROL_USAGE = (0xFF02, 0x0002)   # the collection the OpenMouse ATK/VXE panel opens
+
+SONIX_VID = 0x3710
+SONIX_PIDS = {
+    0x5403: ("Pulsar X2 V3 Mini (8K wireless)", False),
+    0x3402: ("Pulsar X2 V3 Mini (wired)", True),
+}
+SONIX_INTERFACE = 3
+SONIX_WIRE_LEN = 64
+SONIX_REPORT_LEN = 65          # hidapi report id + the 64-byte USB control payload
+SONIX_BATTERY_COMMAND = (0x08, 0x81, 0x01)
+SONIX_LEVEL_INDEX = 7          # wire byte 6, shifted by hidapi's report-id byte
 
 
 class _HIDP_CAPS(ctypes.Structure):
@@ -188,6 +207,29 @@ def voltage_mv(r) -> Optional[int]:
     return int.from_bytes(bytes(r[VOLTAGE_SLICE[0]:VOLTAGE_SLICE[1]]), "big")
 
 
+def make_sonix_request() -> List[int]:
+    """hidapi form of the X2 V3's 64-byte report-0 feature request.
+
+    The first zero is hidapi's report id; the second starts the 64-byte packet that
+    the libusb reference sends. Its checksum stays at wire bytes 62-63.
+    """
+    wire = ([0x00] + list(SONIX_BATTERY_COMMAND) +
+            [0x00] * (SONIX_WIRE_LEN - len(SONIX_BATTERY_COMMAND) - 3))
+    check = sum(wire) & 0xFFFF
+    wire += [check & 0xFF, check >> 8]
+    return [0x00] + wire
+
+
+def parse_sonix_power(response) -> Optional[int]:
+    """Battery percentage from a Sonix response; reject missing/bogus values."""
+    if not response or len(response) <= SONIX_LEVEL_INDEX:
+        return None
+    if tuple(response[2:5]) != SONIX_BATTERY_COMMAND:
+        return None
+    level = response[SONIX_LEVEL_INDEX]
+    return level if 0 <= level <= 100 else None
+
+
 class PulsarProvider(Provider):
     name = "pulsar"
 
@@ -265,9 +307,65 @@ class PulsarProvider(Provider):
             if not dev.read(PAYLOAD_LEN, FLUSH_TIMEOUT_MS):
                 return
 
+    def _query_sonix(self, path: bytes) -> Optional[int]:
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  open: {e}")
+            return None
+        try:
+            try:
+                n = dev.send_feature_report(make_sonix_request())
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  feature send: {e}")
+                return None
+            if n is not None and n < 0:
+                self._diag.append("  feature send: refused")
+                return None
+            time.sleep(0.05)
+            try:
+                response = dev.get_feature_report(0, SONIX_REPORT_LEN)
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  feature read: {e}")
+                return None
+            self._diag.append(f"  feature reply: {hexdump(response, 16)}")
+            return parse_sonix_power(response)
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def _poll_sonix(self) -> List[DeviceStatus]:
+        out = []
+        try:
+            infos = hidlist.enumerate(SONIX_VID)
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(%04x): %s", SONIX_VID, e)
+            return out
+        for pid, (name, wired) in SONIX_PIDS.items():
+            mine = [d for d in infos if d.get("product_id") == pid]
+            if not mine:
+                continue
+            controls = [d for d in mine if d.get("interface_number") == SONIX_INTERFACE]
+            if not controls:
+                self._diag.append(f"[Pulsar Sonix] pid={SONIX_VID:04x}:{pid:04x} "
+                                  f"'{name}': no interface {SONIX_INTERFACE}")
+                continue
+            d = next((x for x in controls if x.get("usage_page", 0) >= 0xFF00), controls[0])
+            self._diag.append(f"[Pulsar Sonix] pid={SONIX_VID:04x}:{pid:04x} '{name}' "
+                              f"iface={d.get('interface_number')} "
+                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            level = self._query_sonix(d["path"])
+            if level is not None:
+                out.append(DeviceStatus(f"pulsar:{SONIX_VID:04x}{pid:04x}", name, level,
+                                        wired, True, "pulsar", kind="mouse"))
+        return out
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
-        out = []
+        out = self._poll_sonix()
         for vid, pids in PIDS.items():
             try:
                 infos = hidlist.enumerate(vid)
