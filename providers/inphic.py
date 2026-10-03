@@ -37,13 +37,21 @@ The support is **confirmed on hardware**: the reporter's run of the test build
 (#160) shows the level, and the charging state too: the reporter watched the
 ring turn green while charging and return to normal after unplugging.
 
-The same frame serves this ODM family's other receiver: Attack Shark's X11/R1
-(1d57:fa60) was caught announcing `03 55 40 01 1f` (31 %) on the same
-`000a:0000` collection, read-only, by the reporter's probe in #163 - matching
-the `03 55 40 01 4b` frame in the notes behind #69. Both receivers live here,
-each gated on the model codes proven for it. The X11 is fully confirmed in
-the reporter's runs (#163): level and charging state both - his diagnostics
-caught the `40 03` frame on the cable.
+Two generations of this ODM family share the fa60 receiver, with different
+status shapes, so both live here behind the model bytes proven on the units:
+
+- the `0x55` shape - `03 55 40 <sub> <level>`, the sub-commands of the Inphic
+  row - is the Attack Shark X11: caught by its reporter's probe in #163
+  announcing `03 55 40 01 1f` (31 %) on the same `000a:0000` collection,
+  read-only, and fully confirmed in his runs - level and charging state both
+  (his diagnostics caught the `40 03` frame on the cable).
+- the `0x10` shape - `03 10 40 <stage> <level/10>` - is the X6/R1 generation:
+  decoded in blak0p's attack-shark-linux protocol documents (validated live
+  on the dongle: idle `03 10 40 01 0a` = 100 %) and caught on the R1's own
+  receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %). The
+  level arrives in steps of ten and the frames carry no charging state; the
+  dongle's config ACK (`03 10 50 ...`) and DPI-button (`03 10 10 ...`)
+  reports are excluded by the `0x40` command check.
 """
 from __future__ import annotations
 
@@ -60,18 +68,23 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x1D57
 # The ODM family's receivers, each with the model codes proven on it: the Inphic
-# codes are INPHIC HUB's own accept list (#160), and 0x55 is the Attack Shark
-# code its reporter's probe caught announcing 31 % on X11/R1 hardware (#69
-# notes, #163).
+# codes are INPHIC HUB's own accept list (#160); 0x55 is the Attack Shark X11
+# code its reporter's probe caught announcing 31 % (#163); 0x10 is the X6/R1
+# generation's status event - its reporter's probe caught `03 10 40 01 09`
+# (90 %) on the R1's own receiver (#69), the shape blak0p's X6 protocol
+# documents validated live on the dongle.
 PIDS = {
     0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99)),
-    0xFA60: ("Attack Shark X11 / R1", (0x55,)),
+    0xFA60: ("Attack Shark X11 / R1", (0x55, 0x10)),
 }
 
 REPORT_ID = 0x03                    # hidapi hands it back first on Windows
 CMD_BATTERY = 0x40
 SUB_FULL = 0x02                     # charge complete: the app shows 100 %
 SUB_CHARGING = 0x03                 # on the cable: the app runs its animation
+X6_EVENT = 0x10                     # the X6/R1 generation's status event; its
+                                    # heartbeat level arrives in X6_STEP steps
+X6_STEP = 10
 LEVEL_MIN, LEVEL_MAX = 1, 100
 
 READ_SIZE = 100                     # the vendor app's read buffer
@@ -105,6 +118,18 @@ def parse_frame(frame, models) -> Optional[Tuple[Optional[int], bool]]:
     if len(f) < 4:
         return None
     if f[0] not in models or f[1] != CMD_BATTERY:
+        return None
+    if f[0] == X6_EVENT:
+        # The X6/R1 generation (blak0p's protocol documents, live-validated:
+        # idle `03 10 40 01 0a` = 100 %; the R1's own push in #69): the
+        # heartbeat's level arrives in steps of ten, and its byte 3 is the
+        # DPI stage, not a sub-command - and there is no charging state in
+        # this generation's frames. The dongle's ACK (`... 50 ..`) and the
+        # DPI-button report (`... 10 ..`) share the shape and are already
+        # refused by the command check above.
+        level = f[3] * X6_STEP
+        if LEVEL_MIN <= level <= LEVEL_MAX:
+            return level, False
         return None
     if f[2] == SUB_CHARGING:
         return None, True
