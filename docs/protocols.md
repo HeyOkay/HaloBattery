@@ -98,6 +98,12 @@ The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the ven
 
 The Dark Core / Ironclaw "nxp" protocol from ckb-next: a 64-byte packet `CMD_GET 0x0e` + `FIELD_BATTERY 0x50` answered with a level index into the five-step table {0, 15, 30, 50, 100}, so the level is shown as a gauge ("about 50%") and no charging state is reported. The wired id 1B1C:1B7E is left out. **Unverified** - no Corsair mouse was on hand; the collection (`ff42:0001`) comes from the reporter's dump in #56
 
+### DAREU A950
+
+**Connection:** 2.4 GHz receiver (260D:1074, Compx strings; 260D:1084 claimed from the source)
+
+The Compx 17-byte frame of the Pulsar / ATK mice (report id 0x08, command 0x04, checksum 0x55 minus the sum of the first 16 bytes), but sent as a feature report on the `ff02:0002` collection and answered as an input report on `ff01:0000` under header 0x09: status in byte 2 (0 = data, 1 = empty ack), the level in byte 6 and the charging flag in byte 7, with the same checksum rule. From vamyane/MousePower (MIT), `src/mousepower/core/providers/dareu_compx.py`, which also warns that report 0x06 on `ff04` always reads 100. Read on hardware on 260D:1074: `09 04 00 00 00 02 5a 00 .. ec` = 90 %, on battery. A frame whose checksum does not match, an ack and a pushed event are refused rather than shown
+
 ### G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini
 
 **Connection:** 8K receiver or USB cable
