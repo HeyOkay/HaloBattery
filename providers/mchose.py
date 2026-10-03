@@ -415,9 +415,10 @@ class MchoseProvider(Provider):
                 # alone (nothing off the documented path is written to)
                 cols = [d for d in cols if (d.get("usage_page") or 0) == CONFIG_PAGE]
             elif vid == A5_VID:
-                # the A5 reference prefers usage page 0xFFFF; 0xFFA0 next to it is never
-                # where the answer comes from
-                cols.sort(key=lambda d: (d.get("usage_page") != A5_USAGE_PAGE,))
+                # The A5 reference opens its 0xFFFF page only; 0xFFA0 next to it is
+                # never where the answer comes from, so it is not written to at all
+                # (the G7's rule; review by @ahmedkhursheed23).
+                cols = [d for d in cols if (d.get("usage_page") or 0) == A5_USAGE_PAGE]
             else:
                 # the configuration collection first; 0xFF0B is dead on the M7 Ultra
                 cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))

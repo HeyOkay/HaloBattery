@@ -160,6 +160,9 @@ class PollTest(unittest.TestCase):
         fake = FakeMchose(answer_path=None)
         out, diag = self.poll(fake, ents)
         self.assertEqual(out, [])
+        # the 0xFFA0 sibling is not written to even when the mouse stays silent
+        # (review by @ahmedkhursheed23)
+        self.assertNotIn(FFA0, {p for p, _ in fake.sent})
         self.assertTrue(any("no A1 answer" in line for line in diag))
 
 
