@@ -236,8 +236,12 @@ class _Channel:
 
         The request is a short report, 10 <idx> 81 <reg>, on the short
         collection - the shape Solaar sends to protocol 1.0 devices; the reply
-        may be short or long. An error reply (10 <idx> 8f 81 <reg> <code>)
-        leaves self.error set. Registers are only ever read.
+        may be short or long. An error reply (10 <idx> 8f 81 <reg> <code>, or
+        its HID++ 2.0 form with FF in place of 8F) leaves self.error set and is
+        recognised at once (review by @ahmedkhursheed23: a 2.0 device without a
+        battery feature answers every register read with the 2.0 error, and
+        without this it cost the full timeout per register). Registers are only
+        ever read.
         """
         if len(self.devs) < 2:        # register reads go on the short collection
             return None
@@ -249,7 +253,7 @@ class _Channel:
                 r = d.read(64)
                 if not r or len(r) < 4 or r[1] != idx:
                     continue
-                if r[2] == 0x8F and len(r) >= 6 and r[3] == 0x81 and r[4] == reg:
+                if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == 0x81 and r[4] == reg:
                     self.error, self.error_code = True, r[5]
                     return None
                 if r[2] == 0x81 and r[3] == reg:
