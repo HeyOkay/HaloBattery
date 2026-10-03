@@ -21,23 +21,30 @@ renamed it to in Swarm II; "My Headset" out of the box). Each input report is fr
 the JSON scan. The transmitter also pushes key updates by itself (``{"UP":"GSI",...}``
 with only the changed keys), so a poll that reads a push carries it as well.
 
-Reading replays the app's own asks, byte for byte: first the session opener (the "SInf"
-ask, capture packet 150) - the device answers it with its whole state dump within about
-30 ms (packets 151-168), and a record ask outside that session is met with idle frames
-only, which is exactly what the first test builds saw on real hardware. Then the GSI ask
-(packet 616): its length byte counts the 24 content bytes from byte 3 up to and
-including the record name at bytes 21-26, and the request token after ``01 44`` comes
-back echoed in the answer's envelope. The write is only ever sent to the product ids in
-KNOWN and only to a vendor collection.
+Reading replays the app's own asks. First the session opener (the "SInf" ask, byte for
+byte from capture packet 150) - the device answers it with its whole state dump within
+about 30 ms (packets 151-168), and a record ask outside that session is met with idle
+frames only, which is exactly what the first test builds saw on real hardware. Then the
+GSI ask (byte for byte from packet 616): its length byte counts the 24 content bytes
+from byte 3 up to and including the record name at bytes 21-26, and the request token
+after ``01 44`` comes back echoed in the answer's envelope. A third ask carries the same
+frame with the token a fresh session's counter would start at - the capture's own index
+ask (packet 280) carries it there; that token is INFERRED, not in the capture (review by
+@ahmedkhursheed23). It is kept because the reporter's on-battery diagnostics (#173) show
+it is the ask that answers there when the captured token's one does not: 77 % within 3
+replies. The fallback's budget is shortened after a silent opener and record ask, and a
+total read cap bounds a dead channel's read to about two seconds. The write is only ever
+sent to the product ids in KNOWN and only to a vendor collection.
 
 The headset itself, plugged in by its USB cable, enumerates as 10f5:229e with the same
 vendor collection and is read the same way; both are one icon (FAMILY_KEY).
 
-Unverified on hardware: no Stealth Pro II here. Two test builds on the reporter's unit
+Unverified on hardware here: no Stealth Pro II. Two test builds on the reporter's unit
 changed what is known: build 1's request was one byte short of the capture's, and build
 2's byte-identical ask still got idle frames only - because it went out cold, without the
-SInf opener. Both asks are now byte-identical to the capture, and a test pins their
-offsets and tokens.
+SInf opener. The opener and the record ask are byte-identical to the capture now, and a
+test pins their offsets and tokens; the fallback's token is inferred, and its answers are
+the reporter's diagnostics.
 
 The charging state is the record's key `250`. The reporter's runs in #173 settled it by
 diffing: on battery the full record reads {"230":"2","250":"0","280":"1","290":"2"},
@@ -79,6 +86,10 @@ REPORT_ID_IN = 0x07
 PACKET_DELAY = 0.060      # the cadence of the vendor app's own asks (and HeadsetControl's)
 MAX_READS = 16            # the GSI record arrived within 4-5 replies in the capture
 SINF_READS = 10           # the state dump came as 8 frames within 30 ms in the capture
+FRESH_SHORT_READS = 5     # after a silent opener and record ask the fallback still goes
+                          # out, but short: where it answered on the reporter's unit, it
+                          # did so within 3 reads (#173 diagnostics, #194 review)
+TOTAL_READS = 32          # hard cap across the asks of one read (~1.9 s at 60 ms)
 
 # Swarm II's request for the GSI record, as captured (packet 616): output report 6, 62
 # bytes. Byte 1 is the content length (24), counted from byte 3 up to and including the
@@ -91,10 +102,12 @@ ASK_GSI = bytes.fromhex(
     "0000000000000000000000000000"
 )
 
-# The same ask with the token a fresh session would use: the capture's 44-type asks
-# carry (0x10 + n, n) with n counting them (280 is the first, `11 01`; packet 616 is
-# the fourth, `14 04`), so when the captured token is not the one a new session takes,
-# this is the shape it starts at. Both were tried against the device in turn.
+# The same ask with the token a fresh session would use - INFERRED, not in the capture:
+# the capture's 44-type asks carry (0x10 + n, n) with n counting them (packet 280, the
+# index ask, is the first, `11 01`; packet 616 is the fourth, `14 04`), so when the
+# captured token is not the one a new session takes, this is the shape it starts at. The
+# reporter's on-battery diagnostics (#173) show it is the ask that answers there when the
+# captured token's one does not, so it stays the fallback (review by @ahmedkhursheed23).
 ASK_GSI_FRESH = ASK_GSI[:12] + bytes([0x11, 0x01]) + ASK_GSI[14:]
 
 # Swarm II's first ask, "SInf" (session info), byte for byte from capture packet 150;
@@ -262,11 +275,20 @@ class TurtleBeachProvider(Provider):
         try:
             # the session opener first, then the GSI ask; the dump may already carry
             # the level (a pushed 240), in which case no record ask is needed
+            payload_seen = False     # a reply carried bytes past its own framing
+            budget = TOTAL_READS     # hard cap across the asks of one read
             for tag, request, reads in (("SInf", ASK_SINF, SINF_READS),
                                         ("GSI", ASK_GSI, MAX_READS),
                                         ("GSI fresh token", ASK_GSI_FRESH, MAX_READS)):
                 if level is not None:
                     break
+                if tag == "GSI fresh token" and not payload_seen:
+                    # only idle frames answered the opener and the record ask: the
+                    # fallback still goes out - it is the ask that answers on the
+                    # reporter's unit (#173) - but on a short budget
+                    reads = min(reads, FRESH_SHORT_READS)
+                    self._diag.append("    (opener and record ask were silent; "
+                                      "the fallback goes out short)")
                 try:
                     sent = dev.write(request)
                 except (OSError, ValueError) as e:
@@ -277,6 +299,10 @@ class TurtleBeachProvider(Provider):
                     continue
                 got = 0
                 for _ in range(reads):
+                    if budget <= 0:
+                        self._diag.append(f"    {tag}: the read budget is spent")
+                        break
+                    budget -= 1
                     time.sleep(PACKET_DELAY)
                     try:
                         frame = dev.get_input_report(REPORT_ID_IN, MSG_SIZE)
@@ -286,6 +312,8 @@ class TurtleBeachProvider(Provider):
                     if frame:
                         frames.append(bytes(frame))
                         got += 1
+                        if len(frame) > 3 and frame[1] > 0:
+                            payload_seen = True
                     level, name = status_from_documents(json_documents(strip_frames(frames)))
                     if level is not None:
                         break
