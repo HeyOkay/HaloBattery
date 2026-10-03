@@ -13,9 +13,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   that session gets idle frames only, as two test builds on real hardware showed - and
   the general status record's key `240` is the percentage (86 in the capture, at
   the moment the vendor app's screen said "86%" for the same headset) and `220` the
-  headset's name; the two share one icon. The charging flag is not identified yet;
-  Diagnostics prints every status record received, so one reading with the headset on the
-  charging cable pins it. Unverified on hardware.
+  headset's name; the two share one icon. The level and the name are confirmed on the
+  reporter's hardware. The charging state is the record's key `250` - the one strict
+  0/1 key that flips between his on-battery and on-cable runs (#173) - shown from the
+  next test build on.
 
 ## [1.13.0] - 2026-09-29
 
