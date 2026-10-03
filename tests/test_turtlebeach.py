@@ -284,6 +284,30 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.key, s.level, s.online) for s in res],
                          [("turtlebeach:stealthpro2", None, True)])
 
+    def test_a_silent_transmitter_keeps_the_last_level_greyed_out(self):
+        # the reporter's #173 run: with Swarm II open the transmitter answers 40+ idle
+        # frames and no record - the level and its charging state stay on a greyed icon
+        # instead of "no link" (the cable record: 78 %, charging - 250 = 1)
+        self.infos = ifaces(pid=0x229E, serial="SN456")
+        self.transmitter.queues = {(1, 2): CABLE_REPLY}
+        first = self.p.poll()
+        self.assertEqual((first[0].level, first[0].charging, first[0].online), (78, True, True))
+        self.transmitter.queues = {}                      # idle frames only from now on
+        out = self.p.poll()
+        self.assertEqual((out[0].key, out[0].level, out[0].charging, out[0].online),
+                         (turtlebeach.FAMILY_KEY, 78, True, False))
+        self.assertTrue(any("keeping 78%" in line for line in self.p.diagnostics()))
+
+    def test_the_kept_level_expires_with_the_sleep_window(self):
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        with mock.patch.object(turtlebeach.time, "time", lambda: 1000.0):
+            self.p.poll()
+        self.transmitter.queues = {}
+        late = 1000.0 + turtlebeach.ASLEEP_KEEP + 1
+        with mock.patch.object(turtlebeach.time, "time", lambda: late):
+            out = self.p.poll()
+        self.assertEqual((out[0].level, out[0].online), (None, True))
+
     def test_a_silent_transmitter_still_shows_the_cables_reading(self):
         # the transmitter is muted (the headset is off its link) but the cable answers
         self.transmitter.queues = {(2, 2): GSI_REPLY}
