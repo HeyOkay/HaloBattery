@@ -48,7 +48,8 @@ status shapes, so both live here behind the model bytes proven on the units:
 - the `0x10` shape - `03 10 40 <stage> <level/10>` - is the X6/R1 generation:
   decoded in blak0p's attack-shark-linux protocol documents (validated live
   on the dongle: idle `03 10 40 01 0a` = 100 %) and caught on the R1's own
-  receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %). The
+  receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %), and his
+  run of the test build shows the same reading in the tray. The
   level arrives in steps of ten and the frames carry no charging state; the
   dongle's config ACK (`03 10 50 ...`) and DPI-button (`03 10 10 ...`)
   reports are excluded by the `0x40` command check.
