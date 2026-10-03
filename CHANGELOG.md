@@ -21,7 +21,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   documents validated on the dongle - caught on the R1's own receiver by its
   reporter's probe in [#69](https://github.com/HeyOkay/HaloBattery/issues/69);
   it carries no charging state. Each receiver only reads the model bytes
-  proven on it; the R1's run of the test build is its confirmation.
+  proven on it; the R1's run of the test build confirmed it on hardware - the
+  tray showed 90 %, its own ten-step size, unchanged while charging.
 
 ## [1.14.0] - 2026-10-05
 
