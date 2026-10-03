@@ -99,6 +99,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesProvider, WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
+from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
@@ -159,11 +160,12 @@ PROVIDER_LABELS = {
 }
 
 
-def make_providers() -> list:
+def make_providers(jbl_listen_first: float = 0.0) -> list:
+    # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider()]
@@ -1874,7 +1876,7 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = make_providers()
+    app.providers = make_providers(jbl_listen_first=JBL_PROBE_LISTEN_S)
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:

@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- JBL Quantum 910: while its receiver was plugged in, every poll waited up to 10 seconds for
+  the headset to speak and held back the icons of all other devices. The app now listens
+  to the receiver all the time in the background, so polls do not wait, and a level the
+  headset sends between polls is no longer missed.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
