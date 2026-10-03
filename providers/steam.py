@@ -1,13 +1,17 @@
 """Steam Controller (2025) over its puck: the battery from the controller's own
 input reports.
 
-The puck (dongle) relays one controller per slot: its vendor collection (usage
-page 0xFF00 / usage 0x0001) on interfaces 2 to 5, one interface per slot, the
-way SDL's HIDAPI driver reads it
-(src/joystick/hidapi/SDL_hidapi_steam_triton.c). SDL names the frames:
+The puck (dongle) relays one controller per slot: interfaces 2 to 5, one
+interface per slot, the way SDL's HIDAPI driver reads it
+(src/joystick/hidapi/SDL_hidapi_steam_triton.c - it matches the interface
+number alone). The collection ON each interface is picked by usage, best
+evidence first: usage page 0xFF00 / usage 0x0001, then any vendor page, then
+0001:0005 - and the pick is logged, because no dump on the record shows the
+puck's exact usages (review by @ahmedkhursheed23). The frames, named by SDL:
 
-  * input report 0x43 (ID_TRITON_BATTERY_STATUS): byte 0 the charge state
-    (1 discharging, 2 charging, 4 charging done), byte 1 the level in %.
+  * input report 0x43 (ID_TRITON_BATTERY_STATUS): after the report id, byte 1
+    the charge state (1 discharging, 2 charging, 4 charging done), byte 2 the
+    level in % (TritonBatteryStatus_t, 14 bytes).
   * 0x79 and 0x46 (ID_TRITON_WIRELESS_STATUS): byte 0 the state, 2 a controller
     connected, 1 disconnected.
   * 0x42, 0x45 and 0x47: the controller's state reports. No battery, but their
@@ -20,8 +24,10 @@ user's games. Nothing is ever sent from here.
 
 How often the puck sends 0x43 was not measured, so the last level is kept
 between reports (that is what SDL does too). A slot that goes quiet keeps its
-last value greyed for ASLEEP_KEEP; a disconnect report removes the icon at once
-and clears the value.
+last value greyed for as long as the puck is there - no timer, because an icon
+that is removed and re-created comes back at a new tray position (#87, #202
+review). A disconnect report removes the icon at once, and the puck leaving the
+USB tree clears the value.
 """
 from __future__ import annotations
 
@@ -46,11 +52,13 @@ PUCKS = {
 }
 NAME = "Steam Controller"
 
-# One vendor collection per controller slot, on its own interface (SDL's driver).
-# The same interface also carries the mouse and keyboard collections of the
-# controller's "lizard mode"; those are ignored.
+# One controller slot per interface (SDL's driver matches the interface alone).
+# The interface also carries the mouse and keyboard collections of the
+# controller's "lizard mode"; the slot collection is picked by usage, in this
+# order, and the pick is logged.
 USAGE_PAGE = 0xFF00
 USAGE = 0x0001
+GAMEPAD_PAGE, GAMEPAD_USAGE = 0x0001, 0x0005
 SLOT_INTERFACES = (2, 3, 4, 5)
 
 REPORT_BATTERY = 0x43
@@ -66,8 +74,6 @@ CHARGE_DONE = 4
 # quiet slot costs the whole window, and four of them a couple of seconds.
 WINDOW = 0.4
 MAX_REPORTS = 1024   # a safety valve against a pathological stream
-
-ASLEEP_KEEP = 300    # s: a slot that went quiet keeps its last value (greyed)
 
 NOT_REPORTED = "connected, battery level not reported yet"
 
@@ -100,7 +106,6 @@ class SteamProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Dict[str, Tuple[int, bool]] = {}   # key -> level, charging
-        self._seen: Dict[str, float] = {}              # key -> when it was last seen
 
     def _read(self, path) -> dict:
         """Listen on one slot -> {"battery": (level, charging) or None,
@@ -160,24 +165,58 @@ class SteamProvider(Provider):
             log.warning("hid.enumerate(steam): %s", e)
             return []
 
-        slots = []                       # (pid, interface, path), one per slot
+        by_iface: Dict[int, List[dict]] = {}
+        puck_seen: List[dict] = []
         for d in infos:
-            pid = d["product_id"]
-            if pid not in PUCKS:
+            if d.get("product_id") not in PUCKS:
                 continue
-            if d.get("interface_number") not in SLOT_INTERFACES:
-                continue
-            if (d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE):
-                continue
-            slots.append((pid, d.get("interface_number"), d["path"]))
-        slots.sort(key=lambda s: (s[0], s[1]))
+            puck_seen.append(d)
+            iface = d.get("interface_number")
+            if iface in SLOT_INTERFACES:
+                by_iface.setdefault(iface, []).append(d)
+
+        slots = []                       # (pid, interface, path, how), one per slot
+        for iface in sorted(by_iface):
+            cols = sorted(by_iface[iface],
+                          key=lambda d: (d.get("usage_page") or 0, d.get("usage") or 0))
+            pick, how = None, ""
+            for d in cols:
+                if (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE):
+                    pick, how = d, "usage ff00:0001"
+                    break
+            if pick is None:
+                for d in cols:           # any vendor collection on the interface
+                    if (d.get("usage_page") or 0) >= 0xFF00:
+                        pick = d
+                        how = f"vendor page {(d.get('usage_page') or 0):04x}"
+                        break
+            if pick is None:
+                for d in cols:           # the controller's own gamepad face
+                    if (d.get("usage_page"), d.get("usage")) == (GAMEPAD_PAGE, GAMEPAD_USAGE):
+                        pick, how = d, "usage 0001:0005"
+                        break
+            if pick is None:
+                continue                 # nothing plausible: said below
+            if how != "usage ff00:0001":
+                self._diag.append(f"[Steam] iface={iface}: no usage ff00:0001 on this "
+                                  f"interface; picked {how}")
+            slots.append((pick["product_id"], iface, pick["path"], how))
+
+        if not slots and puck_seen:
+            self._diag.append("[Steam] the puck is present but no slot collection was "
+                              "found on interfaces 2-5; its collections:")
+            for d in sorted(puck_seen, key=lambda d: (d.get("interface_number") or 0,
+                                                      d.get("usage_page") or 0,
+                                                      d.get("usage") or 0)):
+                self._diag.append(f"    iface={d.get('interface_number')} "
+                                  f"usage={(d.get('usage_page') or 0):04x}:"
+                                  f"{(d.get('usage') or 0):04x}")
 
         out: List[DeviceStatus] = []
-        now = time.time()
-        for pid, iface, path in slots:
+        for pid, iface, path, how in slots:
             key = f"steam:{pid:04x}:{iface}"
             self._diag.append(f"[Steam] {NAME} slot iface={iface} pid={pid:04x}: "
-                              f"{PUCKS[pid]}, listening on usage=ff00:0001")
+                              f"{PUCKS[pid]}, listening on {how}")
             res = self._read(path)
             for rid, (n, sample) in sorted(res["seen"].items()):
                 self._diag.append(f"    report {rid:#04x} x{n} len={len(sample)}: "
@@ -188,13 +227,11 @@ class SteamProvider(Provider):
                 if key in self._last:
                     log.info("[Steam] %s slot %d: disconnected", NAME, iface)
                 self._last.pop(key, None)
-                self._seen.pop(key, None)
                 continue
             active = res["state"] or wireless == 2 or REPORT_BATTERY in res["seen"]
             if active:
                 if res["battery"] is not None:
                     self._last[key] = res["battery"]
-                self._seen[key] = now
                 last = self._last.get(key)
                 if last is None:
                     self._diag.append(f"    -> {NOT_REPORTED}")
@@ -208,17 +245,18 @@ class SteamProvider(Provider):
                                             kind="gamepad"))
                 continue
             last = self._last.get(key)
-            seen_at = self._seen.get(key, 0.0)
-            if last is not None and now - seen_at < ASLEEP_KEEP:
+            if last is not None:
+                # no timer: the value stays greyed while the puck is there. An icon
+                # removed and re-created comes back at a new tray position (#87).
                 self._diag.append("    nothing in the window: keeping the last value")
                 out.append(DeviceStatus(key, NAME, last[0], False, False, "steam",
                                         kind="gamepad"))
-            elif last is not None:
-                self._diag.append("    nothing for a while: dropping the icon")
-                self._last.pop(key, None)
-                self._seen.pop(key, None)
             else:
                 self._diag.append("    nothing in the window (no controller in this slot)")
+        current = {f"steam:{pid:04x}:{iface}" for pid, iface, path, how in slots}
+        for key in list(self._last):
+            if key not in current:       # the puck left: nothing is kept for it
+                self._last.pop(key, None)
         return out
 
     def diagnostics(self) -> List[str]:
