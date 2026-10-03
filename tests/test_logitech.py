@@ -28,12 +28,18 @@ class FakeHidpp:
     silent:    the device does not answer at all (asleep)
     """
 
-    def __init__(self, features=None, name=None, error=None, silent=False, registers=None):
+    def __init__(self, features=None, name=None, error=None, silent=False, registers=None,
+                 register_error_form=0x8F, register_noise=None):
         self.features = features or {}
         self.name = name
         self.error = error
         self.silent = silent
         self.registers = registers
+        # a HID++ 2.0 device answers a register read with the 2.0 error form (FF)
+        self.register_error_form = register_error_form
+        # frames another app's register read puts on the channel, queued before
+        # each register answer (they are followed by this device's own reply)
+        self.register_noise = register_noise
 
 
 class FakeBus:
@@ -44,6 +50,7 @@ class FakeBus:
         self.short_of = {p: sh for p, (_, sh) in paths.items()}
         self.queues = {}
         self.writes = []            # (path, bytes) of every write
+        self.reads = 0
         # if set: before each "find feature" reply, a late reply to the PREVIOUS
         # request arrives first (it carries that request's swid)
         self.late_replies = False
@@ -64,6 +71,7 @@ class FakeBus:
                 pass
 
             def read(self, n, timeout=None):
+                bus.reads += 1
                 q = bus.queues.get(self.path, [])
                 return q.pop(0) if q else []
 
@@ -92,9 +100,9 @@ class FakeBus:
             self.queues.setdefault(path, []).append(
                 [0x11, idx, 0x81, reg] + list(params) + [0] * (16 - len(params)))
 
-    def _register_error(self, path, idx, reg, code):
+    def _register_error(self, path, idx, reg, code, form=0x8F):
         short = self.short_of.get(path) or path
-        self.queues.setdefault(short, []).append([0x10, idx, 0x8F, 0x81, reg, code, 0])
+        self.queues.setdefault(short, []).append([0x10, idx, form, 0x81, reg, code, 0])
 
     def write(self, path, data):
         self.writes.append((path, data))
@@ -108,9 +116,12 @@ class FakeBus:
                 return self._register_error(owner, idx, reg, L.ERR_EMPTY_SLOT)
             if dev.silent:
                 return
+            if dev.register_noise:
+                self.queues.setdefault(self.short_of.get(owner) or owner, []).extend(
+                    [list(f) for f in dev.register_noise])
             regs = dev.registers or {}
             if regs.get(reg, "error") == "error":
-                return self._register_error(owner, idx, reg, 0x02)
+                return self._register_error(owner, idx, reg, 0x02, dev.register_error_form)
             return self._register_reply(owner, idx, reg, regs[reg])
         idx, feat, fn = data[1], data[2], data[3]
         prev, self.prev_swid = self.prev_swid, fn & 0x0F
@@ -260,6 +271,34 @@ class ReceiverTests(LogitechTestCase):
         [st] = p.poll()
         self.assertEqual((st.level, st.approx), (20, "about 20% (low)"))
         self.assertTrue(any("HID++ 1.0" in line for line in p.diagnostics()))
+
+    def test_a_foreign_register_error_does_not_eat_the_register_read(self):
+        # another app's error frame for a different register (the echo does not
+        # match) sits ahead of the real reply: it must be skipped, not taken as
+        # this register's answer (review by @ahmedkhursheed23)
+        dev = FakeHidpp(registers={0x0D: [87, 0, 0x50]},
+                        register_noise=[[0x10, 3, 0x8F, 0x81, 0x05, 0x01, 0]])
+        self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.level, st.charging), (87, True))
+
+    def test_a_20_error_ends_the_register_wait_at_once(self):
+        # a HID++ 2.0 device without a battery feature answers register reads
+        # with the 2.0 error (`.. FF ..` in byte 2): it used to wait the full
+        # timeout for each register, about 1.2 s per poll (review by
+        # @ahmedkhursheed23)
+        import time as _time
+        dev = FakeHidpp({L.F_NAME: (3, {2: [3]})}, name="G502 X",
+                        register_error_form=0xFF)
+        self.use(receiver(), {b"long": ({1: dev}, b"short")})
+        p = L.LogitechProvider()
+        t0 = _time.monotonic()
+        out = p.poll()
+        dt = _time.monotonic() - t0
+        self.assertEqual(out, [])                 # no reading from this device
+        self.assertTrue(any("no battery reading" in line for line in p.diagnostics()))
+        # the old code waited TIMEOUT (0.05 s here) per register, twice
+        self.assertLess(dt, 0.05)
 
     def test_a_charging_only_register_reply_is_no_reading(self):
         dev = FakeHidpp(registers={0x07: [0, 0x21, 0x00, 0x00]})
