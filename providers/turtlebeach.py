@@ -39,10 +39,11 @@ changed what is known: build 1's request was one byte short of the capture's, an
 SInf opener. Both asks are now byte-identical to the capture, and a test pins their
 offsets and tokens.
 
-The charging flag is not identified yet: the capture has the headset off the cable, and
-none of the other GSI keys can be told apart as a charging state from one reading.
-Diagnostics prints every GSI document received, so one run with the headset on the
-charging cable pins it.
+The charging state is the record's key `250`. The reporter's runs in #173 settled it by
+diffing: on battery the full record reads {"230":"2","250":"0","280":"1","290":"2"},
+on the cable {"230":"0","250":"1","280":"2","290":"4"} - the only strict 0/1 key
+among the changes is 250, so that is the charging flag (230/280/290 move in enum-like
+steps, transport or power source). A record without 250 counts as not charging.
 """
 from __future__ import annotations
 
@@ -108,6 +109,7 @@ ASK_SINF = bytes.fromhex(
 
 GSI_KEY_LEVEL = "240"
 GSI_KEY_NAME = "220"
+GSI_KEY_CHARGING = "250"             # the charging state (see the module docstring)
 
 
 def strip_frames(frames) -> bytes:
@@ -206,6 +208,22 @@ def status_from_documents(docs) -> Tuple[Optional[int], Optional[str]]:
     return level, name
 
 
+def charging_from_documents(docs) -> Optional[bool]:
+    """The charging state from a status record, or None when no document carried
+    key 250. The newest document with the key wins; partial updates without it leave
+    the state as Not-answered (the icon then simply does not claim a charge)."""
+    for doc in reversed(docs):
+        if (doc.get("UP") or doc.get("OR")) != "GSI":
+            continue
+        kvp = doc.get("KVP")
+        if not isinstance(kvp, dict):
+            continue
+        value = kvp.get(GSI_KEY_CHARGING)
+        if value is not None:
+            return str(value) == "1"
+    return None
+
+
 def _status_record(frames) -> Optional[dict]:
     """The newest status document of a read, for the diagnostics: printing the whole
     record on a successful read is what lets two runs - on battery and on the cable -
@@ -229,14 +247,15 @@ class TurtleBeachProvider(Provider):
         self._diag: List[str] = []
 
     # ---- low level -------------------------------------------------------
-    def _read_status(self, path) -> Tuple[Optional[int], Optional[str]]:
-        """Ask the transmitter for the GSI record -> (level, name); either may be None."""
+    def _read_status(self, path) -> Tuple[Optional[int], Optional[str], Optional[bool]]:
+        """Ask the device for the GSI record -> (level, name, charging); any may be
+        None (the level and the name are what a read is taken for)."""
         dev = hid.device()
         try:
             dev.open_path(path)
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    open: {e}")
-            return None, None
+            return None, None, None
         frames: List[bytes] = []
         level = None
         name = None
@@ -252,7 +271,7 @@ class TurtleBeachProvider(Provider):
                     sent = dev.write(request)
                 except (OSError, ValueError) as e:
                     self._diag.append(f"    {tag} write: {e}")
-                    return level, name
+                    return level, name, None
                 if sent != len(request):
                     self._diag.append(f"    {tag} write returned {sent} of {len(request)} bytes")
                     continue
@@ -271,8 +290,10 @@ class TurtleBeachProvider(Provider):
                     if level is not None:
                         break
                 self._diag.append(f"    {tag}: {got} replies")
+            charging = charging_from_documents(json_documents(strip_frames(frames)))
             if level is not None:
-                self._diag.append(f"    -> {name or 'the headset'!r}: {level}%")
+                self._diag.append(f"    -> {name or 'the headset'!r}: {level}%"
+                                  + (", charging" if charging else ""))
                 record = _status_record(frames)
                 if record is not None:
                     self._diag.append("    status record: "
@@ -280,7 +301,7 @@ class TurtleBeachProvider(Provider):
             else:
                 self._diag.append(f"    no GSI record in {len(frames)} replies"
                                   + (f", last: {hexdump(frames[-1])}" if frames else ""))
-            return level, name
+            return level, name, charging
         finally:
             try:
                 dev.close()
@@ -307,7 +328,7 @@ class TurtleBeachProvider(Provider):
                 continue
             groups.setdefault((pid, d.get("serial_number") or ""), []).append(d)
 
-        levels: List[Optional[int]] = []
+        results: List[Tuple[Optional[int], Optional[bool]]] = []
         for (pid, serial), ifaces in sorted(groups.items()):
             name = KNOWN.get(pid) or (ifaces[0].get("product_string") or
                                       f"TurtleBeach {pid:04x}").strip()
@@ -320,6 +341,7 @@ class TurtleBeachProvider(Provider):
                      or [d for d in ifaces if d.get("usage_page") == VENDOR_USAGE_PAGE]
                      or [d for d in ifaces if (d.get("usage_page") or 0) >= 0xFF00])
             level = None
+            charging = None
             if not cands:
                 self._diag.append("    no vendor collection on this device "
                                   "(not writing to the standard collections)")
@@ -328,23 +350,25 @@ class TurtleBeachProvider(Provider):
                     if len(cands) > 1:
                         self._diag.append(f"  iface={d.get('interface_number')} "
                                           f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                    level, _ = self._read_status(d["path"])
+                    level, _, charging = self._read_status(d["path"])
                     if level is not None:
                         break
-            levels.append(level)
+            results.append((level, charging))
 
-        if not levels:
+        if not results:
             return []
         # One icon for the model (#155/#192): whether the transmitter or the headset's own
         # cable answers, it is the same headset; the first (in pid order) that carries a
-        # level wins. No charging flag yet (see the module docstring), so the icon never
-        # claims a charge. A None level shows the headset without a percentage - the
-        # signal that it was seen but its level could not be read.
-        shown = next((lv for lv in levels if lv is not None), None)
+        # level wins, with its charging state (key 250, module docstring). A None level
+        # shows the headset without a percentage - the signal that it was seen but its
+        # level could not be read.
+        shown = next((lv for lv, _ in results if lv is not None), None)
+        charging = next((ch for lv, ch in results if lv is not None), None)
         self._diag.append("  -> " + FAMILY_KEY + (f": {shown}%" if shown is not None
-                                                   else ": no level from any source"))
-        return [DeviceStatus(FAMILY_KEY, "Turtle Beach Stealth Pro II", shown, False, True,
-                             "turtlebeach", kind="headset")]
+                                                   else ": no level from any source")
+                          + (", charging" if charging else ""))
+        return [DeviceStatus(FAMILY_KEY, "Turtle Beach Stealth Pro II", shown,
+                             bool(charging), True, "turtlebeach", kind="headset")]
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
