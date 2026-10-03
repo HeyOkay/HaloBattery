@@ -1480,17 +1480,20 @@ class App:
         hidden = self._settings_map("hidden")
         now = time.time()
         for st in results:
-            if st.key in hidden:
-                continue          # hidden by the user: no icon and no low battery alert
-            seen.add(st.key)
-            self.history.record(st.key, st.level, st.charging, st.online, now,
-                                coarse=bool(st.approx))
-            self.missing.pop(st.key, None)
-            ic = self.icons.get(st.key)
-            if ic is None:
-                ic = DeviceIcon(self, st.key)
-                self.icons[st.key] = ic
-            ic.update(st)
+            # "Hide this device" runs in a menu thread: with the lock, a device is
+            # either hidden before this check or has its icon removed after the update
+            with self.lock:
+                if st.key in hidden:
+                    continue      # hidden by the user: no icon and no low battery alert
+                seen.add(st.key)
+                self.history.record(st.key, st.level, st.charging, st.online, now,
+                                    coarse=bool(st.approx))
+                self.missing.pop(st.key, None)
+                ic = self.icons.get(st.key)
+                if ic is None:
+                    ic = DeviceIcon(self, st.key)
+                    self.icons[st.key] = ic
+                ic.update(st)
             self.check_alert(ic, st)
             self.check_full(ic, st)
 
@@ -1500,15 +1503,20 @@ class App:
         # presence comes from the reliable HID list (and its key switches between
         # the cable-only and Bluetooth forms when a cable is added to a BT pad),
         # so those go at once
-        for key in list(self.icons):
-            if key not in seen:
-                self.missing[key] = self.missing.get(key, 0) + 1
-                limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
-                if self.missing[key] >= limit:
-                    self.icons.pop(key).stop()
-                    # the icon is gone: stop counting, otherwise the quick
-                    # 3-second re-check in wait_next() would go on forever
-                    self.missing.pop(key, None)
+        gone = []
+        with self.lock:
+            for key in list(self.icons):
+                if key not in seen:
+                    self.missing[key] = self.missing.get(key, 0) + 1
+                    limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
+                    if self.missing[key] >= limit:
+                        gone.append(self.icons.pop(key))
+                        # the icon is gone: stop counting, otherwise the quick
+                        # 3-second re-check in wait_next() would go on forever
+                        self.missing.pop(key, None)
+        # stop() waits for the icon's thread: not while the menu threads wait for the lock
+        for ic in gone:
+            ic.stop()
 
         self.show_placeholder(not self.icons)
         self.history.save()
