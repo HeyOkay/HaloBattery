@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Corsair Virtuoso SE and Virtuoso XT: the battery over the Slipstream receiver or the USB
+  cable (#204), from HeadsetControl (`corsair_virtuoso_xt.hpp`, commit 8292ac41). Charging
+  is not shown, as HeadsetControl does not decode it. **Unverified** on hardware; the
+  receiver id 1B1C:0A40 from #204 is not in HeadsetControl and needs the reporter's test.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

@@ -18,6 +18,12 @@ The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte 
 
 The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, whose answer carries the battery as attribute 0x0CD6 (`05 5D <len> 00 D6 0C <percent>`). One packet is enough — the query for that attribute is answered with the marker on its own (0.19 s against 1.48 s for the whole sequence) — with the full sequence as the fallback. Dongle and cable are one headset and share one icon; charging is inferred from the cable answering, so the icon breathes while it sits on USB-C. With the headset switched off the dongle keeps answering with the last value it held, so the provider goes by the dongle's own product string — `"Audeze Maxwell Dongle"` with no headset linked, `"Audeze Maxwell HID"` with one — and reports nothing: the icon leaves the tray the way any switched-off device does
 
+### Corsair Virtuoso SE, Virtuoso XT
+
+**Connection:** Slipstream receiver (1B1C:0A3E SE, 1B1C:0A64 XT) or USB cable (1B1C:0A3D SE, 1B1C:0A62 XT)
+
+The protocol is from Sapd/HeadsetControl, `lib/devices/corsair_virtuoso_xt.hpp` at commit [8292ac41](https://github.com/Sapd/HeadsetControl/blob/8292ac41/lib/devices/corsair_virtuoso_xt.hpp). The vendor collection has usage page 0xFF42 and usage 0x0001 (HeadsetControl names it as interface 3). A two-byte write `02 00` is answered with a 64-byte report: byte 0 is 0x01, byte 1 is the status (0xF0 normal, 0x00 headset not connected to the receiver) and byte 2 is the battery percent. The headset also sends volume reports (first byte 0x0E) without being asked; they are skipped, up to 8 reads, as HeadsetControl does. A status of 0x00 or a level above 100 gives no reading, so the icon leaves the tray. HeadsetControl does not decode charging, so none is shown. The receiver and the cable are one headset and share one icon. **Unverified** - the id 1B1C:0A40 (a "Slipstream Multi-Device Receiver", from issue #204) is not in HeadsetControl; it is read like 0A3E, and that is a guess until the reporter of #204 has tried it. The four ids from HeadsetControl have not been tried on hardware here either
+
 ### Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless
 
 **Connection:** Wireless receiver (1B1C:2A08, 1B1C:2A02, 1B1C:0A97)
