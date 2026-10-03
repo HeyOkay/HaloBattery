@@ -92,7 +92,8 @@ import updates  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
+                       AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider,
+                       CorsairVirtuosoProvider, DeviceStatus,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
@@ -139,6 +140,7 @@ PROVIDER_LABELS = {
     "audeze": "Audeze Maxwell",
     "barracuda": "Razer Barracuda Pro",
     "corsair": "Corsair headsets",
+    "corsair_virtuoso": "Corsair Virtuoso SE / XT",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
@@ -166,6 +168,7 @@ def make_providers() -> list:
             JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
+            CorsairVirtuosoProvider(),
             LamzuProvider(), AmInfinityProvider()]
 
 

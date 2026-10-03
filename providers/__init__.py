@@ -22,5 +22,6 @@ from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
+from .corsair_virtuoso import CorsairVirtuosoProvider  # noqa: F401
 from .lamzu import LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
