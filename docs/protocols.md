@@ -120,7 +120,11 @@ The mouse announces its level and charging state by itself - nothing is ever sen
 
 **Connection:** 2.4 GHz dongle (1D57:FA60)
 
-The same ODM family and the same passive frame as the Inphic row above: the mouse announces `03 <model> 40 <sub> <level>` by itself on the `000a:0000` collection, and nothing is ever sent to it. The `0x55` model byte was caught by a reporter's probe announcing `03 55 40 01 1f` (31 %), matching the `03 55 40 01 4b` frame in the notes behind [#69](https://github.com/HeyOkay/HaloBattery/issues/69). Each receiver of the family only reads the model codes proven on it. **Confirmed on hardware** in the reporter's runs of the test build ([#163](https://github.com/HeyOkay/HaloBattery/issues/163)): the icon shows the level, and the charging state too - his diagnostics caught the mouse announcing `03 55 40 03 1e` while on the cable, and the tray read "30 %, charging"
+The same ODM family as the Inphic row above, in two generations - both announce their frames by themselves on the `000a:0000` collection, and nothing is ever sent to either. Each receiver of the family only reads the model bytes proven on it.
+
+The **X11** speaks the same shape as the Inphic row: `03 55 40 <sub> <level>`. Its reporter's probe caught the `0x55` model byte announcing `03 55 40 01 1f` (31 %), and it is **confirmed on hardware** in his runs of the test build ([#163](https://github.com/HeyOkay/HaloBattery/issues/163)): the icon shows the level, and the charging state too - his diagnostics caught the mouse announcing `03 55 40 03 1e` while on the cable, and the tray read "30 %, charging".
+
+The **X6/R1 generation** announces `03 10 40 <stage> <level/10>`: the level arrives in steps of ten, byte 3 is the DPI stage (not a sub-command), and the frames carry no charging state. The shape is decoded from blak0p's attack-shark-linux protocol documents (validated live on an X6 dongle: idle `03 10 40 01 0a` = 100 %) and was caught on the R1's own receiver by its reporter's probe in [#69](https://github.com/HeyOkay/HaloBattery/issues/69) (`03 10 40 01 09` = 90 %). The dongle's config ACK (`03 10 50 ...`) and its DPI-button report (`03 10 10 ...`) share the shape and are excluded by the `0x40` command byte. The R1's run of its test build is its confirmation
 
 ### LAMZU Maya X
 

@@ -11,9 +11,10 @@ collection shape is the reporter's diagnostics dump (1d57:fa65: a keyboard
 and a mouse collection, then the four status collections on interface 2,
 with the vendor app reading 000a:0000 and keeping ff00:0001 for its writes).
 
-The Attack Shark X11/R1 frame (`03 55 40 01 1f` = 31 %, on 1d57:fa60) is the
-one a reporter's probe caught in #163; each receiver only reads the model
-codes proven on it.
+Two Attack Shark shapes live on one receiver id (1d57:fa60), each caught by a
+reporter's own probe: the X11's `03 55 40 01 1f` = 31 % (#163) and the X6/R1
+generation's `03 10 40 01 09` = 90 % (#69; the level is byte 4 x 10, per
+blak0p's live-validated X6 protocol documents).
 
 Run from the repository root:
 
@@ -38,6 +39,9 @@ FULL = [0x03, 0x99, 0x40, 0x02, 0x00] + [0x00] * 95
 
 # the Attack Shark X11/R1 frame a reporter's probe caught on 1d57:fa60 (#163)
 AS_31 = [0x03, 0x55, 0x40, 0x01, 0x1F] + [0x00] * 95
+# the R1's own push from its receiver's probe run (#69) - the X6/R1
+# generation's heartbeat, level in steps of ten (0x09 -> 90 %)
+AS_R1_90 = [0x03, 0x10, 0x40, 0x01, 0x09] + [0x00] * 95
 INPHIC = I.PIDS[0xFA65][1]
 ATTACK = I.PIDS[0xFA60][1]
 
@@ -125,9 +129,27 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(I.parse_frame(charged, ATTACK), (None, True))
         self.assertEqual(I.parse_frame(full, ATTACK), (100, True))
 
+    def test_the_r1_generation_reads_in_steps_of_ten(self):
+        # 0x09 -> 90 %: the R1's own push caught in #69; blak0p's X6 doc's
+        # live idle frame reads 0x0a -> 100 %
+        self.assertEqual(I.parse_frame(AS_R1_90, ATTACK), (90, False))
+        idle = [0x03, 0x10, 0x40, 0x01, 0x0A] + [0x00] * 95
+        self.assertEqual(I.parse_frame(idle, ATTACK), (100, False))
+
+    def test_the_r1_generations_other_reports_are_not_levels(self):
+        # the config ACK and the DPI-button report share the shape
+        ack = [0x03, 0x10, 0x50, 0x00, 0x04] + [0x00] * 95
+        dpi = [0x03, 0x10, 0x10, 0x02, 0x00] + [0x00] * 95
+        self.assertIsNone(I.parse_frame(ack, ATTACK))
+        self.assertIsNone(I.parse_frame(dpi, ATTACK))
+        # a zero level (0 x 10) is refused like any other out-of-range one
+        zero = [0x03, 0x10, 0x40, 0x01, 0x00] + [0x00] * 95
+        self.assertIsNone(I.parse_frame(zero, ATTACK))
+
     def test_each_receivers_model_codes_are_gated(self):
         # a model byte is only trusted on the receiver it was proven on
         self.assertIsNone(I.parse_frame(AS_31, INPHIC))
+        self.assertIsNone(I.parse_frame(AS_R1_90, INPHIC))
         self.assertIsNone(I.parse_frame(LEVEL75, ATTACK))
 
     def test_another_command_is_refused(self):
@@ -189,6 +211,15 @@ class PollTest(unittest.TestCase):
                          [("inphic:fa60", "Attack Shark X11 / R1", 31, False,
                            "inphic", "mouse")])
         self.assertEqual(self.provider._chosen.get(0xFA60), AS_STATUS_PATH)
+
+    def test_the_r1_receivers_frame_reads_its_own_level(self):
+        entries = receiver_entries(pid=0xFA60, prefix=b"as")
+        cols = self.cols(entries, replies=(AS_R1_90,), answer=AS_STATUS_PATH)
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.source, s.kind)
+                          for s in out],
+                         [("inphic:fa60", "Attack Shark X11 / R1", 90, False,
+                           "inphic", "mouse")])
 
     def test_both_receivers_present_read_side_by_side(self):
         entries = receiver_entries() + receiver_entries(pid=0xFA60, prefix=b"as")

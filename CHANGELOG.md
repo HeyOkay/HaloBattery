@@ -12,12 +12,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   frame map is mirrored from the vendor's own INPHIC HUB driver
   ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)). Confirmed on
   hardware in the reporter's runs, the charging state included.
-- Attack Shark X11 / R1 (1d57:fa60): the same ODM family frame as the Inphic
-  row (`03 55 40 01 <level>` on `000a:0000`, read-only), caught by a
-  reporter's probe in [#163](https://github.com/HeyOkay/HaloBattery/issues/163).
-  Each receiver of the family only reads the model codes proven on it.
-  Level and charging are both confirmed in the reporter's runs - his diagnostics
-  caught the charging frame (`03 55 40 03 ...`) while on the cable.
+- Attack Shark X11 / R1 (1d57:fa60): the same ODM family, in two generations,
+  both read passively on `000a:0000`. The X11 announces the Inphic row's shape
+  (`03 55 40 01 <level>`); its reporter's probe caught it in
+  [#163](https://github.com/HeyOkay/HaloBattery/issues/163), where level and
+  charging are both confirmed. The X6/R1 generation announces
+  `03 10 40 <stage> <level/10>` - the shape blak0p's attack-shark-linux X6
+  documents validated on the dongle - caught on the R1's own receiver by its
+  reporter's probe in [#69](https://github.com/HeyOkay/HaloBattery/issues/69);
+  it carries no charging state. Each receiver only reads the model bytes
+  proven on it; the R1's run of the test build is its confirmation.
 
 ## [1.13.0] - 2026-09-29
 
