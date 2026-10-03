@@ -144,6 +144,7 @@ MODELS = {
     0x2216: ("Arctis 7+ Xbox", parse_arctis7_plus),
     0x2236: ("Arctis 7+ Destiny", parse_arctis7_plus),
     0x230A: ("Arctis GameBuds", parse_gamebuds),
+    0x2317: ("Arctis GameBuds X", parse_gamebuds),
 }
 
 
