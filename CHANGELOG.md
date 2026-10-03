@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- DAREU A950 on its 2.4 GHz receiver (260d:1074), from vamyane/MousePower; read on hardware.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

@@ -11,6 +11,7 @@ from .steelseries import SteelSeriesProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
+from .dareu import DareuProvider  # noqa: F401
 from .hyperx import HyperXProvider  # noqa: F401
 from .hyperx_alpha2 import HyperXAlpha2Provider  # noqa: F401
 from .hyperx_cloud3 import HyperXCloud3Provider  # noqa: F401

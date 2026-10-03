@@ -26,6 +26,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](docs/protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
 | [Corsair Dark Core RGB Pro SE](docs/protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | no |
 | [Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless](docs/protocols.md#corsair-void-v2-wireless-virtuoso-max-wireless-hs80-max-wireless) | Wireless receiver | no |
+| [DAREU A950](docs/protocols.md#dareu-a950) | 2.4 GHz receiver | yes |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](docs/protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](docs/protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [Hitscan Hyperlight](docs/protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
