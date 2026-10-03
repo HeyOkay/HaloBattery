@@ -310,12 +310,35 @@ class PollTest(unittest.TestCase):
         entries = receiver_entries()
         cols = self.cols(entries)
         self.poll(entries, cols)
-        self.now[0] += I.ASLEEP_KEEP + 1
+        self.now[0] += I.RESWEEP_AFTER + 1        # the back-off has passed
         cols[STATUS_PATH].replies = []
         cols[VENDOR_PATH].replies = [LEVEL80]      # it comes back on the vendor page
         out = self.poll(entries, cols)
         self.assertEqual([s.level for s in out], [80])
         self.assertEqual(self.provider._chosen.get(0xFA65), VENDOR_PATH)
+
+    def test_an_overnight_silence_does_not_sweep_every_poll(self):
+        # a mouse that is off overnight used to sweep every candidate collection
+        # on every poll (#181 review, @ahmedkhursheed23): the known collection is
+        # listened to alone, and the sweep happens at most once per RESWEEP_AFTER
+        entries = receiver_entries()
+        cols = self.cols(entries)
+        self.poll(entries, cols)                             # discovery: the sweep
+        for c in cols.values():
+            c.replies = []
+        self.now[0] += 150                                   # past ONLINE_FRESH
+        self.order.clear()
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.level, s.online) for s in out], [(75, False)])
+        self.assertEqual(self.order, [STATUS_PATH])          # the known one only
+        self.assertEqual(cols[VENDOR_PATH].opened, 0)
+        self.now[0] += 500                                   # the back-off has passed
+        self.order.clear()
+        self.poll(entries, cols)                             # the one sweep
+        self.assertIn(VENDOR_PATH, self.order)
+        self.order.clear()
+        self.poll(entries, cols)                             # and not again
+        self.assertEqual(self.order, [STATUS_PATH])
 
     def test_a_heartbeat_without_a_level_refreshes_the_clock(self):
         entries = receiver_entries()
