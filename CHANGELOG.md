@@ -11,7 +11,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   dongles' Airoha RACE channel, from the Headroom project and cross-checked against the
   Skull-HQ capture attached to [#104](https://github.com/HeyOkay/HaloBattery/issues/104).
   Confirmed on the reporter's PLYR after the test build; the Crusher PLYR 720 exchange
-  is the Headroom project's own capture.
+  is the Headroom project's own capture. On review (@ahmedkhursheed23) the read no longer
+  takes the snapshot from before the ask as the answer: report 7 is read once first and
+  unchanged reads are skipped, with the last read still parsed so a steady level cannot
+  leave the icon empty.
 
 ## [1.14.0] - 2026-10-05
 
