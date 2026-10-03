@@ -35,8 +35,8 @@
 | [MCHOSE V9 Turbo+](protocols.md#mchose-v9-turbo) | 2.4 GHz dongle or USB cable | level yes; charging unverified |
 | [Nintendo Switch Pro Controller, Joy-Con (L) / (R)](protocols.md#nintendo-switch-pro-controller-joy-con-l--r) | Bluetooth | no |
 | [Pulsar X2 V2 Mini, ATK VXE R1 SE+, VXE R1 Pro Max](protocols.md#pulsar-x2-v2-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz dongle and USB cable | yes |
-| [Rapoo V700DIY-98](protocols.md#rapoo-vt7-gen-2-and-v700diy-98) | 2.4 GHz receiver or USB cable | no |
-| [Rapoo VT7 (Gen-2)](protocols.md#rapoo-vt7-gen-2-and-v700diy-98) | 2.4 GHz receiver | level yes; charging unverified |
+| [Rapoo V700DIY-98](protocols.md#rapoo-vt7-gen-2-and-v700diy-98) | 2.4 GHz receiver or USB cable | level unverified |
+| [Rapoo VT7 (Gen-2)](protocols.md#rapoo-vt7-gen-2-and-v700diy-98) | 2.4 GHz receiver | yes |
 | [Razer Barracuda Pro (2.4 GHz)](protocols.md#razer-barracuda-pro-24-ghz) | 2.4 GHz dongle | yes |
 | [Razer Basilisk V3 Pro, Razer Basilisk Ultimate (tested by users)](protocols.md#razer-basilisk-v3-pro-razer-basilisk-ultimate) | 2.4 GHz receiver | yes |
 | [Razer BlackShark V2 Pro (2023)](protocols.md#razer-blackshark-v2-pro-2023) | 2.4 GHz receiver | yes |
