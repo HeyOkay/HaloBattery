@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Scyrox 8K Dongle (3554:F5F7) and wireless mouse on USB cable (3554:F5F6), using the Compx 17-byte HID frame protocol in the Pulsar provider. Tested on hardware.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

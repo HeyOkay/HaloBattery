@@ -342,5 +342,20 @@ class PulsarTest(unittest.TestCase):
             self.assertEqual(mv, P.voltage_mv(frame))
 
 
+    def test_the_scyrox_receiver_is_read(self):
+        bus = self.one_receiver(vid=0x3554, pid=0xF5F7, replies=[reply(90, 0, 4076)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        self.assertEqual("Scyrox 8K Dongle", found[0].name)
+        self.assertEqual(90, found[0].level)
+        self.assertEqual("pulsar:3554f5f7", found[0].key)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_captured_scyrox_frame(self):
+        raw = bytes.fromhex("0804000000025a000fec000000000000f2")
+        self.assertEqual((90, False), P.parse_power(raw))
+        self.assertEqual(4076, P.voltage_mv(raw))
+
+
 if __name__ == "__main__":
     unittest.main()
