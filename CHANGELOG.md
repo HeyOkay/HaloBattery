@@ -10,7 +10,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Skullcandy PLYR (34F0:3210) and Crusher PLYR 720 (34F0:5310): the level over their
   dongles' Airoha RACE channel, from the Headroom project and cross-checked against the
   Skull-HQ capture attached to [#104](https://github.com/HeyOkay/HaloBattery/issues/104).
-  Unverified until the reporter's run.
+  Confirmed on the reporter's PLYR after the test build; the Crusher PLYR 720 exchange
+  is the Headroom project's own capture.
 
 ## [1.14.0] - 2026-10-05
 
