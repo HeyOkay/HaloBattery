@@ -361,13 +361,18 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual((64, True), (kept[0].level, kept[0].charging))
         self.assertEqual("pulsar:3554f58a", kept[0].key)
 
-    def test_the_kept_reading_is_dropped_after_the_keep_window(self):
+    def test_the_kept_reading_does_not_expire_while_the_receiver_is_present(self):
+        # the 2026-10-03 report: a screen-off let the greyed reading expire and the
+        # re-created icon came back at a new tray position - it must never expire
         self.one_receiver(replies=[reply(64)])
         provider = P.PulsarProvider()
         with mock.patch.object(P.time, "time", return_value=1000.0):
             self.assertEqual(1, len(provider.poll()))
-        with mock.patch.object(P.time, "time", return_value=1000.0 + P.ASLEEP_KEEP + 1):
-            self.assertEqual([], provider.poll())
+        with mock.patch.object(P.time, "time", return_value=1000.0 + 3600.0):
+            kept = provider.poll()
+        self.assertEqual(1, len(kept), "the receiver is still plugged in")
+        self.assertFalse(kept[0].online)
+        self.assertEqual(64, kept[0].level)
 
     def test_an_unplugged_receiver_is_not_kept(self):
         self.one_receiver(replies=[reply(64)])

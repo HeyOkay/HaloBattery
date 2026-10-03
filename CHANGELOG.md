@@ -11,7 +11,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   greyed out) instead of leaving it, and it is re-read as soon as the PC is used again -
   on the first input after a pause, and also while input keeps coming, which is what
   touchpad use looks like (#87). Reported with hardware measurements by @huyxs2005,
-  and confirmed on his mouse after the second test build.
+  and confirmed on his mouse after the second test build. A later screen-off report
+  showed the greyed reading still expired after five minutes, and the re-created icon
+  came back at a new tray position - the reading now stays for as long as the mouse's
+  receiver is plugged in, however long the mouse sleeps.
 
 ## [1.13.0] - 2026-09-29
 

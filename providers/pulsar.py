@@ -41,10 +41,14 @@ byte is the truth, which is what this file reports.
 A mouse that is idle stops answering - the receiver goes quiet a few seconds after the
 last movement, and the wired collection does the same while the mouse sits on its
 cable - so a silent poll is a normal state and not a device that went away. The last
-reading is kept greyed out for ASLEEP_KEEP seconds and dropped after that. #87 first
-showed the icon vanishing around the mouse's cable, then that after the mouse's own
-deep stop-mode (10-15 idle minutes) the reading took a long time to come back: kept,
-the icon stays and the number refreshes at the first poll the mouse answers again.
+reading is kept greyed out for as long as the mouse's receiver stays in the USB tree,
+however long the mouse sleeps, and it refreshes at the first poll the mouse answers
+again; only a receiver that leaves the tree drops the device, icon included. #87
+first showed the icon vanishing around the mouse's cable, then that after the mouse's
+own deep stop-mode (10-15 idle minutes) the reading took a long time to come back; a
+later screen-off report showed that dropping the icon also cost it its tray position
+(Windows puts a re-created icon at a new spot), so the greyed value no longer
+expires on a timer.
 
 Frames are 17 bytes, big-endian, report id 0x08:
 
@@ -145,10 +149,6 @@ def output_length(path) -> Optional[int]:
 READ_ATTEMPTS = 4
 READ_TIMEOUT_MS = 250
 FLUSH_TIMEOUT_MS = 30
-
-# How long a silent mouse keeps its last reading on a greyed icon (see the docstring).
-# The same value as the other receiver providers.
-ASLEEP_KEEP = 300
 
 # vendor id -> product ids
 PIDS: Dict[int, Dict[int, str]] = {
@@ -320,17 +320,19 @@ class PulsarProvider(Provider):
                 out.append(DeviceStatus(key, name, level, on_cable, True, "pulsar",
                                         kind="mouse"))
         # A mouse that stopped answering is not necessarily a mouse that went away
-        # (idle it stops answering - see the docstring), so keep its last reading
-        # greyed out for a while and let the app drop the icon after that. Only while
-        # it is still enumerated: a receiver pulled out keeps nothing.
+        # (idle it stops answering - see the docstring), so its last reading stays
+        # greyed out for as long as its receiver is still in the USB tree, however
+        # long it sleeps. Only a receiver pulled out drops the device: Windows
+        # re-creates a removed icon at a new tray position, which is what the
+        # 2026-10-03 screen-off report was about.
         for key in list(self._last):
             name, level, charging, seen = self._last[key]
             if key in found:
                 continue
-            if key in present and now - seen < ASLEEP_KEEP:
+            if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
-                                  f"{' (charging)' if charging else ''} greyed for "
-                                  f"{int(ASLEEP_KEEP - (now - seen))}s more")
+                                  f"{' (charging)' if charging else ''} greyed "
+                                  f"(its receiver is still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
                                         kind="mouse"))
             else:
