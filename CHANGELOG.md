@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- HyperX Cloud II Core Wireless (03f0:0995 its dongle, 03f0:0795 its second mode): the
+  same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless, decoded
+  from the reporter's NGENUITY capture in [#155](https://github.com/HeyOkay/HaloBattery/issues/155).
+  Confirmed on hardware in the reporter's run, which also showed both connection ids
+  answering at once while charging - they now share one icon, with the charging reading
+  winning when both answer.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,

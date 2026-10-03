@@ -142,7 +142,7 @@ PROVIDER_LABELS = {
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
-    "hyperx_cloud3": "HyperX Cloud III Wireless",
+    "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
