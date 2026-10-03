@@ -6,6 +6,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- MCHOSE A5 Pro Max (2023:f013 1K receiver, 2023:f015 4K receiver, 2023:f019 wired):
+  a third MCHOSE exchange on a third vendor id - 64-byte feature reports, battery on
+  page 0 command 0x83 - from the community web driver for this model
+  ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)); only its own 0xFFFF
+  collection is written to - the 0xFFA0 sibling is left alone even when the mouse is
+  silent (review by @ahmedkhursheed23). Confirmed by the
+  reporter's run on his 1K receiver: the level and the charging state, matching the
+  MCHOSE software.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
