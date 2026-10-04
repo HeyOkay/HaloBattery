@@ -10,7 +10,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - FlyDigi Vader 5 Pro: the level and charging state read through the pad's own
   vendor channel (the 0xFFA0 collection), because XInput calls its 2.4 GHz dongle
   "wired" and Windows.Gaming.Input's report is the constant 1000/1000 placeholder
-  (#191). Unverified on hardware until the reporters' run.
+  (#191). Confirmed on hardware - @musicjoywu's Vader 5 Pro showed 100 % over
+  2.4 GHz and switched to charging with the cable plugged in.
 
 ### Fixed
 - The constant remain=full=1000 battery report Windows.Gaming.Input hands out for
