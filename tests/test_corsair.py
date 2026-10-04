@@ -46,6 +46,20 @@ def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
+def bragi_se_reply(value=960, source=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET,
+                   err=0x00, report_id=False, size=C.BRAGI_MSG_SIZE):
+    """The Virtuoso receivers' answer shape (probe-measured, #204): the source
+    byte sits between the route and the command - `01 01 02 00 <v LE>`."""
+    payload = bytearray(size)
+    payload[0] = C.BRAGI_ROUTE_CHILD
+    payload[1] = source
+    payload[2] = cmd
+    payload[3] = err
+    payload[4] = value & 0xFF
+    payload[5] = (value >> 8) & 0xFF
+    return ([0x00] + list(payload)) if report_id else list(payload)
+
+
 class FakeDongle:
     """One HID interface of the dongle. Each read returns the next queued reply;
     a single reply repeats."""
@@ -145,6 +159,31 @@ class BragiParseTest(unittest.TestCase):
         b = C.parse_bragi(bragi_reply(550, report_id=False))
         self.assertEqual(a, b)
         self.assertEqual(a, 55)
+
+    def test_the_virtuoso_answers_carry_the_source_byte(self):
+        # the reporter's probe frames, verbatim (#204): 01 01 02 00 c0 03 = 960
+        self.assertEqual(C.parse_bragi(bragi_se_reply(960)), 96)
+        self.assertEqual(C.parse_bragi(bragi_se_reply(1000)), 100)
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(1001)))
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(0)))
+        self.assertEqual(C.parse_bragi(bragi_se_reply(960, report_id=True)), 96)
+
+    def test_the_se_heartbeat_value_is_not_a_level(self):
+        # the headset heartbeat answered `01 01 02 00 3f 0a` = 2623 (#204)
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(2623)))
+
+    def test_the_se_charge_property_parses(self):
+        self.assertTrue(C.parse_bragi_charge(bragi_se_reply(1)))    # charging
+        self.assertFalse(C.parse_bragi_charge(bragi_se_reply(2)))   # on battery
+        self.assertIsNone(C.parse_bragi_charge(bragi_se_reply(3)))
+
+    def test_a_se_shaped_frame_needs_its_own_fields(self):
+        # source 0x00 is the receiver itself; a bad command or err is not an answer
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(960, source=0x00)))
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(960, cmd=0x12)))
+        for err in (1, 2):
+            self.assertIsNone(C.parse_bragi(bragi_se_reply(960, err=err)))
+        self.assertIsNone(C.parse_bragi(bragi_se_reply(960)[:5]))   # short
 
 
 class BragiPollTest(unittest.TestCase):
@@ -294,10 +333,10 @@ class BragiPollTest(unittest.TestCase):
             def __init__(self):
                 super().__init__(replies=[])
                 self.script = {
-                    3: [bragi_reply(2623)],      # headset heartbeat (fw version)
-                    4: [bragi_reply(550)],       # level
-                    5: [bragi_reply(550)],       # level, confirmed
-                    6: [bragi_reply(1)],         # charge property: 1 = charging
+                    3: [bragi_se_reply(2623)],   # headset heartbeat (fw version)
+                    4: [bragi_se_reply(960)],    # level: 01 01 02 00 c0 03 = 96 %
+                    5: [bragi_se_reply(960)],    # level, confirmed
+                    6: [bragi_se_reply(1)],      # charge property: 1 = charging
                 }
 
             def write(self, data):
@@ -314,7 +353,7 @@ class BragiPollTest(unittest.TestCase):
         dongle = SeDongle()
         out, _ = self.poll([entry(0x0A40, b"se", 3, 0xFF42, 0x0001)], {b"se": dongle})
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.kind) for s in out],
-                         [("corsair:virtuoso-se", "Corsair Virtuoso RGB Wireless SE", 55,
+                         [("corsair:virtuoso-se", "Corsair Virtuoso RGB Wireless SE", 96,
                            True, "headset")])
         # the session went first; every accepted write is the bare 64-byte form
         self.assertEqual([len(w) for w in dongle.writes], [64] * 6)
@@ -329,8 +368,8 @@ class BragiPollTest(unittest.TestCase):
         class SeDongle(FakeDongle):
             def __init__(self):
                 super().__init__(replies=[])
-                self.script = {3: [bragi_reply(2623)], 4: [bragi_reply(960)],
-                               5: [bragi_reply(960)], 6: [bragi_reply(2)]}
+                self.script = {3: [bragi_se_reply(2623)], 4: [bragi_se_reply(960)],
+                               5: [bragi_se_reply(960)], 6: [bragi_se_reply(2)]}
 
             def write(self, data):
                 if len(data) == C.BRAGI_MSG_SIZE + 1:

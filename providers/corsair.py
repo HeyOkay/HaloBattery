@@ -185,23 +185,29 @@ def bragi_se_request(prop: int = BRAGI_PROP_BATTERY,
 def parse_bragi_raw(reply) -> Optional[int]:
     """The raw 16-bit value of a get-property answer, or None when it is not one.
 
-    An answer is `[route][0x02][err][value]...`: 0x01 is the mouse's route, err 0
-    means OK, and bytes 3-4 hold the value little-endian. The dongle sends other
-    frames as well (device-list records on the same channel, notices on its
-    sibling collection), so a frame counts only when every field above matches -
-    one of those frames parsed as a level was the 0 % flash the earlier release
-    showed.
+    Two answer shapes carry it, both routed to `0x01` with command `0x02` and
+    err `0x00`: the Dark Core's `01 02 00 <v LE>` (measured in #56) and the
+    Virtuoso receivers' `01 01 02 00 <v LE>`, whose extra byte is the source
+    (`01` = the headset; probe-measured on the 0A40, #204 - the value sits one
+    byte further along). The dongle sends other frames as well (device-list
+    records on the same channel, notices on its sibling collection, the session
+    heartbeats with values in the thousands), so a frame counts only when every
+    field above matches - one of those frames parsed as a level was the 0 %
+    flash the earlier release showed.
     """
     if not reply:
         return None
     data = list(reply)
     if len(data) >= BRAGI_MSG_SIZE + 1:      # hidapi may hand the report id back
         data = data[1:]
-    if len(data) < 5:
+    if len(data) < 5 or data[0] != BRAGI_ROUTE_CHILD:
         return None
-    if data[0] != BRAGI_ROUTE_CHILD or data[1] != BRAGI_CMD_GET or data[2] != 0x00:
-        return None
-    return data[3] | (data[4] << 8)
+    if data[1] == BRAGI_CMD_GET and data[2] == 0x00:            # the Dark Core
+        return data[3] | (data[4] << 8)
+    if (len(data) >= 6 and data[1] == BRAGI_ROUTE_CHILD         # the Virtuoso
+            and data[2] == BRAGI_CMD_GET and data[3] == 0x00):
+        return data[4] | (data[5] << 8)
+    return None
 
 
 def parse_bragi(reply) -> Optional[int]:
