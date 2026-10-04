@@ -13,7 +13,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   report-id-prefixed form is refused with 0x57), the full session runs first (firmware
   query, receiver heartbeat, headset heartbeat), and the headset reports the charge state
   on property 0x10 (1 charging, 2 on battery). Measured end to end with @jeffpeng3's
-  on-hardware runs ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
+  on-hardware runs, and confirmed in the app on his unit - 97 % over the receiver and
+  the charging state both read correctly ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
 - The rest of the Corsair Virtuoso family, on the same routed exchange: the SE's own
   receiver `1B1C:0A3E` and cable `1B1C:0A3D`, the XT's receiver `1B1C:0A64` and cable
   `1B1C:0A62` (HeadsetControl's reworked XT/SE device,
