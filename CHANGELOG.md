@@ -7,11 +7,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Traditional Chinese, Simplified Chinese and Japanese UI catalogs using the localization registry
+  from #188. All three are selectable in Preferences and detected from the Windows
+  UI language; Traditional Chinese uses exact LANGIDs to avoid selecting it on
+  Simplified Chinese systems, which select their own catalog. All three languages
+  use the `other` plural form.
 - French localization for tray menus, preferences, tooltips, device states, rename
   dialogs and notifications (#162). **Language / Langue** in Preferences switches
-  between English and Français immediately and saves the selection. On the first
-  run without a saved language, a French Windows UI selects French; other languages
-  use English. Saved choices take precedence, and English remains the fallback.
+  between registered languages immediately and saves the selection. On the first
+  run without a saved language, the Windows UI language selects a supported
+  translation; unsupported languages use English. Saved choices take precedence, and English remains the fallback.
   Diagnostics, protocol output and status-file text stay in English. Translation
   catalogs are bundled without additional runtime dependencies.
   A single language registry supplies native names, catalogs, Windows detection

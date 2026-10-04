@@ -435,5 +435,59 @@ class NotificationTests(unittest.TestCase):
         self.assertNotIn("Annuler", command)
 
 
+class AsianLanguageTests(unittest.TestCase):
+    def test_single_plural_form_for_all_counts(self):
+        for language in ("zh-TW", "zh-CN", "ja"):
+            for count in (0, 1, 2, 5, 100):
+                with self.subTest(language=language, count=count):
+                    self.assertEqual(i18n.LANGUAGES[language].plural_rule(count), "other")
+                    self.assertIn(str(count), i18n.translate("duration.hours", language=language, count=count))
+
+    def test_localized_menus_and_independent_languages(self):
+        for language, preferences, refresh in (("zh-TW", "偏好設定", "立即更新"),
+                                                ("zh-CN", "首选项", "立即刷新"),
+                                                ("ja", "設定", "今すぐ取得")):
+            with self.subTest(language=language):
+                app = make_app({"language": language})
+                menu = app.build_menu(None)
+                find(menu, refresh)
+                submenu = find(menu, preferences).submenu
+                options = find(submenu, app.tr("preferences.language")).submenu.items
+                self.assertEqual([item.text for item in options if item.checked],
+                                 [i18n.LANGUAGES[language].name])
+                self.assertEqual(app.tr("rename.cancel"), "キャンセル" if language == "ja" else "取消")
+        self.assertEqual(i18n.translate("menu.preferences"), "Preferences")
+
+    def test_localized_notifications_and_states(self):
+        for language in ("zh-TW", "zh-CN", "ja"):
+            with self.subTest(language=language):
+                self.assertIn("Mouse", i18n.translate("notification.low", language=language, name="Mouse", level=15))
+                self.assertIn("15", i18n.translate("notification.low", language=language, name="Mouse", level=15))
+                self.assertEqual(i18n.translate("state.charging", language=language, state="50%"),
+                                 {"zh-TW": "50%，充電中", "zh-CN": "50%，充电中", "ja": "50%、充電中"}[language])
+                self.assertEqual(i18n.translate("provider.8bitdo", language=language),
+                                 "8BitDo コントローラー" if language == "ja" else "8BitDo 控制器")
+
+    def test_exact_chinese_and_japanese_detection(self):
+        detector = DetectionTests()
+        for langid in (0x0404, 0x0C04, 0x1404, 0x7C04):
+            with self.subTest(langid=langid):
+                self.assertEqual(detector.detect(langid), "zh-TW")
+        for langid in (0x0804, 0x1004, 0x0004, 0x7804):
+            with self.subTest(langid=langid):
+                self.assertEqual(detector.detect(langid), "zh-CN")
+        self.assertEqual(detector.detect(0x0411), "ja")
+
+    def test_exact_windows_ids_are_unambiguous(self):
+        owners = {}
+        for code, language in i18n.LANGUAGES.items():
+            for langid in language.windows_language_ids:
+                self.assertNotIn(langid, owners)
+                owners[langid] = code
+                for other_code, other in i18n.LANGUAGES.items():
+                    if code != other_code:
+                        self.assertNotIn(langid & 0x3FF, other.windows_primary_ids)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -113,10 +113,10 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**
 - **Preferences**:
-  - **Language / Langue**: English or Français, applied immediately to menus and tooltips.
+  - **Language / Langue**: English, Français, 繁體中文, 简体中文 or 日本語, applied immediately to menus and tooltips.
     On the first run without a saved language (including an upgrade from an older version),
-    the app selects French when the current user's Windows UI language is French, and
-    English otherwise. The selection is saved; a manual choice always takes precedence,
+    the app selects French, Traditional Chinese, Simplified Chinese or Japanese when supported by the
+    current user's Windows UI language, and English otherwise. The selection is saved; a manual choice always takes precedence,
     even if the Windows language changes later. Diagnostics and the status file stay in English.
   - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 10–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
   - **Alert when fully charged** (a notification once per charge, on by default)
