@@ -36,9 +36,11 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   five-state run followed it on hardware both ways (charging with the cable in, not
   charging off it, the icon's charging indication following). A transmitter that is
   present but answers no record now keeps its last level greyed out for five minutes
-  instead of dropping to "no link" at once - measured on his unit with Swarm II open,
-  which holds the headset's channel: 40+ idle frames, no record, and the reading back
-  the moment it was closed. On review (@ahmedkhursheed23) the fallback's token is marked
+  instead of dropping to "no link" at once. Measured on his unit with Swarm II open,
+  which holds the headset's channel (40+ idle frames, no record): his test build 6 run
+  shows the keeping itself - **99 % kept greyed out while Swarm II ran, and the fresh
+  97 % back on its own the moment it was closed** (#173). On review (@ahmedkhursheed23)
+  the fallback's token is marked
   inferred in these docs and the read loop is bounded: a total read cap, and the
   fallback's budget shortened after a silent opener and record ask.
 
