@@ -6,6 +6,35 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Corsair Virtuoso RGB Wireless SE over its Slipstream Multi-Device receiver (1B1C:0A40):
+  the same routed exchange as the Dark Core with the receiver's measured differences - the
+  frame carries a leading 0x02 (`02 09 02 0f`), Windows takes it only bare (every
+  report-id-prefixed form is refused with 0x57), the full session runs first (firmware
+  query, receiver heartbeat, headset heartbeat), and the headset reports the charge state
+  on property 0x10 (1 charging, 2 on battery). Measured end to end with @jeffpeng3's
+  on-hardware runs, and confirmed in the app on his unit - 97 % over the receiver and
+  the charging state both read correctly ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
+- The rest of the Corsair Virtuoso family, on the same routed exchange: the SE's own
+  receiver `1B1C:0A3E` and cable `1B1C:0A3D`, the XT's receiver `1B1C:0A64` and cable
+  `1B1C:0A62` (HeadsetControl's reworked XT/SE device,
+  [#570](https://github.com/Sapd/HeadsetControl/pull/570) - the wired ids try target
+  `0x08` first and the receivers `0x09`, each with the other as the fallback, and reads
+  need neither a session nor software mode). A product's receiver and cable ids share
+  one icon, and a reading that reports charging wins the merge. The four ids are
+  HeadsetControl's, run on its author's hardware; **unverified in the app** until an
+  XT/SE owner runs a build.
+
+### Fixed
+- Corsair Dark Core RGB Pro SE: read the battery the way the dongle actually answers (#56). The
+  1.13.0 build asked with ckb-next's "nxp" packet, which this dongle never answers; it speaks the
+  newer routed exchange (ckb-next's "bragi", OpenLinkHub's "slipstream") and returns the level in
+  tenths of a percent behind the mouse's route byte. A frame that is not exactly an answer - the
+  receiver's device records and notices - is no longer read as a level; that parsing was the 0 %
+  flash. The request and the answer were captured on the reporter's dongle; the reading is
+  confirmed on hardware: KKiruano ran the test build against his mouse and it showed
+  the same value as SignalRGB ([#56](https://github.com/HeyOkay/HaloBattery/issues/56)).
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
