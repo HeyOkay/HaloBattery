@@ -66,7 +66,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   transports and the charging flag are confirmed on the reporter's hardware. The
   same receiver also carries the Redragon K1NG Max (M918)
   ([#197](https://github.com/HeyOkay/HaloBattery/issues/197)), confirmed on the
-  reporter's hardware in both states, and the tray label now covers both mice.
+  reporter's hardware in both states - and on the reworked label build his cable
+  test showed the charging mark following the cable in and out, with the level
+  matching Redragon's own software. The tray label now covers both mice.
 
 ## [1.13.0] - 2026-09-29
 
