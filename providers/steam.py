@@ -22,12 +22,16 @@ over the same report - the setting is re-sent every 3 seconds - but the app must
 not, because disabling lizard mode changes how the controller behaves for the
 user's games. Nothing is ever sent from here.
 
-How often the puck sends 0x43 was not measured, so the last level is kept
-between reports (that is what SDL does too). A slot that goes quiet keeps its
-last value greyed for as long as the puck is there - no timer, because an icon
-that is removed and re-created comes back at a new tray position (#87, #202
-review). A disconnect report removes the icon at once, and the puck leaving the
-USB tree clears the value.
+The puck sends 0x43 about every 2.5 s while the controller is awake (~0.4 Hz,
+measured over ~9k frames by CouchTurtle/sc2-research and by eva-val/steambattery;
+the first tester run in #58 showed the original 0.4 s listen window missing it),
+so a slot with a live controller is listened to for up to BATTERY_WINDOW - twice
+the cadence - while a quiet slot costs only the short WINDOW. The last level is
+kept between reports (that is what SDL does too). A slot that goes quiet keeps
+its last value greyed for as long as the puck is there - no timer, because an
+icon that is removed and re-created comes back at a new tray position (#87,
+#202 review). A disconnect report ends the read early and removes the icon at
+once, and the puck leaving the USB tree clears the value.
 """
 from __future__ import annotations
 
@@ -69,11 +73,20 @@ CHARGE_DISCHARGING = 1
 CHARGE_CHARGING = 2
 CHARGE_DONE = 4
 
-# s: how long one slot is listened to per poll. A live slot streams the state
-# reports fast (SDL: about 4 ms apart), so the window is plenty to see it; a
-# quiet slot costs the whole window, and four of them a couple of seconds.
+# s: how long one slot is listened to per poll before anything is seen. A live
+# slot streams the state reports fast (SDL: about 4 ms apart), so the window is
+# plenty to see it; a quiet slot costs the whole window, and four of them a
+# couple of seconds.
 WINDOW = 0.4
-MAX_REPORTS = 1024   # a safety valve against a pathological stream
+# s: how long a slot with a live controller is listened to for its battery
+# report. The puck sends 0x43 about every 2.5 s while the controller is awake
+# (~0.4 Hz - CouchTurtle/sc2-research measured it over ~9k frames, eva-val/
+# steambattery on live hardware; #58's first tester run is what showed the
+# short window missing it), so twice the cadence always catches one. A quiet
+# slot never comes here; a disconnect ends the read early.
+BATTERY_WINDOW = 5.0
+MAX_REPORTS = 4096   # a safety valve against a pathological stream (5 s of the
+                     # ~266 Hz state stream is ~1300 reports)
 
 NOT_REPORTED = "connected, battery level not reported yet"
 
@@ -122,9 +135,18 @@ class SteamProvider(Provider):
                 dev.set_nonblocking(True)
             except Exception:
                 pass
-            deadline = time.time() + WINDOW
+            start = time.time()
+            limit = start + WINDOW
             count = 0
-            while time.time() < deadline and count < MAX_REPORTS:
+            while count < MAX_REPORTS:
+                if res["wireless"] == 1:
+                    break                # the link dropped: nothing more will come
+                if (res["state"] or res["wireless"] == 2) \
+                        and limit < start + BATTERY_WINDOW:
+                    # a live controller: its battery report comes ~every 2.5 s
+                    limit = start + BATTERY_WINDOW
+                if time.time() >= limit:
+                    break
                 try:
                     data = dev.read(64)
                 except (OSError, ValueError) as e:

@@ -64,8 +64,9 @@ class FakePuck:
 
 
 class FakeBus:
-    def __init__(self, pucks):
+    def __init__(self, pucks, clock=None):
         self.pucks = pucks          # {path: FakePuck}
+        self.clock = clock          # set = a frame read advances it (a ~250 Hz stream)
 
     def device_class(self):
         bus = self
@@ -85,7 +86,10 @@ class FakeBus:
                 return len(data)
 
             def read(self, n):
-                return self.puck.on_read()
+                data = self.puck.on_read()
+                if data and bus.clock is not None:
+                    bus.clock.now += 0.004
+                return data
 
             def close(self):
                 pass
@@ -110,8 +114,8 @@ class ProviderTest(unittest.TestCase):
     def tearDown(self):
         S.hid, S.hidlist, S.time = self._saved
 
-    def poll(self, entries, pucks):
-        bus = FakeBus(pucks)
+    def poll(self, entries, pucks, advance=False):
+        bus = FakeBus(pucks, clock=self.clock if advance else None)
         S.hid = types.SimpleNamespace(device=bus.device_class())
         S.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
         return self.provider.poll()
@@ -153,6 +157,39 @@ class PollTest(ProviderTest):
         self.assertEqual((st.key, st.kind, st.source),
                          ("steam:1304:2", "gamepad", "steam"))
         self.assertEqual((puck.opened, puck.writes), (1, []))
+
+    def test_the_battery_is_waited_for_past_the_short_window(self):
+        # #58: ~266 Hz state stream, one 0x43 every ~2.5 s - 1.6 s of stream
+        # then the battery; the old 0.4 s window stopped before it.
+        puck = FakePuck([state_report()] * 400 + [battery(2, 80)])
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck}, advance=True)
+        self.assertEqual([(r.level, r.charging, r.online) for r in res],
+                         [(80, True, True)])
+
+    def test_a_live_slot_without_a_battery_waits_the_battery_window(self):
+        puck = FakePuck([state_report()] * 4)
+        start = self.clock.now
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck}, advance=True)
+        self.assertEqual([(r.level, r.online, r.approx) for r in res],
+                         [(None, True, S.NOT_REPORTED)])
+        self.assertGreaterEqual(self.clock.now - start, S.BATTERY_WINDOW - 0.05)
+
+    def test_a_quiet_slot_does_not_wait_the_battery_window(self):
+        start = self.clock.now
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): FakePuck()},
+                        advance=True)
+        self.assertEqual(res, [])
+        self.assertLessEqual(self.clock.now - start, S.WINDOW + 0.1)
+
+    def test_a_disconnect_ends_the_read_before_the_battery_window(self):
+        puck = FakePuck([wireless(2), wireless(1)])
+        start = self.clock.now
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck}, advance=True)
+        self.assertEqual(res, [])
+        self.assertLess(self.clock.now - start, S.WINDOW)
+
+    def test_the_battery_window_covers_twice_the_measured_cadence(self):
+        self.assertGreaterEqual(S.BATTERY_WINDOW, 2 * 2.5)
 
     def test_charging_and_charging_done(self):
         a, b = FakePuck([battery(2, 40)]), FakePuck([battery(4, 100)])
