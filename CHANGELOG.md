@@ -6,6 +6,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A sleeping Pulsar / ATK / VXE mouse keeps its place in the tray (the last reading,
+  greyed out) instead of leaving it, and it is re-read as soon as the PC is used again -
+  on the first input after a pause, and also while input keeps coming, which is what
+  touchpad use looks like (#87). Reported with hardware measurements by @huyxs2005,
+  and confirmed on his mouse after the second test build. A later screen-off report
+  showed the greyed reading still expired after five minutes, and the re-created icon
+  came back at a new tray position - the reading now stays for as long as the mouse's
+  receiver is plugged in, however long the mouse sleeps, and the reporter confirmed it
+  on both a manual and an automatic screen-off. On review (@ahmedkhursheed23)
+  the input wake was narrowed to readings whose provider marks them wake-on-input: a
+  greyed icon for a device that is simply off no longer re-polls the whole app on
+  every keystroke, and the input class is defined once instead of on every tick.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
