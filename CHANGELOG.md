@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Pulsar X2 V3 Mini on its 8K receiver (`3710:5403`) and USB cable (`3710:3402`),
+  using its separate 64-byte Sonix feature-report protocol. Device ids and the
+  interface layout come from the reporter's hardware; the battery command is
+  cross-checked against jonkristian/pulsar-x3-python.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
