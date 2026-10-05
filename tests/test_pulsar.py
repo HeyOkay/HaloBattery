@@ -55,6 +55,11 @@ HITSCAN_SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the two frames the Pulsar X2 CrazyLight Mini answered on its reporter's hardware
+# (#164, both checksums valid): 3710:5406 the dongle, 3710:3414 the cable
+CRAZYLIGHT_DONGLE = bytes.fromhex("08 04 00 00 00 02 14 00 0d ea 00 00 00 00 00 00 3c")
+CRAZYLIGHT_CABLE = bytes.fromhex("08 04 00 00 00 02 19 01 0e 52 00 00 00 00 00 00 cd")
+
 
 def reply(level, power=0, mv=0, command=P.CMD_POWER, header=P.PAYLOAD_HEADER,
           break_checksum=False):
@@ -229,6 +234,23 @@ class PulsarTest(unittest.TestCase):
     def test_a_sleeping_dongle_gives_no_device(self):
         self.one_receiver(replies=[])
         self.assertEqual([], P.PulsarProvider().poll())
+
+    def test_the_captured_crazylight_frames_parse(self):
+        self.assertEqual((20, False), P.parse_power(CRAZYLIGHT_DONGLE))
+        self.assertEqual(3562, P.voltage_mv(CRAZYLIGHT_DONGLE))
+        self.assertEqual((25, True), P.parse_power(CRAZYLIGHT_CABLE))
+        self.assertEqual(3666, P.voltage_mv(CRAZYLIGHT_CABLE))
+
+    def test_the_crazylight_mini_is_read_on_both_transports(self):
+        self.one_receiver(vid=0x3710, pid=0x5406, replies=[CRAZYLIGHT_DONGLE])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        self.assertEqual(("pulsar:37105406", "Pulsar X2 CrazyLight Mini (2.4 GHz)", 20, False),
+                         (found[0].key, found[0].name, found[0].level, found[0].charging))
+        self.one_receiver(vid=0x3710, pid=0x3414, replies=[CRAZYLIGHT_CABLE])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(("pulsar:37103414", "Pulsar X2 CrazyLight Mini (wired)", 25, True),
+                         (found[0].key, found[0].name, found[0].level, found[0].charging))
 
     def test_every_claimed_id_answers_the_same_request(self):
         for vid, pids in P.PIDS.items():
