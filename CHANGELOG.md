@@ -6,6 +6,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Razer BlackShark V2 Pro (2020, receiver 1532:0528): device-reported battery level
+  and charging state through its 64-byte feature report 0xFF. Reads the receiver's
+  vendor collection without probing the generic mouse or 2023 PA protocols.
+  Recognizes on-battery (0x01), charging (0x09) and charge-complete (0x06) states.
+  Unknown power states keep fresh readings visible with charging marked unknown.
+  Stale replies are rejected and the charging cable (1532:052E) gets no second icon.
+  The reported battery level is imprecise: observed discharge readings were
+  100 -> 80 -> 50 -> 30 -> 10, with no intermediate values.
+  During active charging the unreliable percentage is hidden while the charging
+  indicator remains visible; connecting the charger caused an immediate jump
+  from 10 to 80. On battery and after charge completion, the reported level is
+  displayed unchanged. Invalid levels are shown as unknown.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
