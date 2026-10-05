@@ -6,22 +6,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.14.0] - 2026-10-05
-
-Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
-folder. An optional sound with the low battery alert for full-screen games. New devices:
-Razer DeathStalker V2 Pro / TKL and BlackWidow HyperSpeed keyboards, HyperX Cloud III S
-Wireless, Logitech G PRO X 2 LIGHTSPEED headset, G-Wolves HSK Pro ACE and the other
-G-Wolves models with their own receiver, and SteelSeries Arctis Nova Elite. Fixes for
-Bluetooth polling, JBL Quantum 910 polls, "Hide this device" during a poll and CPU use
-while charging. The README is shorter; the device list moved to `docs/devices.md`.
-
 ### Added
-- **Portable mode**: put an empty `portable.txt` next to `HaloBattery.exe` and the
-  settings, log, battery history, status file and diagnostics report are kept in the app's
-  folder instead of `%APPDATA%\HaloBattery`. If that folder cannot be written, the app
-  falls back to `%APPDATA%` and says so in the log. The diagnostics report shows the data
-  folder in use.
 - Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) or
   the headset's own USB cable, with the protocol captured from Turtle Beach's own Swarm II
   (#173); the transmitter's own session opener and record ask replay the vendor app's
@@ -44,6 +29,22 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   inferred in these docs and the read loop is bounded: a total read cap, and the
   fallback's budget shortened after a silent opener and record ask.
 
+## [1.14.0] - 2026-10-05
+
+Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
+folder. An optional sound with the low battery alert for full-screen games. New devices:
+Razer DeathStalker V2 Pro / TKL and BlackWidow HyperSpeed keyboards, HyperX Cloud III S
+Wireless, Logitech G PRO X 2 LIGHTSPEED headset, G-Wolves HSK Pro ACE and the other
+G-Wolves models with their own receiver, and SteelSeries Arctis Nova Elite. Fixes for
+Bluetooth polling, JBL Quantum 910 polls, "Hide this device" during a poll and CPU use
+while charging. The README is shorter; the device list moved to `docs/devices.md`.
+
+### Added
+- **Portable mode**: put an empty `portable.txt` next to `HaloBattery.exe` and the
+  settings, log, battery history, status file and diagnostics report are kept in the app's
+  folder instead of `%APPDATA%\HaloBattery`. If that folder cannot be written, the app
+  falls back to `%APPDATA%` and says so in the log. The diagnostics report shows the data
+  folder in use.
 - **Preferences > Sound with the low battery alert** (off by default), for full-screen
   games where the notification is not seen (#66). The low battery alert then also plays
   Windows' own "Battery Low" sound ("Battery Critical" at 5% or less), and plays it again
