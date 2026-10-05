@@ -59,6 +59,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the headset to speak and held back the icons of all other devices. The app now listens
   to the receiver all the time in the background, so polls do not wait, and a level the
   headset sends between polls is no longer missed.
+- Redragon M991 (3554:f5d5): the same Compx report-0x08 stack as the Pulsar / ATK /
+  VXE mice ([#183](https://github.com/HeyOkay/HaloBattery/issues/183)); the level is
+  confirmed on the reporter's receiver. The wired id (3554:f55e) is claimed too, so
+  the icon keeps showing (with charging) while the mouse is on its cable. Both
+  transports and the charging flag are confirmed on the reporter's hardware. The
+  same receiver also carries the Redragon K1NG Max (M918)
+  ([#197](https://github.com/HeyOkay/HaloBattery/issues/197)), confirmed on the
+  reporter's hardware in both states - and on the reworked label build his cable
+  test showed the charging mark following the cable in and out, with the level
+  matching Redragon's own software. The tray label now covers both mice.
 
 ## [1.13.0] - 2026-09-29
 

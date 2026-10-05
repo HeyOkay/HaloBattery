@@ -175,7 +175,7 @@ PROVIDER_LABELS = {
     "mchose": "MCHOSE mice",
     "nintendo": "Nintendo Switch controllers",
     "playstation": "PlayStation controllers",
-    "pulsar": "Pulsar / ATK VXE mice",
+    "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "razer": "Razer mice and headsets",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
