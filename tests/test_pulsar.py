@@ -12,9 +12,10 @@ The same mouse on its cable (3554:f58c) is the reporter's second report in that 
 lists the same eight collections, so the same rule picks ff02:0002 and the same frame
 applies.
 
-The Hitscan Hyperlight (3770:0200 on its receiver, 3770:0100 on the cable, #105) is
-faked with its own collection list and the frames sopparus/hitscan-battery captured
-from the vendor application; the same rule picks its ff02:0002 collection.
+The Hitscan Hyperlight (3770:0200 on its receiver, 3770:0300 on the 8K receiver,
+3770:0100 on the cable, #105) is faked with its own collection list and the frames
+sopparus/hitscan-battery captured from the vendor application; the same rule picks
+its ff02:0002 collection.
 
 hidlist.enumerate() and hid.device() are replaced: the real ones ask Windows for
 collections of real devices.
@@ -320,6 +321,16 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual("Hitscan Hyperlight (2.4 GHz)", found[0].name)
         self.assertEqual(100, found[0].level)
         self.assertEqual("pulsar:37700200", found[0].key)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_hitscan_8k_receiver_is_read(self):
+        bus = self.one_receiver(vid=0x3770, pid=0x0300, replies=[reply(85, 0, 4100)],
+                                shape=HITSCAN_SHAPE)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        self.assertEqual("Hitscan Hyperlight (8K receiver)", found[0].name)
+        self.assertEqual(85, found[0].level)
+        self.assertEqual("pulsar:37700300", found[0].key)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
     def test_the_hitscan_on_its_cable_is_read(self):

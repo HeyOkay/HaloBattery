@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Hitscan Hyperlight on its 8K receiver (`3770:0300`). Uses the same vendor collection
+  (`ff02:0002`) and 17-byte command `0x04` frame as the 1K receiver.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
