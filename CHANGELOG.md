@@ -6,6 +6,24 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Inphic In9 Pro (1d57:fa65): the mouse announces its level and charging state
+  by itself on its dongle's status collection; nothing is ever sent to it. The
+  frame map is mirrored from the vendor's own INPHIC HUB driver
+  ([#160](https://github.com/HeyOkay/HaloBattery/issues/160)). Confirmed on
+  hardware in the reporter's runs, the charging state included.
+- Attack Shark X11 / R1 (1d57:fa60): the same ODM family, in two generations,
+  both read passively on `000a:0000`. The X11 announces the Inphic row's shape
+  (`03 55 40 01 <level>`); its reporter's probe caught it in
+  [#163](https://github.com/HeyOkay/HaloBattery/issues/163), where level and
+  charging are both confirmed. The X6/R1 generation announces
+  `03 10 40 <stage> <level/10>` - the shape blak0p's attack-shark-linux X6
+  documents validated on the dongle - caught on the R1's own receiver by its
+  reporter's probe in [#69](https://github.com/HeyOkay/HaloBattery/issues/69);
+  it carries no charging state. Each receiver only reads the model bytes
+  proven on it; the R1's run of the test build confirmed it on hardware - the
+  tray showed 90 %, its own ten-step size, unchanged while charging.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
