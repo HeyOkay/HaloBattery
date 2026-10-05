@@ -6,6 +6,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Steam Controller (2025) over its puck (#58): the battery is read from the controller's
+  own input reports - the charge state and level in report 0x43, a connect and disconnect
+  in reports 0x79 / 0x46 - listen-only, nothing is sent to the controller, so its lizard
+  mode and rumble stay as the user's games set them. On review (@ahmedkhursheed23) the
+  greyed value no longer expires on a timer while the puck is there (a removed icon comes
+  back at a new tray position, #87), the collection under each slot interface is picked
+  by usage with a logged fallback when 0xFF00:0001 is not present, and the diagnostics
+  list the puck's collections when nothing matches. The puck sends its battery report
+  about every 2.5 s while the controller is awake (~0.4 Hz, measured by
+  [CouchTurtle/sc2-research](https://github.com/CouchTurtle/sc2-research) and
+  [eva-val/steambattery](https://github.com/eva-val/steambattery)); the first tester
+  run in #58 showed the original 0.4 s listen window missing it, so a slot with a
+  live controller is listened to for up to 5 s per poll - twice the cadence - with a
+  disconnect ending the read early. Unit tests. Confirmed on hardware (@Kosminaut13, #58): 95 % while awake and 100 % charging in the app, and an asleep slot keeping its last value greyed.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
