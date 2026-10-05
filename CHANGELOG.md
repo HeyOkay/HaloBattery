@@ -6,6 +6,29 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Turtle Beach Stealth Pro II: the level is read through the transmitter (the dock) or
+  the headset's own USB cable, with the protocol captured from Turtle Beach's own Swarm II
+  (#173); the transmitter's own session opener and record ask replay the vendor app's
+  frames byte for byte - a record ask outside that session gets idle frames only, as two
+  test builds on real hardware showed, so a fallback ask carries the token shift the
+  capture's own asks show (inferred, not a captured frame) - and
+  the general status record's key `240` is the percentage (86 in the capture, at
+  the moment the vendor app's screen said "86%" for the same headset) and `220` the
+  headset's name; the two share one icon. The level and the name are confirmed on the
+  reporter's hardware. The charging state is the record's key `250` - the one strict
+  0/1 key that flips between his on-battery and on-cable runs (#173) - and his
+  five-state run followed it on hardware both ways (charging with the cable in, not
+  charging off it, the icon's charging indication following). A transmitter that is
+  present but answers no record now keeps its last level greyed out for five minutes
+  instead of dropping to "no link" at once. Measured on his unit with Swarm II open,
+  which holds the headset's channel (40+ idle frames, no record): his test build 6 run
+  shows the keeping itself - **99 % kept greyed out while Swarm II ran, and the fresh
+  97 % back on its own the moment it was closed** (#173). On review (@ahmedkhursheed23)
+  the fallback's token is marked
+  inferred in these docs and the read loop is bounded: a total read cap, and the
+  fallback's budget shortened after a silent opener and record ask.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
