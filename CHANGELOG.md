@@ -20,7 +20,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   [eva-val/steambattery](https://github.com/eva-val/steambattery)); the first tester
   run in #58 showed the original 0.4 s listen window missing it, so a slot with a
   live controller is listened to for up to 5 s per poll - twice the cadence - with a
-  disconnect ending the read early. Unit tests. Unverified on hardware here.
+  disconnect ending the read early. Unit tests. Confirmed on hardware (@Kosminaut13, #58): 95 % while awake and 100 % charging in the app, and an asleep slot keeping its last value greyed.
 
 ## [1.14.0] - 2026-10-05
 

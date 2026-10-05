@@ -198,6 +198,20 @@ class PollTest(ProviderTest):
         self.assertEqual(sorted((r.level, r.charging) for r in res),
                          [(40, True), (100, True)])
 
+    def test_the_confirming_frames_from_58(self):
+        # @Kosminaut13's run of the test build caught the battery report the 5 s
+        # window was for: `43 01 5f` = 95 % awake (after a state stream, the
+        # original 0.4 s window's blind spot), and on the cable `43 04 64` =
+        # 100 %, charging done - shown as charging, as the tray did.
+        puck = FakePuck([state_report()] * 200 + [battery(1, 0x5F)])
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck}, advance=True)
+        self.assertEqual([(r.level, r.charging, r.online) for r in res],
+                         [(95, False, True)])
+        puck = FakePuck([battery(4, 0x64)])
+        res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck})
+        self.assertEqual([(r.level, r.charging, r.online) for r in res],
+                         [(100, True, True)])
+
     def test_state_report_alone_shows_the_controller_without_a_level(self):
         puck = FakePuck([state_report(), state_report()])
         res = self.poll([entry(PUCK, 2)], {path_for(PUCK, 2): puck})
