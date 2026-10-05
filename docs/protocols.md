@@ -204,7 +204,7 @@ The same feature-report exchange as the Beast X Max (`00 00 02 02 00 83` out, `a
 
 **Connection:** 8K receiver (36A7:A880) and USB cable
 
-Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon
+Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon. A receiver whose mouse is switched off is walked only every fifth poll once nothing is shown (each walk refuses on every vendor collection, ~0.75 s apiece, then listens ~2 s), and at once when the receiver's device set changes (#62 item 5)
 
 ## Mice and keyboards
 

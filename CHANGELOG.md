@@ -69,6 +69,11 @@ while charging. The README is shorter; the device list moved to `docs/devices.md
   the headset to speak and held back the icons of all other devices. The app now listens
   to the receiver all the time in the background, so polls do not wait, and a level the
   headset sends between polls is no longer missed.
+- WLmouse receiver with the mouse switched off: the walk of every vendor collection
+  plus the two-second listen ran on every poll forever, even after the greyed icon
+  was gone. It now runs every fifth poll once nothing is shown - and at once when
+  the receiver's device set changes, such as the charging cable appearing (#62
+  item 5, reported by @ahmedkhursheed23).
 
 ## [1.13.0] - 2026-09-29
 
