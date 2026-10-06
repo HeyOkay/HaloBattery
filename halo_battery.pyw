@@ -105,6 +105,7 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 import flyout  # noqa: E402
 import history  # noqa: E402
 import icons  # noqa: E402
+import lang  # noqa: E402
 import updates  # noqa: E402
 import winevents  # noqa: E402
 from providers import hidlist  # noqa: E402
@@ -149,6 +150,7 @@ DEFAULTS = {
     "percent_in_icon": False,  # the level as a number in the ring, instead of the pictogram
     "quiet_fullscreen": True,  # while a game is full screen: hold alerts, poll every 5 min
     "status_file": False,      # write status.json for Rainmeter, Stream Deck, scripts
+    "language": "en",          # interface language: "en" (original) or "es" (Spanish)
 }
 
 # Preferences > Device types: provider name -> what the user sees. Windows Bluetooth
@@ -324,18 +326,19 @@ def running_from_temp() -> bool:
 
 
 # The texts of the app's notifications.
-def low_battery_text(name: str, level: Optional[int], approx: bool) -> str:
-    left = "battery is low" if approx else f"{level}% left"
-    return f"{name}: {left}. Time to charge."
+def low_battery_text(name: str, level: Optional[int], approx: bool,
+                     code: str = "en") -> str:
+    left = (lang.get(code, "battery_is_low") if approx
+            else lang.get(code, "percent_left").format(level=level))
+    return lang.get(code, "notify_low").format(name=name, left=left)
 
 
-def fully_charged_text(name: str) -> str:
-    return f"{name} is fully charged."
+def fully_charged_text(name: str, code: str = "en") -> str:
+    return lang.get(code, "fully_charged").format(name=name)
 
 
-def update_text(latest: str) -> str:
-    return (f"Version {latest} is available. Right-click a battery icon "
-            f"and choose \"Download v{latest}…\".")
+def update_text(latest: str, code: str = "en") -> str:
+    return lang.get(code, "update_available").format(latest=latest)
 
 
 # Windows titles a notification with the app that sent it. Without an id of its own the
@@ -387,9 +390,9 @@ def set_app_id() -> None:
         log.warning("app id: %s", e)
 
 
-TEMP_AUTOSTART_TEXT = ("Halo Battery is running from a temporary folder (straight from the ZIP). "
-                       "Extract the ZIP to a folder of its own, run HaloBattery.exe from there, "
-                       "then turn on Start with Windows.")
+def temp_autostart_text(code: str = "en") -> str:
+    """Why "Start with Windows" did nothing when the app runs from a temp folder."""
+    return lang.get(code, "temp_autostart")
 
 
 def autostart_enabled() -> bool:
@@ -636,6 +639,10 @@ def badge_for(st: DeviceStatus) -> str:
 # the pictograms a user can pick for one device ("Icon" in its menu); "" = automatic
 PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboard"),
                      ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
+# value -> lang key, so the labels follow the app language
+PICTOGRAM_KEYS = {"": "picto_automatic", "mouse": "picto_mouse", "keyboard": "picto_keyboard",
+                  "headset": "picto_headset", "gamepad": "picto_controller",
+                  "bluetooth": "picto_bluetooth"}
 
 GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")
 
@@ -734,25 +741,27 @@ def drop_bluetooth_duplicates(results: List[DeviceStatus],
     return kept
 
 
-def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "") -> str:
+def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "",
+             code: str = "en") -> str:
     """The tooltip text. `name` replaces the device's own name (set with "Rename..."),
     `left` is the estimated time left ("about 5 h of use left"), shown only while the
-    device is awake and on battery."""
-    return f"{name or st.name}: {device_state(st, left)}"
+    device is awake and on battery. `code` is the language; it defaults to English, so
+    the Diagnostics report and --probe always stay in English."""
+    return f"{name or st.name}: {device_state(st, left, code)}"
 
 
-def device_state(st: DeviceStatus, left: str = "") -> str:
+def device_state(st: DeviceStatus, left: str = "", code: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
     if st.approx:
         state = st.approx          # XInput: coarse levels or "not reported yet", never a fake "NN%"
     elif st.level is None:
-        state = "no link (off or asleep)"
+        state = lang.get(code, "state_no_link")
     else:
         state = f"{st.level}%"
         if st.charging:
-            state += ", charging"
+            state += lang.get(code, "state_charging")
         if not st.online:
-            state += " (last known value, device asleep)"
+            state += lang.get(code, "state_asleep")
         elif left and not st.charging:
             state += f", {left}"
     return state
@@ -796,6 +805,18 @@ def play_low_sound(kind: str) -> None:
 
 
 # ------------------------------------------------------------- hide / rename
+# The language of the rename box. The App sets it with set_dialog_language() before
+# calling ask_name(); keeping ask_name(current) one-argument lets tests replace it
+# with a one-argument fake (tests/test_hide_rename.py, RenameTests).
+_dialog_lang = "en"
+
+
+def set_dialog_language(code: str) -> None:
+    """Use `code` for the next ask_name() box (unknown codes fall back to English)."""
+    global _dialog_lang
+    _dialog_lang = code if code in lang.STRINGS else "en"
+
+
 def ask_name(current: str) -> Optional[str]:
     """Show a Windows input box for a new device name.
     -> the new name, or None when the user cancels or leaves it empty.
@@ -805,10 +826,12 @@ def ask_name(current: str) -> Optional[str]:
     the command line, so quotes or other characters in a name do no harm."""
     if sys.platform != "win32":
         return None
+    prompt = lang.get(_dialog_lang, "rename_prompt")
+    title = lang.get(_dialog_lang, "rename_title")
     script = ("[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
               "Add-Type -AssemblyName Microsoft.VisualBasic; "
               "[Microsoft.VisualBasic.Interaction]::InputBox("
-              "'New name for this device:', 'Halo Battery - Rename', $env:HALO_BATTERY_NAME)")
+              f"'{prompt}', '{title}', $env:HALO_BATTERY_NAME)")
     try:
         res = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
@@ -874,7 +897,8 @@ class DeviceIcon:
             else:
                 self.frames = None
                 self.icon.icon = art
-        title = describe(st, self.app.display_name(st), self.app.time_left_text(st))
+        title = describe(st, self.app.display_name(st), self.app.time_left_text(st),
+                         self.app.lang_code())
         # the tray tooltip is limited to 127 characters
         if self.icon.title != title[:127]:
             self.icon.title = title[:127]
@@ -1003,17 +1027,31 @@ class App:
             flyout.FlyoutHost() if sys.platform == "win32" and self.cfg.get("fluent_menu", True) else None)
 
     # ---------------- menu
+    def lang_code(self) -> str:
+        """The interface language ("en" or "es"); anything unknown falls back to "en".
+        Always read it through cfg.get: tests build partial configs without "language"."""
+        code = self.cfg.get("language", "en")
+        return code if code in lang.STRINGS else "en"
+
     def build_menu(self, owner: Optional[DeviceIcon]) -> Menu:
+        code = self.lang_code()
+
+        def tr(key):
+            return lang.get(code, key)
+
         # the flyout shows the state on the line below the name (flyout.HeaderItem)
         def header_title():
             if owner and owner.status:
                 return self.display_name(owner.status) or owner.status.name
             hidden = len(self._settings_map("hidden"))
-            return f"No devices shown ({hidden} hidden)" if hidden else "No devices found"
+            if not hidden:
+                return tr("no_devices_found")
+            key = "no_devices_shown_one" if hidden == 1 else "no_devices_shown"
+            return tr(key).format(n=hidden)
 
         def header_detail():
             if owner and owner.status:
-                return device_state(owner.status, self.time_left_text(owner.status))
+                return device_state(owner.status, self.time_left_text(owner.status), code)
             return ""
 
         def set_interval(sec):
@@ -1056,16 +1094,20 @@ class App:
         def toggle_autostart(icon, item):
             try:
                 if not set_autostart(not autostart_enabled()):
-                    icon.notify(TEMP_AUTOSTART_TEXT, "Start with Windows")
+                    icon.notify(temp_autostart_text(code), tr("pref_start_windows"))
             except OSError as e:
                 log.warning("autostart: %s", e)
 
-        intervals = [(15, "15 s"), (30, "30 s"), (60, "1 min"), (120, "2 min"), (300, "5 min")]
-        themes = [("auto", "Automatic"), ("white", "White"), ("black", "Black")]
-        lows = [(0, "Off"), (10, "10%"), (15, "15%"), (20, "20%"), (25, "25%"), (30, "30%")]
+        intervals = [(15, tr("interval_15s")), (30, tr("interval_30s")), (60, tr("interval_1min")),
+                     (120, tr("interval_2min")), (300, tr("interval_5min"))]
+        themes = [("auto", tr("theme_auto")), ("white", tr("theme_white")),
+                  ("black", tr("theme_black"))]
+        lows = [(0, tr("low_off")), (10, tr("low_10")), (15, tr("low_15")), (20, tr("low_20")),
+                (25, tr("low_25")), (30, tr("low_30"))]
 
         def update_text(_item):
-            return f"Download v{self.update[0]}…" if self.update else "Download update…"
+            return (tr("menu_download_version").format(version=self.update[0]) if self.update
+                    else tr("menu_download_update"))
 
         def renamed(_item):
             return bool(owner and owner.status and owner.status.key in self._settings_map("names"))
@@ -1091,7 +1133,17 @@ class App:
 
         def default_low_text(_item):
             low = self.cfg["low"]
-            return f"Default ({low}%)" if low else "Default (off)"
+            return tr("low_default").format(low=low) if low else tr("low_default_off")
+
+        def set_language(lang_code):
+            def _f(icon, item):
+                self.cfg["language"] = lang_code
+                save_config(self.cfg)
+                self.apply_language()
+            return _f
+
+        def language_picked(value):
+            return lambda _item: self.lang_code() == value
 
         def provider_on(name):
             return lambda _item: name not in self.disabled_providers()
@@ -1107,61 +1159,66 @@ class App:
             # built each time the menu opens, so it always shows the current list
             hidden = self._settings_map("hidden")
             for key, name in sorted(hidden.items(), key=lambda kv: str(kv[1]).lower()):
-                yield Item(f"Show {name}", show_again(key))
+                yield Item(tr("menu_show_device").format(name=name), show_again(key))
 
         # items for the device of this icon only (the "no devices" icon has none)
         device_items = [
             # the flyout has the pencil next to the name instead
-            flyout.classic_only(Item("Rename…", lambda i, it: self.rename(owner))),
-            Item("Reset name", lambda i, it: self.reset_name(owner), visible=renamed),
-            Item("Icon", Menu(*[Item(label, pick(value), checked=picked(value), radio=True)
-                                for value, label in PICTOGRAM_CHOICES])),
-            Item("Low battery alert at", Menu(
+            flyout.classic_only(Item(tr("menu_rename"), lambda i, it: self.rename(owner))),
+            Item(tr("menu_reset_name"), lambda i, it: self.reset_name(owner), visible=renamed),
+            Item(tr("menu_icon"), Menu(*[
+                Item(tr(PICTOGRAM_KEYS[value]), pick(value), checked=picked(value), radio=True)
+                for value, _label in PICTOGRAM_CHOICES])),
+            Item(tr("menu_low_alert_at"), Menu(
                 Item(default_low_text, pick_device_low(None), checked=device_low_picked(None), radio=True),
                 *[Item(t, pick_device_low(p), checked=device_low_picked(p), radio=True)
                   for p, t in lows])),
-            Item("Hide this device", lambda i, it: self.hide(owner)),
+            Item(tr("menu_hide_device"), lambda i, it: self.hide(owner)),
         ] if owner is not None else []
 
         # all settings in one submenu, so the main menu keeps only the things used often
         preferences = Menu(
             # - / + in the menu; the classic menu shows them as a list to pick from
-            flyout.CounterItem("Poll interval", intervals, lambda: self.cfg["interval"], set_interval),
-            flyout.CounterItem("Low battery alert", lows, lambda: self.cfg["low"], set_low),
-            Item("Alert when fully charged", toggle("full_alert"),
+            flyout.CounterItem(tr("pref_poll_interval"), intervals, lambda: self.cfg["interval"], set_interval),
+            flyout.CounterItem(tr("pref_low_battery_alert"), lows, lambda: self.cfg["low"], set_low),
+            Item(tr("pref_alert_full"), toggle("full_alert"),
                  checked=lambda it: self.cfg.get("full_alert", True)),
-            Item("Estimated time left", toggle("time_left"),
+            Item(tr("pref_time_left"), toggle("time_left"),
                  checked=lambda it: self.cfg.get("time_left", True)),
-            Item("Quiet while gaming", toggle("quiet_fullscreen"),
+            Item(tr("pref_quiet_gaming"), toggle("quiet_fullscreen"),
                  checked=lambda it: self.cfg.get("quiet_fullscreen", True)),
             # for full-screen games, where the notification is not seen (#66)
-            Item("Sound with the low battery alert", toggle("low_sound"),
+            Item(tr("pref_low_sound"), toggle("low_sound"),
                  checked=lambda it: self.cfg.get("low_sound", False)),
             Menu.SEPARATOR,
-            Item("Windows Bluetooth devices", toggle("bluetooth"),
+            Item(tr("pref_bluetooth"), toggle("bluetooth"),
                  checked=lambda it: self.cfg["bluetooth"]),
             # off: a PS4 / PS5 controller over Bluetooth shows its level only while Steam or a
             # game has it in the full mode; on: the app switches it, which some games do not
             # survive until the controller is turned off and on (#96)
-            Item("PlayStation full mode (Bluetooth)", toggle("playstation_full_mode"),
+            Item(tr("pref_playstation_full"), toggle("playstation_full_mode"),
                  checked=lambda it: self.cfg.get("playstation_full_mode", False)),
-            Item("Device types", Menu(provider_items)),
-            Item("Device pictogram", toggle("badges"),
+            Item(tr("pref_device_types"), Menu(provider_items)),
+            Item(tr("pref_pictogram"), toggle("badges"),
                  checked=lambda it: self.cfg["badges"]),
-            Item("Percentage in the icon", toggle("percent_in_icon"),
+            Item(tr("pref_percent_icon"), toggle("percent_in_icon"),
                  checked=lambda it: self.cfg.get("percent_in_icon", False)),
-            Item("Charging animation", toggle("animation"),
+            Item(tr("pref_charging_animation"), toggle("animation"),
                  checked=lambda it: self.cfg["animation"]),
-            Item("Icon colour", Menu(*[
+            Item(tr("pref_icon_colour"), Menu(*[
                 Item(t, set_theme(m), checked=lambda it, m=m: self.cfg.get("icon_theme", "auto") == m, radio=True)
                 for m, t in themes])),
             Menu.SEPARATOR,
-            Item("Status file for other apps", toggle("status_file"),
+            Item(tr("pref_status_file"), toggle("status_file"),
                  checked=lambda it: self.cfg.get("status_file", False)),
-            Item("Start with Windows", toggle_autostart,
+            Item(tr("pref_start_windows"), toggle_autostart,
                  checked=lambda it: autostart_enabled()),
-            Item("Check for updates", toggle("update_check"),
+            Item(tr("pref_check_updates"), toggle("update_check"),
                  checked=lambda it: self.cfg.get("update_check", True)),
+            # the label is bilingual on purpose: it is the way to change the language
+            Item(tr("pref_language"), Menu(
+                Item(tr("language_en"), set_language("en"), checked=language_picked("en"), radio=True),
+                Item(tr("language_es"), set_language("es"), checked=language_picked("es"), radio=True))),
         )
 
         return Menu(
@@ -1171,14 +1228,36 @@ class App:
                  visible=lambda it: self.update is not None),
             *device_items,
             Menu.SEPARATOR,
-            Item("Refresh now", lambda i, it: self.wake.set(), default=True),
-            Item("Preferences", preferences),
-            Item("Hidden devices", Menu(hidden_items),
+            Item(tr("menu_refresh"), lambda i, it: self.wake.set(), default=True),
+            Item(tr("menu_preferences"), preferences),
+            Item(tr("menu_hidden_devices"), Menu(hidden_items),
                  visible=lambda it: bool(self._settings_map("hidden"))),
             Menu.SEPARATOR,
-            Item("Diagnostics…", lambda i, it: self.request_diag()),
-            Item(f"Exit (v{VERSION})", lambda i, it: self.quit()),
+            Item(tr("menu_diagnostics"), lambda i, it: self.request_diag()),
+            Item(tr("menu_exit").format(version=VERSION), lambda i, it: self.quit()),
         )
+
+    def apply_language(self) -> None:
+        """The language changed: rebuild every menu and refresh every tooltip without a
+        restart. The menus are replaced (not just updated), because the static labels of
+        the items are fixed when a Menu is built; the tooltips carry the new texts too."""
+        code = self.lang_code()
+        with self.lock:
+            for ic in list(self.icons.values()):
+                try:
+                    ic.icon.menu = self.build_menu(ic)
+                except Exception as e:
+                    log.warning("menu: %s", e)
+                if ic.status is not None:
+                    ic.update(ic.status)              # new title; rebuilds the menu item texts
+            if self.placeholder is not None:
+                try:
+                    self.placeholder.menu = self.build_menu(None)
+                    self.placeholder.title = f"{APP_TITLE}: {lang.get(code, 'no_devices_found')}"
+                    self.placeholder.update_menu()
+                except Exception as e:
+                    log.warning("menu: %s", e)
+        log.info("language: %s", code)
 
     # ---------------- hide / rename
     def _settings_map(self, key: str) -> Dict[str, str]:
@@ -1232,6 +1311,7 @@ class App:
         st = owner.status
         if st is None:
             return
+        set_dialog_language(self.lang_code())
         new = ask_name(self.display_name(st))
         if new is None or new == self.display_name(st):
             return
@@ -1355,7 +1435,7 @@ class App:
         if not self.cfg.get("time_left", True) or st.approx:
             return ""
         seconds = self.history.seconds_left(st.key, st.level)
-        return history.format_left(seconds) if seconds is not None else ""
+        return history.format_left_in(seconds, self.lang_code()) if seconds is not None else ""
 
     # ---------------- icon colour
     def compute_light(self) -> bool:
@@ -1664,7 +1744,7 @@ class App:
             ready = threading.Event()
             self.placeholder = tray_icon(IDLE_KEY, f"{APP_NAME}_idle",
                                          icons.render(None, False, False, light_taskbar=self.light_taskbar),
-                                         f"{APP_TITLE}: no devices found",
+                                         f"{APP_TITLE}: {lang.get(self.lang_code(), 'no_devices_found')}",
                                          self.build_menu(None))
             self.placeholder._hb_flyout = getattr(self, "flyout", None)
             self.placeholder_ready = ready
@@ -1691,7 +1771,8 @@ class App:
             self.alerted[st.key] = True
             try:
                 self.notify(ic.icon, st.key,
-                            low_battery_text(self.display_name(st), st.level, bool(st.approx)),
+                            low_battery_text(self.display_name(st), st.level, bool(st.approx),
+                                             self.lang_code()),
                             "Low battery")
             except Exception as e:
                 log.warning("notify: %s", e)
@@ -1723,7 +1804,8 @@ class App:
         prev = self.full_state.get(st.key)
         if st.level >= 100 and prev == "charging" and self.cfg.get("full_alert", True):
             try:
-                self.notify(ic.icon, st.key, fully_charged_text(self.display_name(st)),
+                self.notify(ic.icon, st.key, fully_charged_text(self.display_name(st),
+                                                                self.lang_code()),
                             "Fully charged")
             except Exception as e:
                 log.warning("notify: %s", e)
@@ -1884,7 +1966,8 @@ class App:
                 "approx": st.approx or None,
                 "low_alert_at": self.low_for(st),
                 "seconds_left": None if secs is None else int(secs),
-                "text": describe(st, self.display_name(st), self.time_left_text(st)),
+                "text": describe(st, self.display_name(st), self.time_left_text(st),
+                                 self.lang_code()),
             })
         now = time.time()
         return {"app": APP_TITLE, "version": VERSION, "running": running,
@@ -1961,7 +2044,7 @@ class App:
             self.refresh_menus()
             if self.cfg.get("update_notified") != latest:
                 self.cfg["update_notified"] = latest
-                self.notify_any(update_text(latest), f"{APP_TITLE} update")
+                self.notify_any(update_text(latest, self.lang_code()), f"{APP_TITLE} update")
         else:
             self.update = None
         save_config(self.cfg)

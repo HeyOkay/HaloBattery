@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Interface language (English / Spanish)**: Preferences > Language / Idioma switches the
+  menus, tooltips, notifications and the rename box between English (the default, original
+  language) and Spanish, applied at once without a restart. Device names, the device-type
+  labels and the Diagnostics report stay in English on purpose.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
