@@ -108,7 +108,9 @@ The AJAZZ Control Center project's AJ-series exchange: a zero-payload `0xF7` sta
 
 **Connection:** 2.4 GHz receiver or USB cable (for example 0B05:1A72)
 
-The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. The OMNI receiver and models with other layouts are not included. **Unverified** - no ASUS mouse was on hand
+The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. The OMNI receiver and models with other layouts are not included. Other listed models remain **unverified**.
+
+The ASUS TX Gaming Mouse Mini Miku is **verified on hardware** through its `0B05:1C5A` 2.4 GHz receiver. It reuses the G-Helper-derived exchange above ([source](https://github.com/seerge/g-helper/blob/main/app/Peripherals/Mouse/AsusMouse.cs)). The captured reply, with report ID zero omitted by hidapi, was `12 07 00 00 2e 02 14 d7 0e 00 00 01`: 46%, not charging. A fake-HID regression test checks this reply and the existing 65-byte request. Cable and Bluetooth support for this model have not been verified.
 
 ### Corsair Dark Core RGB Pro SE
 

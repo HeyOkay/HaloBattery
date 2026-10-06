@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- ASUS TX Gaming Mouse Mini Miku on its 2.4 GHz receiver (`0B05:1C5A`), using the existing ASUS percentage-battery exchange; verified on hardware at 46%.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
