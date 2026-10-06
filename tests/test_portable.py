@@ -1,81 +1,70 @@
+"""Tests for portable mode (portable.txt next to the app). No tray, no hardware.
+
+Run from the repository root:
+
+    python -m unittest discover -s tests
+"""
+import importlib.util
 import os
 import sys
 import tempfile
 import unittest
 from unittest import mock
 
-# Add the project root to the path so we can import halo_battery
-sys.path.insert(0, os.path.dirname(__file__) + "..")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
-# Import the function we want to test
-from halo_battery import _calculate_data_dir
+# The app writes its log and settings to %APPDATA%\HaloBattery when it loads. Point it
+# at a temporary folder, so the tests never touch the real log or settings.
+_real_appdata = os.environ.get("APPDATA")
+os.environ["APPDATA"] = tempfile.mkdtemp(prefix="halo_battery_test_")
+try:
+    spec = importlib.util.spec_from_file_location("halo_battery", os.path.join(ROOT, "halo_battery.pyw"))
+    hb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hb)
+finally:
+    if _real_appdata is None:
+        os.environ.pop("APPDATA", None)
+    else:
+        os.environ["APPDATA"] = _real_appdata
 
-class PortableTest(unittest.TestCase):
-    
-    def test_portable_mode_disabled_when_file_absent(self):
-        """Test that portable mode is disabled when portable.txt is not present."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Call the function directly with temp directory
-            with mock.patch.dict(os.environ, {"APPDATA": "C:\\Users\\test\\AppData\\Roaming"}):
-                portable_mode, data_dir = _calculate_data_dir(temp_dir)
-                expected_dir = os.path.join("C:\\Users\\test\\AppData\\Roaming", "HaloBattery")
-                self.assertFalse(portable_mode)
-                self.assertEqual(data_dir, expected_dir)
+APPDATA = os.path.join("C:\\", "Users", "test", "AppData", "Roaming")
 
-    def test_portable_mode_enabled_when_file_exists(self):
-        """Test that portable mode is enabled when portable.txt exists."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create portable.txt in the directory
-            portable_file = os.path.join(temp_dir, 'portable.txt')
-            with open(portable_file, 'w') as f:
-                f.write('test content')
-            
-            # Call the function directly with temp directory
-            portable_mode, data_dir = _calculate_data_dir(temp_dir)
-            self.assertTrue(portable_mode)
-            self.assertEqual(data_dir, temp_dir)
 
-    def test_data_dir_selection_normal_mode(self):
-        """Test that in normal mode, DATA_DIR uses APPDATA directory."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Ensure portable.txt does not exist in the directory
-            portable_file = os.path.join(temp_dir, 'portable.txt')
-            self.assertFalse(os.path.exists(portable_file))
-            
-            # Call the function directly with temp directory
-            with mock.patch.dict(os.environ, {"APPDATA": "C:\\Users\\test\\AppData\\Roaming"}):
-                portable_mode, data_dir = _calculate_data_dir(temp_dir)
-                expected_dir = os.path.join("C:\\Users\\test\\AppData\\Roaming", "HaloBattery")
-                self.assertFalse(portable_mode)
-                self.assertEqual(data_dir, expected_dir)
+class PortableModeTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.app_dir = tmp.name
 
-    def test_data_dir_fallback_when_appdata_absent(self):
-        """Test that when APPDATA is not set, fallback to user home directory is used."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            portable_file = os.path.join(temp_dir, 'portable.txt')
-            self.assertFalse(os.path.exists(portable_file))
-            
-            # Test that when APPDATA is not set in environment, it falls back to home directory
-            # We need to temporarily remove APPDATA from environment and test the fallback
-            original_appdata = os.environ.get("APPDATA")
-            
-            # Remove APPDATA from environment to test fallback behavior
-            if "APPDATA" in os.environ:
-                del os.environ["APPDATA"]
-            
-            try:
-                portable_mode, data_dir = _calculate_data_dir(temp_dir)
-                self.assertFalse(portable_mode)
-                
-                # The data directory should be the user home directory + APP_NAME
-                expected_dir = os.path.join(os.path.expanduser("~"), "HaloBattery")
-                self.assertEqual(data_dir, expected_dir)
-            finally:
-                # Restore original APPDATA environment variable
-                if original_appdata is not None:
-                    os.environ["APPDATA"] = original_appdata
-                elif "APPDATA" in os.environ:
-                    del os.environ["APPDATA"]
+    def make_marker(self):
+        with open(os.path.join(self.app_dir, hb.PORTABLE_MARKER), "w") as f:
+            f.write("")
 
-if __name__ == '__main__':
+    def test_without_marker_data_goes_to_appdata(self):
+        self.assertEqual(hb._calculate_data_dir(self.app_dir, APPDATA),
+                         (False, os.path.join(APPDATA, "HaloBattery")))
+
+    def test_marker_keeps_data_in_app_folder(self):
+        self.make_marker()
+        self.assertEqual(hb._calculate_data_dir(self.app_dir, APPDATA), (True, self.app_dir))
+
+    def test_read_only_app_folder_falls_back_to_appdata(self):
+        self.make_marker()
+        with mock.patch.object(hb, "_writable", return_value=False):
+            self.assertEqual(hb._calculate_data_dir(self.app_dir, APPDATA),
+                             (False, os.path.join(APPDATA, "HaloBattery")))
+
+    def test_writable_check(self):
+        self.assertTrue(hb._writable(self.app_dir))
+        self.assertFalse(hb._writable(os.path.join(self.app_dir, "missing")))
+        self.assertEqual(os.listdir(self.app_dir), [])   # the probe file is gone
+
+    def test_default_appdata_is_the_module_one(self):
+        with mock.patch.object(hb, "APPDATA_DIR", APPDATA):
+            self.assertEqual(hb._calculate_data_dir(self.app_dir),
+                             (False, os.path.join(APPDATA, "HaloBattery")))
+
+
+if __name__ == "__main__":
     unittest.main()
