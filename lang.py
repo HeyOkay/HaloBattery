@@ -103,6 +103,12 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "left_days": "about {n} days of use left",
 
         # ---- notifications
+        # Visible toast titles, keyed separately from the internal kind ("low" /
+        # "full" / "update") so held notifications can dedupe by kind whichever
+        # language is active when they are finally shown.
+        "notify_title_low": "Low battery",
+        "notify_title_full": "Fully charged",
+        "notify_title_update": "Halo Battery update",
         "notify_low": "{name}: {left}. Time to charge.",
         "battery_is_low": "battery is low",
         "percent_left": "{level}% left",
@@ -199,6 +205,9 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "left_days": "unos {n} días de uso restantes",
 
         # ---- notifications
+        "notify_title_low": "Batería baja",
+        "notify_title_full": "Carga completa",
+        "notify_title_update": "Actualización de Halo Battery",
         "notify_low": "{name}: {left}. Es hora de cargar.",
         "battery_is_low": "batería baja",
         "percent_left": "{level}% restante",

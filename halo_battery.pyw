@@ -999,7 +999,7 @@ class App:
         self.key_provider: Dict[str, str] = {}   # device key -> provider name
         self.history = history.History(HISTORY_PATH)
         self.history.load()
-        self.held: Dict[tuple, tuple] = {}      # (key, title) -> (text, title), held while quiet
+        self.held: Dict[tuple, str] = {}         # (key, kind) -> text, held while quiet
         self.was_quiet = False
         self.bt = BluetoothProvider()
         self.icons: Dict[str, DeviceIcon] = {}
@@ -1773,7 +1773,7 @@ class App:
                 self.notify(ic.icon, st.key,
                             low_battery_text(self.display_name(st), st.level, bool(st.approx),
                                              self.lang_code()),
-                            "Low battery")
+                            "low")
             except Exception as e:
                 log.warning("notify: %s", e)
         self.check_low_sound(st, low)
@@ -1806,7 +1806,7 @@ class App:
             try:
                 self.notify(ic.icon, st.key, fully_charged_text(self.display_name(st),
                                                                 self.lang_code()),
-                            "Fully charged")
+                            "full")
             except Exception as e:
                 log.warning("notify: %s", e)
         if st.level >= 100:
@@ -1935,12 +1935,12 @@ class App:
             except Exception:
                 pass
 
-    def notify_any(self, text: str, title: str, key: str = "") -> None:
+    def notify_any(self, text: str, kind: str, key: str = "") -> None:
         """A tray notification from whichever icon is there."""
         icon = next((ic.icon for ic in list(self.icons.values())), None) or self.placeholder
         if icon is not None:
             try:
-                self.notify(icon, key, text, title)
+                self.notify(icon, key, text, kind)
             except Exception as e:
                 log.warning("notify: %s", e)
 
@@ -1983,27 +1983,34 @@ class App:
         """True while "Quiet while gaming" is on and a full-screen app is in front."""
         return bool(self.cfg.get("quiet_fullscreen", True)) and fullscreen_app_running()
 
-    def notify(self, icon, key: str, text: str, title: str) -> None:
+    def notify_title(self, kind: str) -> str:
+        """The visible toast title for a notification kind ("low" / "full" / "update"),
+        in the language active right now. Held notifications keep their kind, so the
+        title is chosen when they are finally shown."""
+        return lang.get(self.lang_code(), "notify_title_" + kind)
+
+    def notify(self, icon, key: str, text: str, kind: str) -> None:
         """Show a notification now, or hold it until the full-screen app is gone. Only
         the newest one per device and kind is kept, so a long game ends with one
-        "Low battery" per device rather than a pile of them."""
+        "Low battery" per device rather than a pile of them. `kind` is the stable
+        internal key ("low" / "full" / "update"); the title shown is its translation."""
         if self.quiet():
-            self.held[(key, title)] = (text, title)
+            self.held[(key, kind)] = text
             log.info("held while full screen: %s", text)
             return
-        icon.notify(text, title)
+        icon.notify(text, self.notify_title(kind))
 
     def flush_held(self) -> None:
         """The full-screen app is gone: show what was held, except a low battery alert
         for a device that has been put on the charger (or topped up) since."""
         held, self.held = self.held, {}
-        for (key, title), (text, _) in held.items():
+        for (key, kind), text in held.items():
             ic = self.icons.get(key)
             st = ic.status if ic is not None else None
-            if title == "Low battery" and st is not None and (
+            if kind == "low" and st is not None and (
                     st.charging or (st.level is not None and st.level > self.low_for(st))):
                 continue
-            self.notify_any(text, title, key)
+            self.notify_any(text, kind, key)
 
     def open_update(self) -> None:
         url = self.update[1] if self.update else updates.RELEASES_URL
@@ -2044,7 +2051,7 @@ class App:
             self.refresh_menus()
             if self.cfg.get("update_notified") != latest:
                 self.cfg["update_notified"] = latest
-                self.notify_any(update_text(latest, self.lang_code()), f"{APP_TITLE} update")
+                self.notify_any(update_text(latest, self.lang_code()), "update")
         else:
             self.update = None
         save_config(self.cfg)

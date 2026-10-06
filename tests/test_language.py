@@ -10,6 +10,7 @@ Run from the repository root:
 import os
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests"))
 
@@ -111,6 +112,64 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(hb.low_battery_text("G502", 15, False), "G502: 15% left. Time to charge.")
         self.assertEqual(hb.fully_charged_text("G502"), "G502 is fully charged.")
         self.assertIn("Download v1.2.3…", hb.update_text("1.2.3"))
+
+
+class NotificationTitleTests(HideRenameTestCase):
+    """The toast body is translated (NotificationTests); these cover its title.
+
+    The title is resolved from the stable internal kind ("low" / "full" / "update")
+    at show time, so a held notification groups by kind whatever language it was
+    created in and can be shown with the title of the language active then."""
+
+    class Recorder:
+        def __init__(self):
+            self.calls = []
+
+        def notify(self, text, title):
+            self.calls.append((text, title))
+
+    class Icon:
+        """The little of DeviceIcon that notify_any / flush_held touch."""
+
+        status = None
+
+        def __init__(self, recorder):
+            self.icon = recorder
+
+    def test_titles_translated_in_spanish(self):
+        app = make_app({"language": "es"})
+        self.assertEqual(app.notify_title("low"), "Batería baja")
+        self.assertEqual(app.notify_title("full"), "Carga completa")
+        self.assertEqual(app.notify_title("update"), "Actualización de Halo Battery")
+
+    def test_titles_unchanged_in_english(self):
+        app = make_app()
+        self.assertEqual(app.notify_title("low"), "Low battery")
+        self.assertEqual(app.notify_title("full"), "Fully charged")
+        self.assertEqual(app.notify_title("update"), "Halo Battery update")
+
+    def test_shown_notification_uses_the_translated_title(self):
+        app = make_app({"language": "es"})
+        rec = self.Recorder()
+        with mock.patch.object(hb, "fullscreen_app_running", lambda: False):
+            app.notify(rec, "k", "texto", "low")
+        self.assertEqual(rec.calls, [("texto", "Batería baja")])
+
+    def test_held_dedupes_by_kind_and_flushes_with_translated_titles(self):
+        app = make_app({"language": "es"})
+        rec = self.Recorder()
+        app.icons["k"] = self.Icon(rec)
+        with mock.patch.object(hb, "fullscreen_app_running", lambda: True):
+            app.notify(rec, "k", "low first", "low")
+            app.notify(rec, "k", "low newest", "low")     # same device + kind: replaces
+            app.notify(rec, "k", "full text", "full")
+        self.assertEqual(set(app.held), {("k", "low"), ("k", "full")})
+        self.assertEqual(app.held[("k", "low")], "low newest")
+        with mock.patch.object(hb, "fullscreen_app_running", lambda: False):
+            app.flush_held()
+        self.assertEqual(sorted(rec.calls),
+                         [("full text", "Carga completa"), ("low newest", "Batería baja")])
+        self.assertEqual(app.held, {})
 
 
 class TimeLeftTests(unittest.TestCase):
