@@ -41,6 +41,19 @@ KNOWN = {
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x00A4: ("Razer Mouse Dock Pro", 0x1F),
+    # ---- keyboards with a battery, from OpenRazer's keyboard driver (razerkbd_driver.c:
+    # razer_attr_read_charge_level). The wireless id is the HyperSpeed receiver, the
+    # wired id the keyboard on its cable (charging).
+    0x0290: ("Razer DeathStalker V2 Pro", 0x9F),
+    0x0292: ("Razer DeathStalker V2 Pro", 0x1F),
+    0x0296: ("Razer DeathStalker V2 Pro TKL", 0x9F),
+    0x0298: ("Razer DeathStalker V2 Pro TKL", 0x1F),
+    0x0271: ("Razer BlackWidow V3 Mini HyperSpeed", 0x9F),
+    0x0258: ("Razer BlackWidow V3 Mini HyperSpeed", 0x1F),
+    0x02BA: ("Razer BlackWidow V4 Mini HyperSpeed", 0x9F),
+    0x02B9: ("Razer BlackWidow V4 Mini HyperSpeed", 0x1F),
+    0x02D5: ("Razer BlackWidow V4 Tenkeyless HyperSpeed", 0x9F),
+    0x02D7: ("Razer BlackWidow V4 Tenkeyless HyperSpeed", 0x1F),
     # ---- mice, from OpenRazer (wired / wireless PIDs of one mouse share a name)
     0x001F: ("Razer Naga Epic", 0xFF),
     0x0024: ("Razer Mamba (2012)", 0xFF),
@@ -115,6 +128,15 @@ KNOWN = {
     # goes only to 0x025A.
     0x025A: ("Razer BlackWidow V3 Pro", 0x3F),
     0x025C: ("Razer BlackWidow V3 Pro", 0x9F),
+}
+
+# The keyboards above take the commands on one USB interface: OpenRazer sends them with
+# wIndex = report_index to the interface (USB_RECIP_INTERFACE), in
+# razer_get_report_params(). That interface is asked first; the others stay a fallback.
+KEYBOARD_INTERFACE = {
+    0x0290: 2, 0x0296: 2, 0x02D5: 2,
+    0x0292: 3, 0x0298: 3, 0x02D7: 3,
+    0x0271: 3, 0x0258: 3, 0x02BA: 3, 0x02B9: 3,
 }
 
 TRANSACTION_IDS = (0x1F, 0x3F, 0xFF, 0x9F, 0x08)
@@ -338,6 +360,7 @@ class RazerProvider(Provider):
             if not name:
                 name = (ifaces[0].get("product_string") or f"Razer {pid:04x}").strip()
             key = f"razer:{pid:04x}:{serial}"
+            kind = "keyboard" if pid in KEYBOARD_INTERFACE else ""
             diag_from = len(self._diag)
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
             if not maybe_wireless(pid, name):
@@ -385,14 +408,14 @@ class RazerProvider(Provider):
                 # sleeping one, so they keep exactly the behaviour they had before.
                 last = self._last.get(key)
                 if not is_headset and last and time.time() - last[2] < ASLEEP_KEEP:
-                    out.append(DeviceStatus(key, name, last[0], last[1], False, "razer"))
+                    out.append(DeviceStatus(key, name, last[0], last[1], False, "razer", kind=kind))
                 continue
             elif self._failing.pop(key, None) is not None:
                 log.info("[Razer] %s: answering again", name)
             status, level, charging = st
             if status == STATUS_OK:
                 self._last[key] = (level, bool(charging), time.time())
-                out.append(DeviceStatus(key, name, level, bool(charging), True, "razer"))
+                out.append(DeviceStatus(key, name, level, bool(charging), True, "razer", kind=kind))
         return out
 
     def _poll_group(self, gkey, ifaces, pref_tid):
@@ -405,12 +428,14 @@ class RazerProvider(Provider):
 
         # Probe order: vendor / main collection interfaces first, then the rest.
         # Collections Windows re-parented (interface number -1) go last.
+        want = KEYBOARD_INTERFACE.get(gkey[0])
+
         def rank(d):
             up = d.get("usage_page", 0)
             iface = d.get("interface_number", 0)
             if iface is None or iface < 0:
                 iface = 99
-            return (0 if up in (0x0001, 0xFF00) else 1, iface)
+            return (0 if iface == want else 1, 0 if up in (0x0001, 0xFF00) else 1, iface)
 
         tids = [pref_tid] if pref_tid else []
         tids += [t for t in TRANSACTION_IDS if t not in tids]

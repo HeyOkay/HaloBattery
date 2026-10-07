@@ -35,7 +35,7 @@ Before you report, do these steps:
 
    The **All HID devices** part is the most important for a device that is not supported: it shows the ids (`VID`, `PID`) and the collections (`usage`) of your device.
 
-Then [open an issue](../../issues/new) and:
+Then [open an issue](../../issues/new?template=device.yml) and:
 
 - Write the device name, and how it is connected (receiver, cable or Bluetooth).
 - Drag `diagnostics.txt` into the comment box (type `%APPDATA%\HaloBattery` in the address bar of File Explorer to find it). Do not paste only a part of it.
@@ -75,7 +75,7 @@ Bluetooth devices: Halo Battery shows the level that Windows itself reports. If 
    python -m unittest discover -s tests
    ```
 
-5. Add a line to `CHANGELOG.md` under `[Unreleased]`, and a row to the supported devices table.
+5. Add a line to `CHANGELOG.md` under `[Unreleased]`, a row to the table in `docs/devices.md`, and a section in `docs/protocols.md` that tells how the device is read and names the source.
 6. In the pull request description, write:
    - which issue it closes;
    - the source of the protocol;

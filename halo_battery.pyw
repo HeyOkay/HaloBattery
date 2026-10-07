@@ -32,11 +32,11 @@ import threading
 import time
 import zlib
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.13.0"
+VERSION = "1.14.0"
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 
 if getattr(sys, "frozen", False):
@@ -45,26 +45,36 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-# Define APPDATA_DIR globally for legacy config migration
 APPDATA_DIR = os.environ.get("APPDATA", os.path.expanduser("~"))
+PORTABLE_MARKER = "portable.txt"   # next to the app: keep settings and the log in its folder
 
-def _calculate_data_dir(base_dir):
-    """Calculate data directory based on portable mode.
-    
-    Returns:
-        tuple: (portable_mode: bool, data_dir: str)
+
+def _writable(folder: str) -> bool:
+    """True if a file can be created in the folder (os.access is not reliable on Windows)."""
+    try:
+        with tempfile.TemporaryFile(dir=folder):
+            pass
+        return True
+    except OSError:
+        return False
+
+
+def _calculate_data_dir(base_dir: str, appdata_dir: Optional[str] = None):
+    """Pick the folder for settings, the log, the history and the diagnostics report.
+
+    Portable mode: with a portable.txt file next to the app, everything stays in the app's
+    own folder. Without it, or when that folder cannot be written (e.g. Program Files),
+    the data goes to %APPDATA%\\HaloBattery. Returns (portable_mode, data_dir).
     """
-    portable_mode = os.path.exists(os.path.join(base_dir, "portable.txt"))
-    
-    if portable_mode:
-        return (True, base_dir)
-    else:
-        APPDATA_DIR = os.environ.get("APPDATA", os.path.expanduser("~"))
-        data_dir = os.path.join(APPDATA_DIR, APP_NAME)
-        return (False, data_dir)
+    if appdata_dir is None:
+        appdata_dir = APPDATA_DIR
+    if os.path.exists(os.path.join(base_dir, PORTABLE_MARKER)) and _writable(base_dir):
+        return True, base_dir
+    return False, os.path.join(appdata_dir, APP_NAME)
 
-# Calculate data directory using the new function
-portable_mode, DATA_DIR = _calculate_data_dir(BASE_DIR)
+
+PORTABLE_REQUESTED = os.path.exists(os.path.join(BASE_DIR, PORTABLE_MARKER))
+PORTABLE, DATA_DIR = _calculate_data_dir(BASE_DIR)
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LOG_PATH = os.path.join(DATA_DIR, "halo_battery.log")
@@ -77,11 +87,18 @@ log.setLevel(logging.INFO)
 _fh = RotatingFileHandler(LOG_PATH, maxBytes=512_000, backupCount=1, encoding="utf-8")
 _fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
 log.addHandler(_fh)
+if PORTABLE_REQUESTED and not PORTABLE:
+    log.warning("%s found, but %s cannot be written: settings and the log stay in %s",
+                PORTABLE_MARKER, BASE_DIR, DATA_DIR)
 
 try:
     import hid  # noqa: E402
 except ImportError:
     hid = None
+try:
+    import winsound  # noqa: E402
+except ImportError:
+    winsound = None
 import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
@@ -95,11 +112,15 @@ from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
-                       GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXProvider, JblProvider,
+                       GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
+                       HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
+                       LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
-                       RazerProvider, SteelSeriesProvider, WLmouseProvider, XInputProvider)
+                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
+                       WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
+from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
 HEADSET_WORDS = ("blackshark", "kraken", "barracuda", "nari", "thresher", "headset",
                  "headphone", "earbud", "buds", "hammerhead", "airpods")
@@ -109,6 +130,7 @@ DEFAULTS = {
     "interval": 60,      # seconds between polls
     "low": 20,           # low battery notification threshold, %
     "full_alert": True,  # notification when a charging device reaches 100 %
+    "low_sound": False,  # also play a Windows sound with the low battery alert (#66)
     "notify": True,
     "bluetooth": True,   # Windows Bluetooth devices
     "badges": True,      # device pictogram inside the ring
@@ -145,30 +167,35 @@ PROVIDER_LABELS = {
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_cloud3": "HyperX Cloud III Wireless",
+    "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
     "lofree": "Lofree keyboards",
     "logitech": "Logitech",
+    "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "mchose": "MCHOSE mice",
     "nintendo": "Nintendo Switch controllers",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE mice",
     "razer": "Razer mice and headsets",
     "steelseries": "SteelSeries",
+    "steelseries_elite": "SteelSeries Arctis Nova Elite",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
 }
 
 
-def make_providers() -> list:
+def make_providers(jbl_listen_first: float = 0.0) -> list:
+    # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            JblProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider()]
+            LamzuProvider(), AmInfinityProvider(),
+            SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -749,6 +776,43 @@ def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> s
     return state
 
 
+# ------------------------------------------------------------- low battery sound
+LOW_SOUND_REPEAT = 300     # seconds between low battery sounds while the device stays low
+CRITICAL_LEVEL = 5         # at or below this %, the "critical" sound instead of the "low" one
+# Windows' own sounds in %WINDIR%\Media, and the system sound used when the file is missing
+LOW_SOUNDS = {"low": ("Windows Battery Low.wav", "SystemExclamation"),
+              "critical": ("Windows Battery Critical.wav", "SystemHand")}
+
+
+def low_battery_sound(level: Optional[int], charging: bool, online: bool, low: int,
+                      last: Optional[float], now: float) -> Optional[str]:
+    """The sound to play now for a device, "low" or "critical", or None for no sound.
+
+    A device at or below the alert level `low`, awake and not charging, gets a sound
+    at once (`last` is None) and then again every LOW_SOUND_REPEAT seconds. `last` and
+    `now` are time.monotonic() values."""
+    if not low or level is None or not online or charging or level > low:
+        return None
+    if last is not None and now - last < LOW_SOUND_REPEAT:
+        return None
+    return "critical" if level <= CRITICAL_LEVEL else "low"
+
+
+def play_low_sound(kind: str) -> None:
+    """Play the sound in the background (SND_ASYNC), so the poll thread does not wait."""
+    if winsound is None:
+        return
+    name, alias = LOW_SOUNDS[kind]
+    path = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Media", name)
+    try:
+        if os.path.isfile(path):
+            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        else:
+            winsound.PlaySound(alias, winsound.SND_ALIAS | winsound.SND_ASYNC)
+    except Exception as e:
+        log.warning("low battery sound: %s", e)
+
+
 # ------------------------------------------------------------- hide / rename
 def ask_name(current: str, *, language: str = "en") -> Optional[str]:
     """Show a Windows input box for a new device name.
@@ -823,7 +887,7 @@ class DeviceIcon:
         self.status: Optional[DeviceStatus] = None
         self.frames: Optional[list] = None      # "breathing" frames while charging
         self._state = None                      # to avoid redrawing when nothing changed
-        self._images: Dict[tuple, object] = {}  # state -> image or frames, both colours
+        self._images: Dict[tuple, object] = {}  # state -> image or frames, per colour
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
                               icons.render(None, False, False, light_taskbar=app.light_taskbar),
                               APP_TITLE, app.build_menu(self))
@@ -880,19 +944,24 @@ class DeviceIcon:
                 pass
 
     def _art(self, state: tuple):
-        """The image (or the charging frames) for a state. The same state in the
-        other colour is drawn at the same time, so when the bar colour flips the
-        icon switches without rendering anything."""
-        if state not in self._images:
-            self._images.clear()
+        """The image (or the charging frames) for a state. Only the colour in use is
+        drawn; the other colour is drawn the first time the bar flips to it and then
+        kept with the state, so a MyDockFinder bar that flips back and forth does not
+        draw anything again. The cache holds one state, in at most both colours."""
+        art = self._images.get(state)
+        if art is None:
             level, charging, online, low, light, badge, animate, text = state
-            for lt in (light, not light):
-                if animate:
-                    art = icons.charging_frames(level, online, low, lt, badge, text=text)
-                else:
-                    art = icons.render(level, charging, online, low, lt, badge, text=text)
-                self._images[(level, charging, online, low, lt, badge, animate, text)] = art
-        return self._images[state]
+            other = (level, charging, online, low, not light, badge, animate, text)
+            kept = self._images.get(other)
+            self._images.clear()
+            if kept is not None:
+                self._images[other] = kept      # the same state in the other colour
+            if animate:
+                art = icons.charging_frames(level, online, low, light, badge, text=text)
+            else:
+                art = icons.render(level, charging, online, low, light, badge, text=text)
+            self._images[state] = art
+        return art
 
     def tick(self, i: int) -> None:
         with self.app.lock:
@@ -915,6 +984,37 @@ class DeviceIcon:
             forget()                            # free the cached icon handles
 
 
+class WakeEvent(threading.Event):
+    """Wakes the poll thread. set() asks for a full poll of every device ("Refresh
+    now", a changed setting, diagnostics). bluetooth() only asks to show new
+    Bluetooth results: the watcher sends one at least once a minute and several
+    after each connect, and a full poll for each of them would query the HID
+    devices far more often than the user's "Poll interval"."""
+
+    def __init__(self):
+        super().__init__()
+        self._full = False
+        self._full_lock = threading.Lock()
+
+    def set(self):
+        with self._full_lock:
+            self._full = True
+        super().set()
+
+    def bluetooth(self):
+        super().set()
+
+    def clear(self):
+        self.take()
+
+    def take(self) -> bool:
+        """Clear the event. True when a full poll was asked for since the last clear."""
+        with self._full_lock:
+            full, self._full = self._full, False
+            super().clear()
+        return full
+
+
 class App:
     def __init__(self):
         self.cfg = load_config(initialize_language=True)
@@ -933,13 +1033,15 @@ class App:
         self.placeholder: Optional[pystray.Icon] = None
         self.lock = threading.RLock()
         self._bt_dup_logged: Set[str] = set()   # Bluetooth copies already reported
-        self.wake = threading.Event()
+        self.wake = WakeEvent()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
         self.alerted: Dict[str, bool] = {}
+        self.low_sound_at: Dict[str, float] = {}   # key -> time.monotonic() of the last sound
         self.full_state: Dict[str, str] = {}   # key -> charging / full / idle
         self.missing: Dict[str, int] = {}
         self.bt_cache: List[DeviceStatus] = []
+        self.hid_results: List[DeviceStatus] = []   # the last poll, before the Bluetooth merge
         self.anim_tick = 0
         self.bt_wake = threading.Event()      # "poll Bluetooth now"
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
@@ -1114,6 +1216,9 @@ class App:
                  checked=lambda it: self.cfg.get("time_left", True)),
             Item(tr("preferences.quiet"), toggle("quiet_fullscreen"),
                  checked=lambda it: self.cfg.get("quiet_fullscreen", True)),
+            # for full-screen games, where the notification is not seen (#66)
+            Item("Sound with the low battery alert", toggle("low_sound"),
+                 checked=lambda it: self.cfg.get("low_sound", False)),
             Menu.SEPARATOR,
             Item(tr("preferences.bluetooth"), toggle("bluetooth"),
                  checked=lambda it: self.cfg["bluetooth"]),
@@ -1183,6 +1288,7 @@ class App:
             ic = self.icons.pop(st.key, None)
             self.missing.pop(st.key, None)
             self.alerted.pop(st.key, None)
+            self.low_sound_at.pop(st.key, None)
         log.info("hidden: %s [%s]", self.display_name(st), st.key)
         if ic is not None:
             # stop the icon from another thread: this runs in the icon's own menu callback
@@ -1283,6 +1389,7 @@ class App:
                 lows[key] = value
             save_config(self.cfg)
             self.alerted.pop(key, None)       # the new level may alert at once
+            self.low_sound_at.pop(key, None)  # and sound at once
         log.info("low battery alert of [%s]: %s", key, "default" if value is None else f"{value}%")
         owner.update(owner.status)            # the ring turns red at the new level
         self.refresh_menus()
@@ -1314,6 +1421,7 @@ class App:
                 ic = self.icons.pop(key, None)
                 self.missing.pop(key, None)
                 self.alerted.pop(key, None)
+                self.low_sound_at.pop(key, None)
                 if ic is not None:
                     stopped.append(ic)
         log.info("device type %s: %s", name, "off" if name in off else "on")
@@ -1431,7 +1539,8 @@ class App:
 
     def write_diag(self, results: List[DeviceStatus]):
         lines = [f"{APP_TITLE} v{VERSION}  {time.strftime('%Y-%m-%d %H:%M:%S')}",
-                 f"Python {sys.version.split()[0]}  {sys.platform}", ""]
+                 f"Python {sys.version.split()[0]}  {sys.platform}",
+                 f"data folder: {DATA_DIR}" + ("  (portable)" if PORTABLE else ""), ""]
         lines.append("=== Poll result ===")
         lines += [describe(s) + f"   [{s.key}]" for s in results] or ["(nothing)"]
         hidden, names = self._settings_map("hidden"), self._settings_map("names")
@@ -1507,6 +1616,10 @@ class App:
             for st in found:
                 self.key_provider[st.key] = p.name
             results += found
+        self.hid_results = results
+        return self.merge_bluetooth(results)
+
+    def merge_bluetooth(self, results: List[DeviceStatus]) -> List[DeviceStatus]:
         if self.cfg["bluetooth"]:
             # Bluetooth is polled in its own thread (bt_loop); only the cache is used here
             bt = list(self.bt_cache)
@@ -1514,12 +1627,27 @@ class App:
             results = drop_bluetooth_duplicates(results, self._bt_dup_logged)
         return results
 
+    def show_bluetooth(self):
+        """New Bluetooth results between two polls: merge them with the last poll's
+        HID results and show them. No HID device is queried."""
+        hid = list(self.hid_results)
+        polled = {s.key for s in hid}
+        # A Bluetooth device can go at once, and so can a HID reading that the merge
+        # now drops for its Bluetooth copy. A device the last poll did not see is
+        # counted as missing by the polls only, not again by each snapshot.
+        results = self.merge_bluetooth(hid)
+        self.apply(results, may_go=lambda key: key.startswith("bt:") or key in polled)
+        try:
+            self.write_status(results)      # the status file follows the icons
+        except Exception:
+            log.exception("status file")
+
     def _bt_update(self, res: List[DeviceStatus]):
         """A snapshot from the Bluetooth watcher: show it right away."""
         if self.cfg["bluetooth"]:
             self.bt_cache = res
         self.bt_fresh.set()
-        self.wake.set()
+        self.wake.bluetooth()
 
     def bt_loop(self):
         """Separate thread: PowerShell can take a few seconds and must not delay
@@ -1551,29 +1679,33 @@ class App:
                 if self.cfg["bluetooth"]:
                     self.bt_cache = res
                 self.bt_fresh.set()
-                self.wake.set()                 # show the result right away
+                self.wake.bluetooth()           # show the result right away
             else:
                 self.bt_cache = []
                 self.bt_fresh.set()
             self.bt_wake.wait(60)
             self.bt_wake.clear()
 
-    def apply(self, results: List[DeviceStatus]):
+    def apply(self, results: List[DeviceStatus], may_go: Optional[Callable[[str], bool]] = None):
+        """Show the results. `may_go` limits which missing devices count as gone."""
         seen = set()
         hidden = self._settings_map("hidden")
         now = time.time()
         for st in results:
-            if st.key in hidden:
-                continue          # hidden by the user: no icon and no low battery alert
-            seen.add(st.key)
-            self.history.record(st.key, st.level, st.charging, st.online, now,
-                                coarse=bool(st.approx))
-            self.missing.pop(st.key, None)
-            ic = self.icons.get(st.key)
-            if ic is None:
-                ic = DeviceIcon(self, st.key)
-                self.icons[st.key] = ic
-            ic.update(st)
+            # "Hide this device" runs in a menu thread: with the lock, a device is
+            # either hidden before this check or has its icon removed after the update
+            with self.lock:
+                if st.key in hidden:
+                    continue      # hidden by the user: no icon and no low battery alert
+                seen.add(st.key)
+                self.history.record(st.key, st.level, st.charging, st.online, now,
+                                    coarse=bool(st.approx))
+                self.missing.pop(st.key, None)
+                ic = self.icons.get(st.key)
+                if ic is None:
+                    ic = DeviceIcon(self, st.key)
+                    self.icons[st.key] = ic
+                ic.update(st)
             self.check_alert(ic, st)
             self.check_full(ic, st)
 
@@ -1583,15 +1715,20 @@ class App:
         # presence comes from the reliable HID list (and its key switches between
         # the cable-only and Bluetooth forms when a cable is added to a BT pad),
         # so those go at once
-        for key in list(self.icons):
-            if key not in seen:
-                self.missing[key] = self.missing.get(key, 0) + 1
-                limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
-                if self.missing[key] >= limit:
-                    self.icons.pop(key).stop()
-                    # the icon is gone: stop counting, otherwise the quick
-                    # 3-second re-check in wait_next() would go on forever
-                    self.missing.pop(key, None)
+        gone = []
+        with self.lock:
+            for key in list(self.icons):
+                if key not in seen and (may_go is None or may_go(key)):
+                    self.missing[key] = self.missing.get(key, 0) + 1
+                    limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
+                    if self.missing[key] >= limit:
+                        gone.append(self.icons.pop(key))
+                        # the icon is gone: stop counting, otherwise the quick
+                        # 3-second re-check in wait_next() would go on forever
+                        self.missing.pop(key, None)
+        # stop() waits for the icon's thread: not while the menu threads wait for the lock
+        for ic in gone:
+            ic.stop()
 
         self.show_placeholder(not self.icons)
         self.history.save()
@@ -1631,6 +1768,7 @@ class App:
             return
         if st.charging or st.level > low + 5:
             self.alerted[st.key] = False
+            self.low_sound_at.pop(st.key, None)
             return
         if st.level <= low and not self.alerted.get(st.key):
             self.alerted[st.key] = True
@@ -1641,6 +1779,20 @@ class App:
                             params={"name": self.display_name(st), "level": st.level, "approx": bool(st.approx)})
             except Exception as e:
                 log.warning("notify: %s", e)
+        self.check_low_sound(st, low)
+
+    def check_low_sound(self, st: DeviceStatus, low: int) -> None:
+        """"Sound with the low battery alert": a Windows sound with the notification, and
+        again every 5 minutes while the device stays low, awake and off the charger."""
+        if not self.cfg.get("low_sound", False):
+            self.low_sound_at.pop(st.key, None)
+            return
+        now = time.monotonic()
+        kind = low_battery_sound(st.level, st.charging, st.online, low,
+                                 self.low_sound_at.get(st.key), now)
+        if kind:
+            self.low_sound_at[st.key] = now
+            play_low_sound(kind)
 
     def check_full(self, ic: DeviceIcon, st: DeviceStatus):
         """A notification when a charging device reaches 100 %, once per charge.
@@ -1747,8 +1899,17 @@ class App:
             sig = self.change_signature()
         while not self.stop_evt.is_set():
             left = deadline - time.time()
-            if left <= 0 or self.wake.wait(min(2.5, left)):
+            if left <= 0:
                 return
+            if self.wake.wait(min(2.5, left)):
+                if self.wake.take():
+                    return
+                # only new Bluetooth results: show them and keep the poll interval
+                try:
+                    self.show_bluetooth()
+                except Exception:
+                    log.exception("apply")
+                continue
             now = self.change_signature()
             if now != sig:
                 time.sleep(1.0)          # give Windows time to finish setting up the device
@@ -1973,7 +2134,7 @@ def probe():
             pass
     app = App.__new__(App)
     app.cfg = load_config()
-    app.providers = make_providers()
+    app.providers = make_providers(jbl_listen_first=JBL_PROBE_LISTEN_S)
     app.bt = BluetoothProvider()
     res = []
     for p in app.providers + [app.bt]:

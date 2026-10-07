@@ -35,6 +35,9 @@ finally:
 
 from providers.base import DeviceStatus  # noqa: E402
 
+# the tests replace threading.Thread; the race tests need real threads
+_RealThread = threading.Thread
+
 
 class FakeIcon:
     """Stands in for DeviceIcon: records what the app does with it."""
@@ -86,6 +89,7 @@ def make_app(cfg=None):
     app.cfg = dict(hb.DEFAULTS, **(cfg or {}))
     app.lock = threading.RLock()
     app.icons, app.missing, app.alerted, app.full_state = {}, {}, {}, {}
+    app.low_sound_at = {}
     app.placeholder = None
     app.wake = threading.Event()
     app.light_taskbar = False
@@ -159,6 +163,146 @@ class HideTests(HideRenameTestCase):
                 app.apply([dev()])
                 self.assertIn("logitech:C15E09CD", app.icons)
                 self.assertEqual(app.display_name(dev()), "G502 LIGHTSPEED")
+
+
+class ProbeLock:
+    """An RLock that sets `waiting` when a thread has to wait for it."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self.waiting = threading.Event()
+
+    def acquire(self, blocking=True, timeout=-1):
+        if self._lock.acquire(blocking=False):
+            return True
+        self.waiting.set()
+        return self._lock.acquire(blocking, timeout)
+
+    def release(self):
+        self._lock.release()
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *exc):
+        self.release()
+
+
+class HookDict(dict):
+    """A dict that calls `hook` once, the first time `method` is used."""
+
+    def __init__(self, items, method, hook):
+        super().__init__(items)
+        self.method, self.hook = method, hook
+
+    def _fire(self, name):
+        if self.hook is not None and name == self.method:
+            hook, self.hook = self.hook, None
+            hook()
+
+    def get(self, *args):
+        value = super().get(*args)
+        self._fire("get")                     # after the read, like a thread switch there
+        return value
+
+    def pop(self, *args):
+        self._fire("pop")
+        return super().pop(*args)
+
+    def __setitem__(self, key, value):
+        self._fire("__setitem__")
+        super().__setitem__(key, value)
+
+
+class HideDuringApplyTests(HideRenameTestCase):
+    """"Hide this device" runs in a menu thread, apply() in the poll thread. At a set
+    point inside apply(), the hook starts hide() in a real second thread and goes on
+    when hide() has finished or waits for the app's lock. No timing is involved."""
+
+    KEY = "logitech:C15E09CD"
+
+    def setUp(self):
+        super().setUp()
+        self.threads, self.errors = [], []
+        self.app = make_app()
+        self.app.lock = ProbeLock()
+        self.app.apply([dev()])
+        self.ic = self.app.icons[self.KEY]
+
+    def hide_in_menu_thread(self):
+        settled = self.app.lock.waiting
+
+        def run():
+            try:
+                self.app.hide(self.ic)
+            except Exception as e:
+                self.errors.append(e)
+            finally:
+                settled.set()
+        t = _RealThread(target=run, daemon=True)
+        self.threads.append(t)
+        t.start()
+        self.assertTrue(settled.wait(10), "hide() neither finished nor waited for the lock")
+
+    def finish(self):
+        for t in self.threads:
+            t.join(10)
+            self.assertFalse(t.is_alive())
+        self.assertEqual(self.errors, [])
+
+    def test_hide_while_apply_removes_a_missing_device(self):
+        app = self.app
+        app.apply([])                         # first miss: the icon stays
+        self.assertEqual(app.missing, {self.KEY: 1})
+        # second miss: hide() runs after apply() has listed the icons
+        app.missing = HookDict(app.missing, "__setitem__", self.hide_in_menu_thread)
+        app.apply([])
+        self.finish()
+        self.assertNotIn(self.KEY, app.icons)
+        self.assertTrue(self.ic.stopped)
+        self.assertTrue(app.placeholder.visible, "the \"no devices\" icon is shown")
+
+    def test_hide_while_apply_does_not_make_a_new_icon(self):
+        app = self.app
+        made = []
+
+        def counting(app_, key):
+            made.append(key)
+            return FakeIcon(app_, key)
+        with mock.patch.object(hb, "DeviceIcon", counting):
+            # hide() runs after apply() has checked the "hidden" list
+            app.missing = HookDict(app.missing, "pop", self.hide_in_menu_thread)
+            app.apply([dev()])
+            self.finish()
+            app.apply([dev()])
+        self.assertEqual(made, [], "no new icon for the device that was just hidden")
+        self.assertNotIn(self.KEY, app.icons)
+        self.assertTrue(self.ic.stopped)
+
+    def test_hide_while_apply_does_not_update_a_stopped_icon(self):
+        # a stopped pystray icon that is shown again can stay in the tray as a copy
+        # (the icon is found and updated in one hold of the lock, so hide() waits)
+        app, at_update = self.app, []
+        update = self.ic.update
+        self.ic.update = lambda st: (at_update.append((self.ic.stopped, app.lock._lock._is_owned())),
+                                     update(st))
+        # hide() runs after apply() has found the device's icon
+        app.icons = HookDict(app.icons, "get", self.hide_in_menu_thread)
+        app.apply([dev()])
+        self.finish()
+        self.assertEqual(at_update, [(False, True)], "updated while stopped, or without the lock")
+        self.assertTrue(self.ic.stopped)
+        self.assertNotIn(self.KEY, app.icons)
+
+    def test_gone_icon_is_stopped_without_the_lock(self):
+        # pystray's stop() waits for the icon's thread, and a menu callback in that
+        # thread can wait for the lock: apply() must not hold it while it stops an icon
+        app, held = self.app, []
+        self.ic.stop = lambda: held.append(app.lock._lock._is_owned())
+        app.apply([])
+        app.apply([])
+        self.assertEqual(held, [False])
+        self.assertNotIn(self.KEY, app.icons)
 
 
 class RenameTests(HideRenameTestCase):
@@ -274,6 +418,7 @@ class MenuLayoutTests(HideRenameTestCase):
         texts = [i.text for i in prefs.items if i is not hb.Menu.SEPARATOR]
         self.assertEqual(texts, ["Language / Langue", "Poll interval", "Low battery alert", "Alert when fully charged",
                                  "Estimated time left", "Quiet while gaming",
+                                 "Sound with the low battery alert",
                                  "Windows Bluetooth devices", "PlayStation full mode (Bluetooth)",
                                  "Device types",
                                  "Device pictogram", "Percentage in the icon", "Charging animation",

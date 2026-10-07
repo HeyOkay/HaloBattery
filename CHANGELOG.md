@@ -23,6 +23,70 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and plural rules; catalog checks cover every registered language, including
   languages with additional plural forms.
 
+## [1.14.0] - 2026-10-05
+
+Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
+folder. An optional sound with the low battery alert for full-screen games. New devices:
+Razer DeathStalker V2 Pro / TKL and BlackWidow HyperSpeed keyboards, HyperX Cloud III S
+Wireless, Logitech G PRO X 2 LIGHTSPEED headset, G-Wolves HSK Pro ACE and the other
+G-Wolves models with their own receiver, and SteelSeries Arctis Nova Elite. Fixes for
+Bluetooth polling, JBL Quantum 910 polls, "Hide this device" during a poll and CPU use
+while charging. The README is shorter; the device list moved to `docs/devices.md`.
+
+### Added
+- **Portable mode**: put an empty `portable.txt` next to `HaloBattery.exe` and the
+  settings, log, battery history, status file and diagnostics report are kept in the app's
+  folder instead of `%APPDATA%\HaloBattery`. If that folder cannot be written, the app
+  falls back to `%APPDATA%` and says so in the log. The diagnostics report shows the data
+  folder in use.
+- **Preferences > Sound with the low battery alert** (off by default), for full-screen
+  games where the notification is not seen (#66). The low battery alert then also plays
+  Windows' own "Battery Low" sound ("Battery Critical" at 5% or less), and plays it again
+  every 5 minutes while the device stays low, awake and off the charger.
+- SteelSeries Arctis Nova Elite (`1038:2244`, #138): battery level and charging of the
+  headset through its base station, without SteelSeries GG. The app sends the read-only
+  status request `01 b0` to interface 3 and reads the station's direct `01 b0` reply
+  (headset level in byte 6, power state in byte 14, charging in byte 15), or the
+  `07 b7` / `07 b5` frames. A headset reported as off shows no level; the spare battery in
+  the station is not shown. The request comes from elegos/Linux-Arctis-Manager (a USB
+  capture of SteelSeries GG on Windows), the reply layout from loteran/Arctis-Sound-Manager
+  (SteelSeries GG's own description of the station). **Level and charging verified on
+  hardware** in #138: the level matches SteelSeries GG and the charging animation works.
+  A switched-off headset shows 0 %, as SteelSeries GG does in its tray (the off state does
+  not arrive as power code `01` on this station).
+- G-Wolves HSK Pro ACE on its receiver (33E4:5803, #105), and the other 21 G-Wolves models
+  with a receiver of their own, from the model list of G-Wolves' web driver (mouse.xyz). The
+  older models use the web driver's other battery request (getOldBattery). **Unverified** on
+  hardware.
+- Logitech G PRO X 2 LIGHTSPEED headset on its receiver (046D:0AF7, #103), over Logitech's
+  Centurion transport as Solaar and HeadsetControl read it: battery and charging, read-only
+  requests. Confirmed on a real headset (#103).
+- HyperX Cloud III S Wireless on its dongle (03F0:02CC and 03F0:06BE, #106, #156), with the protocol of
+  HyperHeadset's `cloud_iii_s_wireless`, sent as output reports the way NGENUITY sends them: battery and charging, read-only requests. **Verified on hardware** in #106 (02CC): 89 %, the same level as
+  NGENUITY, and in #156 (06BE), the level and the charging state.
+- Razer DeathStalker V2 Pro and V2 Pro TKL, BlackWidow V3 Mini HyperSpeed, BlackWidow V4 Mini
+  HyperSpeed and BlackWidow V4 Tenkeyless HyperSpeed keyboards, on the HyperSpeed receiver or
+  the cable (#106). The transaction ids (0x9F wireless, 0x1F wired) and the USB interface that
+  takes the commands (2 or 3) come from OpenRazer's keyboard driver. The icon shows the
+  keyboard pictogram. The DeathStalker V2 Pro TKL is confirmed on hardware (#106); the others are not tested yet.
+
+### Fixed
+- **Hide this device** clicked while the app was reading the devices could bring the
+  icon of the hidden device back, or stop that reading halfway so the "no devices" icon
+  did not show. Hiding and the device update now wait for each other.
+- Less CPU while a device charges: each new battery level drew the charging animation
+  twice, once for a light and once for a dark taskbar. Only the colour in use is drawn
+  now; the other one is drawn once, the first time the taskbar or the MyDockFinder bar
+  changes colour.
+- The **Poll interval** was not kept while Bluetooth was on: each Bluetooth update (once a
+  minute, and several times after a device connects) also polled every mouse, keyboard
+  and headset, so a 5-minute interval became about one minute. A Bluetooth update now
+  only refreshes the Bluetooth icons; the other devices are polled at the chosen interval.
+- JBL Quantum 910: while its receiver was plugged in, every poll waited up to 10 seconds for
+  the headset to speak and held back the icons of all other devices. The app now listens
+  to the receiver all the time in the background, so polls do not wait, and a level the
+  headset sends between polls is no longer missed.
+
 ## [1.13.0] - 2026-09-29
 
 A new Windows 11 style tray menu and a batch of tray features: turn device types off,
@@ -796,7 +860,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.13.0...HEAD
+[Unreleased]: ../../compare/v1.14.0...HEAD
+[1.14.0]: ../../compare/v1.13.0...v1.14.0
 [1.13.0]: ../../compare/v1.12.0...v1.13.0
 [1.12.0]: ../../compare/v1.11.0...v1.12.0
 [1.11.0]: ../../compare/v1.10.1...v1.11.0
