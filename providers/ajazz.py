@@ -44,17 +44,21 @@ dump carries no usage for it, so every collection except the plain mouse one
 is tried in turn and the one that takes the write is remembered - the
 vendor-page ranking is a preference, not a filter. The receiver cannot tell
 a sleeping mouse from a switched-off one: a silent poll keeps the last level
-on a greyed icon for a while, then the icon goes away and comes back with the
-next reading. The info block's byte after the level (14) is the charging flag:
-it read 0x01 in the two wireless captures (13 % and 75 %) and 0x00 in the
-diagnostics the reporter saved while charging (56 %, whose dump also carried
-the mouse's own wired USB id) - charging shows from it, and his plug/unplug
-run is the live confirmation. An announcement carries no flag, so it keeps the
-last state. Only 249a:5c2f is claimed - the receiver the captures came from.
+on a greyed icon for a while, then the icon drops to "no link (off or asleep)"
+until a reading comes back (it does not vanish while the receiver is there,
+#74). The info block's byte after the level (14) is the charging flag:
+it read 0x01 in the wireless captures (13 %, 75 %, and 100 % on the cable)
+and 0x00 in the diagnostics saved while charging at 56 % - charging shows
+from it. An announcement carries no flag, so it keeps the last state. Both
+the receiver (249a:5c2f) and the mouse's own USB id (248a:5d2e) are claimed:
+while the wireless link is down - the docked case, e.g. right after a restart
+- the mouse itself answers on its cable, with the same read and the same
+flag (#74).
 
-The level is confirmed on the reporter's mouse ("everything works now"). The
-charging flag is **unverified**: its three samples are consistent, but the
-switch itself has not been watched live yet - his plug/unplug run settles it.
+The level is confirmed on the reporter's mouse. The charging flag's both
+states are on the record from his hardware: 0x01 off the cable (13 %, 75 %,
+100 %) and 0x00 while charging at 56 % - and the vendor app's own screen
+shows no charging at 100 % either, the same rule the app follows.
 """
 from __future__ import annotations
 
@@ -71,6 +75,8 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x249A
 PID = 0x5C2F
+WIRED_VID = 0x248A                 # the mouse's own USB id while its cable is in
+WIRED_PID = 0x5D2E
 NAME = "AJAZZ AJ179 V2 MAX"
 KEY = f"ajazz:{PID:04x}"
 
@@ -169,6 +175,7 @@ class AjazzProvider(Provider):
         self._last: Optional[Tuple[int, float]] = None    # (level, when)
         self._charging = False                            # from the info block's flag
         self._chosen: Optional[bytes] = None
+        self._wired_chosen: Optional[bytes] = None
 
     def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.
@@ -213,6 +220,40 @@ class AjazzProvider(Provider):
             except Exception:
                 pass
 
+    def _ask_wired(self) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
+        """The mouse on its own USB cable: the same read on its own id (#74).
+
+        -> (reading, present): present is True while the mouse's USB device
+        exists (its wireless link is down - the docked case), even when
+        nothing answered.
+        """
+        try:
+            wired = [d for d in hidlist.enumerate(WIRED_VID)
+                     if d.get("product_id") == WIRED_PID]
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(ajazz wired): %s", e)
+            return None, False
+        if not wired:
+            return None, False
+        self._diag.append(f"[AJAZZ] usb mouse pid={WIRED_PID:04x} "
+                          f"product='{(wired[0].get('product_string') or '').strip()}' "
+                          f"(its wireless link is down)")
+        order = candidates(wired)
+        if self._wired_chosen is not None:
+            order = sorted(order, key=lambda d: d["path"] != self._wired_chosen)
+        got = None
+        for d in order[:MAX_CANDIDATES]:
+            self._diag.append(f"  asking iface={d.get('interface_number')} "
+                              f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            got, accepted = self._ask(d)
+            if accepted:
+                if self._wired_chosen != d["path"]:
+                    self._wired_chosen = d["path"]
+                break
+            if got is not None:
+                break
+        return got, True
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         if hid is None:
@@ -223,25 +264,31 @@ class AjazzProvider(Provider):
             log.warning("hid.enumerate(ajazz): %s", e)
             return []
         mine = [d for d in infos if d.get("product_id") == PID]
-        if not mine:
-            return []
-        self._diag.append(f"[AJAZZ] pid={PID:04x} '{NAME}' "
-                          f"product='{(mine[0].get('product_string') or '').strip()}'")
-
-        order = candidates(mine)
-        if self._chosen is not None:
-            order = sorted(order, key=lambda d: d["path"] != self._chosen)
         got = None
-        for d in order[:MAX_CANDIDATES]:
-            self._diag.append(f"  asking iface={d.get('interface_number')} "
-                              f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-            got, accepted = self._ask(d)
-            if accepted:
-                if self._chosen != d["path"]:
-                    self._chosen = d["path"]
-                break                     # the vendor channel; silence is a sleeping mouse
-            if got is not None:
-                break
+        if mine:
+            self._diag.append(f"[AJAZZ] pid={PID:04x} '{NAME}' "
+                              f"product='{(mine[0].get('product_string') or '').strip()}'")
+            order = candidates(mine)
+            if self._chosen is not None:
+                order = sorted(order, key=lambda d: d["path"] != self._chosen)
+            for d in order[:MAX_CANDIDATES]:
+                self._diag.append(f"  asking iface={d.get('interface_number')} "
+                                  f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                got, accepted = self._ask(d)
+                if accepted:
+                    if self._chosen != d["path"]:
+                        self._chosen = d["path"]
+                    break                 # the vendor channel; silence is a sleeping mouse
+                if got is not None:
+                    break
+
+        # The wireless link can be down while the mouse is on its cable (its radio
+        # sleeps when docked / charging, e.g. right after a restart). The mouse is
+        # still present then - ask it the same read on its own USB id (#74).
+        if got is None:
+            got, wired_present = self._ask_wired()
+        else:
+            wired_present = False
 
         if got is not None:
             level, _kind, charging = got
@@ -252,13 +299,16 @@ class AjazzProvider(Provider):
             self._last = (level, time.time())
             return [DeviceStatus(KEY, NAME, level, charging, True, "ajazz", kind="mouse")]
 
-        # Silent receiver: it cannot tell a sleeping mouse from a switched-off
-        # one, so the last value stays (greyed out) for a while, then the icon
-        # is hidden and comes back with the next reading.
+        # Silent: the mouse may be asleep, switched off, out of range, or charging
+        # on a cable the receiver puts its radio down for. While the receiver - or
+        # the mouse's cable - is still there, the icon stays: the last level while
+        # it is fresh, "no link (off or asleep)" after that (#74).
+        if not mine and not wired_present:
+            return []
         if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, self._last[0], self._charging, False, "ajazz",
                                  kind="mouse")]
-        return []
+        return [DeviceStatus(KEY, NAME, None, False, False, "ajazz", kind="mouse")]
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
