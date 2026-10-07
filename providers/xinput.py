@@ -315,6 +315,7 @@ class XInputProvider(Provider):
 
         connected = []
         vias = {}
+        presentation = {}       # slot -> message key and parameters, independent of English text
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
             if rep is None and base_vid is not None and base_vid in bt_only:
@@ -339,6 +340,7 @@ class XInputProvider(Provider):
                 connected.append((slot, name, None, False,
                                   "connected over Bluetooth; turn on \"Windows Bluetooth devices\" "
                                   "to see its battery"))
+                presentation[slot] = ("state.bluetooth_hint", {})
                 continue
             if rep is not None:
                 self._waiting.pop(slot, None)
@@ -356,10 +358,16 @@ class XInputProvider(Provider):
                     self._diag.append(f"[XInput] slot {slot}: type wired, but Windows.Gaming.Input "
                                       "says discharging: not shown as on cable")
                     connected.append((slot, name, None, False, "connected, battery level not reported"))
+                    presentation[slot] = ("state.unreported", {})
                     continue
                 if not charging:
                     self._last[slot] = level
                 connected.append((slot, name, level, charging, approx))
+                if charging:
+                    presentation[slot] = ("state.cable", {})
+                else:
+                    grade = next(word for pct, word in LEVELS.values() if pct == level)
+                    presentation[slot] = ("state.approx_grade", {"level": level, "grade": grade})
                 continue
             # connected, but neither API reports the battery (yet): show the icon
             # without an arc and re-check often for a while
@@ -369,13 +377,16 @@ class XInputProvider(Provider):
             if now - since < PENDING_WINDOW:
                 self.pending = True
             connected.append((slot, name, None, False, "connected, battery level not reported yet"))
+            presentation[slot] = ("state.pending", {})
 
         out: List[DeviceStatus] = []
         for n, (slot, name, level, charging, approx) in enumerate(connected):
             if len(connected) > 1:
                 name = f"{name} {n + 1}"
+            ui_message, ui_params = presentation.get(slot, ("", {}))
             out.append(DeviceStatus(f"xinput:{slot}", name, level, charging, True, "xinput", approx,
-                                    kind="gamepad", via=vias.get(slot, "")))
+                                    kind="gamepad", via=vias.get(slot, ""),
+                                    ui_message=ui_message, ui_params=ui_params))
         return out
 
     def diagnostics(self) -> List[str]:

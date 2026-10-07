@@ -121,6 +121,7 @@ class WiredButDischargingTest(ProviderTest):
         self.assertTrue(st.charging)
         self.assertEqual(st.level, 100)
         self.assertEqual(st.approx, "on cable, charging")
+        self.assertEqual(st.ui_message, "state.cable")
 
     def test_wired_when_wgi_unavailable_unchanged(self):
         _p, res = self.poll({0: (X.TYPE_WIRED, 0)}, None, hid_devices=[XBOX_USB_HID])
@@ -156,6 +157,8 @@ class WiredButDischargingTest(ProviderTest):
                             [wgi_report(0x2DC8, 0x3106, 1000, 1000, "Discharging")])
         self.assertFalse(res[0].charging)
         self.assertEqual(res[0].level, 55)
+        self.assertEqual((res[0].ui_message, res[0].ui_params),
+                         ("state.approx_grade", {"level": 55, "grade": "medium"}))
 
 
 if __name__ == "__main__":

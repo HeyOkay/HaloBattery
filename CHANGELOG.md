@@ -6,6 +6,26 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Traditional Chinese, Simplified Chinese and Japanese UI catalogs using the localization registry
+  from #188. All three are selectable in Preferences and detected from the Windows
+  UI language; Traditional Chinese uses exact LANGIDs to avoid selecting it on
+  Simplified Chinese systems, which select their own catalog. All three languages
+  use the `other` plural form.
+- French localization for tray menus, preferences, tooltips, device states, rename
+  dialogs and notifications (#162). **Language / Langue** in Preferences switches
+  between registered languages immediately and saves the selection. On the first
+  run without a saved language, the Windows UI language selects a supported
+  translation; unsupported languages use English. Saved choices take precedence, and English remains the fallback.
+  Diagnostics, protocol output and status-file text stay in English. Translation
+  catalogs are bundled without additional runtime dependencies.
+  A single language registry supplies native names, catalogs, Windows detection
+  and plural rules; catalog checks cover every registered language, including
+  languages with additional plural forms.
+  Includes the 1.14.0 low-battery sound preference and the HyperX Cloud III S Wireless,
+  Logitech G PRO X 2 LIGHTSPEED and SteelSeries Arctis Nova Elite family labels in
+  every registered catalog; hardware names remain unchanged.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its

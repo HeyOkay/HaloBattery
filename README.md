@@ -58,6 +58,12 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**
 - **Preferences**:
+  - **Language / Langue**: English, Français, 繁體中文, 简体中文 or 日本語, applied immediately to menus and tooltips.
+    On the first run without a saved language (including an upgrade from an older version),
+    the app selects French, Traditional Chinese, Simplified Chinese or Japanese when supported by the
+    current user's Windows UI language, and English otherwise. The selection is saved; a manual choice always takes precedence,
+    even if the Windows language changes later. Diagnostics and the status file stay in English.
+    In portable mode, the language preference is saved with the other settings next to the app.
   - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 10–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
   - **Alert when fully charged** (a notification once per charge, on by default)
   - **Estimated time left**: "about 5 h of use left" in the tooltip, from how fast the device has drained since its last charge. Only time the device is awake and on battery counts, and there is no estimate until it has been used for 30 minutes and dropped 3%. The history is kept in `%APPDATA%\HaloBattery\history.json`.
@@ -65,7 +71,7 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
   - **Sound with the low battery alert** (off by default): also play the Windows "Battery Low" sound ("Battery Critical" at 5% or less), for full-screen games where the notification is not seen. It plays again every 5 minutes while the device stays low and off the charger, and **Quiet while gaming** does not hold it back
   - **Windows Bluetooth devices**, **Device pictogram**, **Percentage in the icon** (the level as a number in the ring instead of the pictogram, amber or red when low), **Charging animation**
   - **PlayStation full mode (Bluetooth)** (off by default): always read the battery of a PS4 / PS5 controller over Bluetooth. Some games stop seeing the controller in that mode until it is turned off and on
-  - **Status file for other apps** (off by default): writes `%APPDATA%\HaloBattery\status.json` after every poll, for Rainmeter, a Stream Deck plugin or a script. Each device has `name`, `level`, `charging`, `online`, `kind`, `seconds_left` and the tooltip `text`; `running` turns false when the app exits, and `updated_unix` says how fresh it is. Turning it off deletes the file.
+  - **Status file for other apps** (off by default): writes `%APPDATA%\HaloBattery\status.json` after every poll, for Rainmeter, a Stream Deck plugin or a script. Each device has `name`, `level`, `charging`, `online`, `kind`, `seconds_left` and the English tooltip `text`; `running` turns false when the app exits, and `updated_unix` says how fresh it is. Turning it off deletes the file.
   - **Device types**: turn off a brand or device family; its devices are then not opened at all
   - **Icon colour**: Automatic (the Windows theme, or MyDockFinder's menu bar while it is running), White or Black
   - **Start with Windows** (per-user registry key, no admin rights needed)

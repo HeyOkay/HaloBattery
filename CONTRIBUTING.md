@@ -83,3 +83,55 @@ Bluetooth devices: Halo Battery shows the level that Windows itself reports. If 
    - which other open pull requests change the same files.
 
 Look at the open issues and pull requests first, so that two people do not do the same work.
+
+## 4. Add or update a translation
+
+Application messages live in `locales/en.py` (the reference and fallback) and
+`locales/fr.py`, `locales/zh_TW.py`, `locales/zh_CN.py` and `locales/ja.py`. They are Python
+modules, bundled by PyInstaller without additional dependencies or a translation
+compilation step.
+
+- Copy the English catalog into `locales/<code>.py` and translate the complete
+  messages. Import that module explicitly in `i18n.py` so PyInstaller bundles it.
+  Add one `Language` entry to `i18n.LANGUAGES` with the native name, catalog,
+  plural rule, plural forms and Windows language IDs. This single registry
+  drives rendering, initial detection, the preferences menu and configuration
+  validation; no provider or UI changes are needed to register a language.
+- The default `one_other` rule selects `one` for integer 1, otherwise `other`.
+  Supply a `plural_rule(count)` when the language differs, returning a category
+  from its declared `plural_forms`. Additional categories such as `few` or `many`
+  are supported. Counts in this application are nonnegative integers.
+  `windows_primary_ids` matches every regional variant; leave it empty for a
+  language available only by manual selection. Use `windows_language_ids` for
+  exact LANGIDs when only specific regional variants should match. Traditional
+  Chinese matches Taiwan, Hong Kong, Macao and Traditional Chinese neutral IDs;
+  Simplified Chinese matches China, Singapore and Simplified Chinese neutral IDs.
+  Chinese and
+  Japanese declare only `other`, using the `other_only` plural rule. English remains
+  the default and fallback regardless of registry order.
+- Keep message keys, named format parameters (`{name}`, `{level}`, etc.), and the
+  parameters of every plural form consistent with English. Every plural message
+  must contain all categories declared in that language's `plural_forms`, including
+  `other`. A missing message or selected plural form falls back to English using
+  the English plural rule. Do not translate brands, hardware names, user-provided
+  names, device keys, protocols or paths.
+- Pass the language explicitly when rendering UI text. A missing translation falls
+  back to English. Providers supply `ui_message` / `ui_params` for dynamic states;
+  keep `approx`, protocol output, logs, diagnostics and status-file text in English.
+- Tests automatically check every registered catalog's keys, parameters and plural
+  forms, along with unambiguous Windows IDs. Add tests for the new plural rule's
+  boundaries. Test fallback, configuration
+  persistence and notification behavior with `python -m unittest discover -s tests`.
+  Review long labels, accents and device names in both classic and Fluent menus.
+  A right-to-left language also requires a separate review of text direction and
+  UI layout; registering its catalog alone does not enable right-to-left layout.
+
+The app detects the Windows **UI language**, not the regional format or keyboard,
+only when no language is saved. French regional variants select `fr`, Japanese
+selects `ja`, Traditional Chinese LANGIDs select `zh-TW`, and Simplified Chinese
+LANGIDs select `zh-CN`. Unsupported
+languages or a failed detection select `en`. Preferences > Language / Langue
+overrides that initial selection immediately and persists `language` in
+`%APPDATA%\HaloBattery\config.json` (or the app's folder in portable mode).
+A stored invalid value falls back to English without triggering detection again.
+`--probe` never initializes the language.

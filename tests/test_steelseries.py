@@ -235,6 +235,7 @@ class NovaProTests(SteelSeriesTestCase):
             st, _ = self.poll_nova_pro(nova_pro_reply(code, 0x08))
             self.assertEqual([(x.level, x.approx) for x in st],
                              [(pct, "about %d%%" % pct)], "code %d" % code)
+            self.assertEqual((st[0].ui_message, st[0].ui_params), ("state.approx", {"level": pct}))
 
     def test_the_state_byte_is_the_gate(self):
         for state in (0x00, 0x03, 0x04, 0x80, 0xFF):

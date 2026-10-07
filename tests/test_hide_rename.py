@@ -307,7 +307,7 @@ class HideDuringApplyTests(HideRenameTestCase):
 
 class RenameTests(HideRenameTestCase):
     def rename_to(self, app, ic, answer):
-        with mock.patch.object(hb, "ask_name", lambda current: answer):
+        with mock.patch.object(hb, "ask_name", lambda current, **kwargs: answer):
             app._rename(ic)
 
     def test_rename_changes_tooltip_and_alert(self):
@@ -383,7 +383,7 @@ class MenuTests(HideRenameTestCase):
         app.apply([dev()])
         ic = app.icons["logitech:C15E09CD"]
         items = {i.text: i for i in app.build_menu(ic).items if i.visible}
-        with mock.patch.object(hb, "ask_name", lambda current: "Work mouse"):
+        with mock.patch.object(hb, "ask_name", lambda current, **kwargs: "Work mouse"):
             items["Rename…"](FakeTrayIcon())
         self.assertEqual(app.cfg["names"], {"logitech:C15E09CD": "Work mouse"})
         items["Hide this device"](FakeTrayIcon())
@@ -416,7 +416,7 @@ class MenuLayoutTests(HideRenameTestCase):
         menu = app.build_menu(None)
         prefs = next(i for i in menu.items if i.text == "Preferences").submenu
         texts = [i.text for i in prefs.items if i is not hb.Menu.SEPARATOR]
-        self.assertEqual(texts, ["Poll interval", "Low battery alert", "Alert when fully charged",
+        self.assertEqual(texts, ["Language / Langue", "Poll interval", "Low battery alert", "Alert when fully charged",
                                  "Estimated time left", "Quiet while gaming",
                                  "Sound with the low battery alert",
                                  "Windows Bluetooth devices", "PlayStation full mode (Bluetooth)",
