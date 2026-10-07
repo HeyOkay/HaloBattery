@@ -10,7 +10,8 @@ announcements `c0 01 4b` / `c0 01 4a`. The collection
 shape is the reporter's diagnostics dump (249a:5c2f: the mouse collection on
 interface 0, consumer control and a keyboard collection on interface 1, and
 the 33-byte vendor channel mi_02 on interface 2, whose usage the dump does
-not carry).
+not carry). The mouse's own cable id (248a:5d2e) and its iface-2 channel are
+from the docked run (2026-10-03, 100 % on the cable).
 
 Run from the repository root:
 
@@ -97,8 +98,24 @@ def receiver_entries(pid=A.PID, prefix=b"rx"):
             for i, p, u in shape]
 
 
+def wired_entries(prefix=b"cb"):
+    # the mouse's own USB device while its cable is in (#74 diagnostics,
+    # 248a:5d2e: the mouse on iface 0, three collections on iface 1 - the
+    # vendor page among them - and the channel that answered on iface 2)
+    shape = [(0, 0x0001, 0x0002),      # the mouse: never opened
+             (1, 0x0001, 0x0006),
+             (1, 0x000C, 0x0001),
+             (1, 0xFFEF, 0x0000),
+             (2, 0x0001, 0x0000)]
+    return [{"product_id": A.WIRED_PID, "interface_number": i, "usage_page": p, "usage": u,
+             "path": prefix + b"-%d-%04x-%02x" % (i, p, u),
+             "product_string": "AJAZZ AJ179 V2 MAX"}
+            for i, p, u in shape]
+
+
 VENDOR_PATH = receiver_entries()[2]["path"]
 CONSUMER_PATH = receiver_entries()[1]["path"]
+WIRED_ANSWER_PATH = wired_entries()[4]["path"]
 
 
 class PollTest(unittest.TestCase):
@@ -112,9 +129,10 @@ class PollTest(unittest.TestCase):
     def tearDown(self):
         A.hid, A.hidlist, A.time = self._saved
 
-    def poll(self, entries, cols):
+    def poll(self, entries, cols, wired=()):
         A.hid = types.SimpleNamespace(device=fake_device_class(cols, self.order))
-        A.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
+        A.hidlist = types.SimpleNamespace(
+            enumerate=lambda vid=0: list(wired) if vid == A.WIRED_VID else list(entries))
         return self.provider.poll()
 
     def cols(self, entries, replies=(CAPTURED75,), answer=VENDOR_PATH):
@@ -230,22 +248,64 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries, cols)
         self.assertEqual([(s.level, s.online) for s in out], [(75, False)])
 
-    def test_silence_after_the_keep_window_drops_the_device(self):
+    def test_silence_after_the_keep_window_falls_back_to_no_link(self):
+        # #74: the icon does not vanish while the receiver is there - the stale
+        # level gives way to "no link (off or asleep)".
         entries = receiver_entries()
         cols = self.cols(entries)
         self.poll(entries, cols)
         self.now[0] += A.ASLEEP_KEEP + 1
         for c in cols.values():
             c.replies = []
-        self.assertEqual(self.poll(entries, cols), [])
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in out],
+                         [("ajazz:5c2f", None, False, False)])
 
-    def test_silence_on_the_first_poll_gives_nothing(self):
+    def test_silence_on_the_first_poll_shows_a_greyed_no_link_icon(self):
+        # the restart case from #74: the app has never heard from the mouse,
+        # but the receiver is there - the icon shows "no link (off or asleep)".
         entries = receiver_entries()
         cols = self.cols(entries, replies=())
         out = self.poll(entries, cols)
-        self.assertEqual(out, [])
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("ajazz:5c2f", None, False)])
         self.assertEqual(self.provider._chosen, VENDOR_PATH)   # the write was taken
         self.assertTrue(any("silence" in line for line in self.provider.diagnostics()))
+
+    def test_the_cable_answers_while_the_wireless_link_is_down(self):
+        # the docked case from #74: the receiver is silent (its radio is down
+        # while the mouse charges), the mouse's own USB device answers on its
+        # cable - level and charging from the flag.
+        entries = receiver_entries()
+        cols = self.cols(entries, replies=())
+        for e in wired_entries():
+            cols[e["path"]] = FakeCollection(
+                (info(80, flag=0x00),) if e["path"] == WIRED_ANSWER_PATH else (),
+                accept_write=(e["path"] == WIRED_ANSWER_PATH))
+        out = self.poll(entries, cols, wired=wired_entries())
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in out],
+                         [("ajazz:5c2f", 80, True, True)])
+        self.assertTrue(any("usb mouse pid=5d2e" in line
+                            for line in self.provider.diagnostics()))
+
+    def test_the_receiver_wins_while_it_answers(self):
+        entries = receiver_entries()
+        cols = self.cols(entries)                       # answers 75
+        for e in wired_entries():
+            cols[e["path"]] = FakeCollection((info(90),), accept_write=False)
+        out = self.poll(entries, cols, wired=wired_entries())
+        self.assertEqual([s.level for s in out], [75])
+        self.assertFalse(any("usb mouse" in line for line in self.provider.diagnostics()))
+
+    def test_the_cable_alone_shows_the_mouse_while_it_charges(self):
+        # no receiver at all, the mouse on its cable: one icon, from the cable.
+        cols = {}
+        for e in wired_entries():
+            cols[e["path"]] = FakeCollection(
+                (info(64, flag=0x00),) if e["path"] == WIRED_ANSWER_PATH else (),
+                accept_write=(e["path"] == WIRED_ANSWER_PATH))
+        out = self.poll([], cols, wired=wired_entries())
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(64, True, True)])
 
     def test_no_receiver_gives_nothing(self):
         self.assertEqual(self.poll([], {}), [])
