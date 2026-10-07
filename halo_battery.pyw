@@ -1217,7 +1217,7 @@ class App:
             Item(tr("preferences.quiet"), toggle("quiet_fullscreen"),
                  checked=lambda it: self.cfg.get("quiet_fullscreen", True)),
             # for full-screen games, where the notification is not seen (#66)
-            Item("Sound with the low battery alert", toggle("low_sound"),
+            Item(tr("preferences.low_sound"), toggle("low_sound"),
                  checked=lambda it: self.cfg.get("low_sound", False)),
             Menu.SEPARATOR,
             Item(tr("preferences.bluetooth"), toggle("bluetooth"),

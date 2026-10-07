@@ -132,5 +132,6 @@ selects `ja`, Traditional Chinese LANGIDs select `zh-TW`, and Simplified Chinese
 LANGIDs select `zh-CN`. Unsupported
 languages or a failed detection select `en`. Preferences > Language / Langue
 overrides that initial selection immediately and persists `language` in
-`%APPDATA%\HaloBattery\config.json`. A stored invalid value falls back to English
-without triggering detection again. `--probe` never initializes the language.
+`%APPDATA%\HaloBattery\config.json` (or the app's folder in portable mode).
+A stored invalid value falls back to English without triggering detection again.
+`--probe` never initializes the language.

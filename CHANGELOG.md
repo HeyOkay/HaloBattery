@@ -22,6 +22,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   A single language registry supplies native names, catalogs, Windows detection
   and plural rules; catalog checks cover every registered language, including
   languages with additional plural forms.
+  Includes the 1.14.0 low-battery sound preference and the HyperX Cloud III S Wireless,
+  Logitech G PRO X 2 LIGHTSPEED and SteelSeries Arctis Nova Elite family labels in
+  every registered catalog; hardware names remain unchanged.
 
 ## [1.14.0] - 2026-10-05
 

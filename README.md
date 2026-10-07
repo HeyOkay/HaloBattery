@@ -63,6 +63,7 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
     the app selects French, Traditional Chinese, Simplified Chinese or Japanese when supported by the
     current user's Windows UI language, and English otherwise. The selection is saved; a manual choice always takes precedence,
     even if the Windows language changes later. Diagnostics and the status file stay in English.
+    In portable mode, the language preference is saved with the other settings next to the app.
   - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 10–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
   - **Alert when fully charged** (a notification once per charge, on by default)
   - **Estimated time left**: "about 5 h of use left" in the tooltip, from how fast the device has drained since its last charge. Only time the device is awake and on battery counts, and there is no estimate until it has been used for 30 minutes and dropped 3%. The history is kept in `%APPDATA%\HaloBattery\history.json`.

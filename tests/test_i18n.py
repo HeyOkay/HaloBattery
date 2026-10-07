@@ -247,6 +247,20 @@ class LanguageConfigTests(unittest.TestCase):
             menu = find(prefs, "Language / Langue").submenu
             self.assertTrue(find(menu, "Test language").checked)
 
+    def test_localized_low_sound_option_persists_without_changing_language(self):
+        for code in i18n.LANGUAGES:
+            with self.subTest(language=code):
+                app = make_app({"language": code})
+                prefs = find(app.build_menu(None), app.tr("menu.preferences")).submenu
+                option = find(prefs, app.tr("preferences.low_sound"))
+                self.assertFalse(option.checked)
+                option(None)
+                self.assertTrue(option.checked)
+                self.assertEqual(app.cfg["language"], code)
+                cfg = hb.load_config()
+                self.assertTrue(cfg["low_sound"])
+                self.assertEqual(cfg["language"], code)
+
 
 class PresentationTests(unittest.TestCase):
     def setUp(self):
@@ -286,9 +300,17 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("débranchez", hb.device_state(st, language="fr"))
 
     def test_every_provider_and_pictogram_is_translated(self):
-        prefs = find(self.app.build_menu(None), "Préférences").submenu
-        labels = [item.text for item in find(prefs, "Types de périphériques").submenu]
-        self.assertEqual(set(labels), {i18n.translate("provider." + key, language="fr") for key in hb.PROVIDER_LABELS})
+        for code in i18n.LANGUAGES:
+            with self.subTest(language=code):
+                app = make_app({"language": code})
+                prefs = find(app.build_menu(None), app.tr("menu.preferences")).submenu
+                labels = [item.text for item in find(prefs, app.tr("preferences.providers")).submenu]
+                self.assertEqual(set(labels), {i18n.translate("provider." + key, language=code)
+                                               for key in hb.PROVIDER_LABELS})
+                # New providers must also have reference keys, not just translations.
+                self.assertTrue(all("provider." + key in en.MESSAGES for key in hb.PROVIDER_LABELS))
+                if code == "en":
+                    self.assertEqual(set(labels), set(hb.PROVIDER_LABELS.values()))
         owner = types.SimpleNamespace(status=dev())
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Casque", "Manette", "Bluetooth"])
