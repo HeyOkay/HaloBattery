@@ -203,7 +203,7 @@ class AjazzProvider(Provider):
                 if not r:
                     continue              # quiet until the answer to the read
                 got = parse_reply(r)
-                self._diag.append(f"    report: {hexdump(r, 20)}"
+                self._diag.append(f"    report: {hexdump(r)}"
                                   + (f"  -> {got[0]} % ({got[1]}"
                                      f"{', charging' if got[2] else ''})" if got
                                      else "  (no level in it)"))
