@@ -59,6 +59,14 @@ The level is confirmed on the reporter's mouse. The charging flag's both
 states are on the record from his hardware: 0x01 off the cable (13 %, 75 %,
 100 %) and 0x00 while charging at 56 % - and the vendor app's own screen
 shows no charging at 100 % either, the same rule the app follows.
+
+His later run watched the ring itself: it breathes while charging and stops on
+unplug. Known device quirk (full 32-byte frames compared, #74): right after a
+host restart the mouse answers its *stored* status on its cable - 100 % / done
+while it was really at 90 % - and that answer has the exact shape of a fresh
+one, with nothing marking it as old. The vendor app's own read set gets the
+same stale value; only the mouse's next replug refreshes it. The app shows
+what the mouse answers and corrects itself as soon as a fresh answer arrives.
 """
 from __future__ import annotations
 
