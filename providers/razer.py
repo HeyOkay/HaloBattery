@@ -128,6 +128,12 @@ KNOWN = {
     # goes only to 0x025A.
     0x025A: ("Razer BlackWidow V3 Pro", 0x3F),
     0x025C: ("Razer BlackWidow V3 Pro", 0x9F),
+    # The Pro Type Ultra's 2.4 GHz receiver (#196): level and icon confirmed on the
+    # reporter's own unit. His diagnostics show the working transaction id is 0x1F -
+    # the receiver answers 0x9F (the newer wireless keyboards' id) with "not
+    # supported"; 0x9F stays in TRANSACTION_IDS as a fallback. Its wired id (0x0277)
+    # is not listed - the only source for it is an open OpenRazer pull request (#2739).
+    0x027B: ("Razer Pro Type Ultra", 0x1F),
 }
 
 # The keyboards above take the commands on one USB interface: OpenRazer sends them with
@@ -217,6 +223,8 @@ class RazerProvider(Provider):
 
     def __init__(self):
         self._cache: Dict[Tuple[int, str], _Cand] = {}
+        self._good: Dict[Tuple[int, str], Tuple[bytes, int]] = {}   # collection+tid that
+        # answered OK at least once: the only one a timeout may keep
         self._dead: Dict[bytes, float] = {}   # interfaces known not to respond
         self._diag: List[str] = []
         self._failing: Dict[str, str] = {}    # key -> reason of the ongoing failure
@@ -422,6 +430,8 @@ class RazerProvider(Provider):
         cached = self._cache.get(gkey)
         if cached:
             status, level, charging = self._read(cached.path, cached.tid)
+            if status == STATUS_OK:
+                self._good[gkey] = (cached.path, cached.tid)
             if status in (STATUS_OK, STATUS_TIMEOUT, STATUS_FOREIGN):
                 return status, level, charging
             self._cache.pop(gkey, None)
@@ -440,10 +450,12 @@ class RazerProvider(Provider):
         tids = [pref_tid] if pref_tid else []
         tids += [t for t in TRANSACTION_IDS if t not in tids]
         now = time.time()
+        good = self._good.get(gkey)          # the collection that answered OK before
         timeout_hit = None
         for d in sorted(ifaces, key=rank):
             path = d["path"]
-            if self._dead.get(path, 0) > now:
+            proven = good is not None and path == good[0]
+            if not proven and self._dead.get(path, 0) > now:
                 continue
             self._diag.append(
                 f"  iface={d.get('interface_number')} usage={d.get('usage_page', 0):04x}:"
@@ -455,19 +467,34 @@ class RazerProvider(Provider):
                     break          # the interface rejects feature reports, next one
                 answered = True
                 if status == STATUS_OK:
+                    self._good[gkey] = (path, tid)
                     self._cache[gkey] = _Cand(path, tid)
                     return status, level, charging
                 if status == STATUS_TIMEOUT:
                     timeout_hit = (status, None, None)
-                    self._cache[gkey] = _Cand(path, tid)
-                    break
+                    if proven:
+                        # The collection that answered before is the one saying "not
+                        # responding": the device is asleep or switched off. Keep THAT
+                        # one and stop - never cache a timeout from a collection that
+                        # has never answered. A wrong sibling that always answers 04
+                        # pinned the cache once and every later poll read only it (a
+                        # cached timeout returns before the walk can run again), so the
+                        # device never came back after waking and only a restart
+                        # cleared it (#196).
+                        self._cache[gkey] = _Cand(good[0], good[1])
+                        return timeout_hit
+                    break              # not our collection: walk on, do not cache it
                 if status == STATUS_FOREIGN:
                     # Another app's replies arrive here, so this is the collection that
                     # takes the Razer commands. The other transaction ids and interfaces
                     # would only cost another second each: keep this one and stop.
                     self._cache[gkey] = _Cand(path, tid)
                     return status, None, None
-            if not answered:
+            if not answered and not proven:
+                # A collection that fails to open is skipped for a while - but never
+                # the one that answered before: a sleeping device's collection can
+                # refuse to open, and losing it is the other half of #196 (the
+                # keyboard stayed missing until the app was restarted).
                 self._dead[path] = now + 300   # leave this interface alone for 5 minutes
         return timeout_hit
 

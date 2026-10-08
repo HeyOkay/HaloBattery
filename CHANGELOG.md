@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Razer Pro Type Ultra (`0x027B`): battery level on its 2.4 GHz receiver, confirmed on
+  @dawn-shao's own unit (#196). His later diagnostics fixed two things on the way:
+  the keyboard's transaction id is `0x1F` (the `0x9F` guess came from the newer
+  wireless keyboards), and the provider no longer pins a collection that has never
+  answered - a wrong collection's timeout could shadow the real one, so a sleeping
+  keyboard stayed missing until the app was restarted.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
