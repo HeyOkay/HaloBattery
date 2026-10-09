@@ -15,6 +15,7 @@ Supported:
   * 8BitDo controllers in D-input mode (Pro 2, Pro 3, SN30 / SF30 Pro), while Steam
     or a game has them in the enhanced mode (never switched by the app, #101)
   * Nintendo Switch Pro Controller and Joy-Con over Bluetooth
+  * NVIDIA SHIELD Controller (2017) over Bluetooth
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -116,7 +117,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
-                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
+                       RazerProvider, ShieldProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -177,6 +178,7 @@ PROVIDER_LABELS = {
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE mice",
     "razer": "Razer mice and headsets",
+    "shield": "NVIDIA SHIELD controllers",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
     "wlmouse": "WLmouse",
@@ -192,7 +194,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider(),
+            LamzuProvider(), AmInfinityProvider(), ShieldProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider()]
 
 

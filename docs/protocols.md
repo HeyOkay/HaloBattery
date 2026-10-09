@@ -4,6 +4,23 @@ How each device's battery level is read - one section per device, linked from th
 the [README](../README.md#supported-devices). These are the implementation notes: what is sent,
 what comes back, and where each protocol was taken from.
 
+## NVIDIA SHIELD Controller (2017)
+
+**Connection:** Bluetooth, VID 0955 / PID 7214. Battery percentage and a
+non-charging state were read on a Windows 11 PC with NVIDIA Controller v01.04.
+Charging and full-charge transitions are covered by simulated reports;
+those transitions have not yet been verified on hardware.
+
+The provider sends 33-byte HID output reports `04 07 00` (battery) and
+`04 3a 00` (charger), zero-padded. Matching input reports start with
+`03 <command> 00`; battery percentage is byte 14, and charger bytes 3..5
+are connected, type and state. State 2 with a connected charger means charging.
+Only these read queries are sent. Unanswered or invalid battery reports produce
+no current reading. USB and the older 2015 controller are not queried.
+
+Source: the [Linux NVIDIA SHIELD HID driver](https://github.com/torvalds/linux/blob/master/drivers/hid/hid-nvidia-shield.c),
+hostcmd structures and battery/charger parsing functions.
+
 ## Headsets
 
 ### Astro A50 Gen 5 (Logitech 046D:0B1C)
