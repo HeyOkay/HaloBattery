@@ -50,9 +50,12 @@ until a reading comes back (it does not vanish while the receiver is there,
 it read 0x01 in the wireless captures (13 %, 75 %, and 100 % on the cable)
 and 0x00 in the diagnostics saved while charging at 56 % - charging shows
 from it. An announcement carries no flag, so it keeps the last state - but
-when an announcement and an info block are both waiting, the info block
-wins: it is the newer frame and it carries the flag (#74 - the ring used to
-keep breathing for a poll after the cable came out). Both
+only on the mouse's own USB path, which is the one place charging is possible
+at all (the wireless link drops while the mouse charges); a wireless answer
+is never a charging one. And when an announcement and an info block are both
+waiting on that path, the info block wins: it is the newer frame and it
+carries the flag. Both rules came from his reports of the ring breathing
+while the mouse was not charging (#74).
 the receiver (249a:5c2f) and the mouse's own USB id (248a:5d2e) are claimed:
 while the wireless link is down - the docked case, e.g. right after a restart
 - the mouse itself answers on its cable, with the same read and the same
@@ -317,7 +320,14 @@ class AjazzProvider(Provider):
         if got is not None:
             level, _kind, charging = got
             if charging is None:
-                charging = self._charging         # announcements carry no flag
+                # An announcement carries no flag. Keep the last state only on
+                # the mouse's own USB path, the one place charging is possible
+                # at all: the wireless link drops while the mouse sits on its
+                # cable, so a wireless answer can never be a charging one. The
+                # kept state used to survive into the first wireless polls
+                # after unplugging and kept the charging ring breathing while
+                # the mouse was not charging (#74).
+                charging = self._charging if wired_present else False
             else:
                 self._charging = charging
             self._last = (level, time.time())

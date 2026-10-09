@@ -222,13 +222,17 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries, cols)
         self.assertEqual([(s.level, s.charging, s.online) for s in out], [(56, True, True)])
 
-    def test_an_announcement_keeps_the_last_charging_state(self):
+    def test_an_announcement_on_the_wireless_link_is_not_charging(self):
+        # #74, the ghost ring: right after unplugging, the receiver answers with an
+        # announcement (no charging flag) for a poll or two. The wireless link drops
+        # while the mouse charges, so a wireless answer can never be a charging one -
+        # the kept state must not survive onto it and keep the ring breathing.
         entries = receiver_entries()
         cols = self.cols(entries, replies=(CAPTURED56_CHARGING,))
         self.poll(entries, cols)
         cols[VENDOR_PATH].replies = [ANNOUNCED74]
         out = self.poll(entries, cols)
-        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(74, True, True)])
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(74, False, True)])
 
     def test_junk_before_the_answer_is_skipped(self):
         entries = receiver_entries()
