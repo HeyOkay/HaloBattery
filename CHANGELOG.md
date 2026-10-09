@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- NVIDIA SHIELD Controller (2017) battery percentage and charging state over USB or Bluetooth HID.
+  Unavailable charging status is shown as unknown; alerts wait for a confirmed state.
+  Board serial identifies the same controller across connections; USB wins if both answer.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its

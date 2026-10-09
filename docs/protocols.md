@@ -264,6 +264,40 @@ Windows.Gaming.Input battery report: exact percentage and charging state. XInput
 
 Byte 2 of the controller's own input report: level 0-8 in steps of 2 (full, medium, low, critical, empty) and the charging bit, shown as SDL shows it (level / 8, so 100 / 75 / 50 / 25 / 0 %) with the level name in the tooltip. When Steam has put the controller in the full mode, the 0x30 reports carry the byte and nothing is written; otherwise one read-only subcommand (0x02, request device info) is sent and its 0x21 reply carries the byte. The controller mode is never changed. USB is not read (the controller charges there). **Unverified** - no Switch controller was on hand, so a level above 8 is refused rather than shown
 
+### NVIDIA SHIELD Controller (2017)
+
+**Connection:** USB or Bluetooth, VID 0955 / PID 7214. Battery percentage,
+Bluetooth non-charging state, and USB active charging were verified on a
+Windows 11 PC with NVIDIA Controller v01.04. Bluetooth disconnect/reconnect
+tray behavior and USB/Bluetooth handoffs were also tested on hardware. Full-charge transitions are tested
+with simulated reports and have not yet been verified on hardware.
+
+The provider sends 33-byte HID output reports `04 07 00` (battery) and
+`04 3a 00` (charger), zero-padded. Matching input reports start with
+`03 <command> 00`; battery percentage is byte 14, and charger bytes 3..5
+are connected, type and state. State 2 with a connected charger means charging.
+Only these read queries are sent. Unanswered or invalid battery reports produce
+no current reading. The older 2015 controller is not supported.
+
+Board-info query `04 10 00` is also sent to read the board serial (reply bytes
+5..18). Identity is re-read because a different USB pad can reuse a port/path.
+It gives a shared identity
+across USB and Bluetooth. If both paths answer, a valid USB reading wins. If
+the serial is unavailable, a Bluetooth address or hashed HID path keeps
+unidentified controllers separate; cross-transport merging then cannot be guaranteed.
+Simultaneous USB/Bluetooth deduplication was verified on hardware: both paths
+answered with the same board serial and HaloBattery showed one charging controller,
+preferring USB. The same identity was retained when unplugging USB and returning
+to Bluetooth, then reconnecting USB.
+
+If the charger query fails or explicitly reports an unknown state, the percentage
+remains visible with "charging status unknown". Low-battery notifications, sounds,
+full-charge notifications and time-left estimates are suppressed until a known
+charger state returns. Diagnostics include the interface and matching reply bytes.
+
+Source: the [Linux NVIDIA SHIELD HID driver](https://github.com/torvalds/linux/blob/master/drivers/hid/hid-nvidia-shield.c),
+hostcmd structures and battery/charger parsing functions.
+
 ### Sony DualSense (PS5)
 
 **Connection:** USB or Bluetooth

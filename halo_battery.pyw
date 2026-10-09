@@ -15,6 +15,7 @@ Supported:
   * 8BitDo controllers in D-input mode (Pro 2, Pro 3, SN30 / SF30 Pro), while Steam
     or a game has them in the enhanced mode (never switched by the app, #101)
   * Nintendo Switch Pro Controller and Joy-Con over Bluetooth
+  * NVIDIA SHIELD Controller (2017) over USB or Bluetooth
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
@@ -116,7 +117,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, PlayStationProvider, PulsarProvider,
-                       RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
+                       RazerProvider, ShieldProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        WLmouseProvider, XInputProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -177,6 +178,7 @@ PROVIDER_LABELS = {
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE mice",
     "razer": "Razer mice and headsets",
+    "shield": "NVIDIA SHIELD controllers",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
     "wlmouse": "WLmouse",
@@ -192,7 +194,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider(),
+            LamzuProvider(), AmInfinityProvider(), ShieldProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider()]
 
 
@@ -751,9 +753,11 @@ def device_state(st: DeviceStatus, left: str = "") -> str:
         state = f"{st.level}%"
         if st.charging:
             state += ", charging"
+        elif not st.charging_known:
+            state += ", charging status unknown"
         if not st.online:
             state += " (last known value, device asleep)"
-        elif left and not st.charging:
+        elif left and not st.charging and st.charging_known:
             state += f", {left}"
     return state
 
@@ -1352,7 +1356,7 @@ class App:
     # ---------------- time left
     def time_left_text(self, st: DeviceStatus) -> str:
         """"about 5 h of use left", or "" when turned off or not known yet."""
-        if not self.cfg.get("time_left", True) or st.approx:
+        if not self.cfg.get("time_left", True) or st.approx or not st.charging_known:
             return ""
         seconds = self.history.seconds_left(st.key, st.level)
         return history.format_left(seconds) if seconds is not None else ""
@@ -1615,7 +1619,8 @@ class App:
                 if st.key in hidden:
                     continue      # hidden by the user: no icon and no low battery alert
                 seen.add(st.key)
-                self.history.record(st.key, st.level, st.charging, st.online, now,
+                self.history.record(st.key, st.level, st.charging,
+                                    st.online and st.charging_known, now,
                                     coarse=bool(st.approx))
                 self.missing.pop(st.key, None)
                 ic = self.icons.get(st.key)
@@ -1681,7 +1686,7 @@ class App:
 
     def check_alert(self, ic: DeviceIcon, st: DeviceStatus):
         low = self.low_for(st)
-        if not low or st.level is None or not st.online:
+        if not low or st.level is None or not st.online or not st.charging_known:
             return
         if st.charging or st.level > low + 5:
             self.alerted[st.key] = False
@@ -1700,6 +1705,8 @@ class App:
     def check_low_sound(self, st: DeviceStatus, low: int) -> None:
         """"Sound with the low battery alert": a Windows sound with the notification, and
         again every 5 minutes while the device stays low, awake and off the charger."""
+        if not st.charging_known:
+            return
         if not self.cfg.get("low_sound", False):
             self.low_sound_at.pop(st.key, None)
             return
@@ -1718,7 +1725,7 @@ class App:
         "charging" when they are full, so 100 % right after charging counts too. A level
         that goes 100 -> 99 -> 100 on the charger does not give a second one: the alert
         comes again only after the device leaves the charger or drops below 95 %."""
-        if st.level is None or not st.online:
+        if st.level is None or not st.online or not st.charging_known:
             return
         prev = self.full_state.get(st.key)
         if st.level >= 100 and prev == "charging" and self.cfg.get("full_alert", True):
@@ -1872,13 +1879,14 @@ class App:
             if st.key in hidden:
                 continue
             secs = None if st.approx else self.history.seconds_left(st.key, st.level)
-            if st.charging or not st.online:
+            if st.charging or not st.online or not st.charging_known:
                 secs = None
             devices.append({
                 "key": st.key,
                 "name": self.display_name(st),
                 "level": st.level,
                 "charging": st.charging,
+                "charging_known": st.charging_known,
                 "online": st.online,
                 "kind": self.pictogram(st),
                 "approx": st.approx or None,
@@ -1918,7 +1926,8 @@ class App:
             ic = self.icons.get(key)
             st = ic.status if ic is not None else None
             if title == "Low battery" and st is not None and (
-                    st.charging or (st.level is not None and st.level > self.low_for(st))):
+                    not st.charging_known or st.charging or
+                    (st.level is not None and st.level > self.low_for(st))):
                 continue
             self.notify_any(text, title, key)
 
