@@ -22,6 +22,8 @@ import os
 import time
 from typing import Dict, List, Optional
 
+import lang
+
 MAX_GAP = 600.0          # s: the most one gap between two readings may add
 MIN_SPAN = 1800.0        # s of use since the charge before an estimate is given
 MIN_DROP = 3             # percentage points dropped since the charge, likewise
@@ -32,13 +34,19 @@ SAVE_EVERY = 300.0       # s between writes of history.json
 
 
 def format_left(seconds: float) -> str:
-    """12600 -> 'about 4 h of use left'."""
+    """12600 -> 'about 4 h of use left'. English; format_left_in() localizes."""
+    return format_left_in(seconds, "en")
+
+
+def format_left_in(seconds: float, code: str = "en") -> str:
+    """Like format_left(), in the language `code` (falling back to English)."""
     hours = seconds / 3600.0
     if hours < 1:
-        return "less than 1 h of use left"
+        return lang.get(code, "left_less_hour")
     if hours < 48:
-        return f"about {round(hours)} h of use left"
-    return f"about {round(hours / 24)} days of use left"
+        n = round(hours)
+        return lang.get(code, "left_one_hour" if n == 1 else "left_hours").format(n=n)
+    return lang.get(code, "left_days").format(n=round(hours / 24))
 
 
 class History:
