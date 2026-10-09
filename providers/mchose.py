@@ -87,6 +87,10 @@ G7_CHARGE_BYTE = 9
 G7_READS = 25                 # a non-blocking read loop, ~0.5 s at G7_READ_GAP
 G7_READ_GAP = 0.02
 
+# The V9 Turbo headsets sit on the 0x3837 vendor id as well (covered by open PR #215,
+# which reads them its own way). Their product ids are never opened or written to here.
+HEADSET_PIDS = (0x6008, 0x600A)
+
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
 LONG_REPORT = 0x12
@@ -287,6 +291,15 @@ class MchoseProvider(Provider):
         for (vid, pid), ifaces in groups.items():
             key = device_key(vid, pid)
             product = (ifaces[0].get("product_string") or "").strip()
+            if vid == 0x3837 and pid in HEADSET_PIDS:
+                # the V9 Turbo headsets share this vendor id but a different protocol
+                # (covered by open PR #215, which reads them its own way); they are left
+                # completely untouched here. Checked before _names is written: the headset
+                # key would otherwise overwrite the mouse A7's product name
+                # (both are "mchose:3837").
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
+                                  "V9 Turbo headset family (see PR #215), leaving alone")
+                continue
             if product:
                 self._names[key] = product
             if vid == G7_VID and pid != G7_PID:
