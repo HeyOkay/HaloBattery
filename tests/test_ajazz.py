@@ -232,10 +232,22 @@ class PollTest(unittest.TestCase):
 
     def test_junk_before_the_answer_is_skipped(self):
         entries = receiver_entries()
-        cols = self.cols(entries, replies=(ANNOUNCED74, [0xC0, 0x00, 0x4B] + [0x00] * 29,
-                                           CAPTURED75))
+        cols = self.cols(entries, replies=([0xC0, 0x00, 0x4B] + [0x00] * 29, CAPTURED75))
         out = self.poll(entries, cols)
-        self.assertEqual([s.level for s in out], [74])   # the first valid frame wins
+        self.assertEqual([s.level for s in out], [75])   # the junk c0 00 is skipped
+
+    def test_an_info_behind_an_announcement_wins(self):
+        # the ring must stop as soon as the mouse answers after unplugging: a
+        # queued announcement (no charging flag) must not stand in for the info
+        # block behind it, which is the newer frame and carries the flag (#74)
+        entries = receiver_entries()
+        cols = self.cols(entries, replies=(CAPTURED56_CHARGING,))
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.level, s.charging) for s in out], [(56, True)])
+        cols[VENDOR_PATH].replies = [ANNOUNCED74, CAPTURED75]
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.level, s.charging, s.online) for s in out],
+                         [(75, False, True)])
 
     def test_silence_keeps_the_last_level_greyed_out(self):
         entries = receiver_entries()
