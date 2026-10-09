@@ -21,6 +21,7 @@ class DeviceStatus:
     kind: str = ""               # headset / mouse / keyboard / gamepad when known
                                  # (picks the pictogram); "" = guess from the source
     via: str = ""                # "bluetooth": a controller connected over Bluetooth
+    charging_known: bool = True  # False: level valid, charger query unavailable; suppress alerts
 
 
 class Provider:

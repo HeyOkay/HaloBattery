@@ -56,6 +56,7 @@ class ShieldTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].level, 73)
         self.assertTrue(result[0].charging)
+        self.assertTrue(result[0].charging_known)
         self.assertEqual(result[0].kind, 'gamepad')
         self.assertTrue(pad.closed)
         self.assertEqual(pad.writes, [[4, 7, 0] + [0] * 30, [4, 58, 0] + [0] * 30])
@@ -96,7 +97,20 @@ class ShieldTests(unittest.TestCase):
             result = provider.poll()
         self.assertEqual(result[0].level, 73)
         self.assertFalse(result[0].charging)
+        self.assertFalse(result[0].charging_known)
         self.assertTrue(pad.closed)
+
+    def test_explicit_unknown_charger_state(self):
+        self.assertIsNone(S.parse_charger([3, 58, 0, 1, 2, 0] + [0] * 59))
+
+    def test_missing_charger_reply_preserves_percentage_as_unknown(self):
+        provider = S.ShieldProvider()
+        with patch.object(S.hidlist, "enumerate", return_value=[info()]), \
+             patch.object(S.hid, "device", return_value=Pad()), \
+             patch.object(provider, "_query", side_effect=[battery(19), []]):
+            result = provider.poll()
+        self.assertEqual(result[0].level, 19)
+        self.assertFalse(result[0].charging_known)
 
     def test_does_not_touch_usb_or_unrelated_nvidia_devices(self):
         devices = [info(path=b'vid_0955&pid_7214'), dict(product_id=123, path=b'other')]

@@ -7,6 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - NVIDIA SHIELD Controller (2017) battery percentage and charging state over Bluetooth HID.
+  Unavailable charging status is shown as unknown; alerts wait for a confirmed state.
 
 ## [1.14.0] - 2026-10-05
 
