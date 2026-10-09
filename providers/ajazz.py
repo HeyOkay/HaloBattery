@@ -49,7 +49,10 @@ until a reading comes back (it does not vanish while the receiver is there,
 #74). The info block's byte after the level (14) is the charging flag:
 it read 0x01 in the wireless captures (13 %, 75 %, and 100 % on the cable)
 and 0x00 in the diagnostics saved while charging at 56 % - charging shows
-from it. An announcement carries no flag, so it keeps the last state. Both
+from it. An announcement carries no flag, so it keeps the last state - but
+when an announcement and an info block are both waiting, the info block
+wins: it is the newer frame and it carries the flag (#74 - the ring used to
+keep breathing for a poll after the cable came out). Both
 the receiver (249a:5c2f) and the mouse's own USB id (248a:5d2e) are claimed:
 while the wireless link is down - the docked case, e.g. right after a restart
 - the mouse itself answers on its cable, with the same read and the same
@@ -206,6 +209,7 @@ class AjazzProvider(Provider):
             if wrote is not None and wrote < 0:
                 self._diag.append("    write refused (no output report here)")
                 return None, False
+            announce = None
             for _ in range(READ_ATTEMPTS):
                 r = dev.read(READ_SIZE, READ_TIMEOUT_MS)
                 if not r:
@@ -215,8 +219,20 @@ class AjazzProvider(Provider):
                                   + (f"  -> {got[0]} % ({got[1]}"
                                      f"{', charging' if got[2] else ''})" if got
                                      else "  (no level in it)"))
-                if got is not None:
-                    return got, True
+                if got is None:
+                    continue
+                if got[1] == "announcement":
+                    # An announcement carries the level but no charging flag.
+                    # Keep the newest one as the fallback, but read on: the ask
+                    # just sent provokes an info block, and only that carries the
+                    # flag. Returning the announcement instead let a stale
+                    # "charging" survive until a later poll - after unplugging,
+                    # the ring kept breathing until the next full answer (#74).
+                    announce = got
+                    continue
+                return got, True
+            if announce is not None:
+                return announce, True
             self._diag.append("    silence after the read (mouse off or asleep)")
             return None, True
         except (OSError, IOError, ValueError) as e:
