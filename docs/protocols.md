@@ -269,7 +269,7 @@ Byte 2 of the controller's own input report: level 0-8 in steps of 2 (full, medi
 **Connection:** USB or Bluetooth, VID 0955 / PID 7214. Battery percentage,
 Bluetooth non-charging state, and USB active charging were verified on a
 Windows 11 PC with NVIDIA Controller v01.04. Bluetooth disconnect/reconnect
-tray behavior was also tested on hardware. Full-charge transitions are tested
+tray behavior and USB/Bluetooth handoffs were also tested on hardware. Full-charge transitions are tested
 with simulated reports and have not yet been verified on hardware.
 
 The provider sends 33-byte HID output reports `04 07 00` (battery) and
@@ -285,8 +285,10 @@ It gives a shared identity
 across USB and Bluetooth. If both paths answer, a valid USB reading wins. If
 the serial is unavailable, a Bluetooth address or hashed HID path keeps
 unidentified controllers separate; cross-transport merging then cannot be guaranteed.
-Simultaneous USB/Bluetooth deduplication is covered by tests; only one transport
-was exposed at a time on the tested controller.
+Simultaneous USB/Bluetooth deduplication was verified on hardware: both paths
+answered with the same board serial and HaloBattery showed one charging controller,
+preferring USB. The same identity was retained when unplugging USB and returning
+to Bluetooth, then reconnecting USB.
 
 If the charger query fails or explicitly reports an unknown state, the percentage
 remains visible with "charging status unknown". Low-battery notifications, sounds,
