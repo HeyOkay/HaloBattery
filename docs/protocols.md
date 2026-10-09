@@ -266,17 +266,27 @@ Byte 2 of the controller's own input report: level 0-8 in steps of 2 (full, medi
 
 ### NVIDIA SHIELD Controller (2017)
 
-**Connection:** Bluetooth, VID 0955 / PID 7214. Battery percentage and a
-non-charging state were read on a Windows 11 PC with NVIDIA Controller v01.04.
-Charging and full-charge transitions are covered by simulated reports;
-those transitions have not yet been verified on hardware.
+**Connection:** USB or Bluetooth, VID 0955 / PID 7214. Battery percentage,
+Bluetooth non-charging state, and USB active charging were verified on a
+Windows 11 PC with NVIDIA Controller v01.04. Bluetooth disconnect/reconnect
+tray behavior was also tested on hardware. Full-charge transitions are tested
+with simulated reports and have not yet been verified on hardware.
 
 The provider sends 33-byte HID output reports `04 07 00` (battery) and
 `04 3a 00` (charger), zero-padded. Matching input reports start with
 `03 <command> 00`; battery percentage is byte 14, and charger bytes 3..5
 are connected, type and state. State 2 with a connected charger means charging.
 Only these read queries are sent. Unanswered or invalid battery reports produce
-no current reading. USB and the older 2015 controller are not queried.
+no current reading. The older 2015 controller is not supported.
+
+Board-info query `04 10 00` is also sent to read the board serial (reply bytes
+5..18). Identity is re-read because a different USB pad can reuse a port/path.
+It gives a shared identity
+across USB and Bluetooth. If both paths answer, a valid USB reading wins. If
+the serial is unavailable, a Bluetooth address or hashed HID path keeps
+unidentified controllers separate; cross-transport merging then cannot be guaranteed.
+Simultaneous USB/Bluetooth deduplication is covered by tests; only one transport
+was exposed at a time on the tested controller.
 
 If the charger query fails or explicitly reports an unknown state, the percentage
 remains visible with "charging status unknown". Low-battery notifications, sounds,

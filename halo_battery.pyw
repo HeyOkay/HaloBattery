@@ -15,7 +15,7 @@ Supported:
   * 8BitDo controllers in D-input mode (Pro 2, Pro 3, SN30 / SF30 Pro), while Steam
     or a game has them in the enhanced mode (never switched by the app, #101)
   * Nintendo Switch Pro Controller and Joy-Con over Bluetooth
-  * NVIDIA SHIELD Controller (2017) over Bluetooth
+  * NVIDIA SHIELD Controller (2017) over USB or Bluetooth
   * Bluetooth devices whose battery level Windows knows (enabled from the menu)
 
 Run:   pythonw halo_battery.pyw
