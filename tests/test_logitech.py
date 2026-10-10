@@ -126,11 +126,12 @@ def receiver(pid=0xC539, product="USB Receiver"):
 
 
 VOLTAGE_76 = {L.F_VOLTAGE: (6, {0: [0x0F, 0x7B, 0x00]})}           # 3963 mV -> 76 %
+CHARGING_100 = {L.F_VOLTAGE: (6, {0: [0x10, 0x6C, 0x80]})}         # G502 on its cable
 
 
-def g502():
-    return FakeHidpp({**VOLTAGE_76, L.F_NAME: (3, {2: [3]}),
-                      L.F_INFO: (2, {0: [3, 0xC1, 0x5E, 0x09, 0xCD]})}, name="G502 LIGHTSPEED")
+def g502(battery=VOLTAGE_76, unit=(0xC1, 0x5E, 0x09, 0xCD)):
+    return FakeHidpp({**battery, L.F_NAME: (3, {2: [3]}),
+                      L.F_INFO: (2, {0: [3, *unit]})}, name="G502 LIGHTSPEED")
 
 
 def slots(keys):
@@ -266,10 +267,35 @@ class TwoReceiverTests(LogitechTestCase):
     def test_two_identical_receivers_get_two_icons(self):
         a, sa, la = self.receiver_at(b"7&aaaa")
         b, sb, lb = self.receiver_at(b"7&bbbb")
-        self.use(a + b, {la: ({1: g502()}, sa), lb: ({1: g502()}, sb)})
+        self.use(a + b, {la: ({1: g502()}, sa), lb: ({1: g502(unit=(1, 2, 3, 4))}, sb)})
+        keys = sorted(st.key for st in L.LogitechProvider().poll())
+        self.assertEqual(keys, ["logitech:01020304", "logitech:C15E09CD"])
+
+    def test_two_identical_receivers_without_unit_ids_get_two_icons(self):
+        """Without a unit id the key is the slot, and both receivers have a slot 1."""
+        a, sa, la = self.receiver_at(b"7&aaaa")
+        b, sb, lb = self.receiver_at(b"7&bbbb")
+        self.use(a + b, {la: ({1: FakeHidpp(VOLTAGE_76)}, sa), lb: ({1: FakeHidpp(VOLTAGE_76)}, sb)})
         keys = sorted(st.key for st in L.LogitechProvider().poll())
         self.assertEqual(len(keys), 2)
         self.assertNotEqual(keys[0], keys[1])
+
+    def test_mouse_on_its_cable_keeps_one_icon(self):
+        """Two receivers of the same kind (a G502 X PLUS and a G915 are both 0xC547), then
+        the mouse is plugged in to charge. The cable reads the same unit id, so the greyed
+        copy from the receiver must not stay next to the charging icon."""
+        a, sa, la = self.receiver_at(b"7&aaaa")
+        b, sb, lb = self.receiver_at(b"7&bbbb")
+        self.use(a + b, {la: ({1: g502()}, sa), lb: ({}, sb)})
+        p = L.LogitechProvider()
+        [st] = p.poll()
+        self.assertEqual(st.key, "logitech:C15E09CD")
+        cable = [entry(0xC08D, 0xFF00, 1, b"cshort", "G502 LIGHTSPEED"),
+                 entry(0xC08D, 0xFF00, 2, b"clong", "G502 LIGHTSPEED")]
+        self.use(a + b + cable, {la: ({1: FakeHidpp(silent=True)}, sa), lb: ({}, sb),
+                                 b"clong": ({0xFF: g502(CHARGING_100)}, b"cshort")})
+        [st] = p.poll()
+        self.assertEqual((st.key, st.online, st.charging), ("logitech:C15E09CD", True, True))
 
 
 # ------------------------------------------------------------------ headsets
