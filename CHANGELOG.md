@@ -6,6 +6,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A Logitech mouse or keyboard showed two icons while charging on its cable when a second
+  receiver of the same kind was plugged in (a G502 X PLUS and a G915 both use `046D:C547`):
+  the charging icon from the cable, and a greyed "device asleep" copy from the receiver.
+  With two such receivers the device's key carried the receiver's instance, which the
+  cable does not have. The unit id is the device's own serial, so it is now the key on its
+  own; only devices without a unit id still get the instance in their key. A device
+  renamed, hidden or given its own icon or alert level since 1.11.0 while two receivers
+  of the same kind were plugged in needs that setting again.
+
 ## [1.14.0] - 2026-10-05
 
 Portable mode: with a `portable.txt` next to the app, settings and the log stay in its
