@@ -67,7 +67,8 @@ go away) and keeps answering every packet with the last value it held - the
 marker does not disappear from its buffer, so a stale level and a live one are
 indistinguishable that way (nine answers over two and a half minutes, all the
 same value). The dongle does say which state it is in, though: with no headset
-linked it enumerates as "Audeze Maxwell Dongle" instead of "Audeze Maxwell HID",
+linked it enumerates as "Audeze Maxwell Dongle" (the Xbox dongle: "Audeze Maxwell
+XBOX Dongle", #244) instead of "Audeze Maxwell HID",
 and its interface paths change at the same moment, so hidlist's path-keyed cache
 re-enumerates by itself and poll() sees the fresh string. poll() reads that
 before anything else and reports nothing while it says Dongle: a switched-off
@@ -248,15 +249,23 @@ def is_vendor_interface(d: dict) -> bool:
     return d.get("usage_page") == VENDOR_USAGE_PAGE and d.get("usage", 0) == VENDOR_USAGE
 
 
-# With no headset linked the dongle identifies itself as this instead of
-# "Audeze Maxwell HID". Its interface paths change at the same moment, so
-# hidlist's path-keyed cache hands poll() a fresh string - no cache to fight.
-NO_HEADSET_STRING = "audeze maxwell dongle"
+# With no headset linked the dongle identifies itself as ...Dongle instead of
+# "Audeze Maxwell HID": the PC dongle says "Audeze Maxwell Dongle", the Xbox
+# one "Audeze Maxwell XBOX Dongle" (#244). Matching only the PC string left an
+# Xbox unit reading a switched-off headset's stored level as if it were live.
+# Its interface paths change at the same moment, so hidlist's path-keyed cache
+# hands poll() a fresh string - no cache to fight.
+NO_HEADSET_SUFFIX = "dongle"
 
 
 def no_headset_linked(ifaces) -> bool:
-    """True when the dongle itself says no headset is linked (switched off)."""
-    return any((d.get("product_string") or "").strip().lower() == NO_HEADSET_STRING
+    """True when the dongle itself says no headset is linked (switched off).
+
+    The product string ends in "Dongle" in that state on every variant
+    measured so far (PC: "Audeze Maxwell Dongle", Xbox: "Audeze Maxwell
+    XBOX Dongle", #244).
+    """
+    return any((d.get("product_string") or "").strip().lower().endswith(NO_HEADSET_SUFFIX)
                for d in ifaces)
 
 
