@@ -1,0 +1,63 @@
+name: Device not detected or wrong level
+description: A device is missing, or its level or charging state is wrong.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Before you fill in this form:
+        1. Close the maker's software (Synapse, G HUB, the web driver and similar).
+        2. Turn the device on and wake it up (move the mouse, press a key).
+        3. Right-click a Halo Battery icon and select **Diagnostics…**. The steps with a screenshot are in [Add your device](https://github.com/HeyOkay/HaloBattery#add-your-device).
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Maker and model, for example "Razer DeathAdder V3 Pro".
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - 2.4 GHz receiver or dongle that came with the device
+        - Shared receiver (Logitech Unifying / Bolt, Razer multi-device and similar)
+        - Charging dock or base station
+        - USB cable
+        - Bluetooth
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Halo Battery version
+      description: The first line of the diagnostics report, or the name of the zip you downloaded.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happens
+      description: For example "no icon", "always 100%", "shows charging when it is not".
+    validations:
+      required: true
+  - type: input
+    id: maker-level
+    attributes:
+      label: Level in the maker's app or in Windows Settings
+      description: The level that the maker's app (or Settings → Bluetooth & devices) shows at the same time. Write "none" if no app shows a level.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: Drag the whole `diagnostics.txt` file here (it is in `%APPDATA%\HaloBattery`). Do not paste only a part of it. You can replace MAC addresses and serial numbers with `xx`.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The device was on and awake when I took the report.
+          required: true
+        - label: The maker's software was closed when I took the report.

@@ -29,3 +29,10 @@ release_notes.md
 version_info.txt
 AGENTS.md
 /agents_memory
+
+# Portable mode (portable.txt): the app keeps its data next to itself
+portable.txt
+config.json
+history.json
+status.json
+notification_icon.png

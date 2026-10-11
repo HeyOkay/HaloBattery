@@ -1,4 +1,5 @@
-"""G-Wolves wireless mice on the 8K receiver (33E4:3854) or on the cable.
+"""G-Wolves wireless mice on the shared 8K receiver (33E4:3854), on a model's own
+receiver, or on the cable.
 
 Source: G-Wolves' own web driver, mouse.xyz. Its device list (Config/env-models.json)
 puts eleven mice on the receiver 33E4:3854, all with "IsNewProtocol": "1" and
@@ -12,6 +13,19 @@ same firmware family: the model folders are "JM_..."):
 The web driver reads the pair as [charging, battery %], shows "device not active"
 when the status byte is not a1 (the mouse sleeps), and shows 99 % instead of 100 %
 while charging. The request and the reply parser are the ones in wlmouse.py.
+
+Mice with a receiver of their own. The same list gives the other models their own
+receiver and cable ids (MODELS below). The web driver reads them with one of two
+exchanges, chosen only by the model's "IsNewProtocol":
+  * "1": the exchange above (getBatPer; byte 2 becomes the model's WiredDeviceID, which
+    is 2 for every model, so the request does not change);
+  * "0": getOldBattery, on the same collection:
+        request   feature report 0, 64 bytes: 00 02 8f <01 over a receiver, 00 on the
+                  cable> 00 ...   (setReportOld sets byte 3 to 1 when not wired)
+        reply     feature report 0:           a1 02 8f .. <charging> <battery %>
+    with the same meaning: [charging, battery %], "device not active" when the status
+    byte is not a1. HSK Pro ACE (#105) is such a model: receiver 5803, cable 5804.
+A model's receiver and cable share one icon.
 
 Which collection. The web driver sends the request to the collection that has a
 64-byte feature report without a report id (WebHID's sendFeatureReport(0, ...)).
@@ -55,12 +69,85 @@ WIRED = {
 }
 DEFAULT_NAME = "G-Wolves mouse"     # the receiver is shared, so it does not tell the model
 
+NEW, OLD = "new", "old"
+# The other models of mouse.xyz's Config/env-models.json, each with a receiver of its own
+# (PIDWireless, PIDWireless4K8K, _1KDongle, _4KDongle, _8KDongle) and its cable
+# (PIDWired): pid -> (name, the model's receiver id = its icon, exchange, on the cable).
+# The list spells one model "Fenir Max"; its name here is "Fenrir Max".
+MODELS: Dict[int, Tuple[str, int, str, bool]] = {
+    0x3808: ("G-Wolves HTM Plus", 0x3817, NEW, True),
+    0x3817: ("G-Wolves HTM Plus", 0x3817, NEW, False),
+    0x6808: ("G-Wolves HSK Pro 2.0", 0x6817, NEW, True),
+    0x6817: ("G-Wolves HSK Pro 2.0", 0x6817, NEW, False),
+    0x5608: ("G-Wolves HTXU", 0x5617, NEW, True),
+    0x5617: ("G-Wolves HTXU", 0x5617, NEW, False),
+    0x3608: ("G-Wolves Fenrir Pro", 0x3617, NEW, True),
+    0x3617: ("G-Wolves Fenrir Pro", 0x3617, NEW, False),
+    0x3908: ("G-Wolves VUK", 0x3917, OLD, True),
+    0x3917: ("G-Wolves VUK", 0x3917, OLD, False),
+    0x7904: ("G-Wolves HT-S2", 0x7913, OLD, True),
+    0x7913: ("G-Wolves HT-S2", 0x7913, OLD, False),
+    0x3708: ("G-Wolves Fenrir Max", 0x3717, OLD, True),
+    0x3717: ("G-Wolves Fenrir Max", 0x3717, OLD, False),
+    0x5308: ("G-Wolves HTS Ultra", 0x5317, OLD, True),
+    0x5317: ("G-Wolves HTS Ultra", 0x5317, OLD, False),
+    0x7704: ("G-Wolves HTR", 0x7713, OLD, True),
+    0x7713: ("G-Wolves HTR", 0x7713, OLD, False),
+    0x3508: ("G-Wolves Fenrir", 0x3517, OLD, True),
+    0x3517: ("G-Wolves Fenrir", 0x3517, OLD, False),
+    0x7908: ("G-Wolves HT-S2 Pro", 0x7917, OLD, True),
+    0x7917: ("G-Wolves HT-S2 Pro", 0x7917, OLD, False),
+    0x5808: ("G-Wolves HSK Pro", 0x5817, OLD, True),
+    0x5817: ("G-Wolves HSK Pro", 0x5817, OLD, False),
+    0x5807: ("G-Wolves HSK Pro", 0x5817, OLD, False),
+    0x2708: ("G-Wolves HTX Mini", 0x2717, OLD, True),
+    0x2717: ("G-Wolves HTX Mini", 0x2717, OLD, False),
+    0x5408: ("G-Wolves HTS Plus", 0x5417, OLD, True),
+    0x5417: ("G-Wolves HTS Plus", 0x5417, OLD, False),
+    0x5407: ("G-Wolves HTS Plus", 0x5417, OLD, False),
+    0x5708: ("G-Wolves HTX", 0x5717, OLD, True),
+    0x5717: ("G-Wolves HTX", 0x5717, OLD, False),
+    0x5707: ("G-Wolves HTX", 0x5717, OLD, False),
+    0x5908: ("G-Wolves HSK Plus", 0x5917, OLD, True),
+    0x5917: ("G-Wolves HSK Plus", 0x5917, OLD, False),
+    0x5907: ("G-Wolves HSK Plus", 0x5917, OLD, False),
+    0x7204: ("G-Wolves HSK Lite", 0x7203, OLD, True),
+    0x7203: ("G-Wolves HSK Lite", 0x7203, OLD, False),
+    0x7708: ("G-Wolves HTR Pro", 0x7717, OLD, True),
+    0x7717: ("G-Wolves HTR Pro", 0x7717, OLD, False),
+    0x5804: ("G-Wolves HSK Pro ACE", 0x5803, OLD, True),
+    0x5803: ("G-Wolves HSK Pro ACE", 0x5803, OLD, False),
+    0x5404: ("G-Wolves HTS Plus ACE", 0x5403, OLD, True),
+    0x5403: ("G-Wolves HTS Plus ACE", 0x5403, OLD, False),
+    0x5704: ("G-Wolves HTX ACE", 0x5703, OLD, True),
+    0x5703: ("G-Wolves HTX ACE", 0x5703, OLD, False),
+    0x5904: ("G-Wolves HSK Plus ACE", 0x5903, OLD, True),
+    0x5903: ("G-Wolves HSK Plus ACE", 0x5903, OLD, False),
+}
+
 REPLY_TRIES = 15                    # get the reply up to 15 times, 50 ms apart
 ASLEEP_KEEP = 300                   # s, as in the WLmouse provider
 
 Reading = Tuple[int, bool]
 
 FEATURE_LENGTH = 65                 # report id byte + the 64 bytes the web driver sends
+
+
+def old_request(wired: bool) -> List[int]:
+    """getOldBattery's 64 bytes (without the report id)."""
+    return [0x00, 0x02, 0x8F, 0x00 if wired else 0x01] + [0x00] * 60
+
+
+def parse_old(resp) -> Tuple[Optional[int], Optional[bool]]:
+    """A getOldBattery reply -> (battery %, charging), or (None, None). The web driver
+    accepts the reply with or without a leading report id byte, and so does this."""
+    r = list(resp or [])
+    for off in (1, 0):
+        if len(r) > off + 5 and r[off] == 0xA1 and r[off + 1] == 0x02 and r[off + 2] == 0x8F:
+            charge, batt = r[off + 4], r[off + 5]
+            if batt <= 100:
+                return batt, bool(charge)
+    return None, None
 
 
 class _HIDP_CAPS(ctypes.Structure):
@@ -116,9 +203,16 @@ class GWolvesProvider(Provider):
         self._path: Dict[int, bytes] = {}          # pid -> collection that answered
         self._name: Optional[str] = None           # model, once seen on the cable
         self._last: Optional[Tuple[int, bool, float]] = None
+        self._model_last: Dict[int, Tuple[int, bool, float]] = {}   # model -> last reading
 
-    def _read(self, path: bytes) -> Tuple[Optional[Reading], bool]:
+    def _read(self, path: bytes, pid: Optional[int] = None) -> Tuple[Optional[Reading], bool]:
         """-> (reading or None, the collection accepted the request)."""
+        model = MODELS.get(pid) if pid is not None else None
+        old = model is not None and model[2] == OLD
+        if old:
+            request, parse, what = old_request(model[3]), parse_old, "0x8f"
+        else:
+            request, parse, what = QUERY + [0x00] * (64 - len(QUERY)), parse_feature, "0x83"
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -127,7 +221,7 @@ class GWolvesProvider(Provider):
             return None, False
         try:
             try:
-                n = dev.send_feature_report([0x00] + QUERY + [0x00] * (64 - len(QUERY)))
+                n = dev.send_feature_report([0x00] + request)
             except (OSError, ValueError) as e:
                 self._diag.append(f"    send: {e}")
                 return None, False
@@ -140,11 +234,11 @@ class GWolvesProvider(Provider):
                     resp = dev.get_feature_report(0, 65)
                 except (OSError, ValueError):
                     resp = None
-                batt, chg = parse_feature(resp)
+                batt, chg = parse(resp)
                 if batt is not None:
                     self._diag.append(f"    reply: {hexdump(resp, 12)}")
                     return (batt, bool(chg)), True
-            self._diag.append("    no a1 reply to request 0x83 (mouse asleep or off)")
+            self._diag.append(f"    no a1 reply to request {what} (mouse asleep or off)")
             return None, True
         finally:
             try:
@@ -168,7 +262,7 @@ class GWolvesProvider(Provider):
                 self._diag.append("  no collection with a 64-byte feature report: nothing sent")
                 return None
             self._path[pid] = path
-        res, _ = self._read(path)
+        res, _ = self._read(path, pid)
         return res
 
     def poll(self) -> List[DeviceStatus]:
@@ -181,11 +275,17 @@ class GWolvesProvider(Provider):
             log.warning("hid.enumerate(gwolves): %s", e)
             return []
         groups: Dict[int, List[dict]] = {}
+        models: Dict[int, Dict[int, List[dict]]] = {}      # model -> pid -> collections
         for d in infos:
-            if d["product_id"] == RECEIVER or d["product_id"] in WIRED:
-                groups.setdefault(d["product_id"], []).append(d)
+            pid = d["product_id"]
+            if pid == RECEIVER or pid in WIRED:
+                groups.setdefault(pid, []).append(d)
+            elif pid in MODELS:
+                models.setdefault(MODELS[pid][1], {}).setdefault(pid, []).append(d)
+        out = [self._poll_model(m, pids) for m, pids in sorted(models.items())]
+        out = [st for st in out if st is not None]
         if not groups:
-            return []
+            return out
 
         readings: List[Reading] = []
         # the mouse on the cable first: it names the model, and it is charging
@@ -204,13 +304,33 @@ class GWolvesProvider(Provider):
         if readings:
             batt, chg = readings[0]                        # the cable's reading, if it answered
             self._last = (batt, chg, time.time())
-            return [DeviceStatus(key, name, batt, chg, True, "gwolves", kind="mouse")]
+            return out + [DeviceStatus(key, name, batt, chg, True, "gwolves", kind="mouse")]
         # the receiver cannot tell a sleeping mouse from a switched-off one: keep the last
         # value greyed out for a while, as the WLmouse provider does
         if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
-            return [DeviceStatus(key, name, self._last[0], self._last[1], False, "gwolves",
-                                 kind="mouse")]
-        return []
+            return out + [DeviceStatus(key, name, self._last[0], self._last[1], False, "gwolves",
+                                       kind="mouse")]
+        return out
+
+    def _poll_model(self, model: int, pids: Dict[int, List[dict]]) -> Optional[DeviceStatus]:
+        """A model with its own receiver: the cable first (it is charging), one icon."""
+        name = MODELS[model][0]
+        key = f"gwolves:{model:04x}"
+        reading = None
+        for pid in sorted(pids, key=lambda p: not MODELS[p][3]):
+            self._diag.append(f"[G-Wolves] pid={pid:04x} '{name}' "
+                              f"({'cable' if MODELS[pid][3] else 'receiver'}, "
+                              f"{MODELS[pid][2]} exchange)")
+            reading = self._read_pid(pid, pids[pid])
+            if reading is not None:
+                break
+        if reading is not None:
+            self._model_last[model] = (reading[0], reading[1], time.time())
+            return DeviceStatus(key, name, reading[0], reading[1], True, "gwolves", kind="mouse")
+        last = self._model_last.get(model)
+        if last and time.time() - last[2] < ASLEEP_KEEP:
+            return DeviceStatus(key, name, last[0], last[1], False, "gwolves", kind="mouse")
+        return None
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
