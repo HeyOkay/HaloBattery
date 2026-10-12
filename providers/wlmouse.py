@@ -4,6 +4,13 @@ Protocol (reverse-engineered by @len0c, see incconutwo/mouse-battery-tray, MIT):
   * request: feature report id 0, payload 00 00 02 02 00 83 ...
   * reply:   a1|a2 00 02 02 00 83 <charging> <battery%>
   * fallback: the mouse periodically sends an input report 03 00 <battery%> <charging>
+
+A receiver whose mouse is switched off is walked at most every fifth poll once
+nothing is shown (or it never answered after the first tries): each walk sends the
+feature request to every 0xFFFF collection - each refusal costs ~0.75 s - and then
+listens ~2 s, and a switched-off mouse used to pay that on every poll forever
+(#62 item 5, review by @ahmedkhursheed23). A change in the receiver's device set -
+the charging cable appearing - is walked at once.
 """
 from __future__ import annotations
 
@@ -30,6 +37,13 @@ QUERY = [0x00, 0x00, 0x02, 0x02, 0x00, 0x83]
 
 # how long a silent mouse keeps its (greyed-out) icon before it is hidden, s
 ASLEEP_KEEP = 300
+
+# (#62 item 5) the first few walks of a receiver are always made, so a mouse that
+# is just waking up is found at full rate; once nothing is shown (the level stale,
+# or never seen) the walk runs every BACKOFF_EVERY polls instead - at once when the
+# receiver's device set changes.
+BACKOFF_FIRST = 3
+BACKOFF_EVERY = 5
 
 
 def parse_feature(resp) -> Tuple[Optional[int], Optional[bool]]:
@@ -61,6 +75,9 @@ class WLmouseProvider(Provider):
         self._diag: List[str] = []
         self._last: Dict[str, Tuple[int, bool, float]] = {}
         self._name: Optional[str] = None      # mouse name (remembered from a known PID)
+        self._silent = 0                      # polls in a row with no reading (#62 item 5)
+        self._silent_sig = None               # the device set of the last silent poll
+        self._skip = 0                        # silent polls skipped since the last walk
 
     def _read_feature(self, path: bytes) -> Tuple[Optional[int], Optional[bool]]:
         dev = hid.device()
@@ -166,6 +183,26 @@ class WLmouseProvider(Provider):
         key = "wlmouse"
         readings = []           # (batt, charging, pid)
 
+        # #62 item 5: a walk of a silent receiver is expensive (each vendor
+        # collection's refusal ~0.75 s, then the ~2 s listen), and a switched-off
+        # mouse paid it on every poll forever. While something is shown, or while
+        # the first tries run, every poll walks; once nothing is shown, only every
+        # BACKOFF_EVERY-th does - and a change in the receiver's device set (the
+        # charging cable appearing) walks at once.
+        last_v = self._last.get(key)
+        fresh = last_v is not None and time.time() - last_v[2] < ASLEEP_KEEP
+        sig = tuple(sorted((pid, len(ifaces)) for pid, ifaces in groups.items()))
+        if not fresh:
+            if self._silent < BACKOFF_FIRST:
+                pass                     # the first few tries are always made
+            elif self._silent_sig == sig and self._skip < BACKOFF_EVERY - 1:
+                self._skip += 1
+                self._diag.append(f"[WLmouse] silent for {self._silent} poll(s); next walk "
+                                  f"in up to {BACKOFF_EVERY - self._skip} poll(s)")
+                return []
+            else:
+                self._skip = 0           # the setup changed, or it is time: walk now
+
         def is_receiver(item):
             pid, ifaces = item
             return "RECEIVER" in (ifaces[0].get("product_string") or "").upper() or pid in RECEIVERS
@@ -192,12 +229,17 @@ class WLmouseProvider(Provider):
             batt, chg, pid = readings[0]
             self._diag.append(f"  -> using pid={pid:04x}: {batt}%{' (charging)' if chg else ''}")
             self._last[key] = (batt, chg, time.time())
+            self._silent = 0
+            self._silent_sig = None
+            self._skip = 0
             return [DeviceStatus(key, name, batt, chg, True, "wlmouse")]
 
         # The receiver is silent. It cannot tell a switched-off mouse from one that
         # fell asleep a few seconds after the last movement, so keep the last value
         # (greyed out) for a while and then hide the icon; it comes back as soon as
         # the mouse answers again.
+        self._silent += 1
+        self._silent_sig = sig
         last = self._last.get(key)
         if last and time.time() - last[2] < ASLEEP_KEEP:
             return [DeviceStatus(key, name, last[0], last[1], False, "wlmouse")]

@@ -132,8 +132,23 @@ class B0ParserTests(unittest.TestCase):
                 self.assertEqual(parse(reply), expected)
 
     def test_new_models_in_table(self):
-        for pid in (0x220A, 0x22A7, 0x2298, 0x2269, 0x226D, 0x220E, 0x2212, 0x2216, 0x2236, 0x230A):
+        for pid in (0x220A, 0x22A7, 0x2298, 0x2269, 0x226D, 0x220E, 0x2212, 0x2216, 0x2236, 0x230A, 0x2317):
             self.assertIn(pid, S.MODELS)
+
+
+# ---------------------------------------------------------------- GameBuds X
+class GameBudsXTests(SteelSeriesTestCase):
+    """The GameBuds X (1038:2317) speaks the GameBuds exchange."""
+
+    def test_lower_active_bud_is_the_level(self):
+        [st] = self.poll([entry(0x2317, 3, 0xFFC0, b"gbx")],
+                         {b"gbx": answer([0xB0, 0, 0, 0x03, 0x03, 80, 60])})[0]
+        self.assertEqual((st.name, st.level, st.kind), ("Arctis GameBuds X", 60, "headset"))
+
+    def test_both_buds_in_the_case_gives_no_reading(self):
+        out = self.poll([entry(0x2317, 3, 0xFFC0, b"gbx")],
+                        {b"gbx": answer([0xB0, 0, 0, 0x02, 0x02, 0, 0])})[0]
+        self.assertEqual(out, [])
 
 
 # ------------------------------------------------------------------ older Arctis

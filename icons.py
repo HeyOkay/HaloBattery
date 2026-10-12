@@ -248,7 +248,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if light_taskbar is None:
         light_taskbar = taskbar_is_light()
     fg = (0, 0, 0) if light_taskbar else (255, 255, 255)
-    active = online and level is not None
+    active = online and (level is not None or charging)
     alpha = 255 if active else 110
 
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -263,8 +263,12 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     # charge arc
     if active:
         c = arc_color(level, charging, low, fg) + (int(255 * max(0.0, min(1.0, pulse))),)
-        lvl = max(0, min(100, level))
-        if lvl >= 100:
+        lvl = max(0, min(100, level)) if level is not None else None
+        if lvl is None:
+            # Charging is known, but the level is not: no percentage-sized arc.
+            for start in range(-90, 270, 45):
+                d.arc(box, start, start + 30, fill=c, width=_r(w))
+        elif lvl >= 100:
             d.ellipse(box, outline=c, width=_r(w))
         elif lvl > 0:
             end = -90 + 360 * max(lvl, 2) / 100

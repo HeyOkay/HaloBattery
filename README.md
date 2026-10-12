@@ -20,7 +20,7 @@ Levels are read over USB/HID (a dongle, a receiver or a cable), from Xbox-style 
 2. Extract it somewhere permanent, e.g. `C:\Tools`, so you get `C:\Tools\HaloBattery\HaloBattery.exe`, and run `HaloBattery.exe`. Keep the `HaloBattery` folder together: the .exe needs the `_internal` folder next to it.
 3. Right-click the tray icon → **Start with Windows**.
 
-The app checks for a new release once a day and adds **Download vX.Y.Z…** to the menu when there is one. To update: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.
+The app checks for a new release once a day (or at once with **Preferences → Check for updates now**) and adds **Update to vX.Y.Z** to the menu when there is one. One click downloads it, checks it, closes the app, replaces the program files and starts the new version, which then shows what is new in a small window. Settings, the battery history and `portable.txt` are kept. From version 1.14.0 or older, or when the app sits in a folder it cannot write to (e.g. Program Files), update by hand: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.
 
 Windows SmartScreen may warn about an unrecognized app on first launch, because the file is not code-signed: **More info → Run anyway**. Some antivirus tools flag unsigned Python apps by mistake (usually a generic `!ml` detection). The release is built by GitHub Actions straight from this repository, with public build logs; if you would rather not trust it, use Option 2.
 
@@ -54,13 +54,14 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 
 - **Rename…**: give the device your own name (for example, two controllers with the same name). **Reset name** goes back to the device's own name.
 - **Icon**: pick the pictogram of this device (Automatic, Mouse, Keyboard, Headset, Controller or Bluetooth), for example a controller over Bluetooth that shows the Bluetooth pictogram.
-- **Low battery alert at**: an alert level for this device only (off, 10–30%), or **Default** to follow Preferences. The red ring follows it too.
+- **Low battery alert at**: an alert level for this device only (off, 5–30%), or **Default** to follow Preferences. The red ring follows it too.
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**
 - **Preferences**:
-  - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 10–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
+  - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 5–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
   - **Alert when fully charged** (a notification once per charge, on by default)
   - **Estimated time left**: "about 5 h of use left" in the tooltip, from how fast the device has drained since its last charge. Only time the device is awake and on battery counts, and there is no estimate until it has been used for 30 minutes and dropped 3%. The history is kept in `%APPDATA%\HaloBattery\history.json`.
+  - **Keep disconnected devices until restart** (off by default): a device that goes away stays in the tray, greyed, with its last level, until it comes back or the app restarts
   - **Quiet while gaming** (on by default): while a game or other app is full screen (the same signal Windows uses to hold its own notifications), alerts are held and shown once it closes - one per device, and a low battery alert is dropped if the device was put on the charger meanwhile. Devices are polled only every 5 minutes then, since every poll talks to them; plugging something in still updates at once.
   - **Sound with the low battery alert** (off by default): also play the Windows "Battery Low" sound ("Battery Critical" at 5% or less), for full-screen games where the notification is not seen. It plays again every 5 minutes while the device stays low and off the charger, and **Quiet while gaming** does not hold it back
   - **Windows Bluetooth devices**, **Device pictogram**, **Percentage in the icon** (the level as a number in the ring instead of the pictogram, amber or red when low), **Charging animation**
@@ -69,7 +70,7 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
   - **Device types**: turn off a brand or device family; its devices are then not opened at all
   - **Icon colour**: Automatic (the Windows theme, or MyDockFinder's menu bar while it is running), White or Black
   - **Start with Windows** (per-user registry key, no admin rights needed)
-  - **Check for updates**: once a day, on by default; a notification and a **Download vX.Y.Z…** item appear when a new release is out
+  - **Check for updates**: once a day, on by default; a notification and an **Update to vX.Y.Z** item appear when a new release is out. **Check for updates now** asks at once and always answers with a notification
 - **Hidden devices** (only when a device is hidden): click a device to show it again
 - **Diagnostics…**: writes a detailed report and opens it
 
@@ -113,7 +114,11 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in
 - Hitscan Hyperlight protocol: @sopparus ([sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery)), who mapped it from the vendor application's USB traffic and confirmed it in the [libratbag discussion](https://github.com/libratbag/libratbag/issues/1893).
 - AM Infinity 8K protocol: the AJAZZ Control Center project ([Aiacos/ajazz-control-center](https://github.com/Aiacos/ajazz-control-center), GPL-3.0), which reads the same USB id on its own AJ159 APEX unit.
 - BlackShark V2 Pro 2023: the OpenRazer driver ([PR #2862](https://github.com/openrazer/openrazer/pull/2862)). Razer PIDs and transaction ids: OpenRazer and [RazerBatteryTaskbar](https://github.com/Tekk-Know/RazerBatteryTaskbar).
+- MCHOSE A5 Pro Max protocol: the community web driver [z750sasr/mchose-a5-pro-max-web-driver](https://github.com/z750sasr/mchose-a5-pro-max-web-driver) (MIT), whose transport the independent [Klegus/mchose-macos](https://github.com/Klegus/mchose-macos) table agrees with; confirmed on @Pekish992's mouse ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)).
+- HyperX Cloud II Core Wireless protocol: @dantifrice ([#155](https://github.com/HeyOkay/HaloBattery/issues/155)), whose USBPcap capture of NGENUITY showed the same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless.
 - The reference implementations behind individual devices - HeadsetControl, rivalcfg, Solaar, G-Helper, HyperHeadset, mouse.xyz, [`@openmouse/protocol`](https://github.com/OpenMouse-Project/openmouse), keychron-battery-dkms, JBL_Baterry_Monitor and others - are credited next to the device they were used for in [docs/protocols.md](docs/protocols.md).
+
+The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #1280](https://github.com/openrazer/openrazer/issues/1280) and [Modzeleczek/RazerNariBatteryLevel](https://github.com/Modzeleczek/RazerNariBatteryLevel).
 
 ## License
 
