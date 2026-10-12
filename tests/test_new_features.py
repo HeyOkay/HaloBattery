@@ -297,6 +297,13 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(history.format_left(1800), "less than 1 h of use left")
         self.assertEqual(history.format_left(5.4 * H), "about 5 h of use left")
         self.assertEqual(history.format_left(72 * H), "about 3 days of use left")
+        # 0% with a known rate: seconds_left returns 0.0, not None
+        self.assertEqual(history.format_left(0), "no use left")
+        self.assertEqual(history.format_left(-1), "no use left")
+        h = history.History()
+        self.drain(h, 100, 3, 5)
+        self.assertEqual(h.seconds_left(KEY, 0), 0.0)
+        self.assertEqual(history.format_left(h.seconds_left(KEY, 0)), "no use left")
 
 
 class TimeLeftTooltipTests(HideRenameTestCase):

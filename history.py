@@ -32,7 +32,13 @@ SAVE_EVERY = 300.0       # s between writes of history.json
 
 
 def format_left(seconds: float) -> str:
-    """12600 -> 'about 4 h of use left'."""
+    """12600 -> 'about 4 h of use left'.
+
+    Zero (or a negative from a bad reading) means the battery is empty: saying
+    "less than 1 h of use left" for 0% would be wrong.
+    """
+    if seconds <= 0:
+        return "no use left"
     hours = seconds / 3600.0
     if hours < 1:
         return "less than 1 h of use left"
