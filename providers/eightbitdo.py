@@ -9,6 +9,12 @@ report, the one SDL (and so Steam) switches on:
     enhanced report: id 0x01 over Bluetooth, id 0x04 over USB.
   * byte 14 of that report: bits 0-6 = level in %, bit 7 = charging.
 
+The Pro 3 (2DC8:6009) differs: its report descriptor declares a single input report,
+id 0x04, on both transports, and that report always carries the level in byte 14.
+So it needs no switch at all; read on hardware over Bluetooth, with Steam closed and
+the controller freshly turned on: 04 0f 80 7f 7f 80 00 00 00 00 00 00 09 60 14 ...
+(20 %). Waiting for report 0x01 over Bluetooth discarded every one of its reports.
+
 Switching is NOT harmless (issue #101): the reporter tested it on a Pro 2 over
 Bluetooth and after Steam had switched the controller, DirectInput games saw no
 input until the controller was turned off. The same thing happens with PlayStation
@@ -55,6 +61,12 @@ KNOWN = {
 
 # The enhanced report id: Bluetooth -> 0x01, USB -> 0x04 (SDL_hidapi_8bitdo.c).
 ENHANCED_REPORT = {True: 0x01, False: 0x04}
+# pid -> its report id on every transport (see the module docstring)
+ENHANCED_REPORT_BY_PID = {0x6009: 0x04}
+
+
+def enhanced_report(pid: int, bluetooth: bool) -> int:
+    return ENHANCED_REPORT_BY_PID.get(pid, ENHANCED_REPORT[bluetooth])
 BATTERY_BYTE = 14
 
 # Bluetooth HID paths carry this service GUID and the "VID&" spelling; USB paths "VID_".
@@ -99,7 +111,7 @@ class EightBitDoProvider(Provider):
         s = s.lower()
         return "vid&" in s or _BT_HID_GUID in s
 
-    def _read(self, path, bluetooth: bool, window: float) -> Optional[Tuple[int, bool]]:
+    def _read(self, path, rid: int, window: float) -> Optional[Tuple[int, bool]]:
         """Listen only. -> (level, charging) from an enhanced report, or None."""
         dev = hid.device()
         try:
@@ -112,7 +124,6 @@ class EightBitDoProvider(Provider):
                 dev.set_nonblocking(True)
             except Exception:
                 pass
-            rid = ENHANCED_REPORT[bluetooth]
             seen: Dict[int, List[int]] = {}       # report id -> the first report of that id
             count = 0
             deadline = time.time() + window
@@ -179,7 +190,7 @@ class EightBitDoProvider(Provider):
                 if left <= 0:
                     self._diag.append("  out of time for this controller")
                     break
-                res = self._read(d["path"], bluetooth, min(WINDOW, left))
+                res = self._read(d["path"], enhanced_report(pid, bluetooth), min(WINDOW, left))
                 if res is not None:
                     break
             key = f"8bitdo:{pid:04x}:{serial}"

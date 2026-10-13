@@ -25,6 +25,158 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Includes the 1.14.0 low-battery sound preference and the HyperX Cloud III S Wireless,
   Logitech G PRO X 2 LIGHTSPEED and SteelSeries Arctis Nova Elite family labels in
   every registered catalog; hardware names remain unchanged.
+  Also covers the 1.15 update installer, manual update checks, retained-device preference,
+  NZXT and Steam families, and the What's new window's controls, headings and dates.
+  Published release-note prose stays in its original language. HID++ 1.0 coarse levels,
+  the Xbox Bluetooth fallback and Steam's pending state retain language-independent
+  presentation metadata alongside unchanged technical text.
+
+### Changed
+- **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
+  package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
+  and CONTRIBUTING.md into `.github/`. The README now fits on one screen; the full list of
+  features and settings is in `docs/features.md` and the credits in `docs/credits.md`.
+
+### Fixed
+- **Start-up with portable mode no longer hangs in a folder it cannot write to**: the
+  check whether the app folder is writable used `tempfile`, which on Windows retries
+  forever when the folder's permissions deny creating files (Program Files). It is now one
+  exclusive open, like the update check fixed in the 1.15.0 rebuild.
+- **Devices show up on their own after a boot with Windows Fast Startup** (#214): when the
+  first poll finds nothing, the app polls again every 10 s for the first 90 s instead of
+  waiting the whole poll interval, so receivers that wake up late appear without
+  **Refresh now**.
+- **Xbox One S controller (first revision, 045e:02e0) over Bluetooth shows a level**
+  (#236): Windows reports no Bluetooth battery for it, and the icon said only
+  "connected". The controller's own coarse level (empty / low / medium / full) is shown
+  instead; when Windows does report a Bluetooth level, that one is still used.
+
+## [1.15.0] - 2026-10-12
+
+Updates install from the app: **Update to vX.Y.Z** downloads the new version, checks it,
+replaces the program files and restarts, and the first start after an update shows what
+is new. Coming from 1.14.0 or older, download this one by hand; later versions install
+from the app. **Check for updates now** and **Keep disconnected devices until restart** in
+Preferences, and a 5% low battery alert. New devices: Steam Controller (2025), NZXT Lift
+Elite, MCHOSE A5 Pro Max, HyperX Cloud II Core Wireless, Pulsar X2 CrazyLight Mini,
+Corsair Virtuoso RGB Wireless SE / XT, Razer BlackShark V2 Pro (2020), SteelSeries Arctis
+GameBuds X and older Logitech HID++ 1.0 keyboards and mice. Fixes for the Corsair Dark
+Core RGB Pro SE, sleeping Pulsar / ATK / VXE mice, the 8BitDo Pro 3 over Bluetooth and a
+switched-off WLmouse receiver.
+
+### Added
+- **Update from the app**: the **Update to vX.Y.Z** menu item (it used to open the release
+  page) now downloads the new version, checks it against the size and SHA-256 that GitHub
+  lists for the release zip, closes the app, replaces the program files and starts the new
+  version. Settings, the log, the battery history and `portable.txt` are not touched; if
+  anything goes wrong the old files are put back and the old version starts again. When
+  the app is run from source or sits in a folder it cannot write to, the item opens the
+  release page as before.
+- **What's new** window: the first start after an update shows the new version's release
+  notes in short, in a small window in the style of the tray menu (blurred background,
+  light or dark like Windows), with a link to the full notes.
+- **Preferences > Check for updates now**: checks at once, also when the daily check is
+  off, and always answers with a notification (a newer version, the latest one already,
+  or why it could not check).
+- Preferences > "Keep disconnected devices until restart" (off by default): the icon of a controller, headset or Bluetooth device that disconnects stays in the tray, greyed, with its last level, until the device comes back or the app restarts (#151).
+- SteelSeries Arctis GameBuds X (`1038:2317`): the existing GameBuds exchange.
+  Confirmed on hardware by @DCVolo - the level matches SteelSeries GG (#146).
+- A 5% level for the low battery alert, in Preferences and in the per-device
+  **Low battery alert at** menu (@NuRoZ123).
+- MCHOSE A5 Pro Max (2023:f013 1K receiver, 2023:f015 4K receiver, 2023:f019 wired):
+  a third MCHOSE exchange on a third vendor id - 64-byte feature reports, battery on
+  page 0 command 0x83 - from the community web driver for this model
+  ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)); only its own 0xFFFF
+  collection is written to - the 0xFFA0 sibling is left alone even when the mouse is
+  silent (review by @ahmedkhursheed23). Confirmed by the
+  reporter's run on his 1K receiver: the level and the charging state, matching the
+  MCHOSE software.
+- Logitech: devices with no HID++ 2.0 feature table (the older HID++ 1.0 generation - for example the M710 keyboard of the MK710 wireless desktop in [#159](https://github.com/HeyOkay/HaloBattery/issues/159)) are read through the old battery registers (`0x0D`/`0x07`), mirrored from Solaar. Confirmed on hardware in the reporter's test-build run. On review (@ahmedkhursheed23) a HID++ 2.0 error answer to a register read is recognised too - a 2.0 device without a battery feature no longer costs a timeout per register on such a poll.
+- HyperX Cloud II Core Wireless (03f0:0995 its dongle, 03f0:0795 its second mode): the
+  same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless, decoded
+  from the reporter's NGENUITY capture in [#155](https://github.com/HeyOkay/HaloBattery/issues/155).
+  Confirmed on hardware in the reporter's run, which also showed both connection ids
+  answering at once while charging - they now share one icon, with the charging reading
+  winning when both answer.
+- Pulsar X2 CrazyLight Mini (`3710:5406` on its dongle, `3710:3414` on the cable): the same 17-byte command-0x04 power exchange as the other Pulsar/ATK mice, mirrored from the frames the reporter of [#164](https://github.com/HeyOkay/HaloBattery/issues/164) tested on their own hardware on both transports. Confirmed on hardware - their run of the branch read both transports.
+- NZXT Lift Elite Wireless (`1e71:2101`, the "NZXT Lift Elite Dongle"): the battery is read with the same telemetry request NZXT CAM uses, decoded from USBPcap captures of CAM (field map and the `ffca:0001` collection in `docs/protocols.md`). Charging follows the cable. The same mouse on its USB cable (`1e71:2129`) is read too. Confirmed on hardware by @MrBeat93 ([#148](https://github.com/HeyOkay/HaloBattery/issues/148)): both connections read (2.4 GHz and USB cable), the level tracks CAM (one step above CAM's smoothed panel), and the charging flag follows the cable. While CAM is open the dongle does not answer and the last value stays on a greyed icon. On
+  review (@ahmedkhursheed23) the mouse's two ids became one icon (keyed on the receiver's
+  id), and a silent id can no longer add a greyed twin while the other one answers.
+- Corsair Virtuoso RGB Wireless SE over its Slipstream Multi-Device receiver (1B1C:0A40):
+  the same routed exchange as the Dark Core with the receiver's measured differences - the
+  frame carries a leading 0x02 (`02 09 02 0f`), Windows takes it only bare (every
+  report-id-prefixed form is refused with 0x57), the full session runs first (firmware
+  query, receiver heartbeat, headset heartbeat), and the headset reports the charge state
+  on property 0x10 (1 charging, 2 on battery). Measured end to end with @jeffpeng3's
+  on-hardware runs, and confirmed in the app on his unit - 97 % over the receiver and
+  the charging state both read correctly ([#204](https://github.com/HeyOkay/HaloBattery/issues/204)).
+- The rest of the Corsair Virtuoso family, on the same routed exchange: the SE's own
+  receiver `1B1C:0A3E` and cable `1B1C:0A3D`, the XT's receiver `1B1C:0A64` and cable
+  `1B1C:0A62` (HeadsetControl's reworked XT/SE device,
+  [#570](https://github.com/Sapd/HeadsetControl/pull/570) - the wired ids try target
+  `0x08` first and the receivers `0x09`, each with the other as the fallback, and reads
+  need neither a session nor software mode). A product's receiver and cable ids share
+  one icon, and a reading that reports charging wins the merge. The four ids are
+  HeadsetControl's, run on its author's hardware; **unverified in the app** until an
+  XT/SE owner runs a build.
+- Steam Controller (2025) over its puck (#58): the battery is read from the controller's
+  own input reports - the charge state and level in report 0x43, a connect and disconnect
+  in reports 0x79 / 0x46 - listen-only, nothing is sent to the controller, so its lizard
+  mode and rumble stay as the user's games set them. On review (@ahmedkhursheed23) the
+  greyed value no longer expires on a timer while the puck is there (a removed icon comes
+  back at a new tray position, #87), the collection under each slot interface is picked
+  by usage with a logged fallback when 0xFF00:0001 is not present, and the diagnostics
+  list the puck's collections when nothing matches. The puck sends its battery report
+  about every 2.5 s while the controller is awake (~0.4 Hz, measured by
+  [CouchTurtle/sc2-research](https://github.com/CouchTurtle/sc2-research) and
+  [eva-val/steambattery](https://github.com/eva-val/steambattery)); the first tester
+  run in #58 showed the original 0.4 s listen window missing it, so a slot with a
+  live controller is listened to for up to 5 s per poll - twice the cadence - with a
+  disconnect ending the read early. Unit tests. Confirmed on hardware (@Kosminaut13, #58): 95 % while awake and 100 % charging in the app, and an asleep slot keeping its last value greyed.
+- Razer BlackShark V2 Pro (2020, receiver 1532:0528): device-reported battery level
+  and charging state through its 64-byte feature report 0xFF. Reads the receiver's
+  vendor collection without probing the generic mouse or 2023 PA protocols.
+  Recognizes on-battery (0x01), charging (0x09) and charge-complete (0x06) states.
+  Unknown power states keep fresh readings visible with charging marked unknown.
+  Stale replies are rejected and the charging cable (1532:052E) gets no second icon.
+  The reported battery level is imprecise: observed discharge readings were
+  100 -> 80 -> 50 -> 30 -> 10, with no intermediate values.
+  During active charging the unreliable percentage is hidden while the charging
+  indicator remains visible; connecting the charger caused an immediate jump
+  from 10 to 80. On battery and after charge completion, the reported level is
+  displayed unchanged. Invalid levels are shown as unknown.
+
+### Fixed
+- Corsair Dark Core RGB Pro SE: read the battery the way the dongle actually answers (#56). The
+  1.13.0 build asked with ckb-next's "nxp" packet, which this dongle never answers; it speaks the
+  newer routed exchange (ckb-next's "bragi", OpenLinkHub's "slipstream") and returns the level in
+  tenths of a percent behind the mouse's route byte. A frame that is not exactly an answer - the
+  receiver's device records and notices - is no longer read as a level; that parsing was the 0 %
+  flash. The request and the answer were captured on the reporter's dongle; the reading is
+  confirmed on hardware: KKiruano ran the test build against his mouse and it showed
+  the same value as SignalRGB ([#56](https://github.com/HeyOkay/HaloBattery/issues/56)).
+- A sleeping Pulsar / ATK / VXE mouse keeps its place in the tray (the last reading,
+  greyed out) instead of leaving it, and it is re-read as soon as the PC is used again -
+  on the first input after a pause, and also while input keeps coming, which is what
+  touchpad use looks like (#87). Reported with hardware measurements by @huyxs2005,
+  and confirmed on his mouse after the second test build. A later screen-off report
+  showed the greyed reading still expired after five minutes, and the re-created icon
+  came back at a new tray position - the reading now stays for as long as the mouse's
+  receiver is plugged in, however long the mouse sleeps, and the reporter confirmed it
+  on both a manual and an automatic screen-off. On review (@ahmedkhursheed23)
+  the input wake was narrowed to readings whose provider marks them wake-on-input: a
+  greyed icon for a device that is simply off no longer re-polls the whole app on
+  every keystroke, and the input class is defined once instead of on every tick.
+- 8BitDo Pro 3 in D-input mode: the level is now shown at all times, over Bluetooth too.
+  Its only input report is 0x04 on both transports and always carries the level, but the
+  app waited for report 0x01 over Bluetooth and discarded every report, so the icon kept
+  saying "level shown only while Steam or a game uses the controller". Confirmed on a
+  real Pro 3 over Bluetooth, with Steam closed.
+- WLmouse receiver with the mouse switched off: the walk of every vendor collection
+  plus the two-second listen ran on every poll forever, even after the greyed icon
+  was gone. It now runs every fifth poll once nothing is shown - and at once when
+  the receiver's device set changes, such as the charging cable appearing (#62
+  item 5, reported by @ahmedkhursheed23).
 
 ## [1.14.0] - 2026-10-05
 
@@ -863,7 +1015,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.14.0...HEAD
+[Unreleased]: ../../compare/v1.15.0...HEAD
+[1.15.0]: ../../compare/v1.14.0...v1.15.0
 [1.14.0]: ../../compare/v1.13.0...v1.14.0
 [1.13.0]: ../../compare/v1.12.0...v1.13.0
 [1.12.0]: ../../compare/v1.11.0...v1.12.0

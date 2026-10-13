@@ -511,5 +511,90 @@ class AsianLanguageTests(unittest.TestCase):
                         self.assertNotIn(langid & 0x3FF, other.windows_primary_ids)
 
 
+class UpdateLocalizationTests(unittest.TestCase):
+    def test_manual_update_check_answers_in_each_selected_language(self):
+        for code in i18n.LANGUAGES:
+            with self.subTest(language=code):
+                app = make_app({"language": code, "quiet_fullscreen": False})
+                app.install_ok = True
+                notes = []
+                app.placeholder = types.SimpleNamespace(notify=lambda text, title: notes.append((text, title)),
+                                                        update_menu=lambda: None)
+                with mock.patch.object(hb, "save_config"), mock.patch.object(hb.updates, "fetch_latest",
+                        return_value=hb.updates.Release(hb.VERSION, "https://example.invalid/release")):
+                    app.check_update(manual=True)
+                self.assertEqual(notes[0][0], app.tr("notification.update_current", version=hb.VERSION))
+                with mock.patch.object(hb, "save_config"), mock.patch.object(hb.updates, "fetch_latest",
+                        side_effect=OSError("HTTP 503 (test)")):
+                    app.check_update(manual=True)
+                self.assertIn("HTTP 503 (test)", notes[1][0])
+                self.assertEqual(notes[1][1], app.tr("notification.update_title", app=hb.APP_TITLE))
+                self.assertEqual(app.cfg["language"], code)
+
+    def test_deferred_update_messages_render_at_delivery(self):
+        app = make_app({"language": "en", "quiet_fullscreen": False})
+        notes = []
+        app.placeholder = types.SimpleNamespace(notify=lambda text, title: notes.append(text))
+        with mock.patch.object(app, "quiet", return_value=True):
+            app.notify_update("notification.update_downloading", version="99.0.0")
+            app.notify_update("notification.update_failed", error="HTTP 503")
+        app.cfg["language"] = "fr"
+        app.flush_held()
+        self.assertTrue(notes[0].startswith("Téléchargement de la version 99.0.0."))
+        self.assertTrue(notes[1].startswith("La mise à jour n’a pas pu être installée (HTTP 503)."))
+
+    def test_update_offer_and_progress_follow_language_and_install_capability(self):
+        for code in i18n.LANGUAGES:
+            with self.subTest(language=code):
+                app = make_app({"language": code})
+                app.update = hb.updates.Release("99.0.0", "https://example.invalid/release")
+                for install in (False, True):
+                    app.install_ok = install
+                    for progress in (None, 0, 42, 100):
+                        app.update_progress = progress
+                        item = app.build_menu(None).items[1]
+                        expected = hb.update_item_text("99.0.0", install, progress, language=code)
+                        self.assertEqual(item.text, expected)
+                self.assertEqual(hb.update_text("99.0.0", False, language=code),
+                                 app.tr("notification.update", version="99.0.0"))
+                self.assertEqual(hb.update_text("99.0.0", True, language=code),
+                                 app.tr("notification.update_install", version="99.0.0"))
+
+    def test_whats_new_labels_dates_and_published_prose(self):
+        notes = "### Added\n- Mouse support. More detail.\n"
+        for code in i18n.LANGUAGES:
+            with self.subTest(language=code):
+                blocks = hb.whatsnew.localized_blocks(notes, language=code)
+                self.assertEqual(blocks[0], ("heading", i18n.translate("whatsnew.added", language=code)))
+                self.assertEqual(blocks[1], ("item", "Mouse support."))
+        self.assertEqual(hb.whatsnew.subtitle("1.14.0", "2026-10-13", language="fr"),
+                         "Mise à jour depuis la v1.14.0  ·  13 octobre 2026")
+        self.assertEqual(hb.whatsnew.nice_date("2026-10-13", language="ja"), "2026年10月13日")
+        self.assertEqual(hb.whatsnew.nice_date("bad", language="fr"), "")
+        with mock.patch.dict(fr.MESSAGES, {}, clear=True):
+            self.assertEqual(hb.whatsnew.nice_date("2026-10-13", language="fr"), "13 October 2026")
+
+    def test_whats_new_captures_language_on_the_tk_thread(self):
+        queued = []
+        host = types.SimpleNamespace(call=lambda callback: (queued.append(callback) or True))
+        with mock.patch.object(hb.whatsnew, "WhatsNewWindow") as window:
+            hb.whatsnew.show(host, "1.15.0", "", "https://example.invalid", language="fr")
+            window.assert_not_called()
+            queued[0]()
+        self.assertEqual(window.call_args.kwargs["language"], "fr")
+
+    def test_coarse_bluetooth_state_and_retained_metadata(self):
+        from dataclasses import replace
+        st = dev(level=50)
+        st.approx = "about 50% (medium), over Bluetooth"
+        st.ui_message = "state.approx_grade"
+        st.ui_params = {"level": 50, "grade": "medium", "bluetooth": True}
+        st.wake_on_input = True
+        kept = replace(st, online=False, charging=False)
+        self.assertTrue(kept.wake_on_input)
+        self.assertEqual(hb.device_state(kept, language="fr"), "environ 50 % (moyenne), via Bluetooth")
+        self.assertEqual(hb.device_state(kept), st.approx)
+
+
 if __name__ == "__main__":
     unittest.main()

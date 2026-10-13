@@ -178,7 +178,7 @@ class PollTest(unittest.TestCase):
         self.assertEqual(self.provider._readers, {})
 
     def test_probe_listens_on_its_first_poll(self):
-        # console mode (probe.bat) polls once, so it still waits for a level to arrive
+        # console mode (scripts/probe.bat) polls once, so it still waits for a level to arrive
         provider = J.JblProvider(listen_first=WAIT)
         later = threading.Timer(0.2, self.rx.send, ([J.REPORT_ID_BATTERY, 88],))
         later.start()                   # the headset talks only after poll() has begun

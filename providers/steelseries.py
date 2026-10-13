@@ -15,6 +15,9 @@ Protocol (model list and reply layouts as documented by Sapd/HeadsetControl):
       status 01 = headset off, charging 01 = charging
   * GameBuds reply:  b0 <?> <?> <left status> <right status> <left %> <right %> ...
       status 03 = bud out of the case; a bud in the case reports 0 %, so it is ignored
+      the GameBuds X (0x2317) answers the same exchange; the vendor's own spec keeps the
+      same base status struct for it (Arctis-Sound-Manager's reading of SteelSeries GG),
+      confirmed against GG on a reporter's dongle (#146)
   * other reports can arrive on the same interface; the b0 reply is picked out, and the
    parsers insist on it, so anything else the dongle sends yields no reading at all
    (without that check a stray report reads as a level: `01 00 63 02` as 99%)
@@ -144,6 +147,7 @@ MODELS = {
     0x2216: ("Arctis 7+ Xbox", parse_arctis7_plus),
     0x2236: ("Arctis 7+ Destiny", parse_arctis7_plus),
     0x230A: ("Arctis GameBuds", parse_gamebuds),
+    0x2317: ("Arctis GameBuds X", parse_gamebuds),
 }
 
 

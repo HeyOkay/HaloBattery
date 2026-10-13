@@ -43,7 +43,7 @@ LEVEL_INDEX = 1
 # reader thread keeps it open and listens all the time; poll() only takes what it heard and
 # never waits, so it does not hold up the other devices.
 READ_TIMEOUT_MS = 250       # one read() of the reader thread; only sets how fast it can stop
-# probe.bat polls once: there the first poll still listens this long, as it always did
+# scripts/probe.bat polls once: there the first poll still listens this long, as it always did
 PROBE_LISTEN_S = 10.0
 
 PIDS = {
