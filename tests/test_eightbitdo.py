@@ -150,6 +150,7 @@ class ProviderTest(unittest.TestCase):
         out = self.poll([entry(BT_PATH)], {BT_PATH: FakePad([])})
         self.assertIsNone(out[0].level)
         self.assertIn("Steam", out[0].approx)
+        self.assertEqual(out[0].ui_message, "state.8bitdo_basic")
         self.assertLessEqual(self.clock.now - start, E.BUDGET + 0.01)
         self.assertIn("ordinary mode", "\n".join(self.provider.diagnostics()))
 

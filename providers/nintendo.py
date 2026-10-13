@@ -203,7 +203,9 @@ class NintendoProvider(Provider):
                 self._last[key] = (res, now)
                 level, charging, text = res
                 out.append(DeviceStatus(key, name, level, charging, True, "nintendo", text,
-                                        kind="gamepad", via="bluetooth"))
+                                        kind="gamepad", via="bluetooth", ui_message="state.approx_grade",
+                                        ui_params={"level": level, "grade": LEVEL_NAMES[level * 8 // 100],
+                                                   "charging": charging}))
                 continue
             if not self._failing.get(key):
                 self._failing[key] = True
@@ -213,7 +215,9 @@ class NintendoProvider(Provider):
                 level, charging, text = last[0]
                 out.append(DeviceStatus(key, name, level, False, False, "nintendo",
                                         f"{text.split(',')[0]} (last known value)",
-                                        kind="gamepad", via="bluetooth"))
+                                        kind="gamepad", via="bluetooth", ui_message="state.approx_grade",
+                                        ui_params={"level": level, "grade": LEVEL_NAMES[level * 8 // 100],
+                                                   "last_known": True}))
         return out
 
     def diagnostics(self) -> List[str]:

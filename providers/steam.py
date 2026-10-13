@@ -258,7 +258,7 @@ class SteamProvider(Provider):
                 if last is None:
                     self._diag.append(f"    -> {NOT_REPORTED}")
                     out.append(DeviceStatus(key, NAME, None, False, True, "steam",
-                                            NOT_REPORTED, kind="gamepad"))
+                                            NOT_REPORTED, kind="gamepad", ui_message="state.pending"))
                 else:
                     level, charging = last
                     self._diag.append(f"    -> {level}%"

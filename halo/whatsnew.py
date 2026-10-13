@@ -25,6 +25,7 @@ import time
 from typing import Callable, List, Optional, Tuple
 
 from . import flyout
+import i18n
 
 log = logging.getLogger("halo_battery")
 
@@ -282,20 +283,30 @@ def visible_blocks(blocks: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     return blocks
 
 
-def nice_date(iso: str) -> str:
+def localized_blocks(notes_md: str, *, language: str = "en") -> List[Tuple[str, str]]:
+    # Release prose is external published content, kept in its original language.
+    headings = {name: "whatsnew." + name.lower()
+                for name in ("Added", "Fixed", "Changed", "Removed", "Deprecated", "Security")}
+    return [(kind, i18n.translate(headings[text], language=language)
+             if kind == "heading" and text in headings else text)
+            for kind, text in visible_blocks(parse_notes(notes_md))]
+
+
+def nice_date(iso: str, *, language: str = "en") -> str:
     """'2026-10-05' -> '5 October 2026'; anything else -> ''."""
     try:
         d = datetime.date.fromisoformat((iso or "")[:10])
     except ValueError:
         return ""
-    return f"{d.day} {d.strftime('%B')} {d.year}"
+    month = i18n.translate("date.month." + str(d.month), language=language)
+    return i18n.translate("whatsnew.date", language=language, day=d.day, month=month, year=d.year)
 
 
-def subtitle(from_version: str, date: str) -> str:
+def subtitle(from_version: str, date: str, *, language: str = "en") -> str:
     parts = []
     if from_version:
-        parts.append(f"Updated from {from_version}")
-    when = nice_date(date)
+        parts.append(i18n.translate("whatsnew.from", language=language, version=from_version))
+    when = nice_date(date, language=language)
     if when:
         parts.append(when)
     return "  ·  ".join(parts)
@@ -464,28 +475,32 @@ _open: List["WhatsNewWindow"] = []
 
 def show(host: "flyout.FlyoutHost", version: str, notes_md: str, url: str,
          from_version: str = "", date: str = "",
-         open_url: Optional[Callable[[str], None]] = None) -> threading.Event:
+         open_url: Optional[Callable[[str], None]] = None, *, language: str = "en") -> threading.Event:
     """Show the window (from any thread). -> an event that is set once it is closed,
     or at once when it cannot be shown."""
     closed = threading.Event()
     if not host.call(lambda: _create(host, version, notes_md, url, from_version, date,
-                                     open_url, closed)):
+                                     open_url, closed, language)):
         log.info("what's new: no window (tkinter is not available)")
         closed.set()
     return closed
 
 
-def _create(host, version, notes_md, url, from_version, date, open_url, closed) -> None:
+def _create(host, version, notes_md, url, from_version, date, open_url, closed, language="en") -> None:
     try:
-        WhatsNewWindow(host, version, notes_md, url, from_version, date, open_url, closed)
+        WhatsNewWindow(host, version, notes_md, url, from_version, date, open_url, closed, language=language)
     except Exception as e:
         log.exception("what's new: %s", e)
         closed.set()
 
 
 class WhatsNewWindow:
+    def tr(self, key):
+        return i18n.translate(key, language=self.language)
+
     def __init__(self, host, version: str, notes_md: str, url: str, from_version: str,
-                 date: str, open_url, closed: threading.Event):
+                 date: str, open_url, closed: threading.Event, *, language: str = "en"):
+        self.language = language
         self.host, self.url, self.open_url, self.closed = host, url, open_url, closed
         tk, root, w32 = host._tk, host._root, host._w
         self.tk, self.root, self.w32 = tk, root, w32
@@ -525,10 +540,9 @@ class WhatsNewWindow:
         icon_fam = next((f for f in flyout.ICON_FONTS if f in fams), None)
         self.f_icon = tkf.Font(root, family=icon_fam, size=-px(CLOSE_PX)) if icon_fam else None
         self.version, self.from_version, self.date = version, from_version, date
-        self.blocks = visible_blocks(parse_notes(notes_md))
+        self.blocks = localized_blocks(notes_md, language=language)
         if not self.blocks:
-            self.blocks = [("para", "The release notes could not be loaded. "
-                                    "They are on the release page.")]
+            self.blocks = [("para", self.tr("whatsnew.notes_unavailable"))]
         self.hover: Optional[str] = None       # "close" / "link" / "button"
         self.pressed: Optional[str] = None     # the part the mouse went down on
         self.thumb_drag: Optional[Tuple[int, int]] = None   # (y at the press, scroll then)
@@ -590,10 +604,10 @@ class WhatsNewWindow:
         label_h = self.f_label.metrics("linespace")
         eyebrow_h = self.f_eyebrow.metrics("linespace")
         title_h = self.f_title.metrics("linespace")
-        sub = subtitle(self.from_version, self.date)
+        sub = subtitle(self.from_version, self.date, language=self.language)
         header_h = eyebrow_h + title_h + (label_h if sub else 0)
         y = top
-        cv.create_text(x_text, y, text="What's new", font=self.f_eyebrow, fill=c["link"], anchor="nw",
+        cv.create_text(x_text, y, text=self.tr("whatsnew.title"), font=self.f_eyebrow, fill=c["link"], anchor="nw",
                        tags="accent")
         y += eyebrow_h
         cv.create_text(x_text, y - px(2), text=f"Halo Battery {self.version}", font=self.f_title,
@@ -618,11 +632,11 @@ class WhatsNewWindow:
         cv.create_window(px(PAD), y, window=self.body, anchor="nw")
         y += self.body_h + px(FOOTER_GAP)
         # footer: the link on the left, the button on the right
-        bw = self.f_button.measure("Got it") + 2 * px(BUTTON_PAD_X)
+        bw = self.f_button.measure(self.tr("whatsnew.got_it")) + 2 * px(BUTTON_PAD_X)
         bh = px(BUTTON_H)
         self.button_box = (self.w - px(PAD) - bw, y, self.w - px(PAD), y + bh)
         self._make_buttons()
-        link_text = "Full release notes"
+        link_text = self.tr("whatsnew.full_notes")
         lw = self.f_link.measure(link_text)
         gw = self.f_icon.measure(LINK_GLYPH) + px(6) if self.f_icon else 0
         mid = y + bh // 2
@@ -731,9 +745,9 @@ class WhatsNewWindow:
                                                      fill), True)
         shift = px(1) if down else 0
         tx, ty = (bx0 + bx1) // 2, (by0 + by1) // 2 + shift
-        cv.create_text(tx, ty + px(1), text="Got it", font=self.f_button,
+        cv.create_text(tx, ty + px(1), text=self.tr("whatsnew.got_it"), font=self.f_button,
                        fill=c["emboss_down"] if down else c["emboss"], anchor="center", tags="chrome")
-        cv.create_text(tx, ty, text="Got it", font=self.f_button,
+        cv.create_text(tx, ty, text=self.tr("whatsnew.got_it"), font=self.f_button,
                        fill=c["on_accent_down"] if down else c["on_accent"],
                        anchor="center", tags="chrome")
         self._thumb = self._track = None         # redrawn below

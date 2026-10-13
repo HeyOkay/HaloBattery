@@ -23,6 +23,12 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**
 - **Preferences**:
+  - **Language / Langue**: English, Français, 繁體中文, 简体中文 or 日本語. On first startup without
+    a saved language, the Windows UI language selects a supported translation, otherwise English.
+    The selection is saved with the other settings (next to the app in portable mode).
+    A manual choice updates menus and tooltips immediately and always takes precedence over Windows.
+    An invalid saved value falls back to English without redetection. Diagnostics and status-file text
+    remain in English.
   - **Poll interval** (15 s to 5 min) and **Low battery alert** (off, 5–30%): change them with the − and + buttons or the mouse wheel, the menu stays open
   - **Alert when fully charged** (a notification once per charge, on by default)
   - **Estimated time left**: "about 5 h of use left" in the tooltip, from how fast the device has drained since its last charge. Only time the device is awake and on battery counts, and there is no estimate until it has been used for 30 minutes and dropped 3%. The history is kept in `%APPDATA%\HaloBattery\history.json`.
@@ -42,6 +48,9 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
 ## Updates
 
 The app checks for a new release once a day (or at once with **Preferences → Check for updates now**) and adds **Update to vX.Y.Z** to the menu when there is one. One click downloads it, checks it, closes the app, replaces the program files and starts the new version, which then shows what is new in a small window. Settings, the battery history and `portable.txt` are kept. From version 1.14.0 or older, or when the app sits in a folder it cannot write to (e.g. Program Files), update by hand: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.
+
+The **What's new** window uses the selected language for its controls, section headings and date.
+The published release-note prose and the full notes on GitHub remain in their original language.
 
 ## SmartScreen and antivirus warnings
 

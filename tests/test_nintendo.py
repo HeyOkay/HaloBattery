@@ -173,6 +173,8 @@ class PollTest(ProviderTest):
         self.assertEqual((st.name, st.level, st.charging, st.online),
                          ("Nintendo Switch Pro Controller", 75, False, True))
         self.assertEqual(st.approx, "about 75% (medium)")
+        self.assertEqual((st.ui_message, st.ui_params),
+                         ("state.approx_grade", {"level": 75, "grade": "medium", "charging": False}))
         self.assertEqual((st.key, st.kind, st.source), ("switch:2009:98b6e9123456", "gamepad", "nintendo"))
         self.assertEqual(len(pad.writes), 1)
         self.assertEqual(pad.writes[0][10], N.SUBCOMMAND_DEVICE_INFO)
@@ -202,6 +204,7 @@ class PollTest(ProviderTest):
         res = self.poll(e, {BT_PATH: pad})
         self.assertEqual([(r.level, r.charging, r.online) for r in res], [(75, False, False)])
         self.assertEqual(res[0].approx, "about 75% (medium) (last known value)")
+        self.assertEqual(res[0].ui_params, {"level": 75, "grade": "medium", "last_known": True})
         self.clock.now += N.ASLEEP_KEEP
         self.assertEqual(self.poll(e, {BT_PATH: pad}), [])
 

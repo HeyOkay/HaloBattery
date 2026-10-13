@@ -6,6 +6,31 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Traditional Chinese, Simplified Chinese and Japanese UI catalogs using the localization registry
+  from #188. All three are selectable in Preferences and detected from the Windows
+  UI language; Traditional Chinese uses exact LANGIDs to avoid selecting it on
+  Simplified Chinese systems, which select their own catalog. All three languages
+  use the `other` plural form.
+- French localization for tray menus, preferences, tooltips, device states, rename
+  dialogs and notifications (#162). **Language / Langue** in Preferences switches
+  between registered languages immediately and saves the selection. On the first
+  run without a saved language, the Windows UI language selects a supported
+  translation; unsupported languages use English. Saved choices take precedence, and English remains the fallback.
+  Diagnostics, protocol output and status-file text stay in English. Translation
+  catalogs are bundled without additional runtime dependencies.
+  A single language registry supplies native names, catalogs, Windows detection
+  and plural rules; catalog checks cover every registered language, including
+  languages with additional plural forms.
+  Includes the 1.14.0 low-battery sound preference and the HyperX Cloud III S Wireless,
+  Logitech G PRO X 2 LIGHTSPEED and SteelSeries Arctis Nova Elite family labels in
+  every registered catalog; hardware names remain unchanged.
+  Also covers the 1.15 update installer, manual update checks, retained-device preference,
+  NZXT and Steam families, and the What's new window's controls, headings and dates.
+  Published release-note prose stays in its original language. HID++ 1.0 coarse levels,
+  the Xbox Bluetooth fallback and Steam's pending state retain language-independent
+  presentation metadata alongside unchanged technical text.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

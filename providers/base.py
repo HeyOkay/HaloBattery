@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 log = logging.getLogger("halo_battery")
@@ -26,6 +26,10 @@ class DeviceStatus:
                                  # tray's input wake fires only for these - an icon
                                  # greyed because its device is off must not re-poll
                                  # the app on every keystroke (review, #202).
+    # Presentation only: keep approx in English for diagnostics and status.json.
+    # Appended fields preserve existing positional constructors and protocol tests.
+    ui_message: str = ""
+    ui_params: dict = field(default_factory=dict)
 
 
 class Provider:

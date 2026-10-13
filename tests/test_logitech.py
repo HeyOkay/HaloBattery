@@ -250,6 +250,8 @@ class ReceiverTests(LogitechTestCase):
         [st] = L.LogitechProvider().poll()
         self.assertEqual((st.name, st.level, st.approx, st.charging, st.key),
                          ("Logitech device", 90, "about 90% (full)", False, "logitech:c52b:3"))
+        self.assertEqual((st.ui_message, st.ui_params),
+                         ("state.approx_grade", {"level": 90, "grade": "full"}))
         self.assertIn((b"short", [0x10, 3, 0x81, 0x07, 0, 0, 0]), bus.writes)
 
     def test_the_status_register_charging_byte(self):
@@ -342,6 +344,20 @@ class ReceiverTests(LogitechTestCase):
         self.use(receiver(), {b"long": ({1: dev}, b"short")})
         [st] = L.LogitechProvider().poll()
         self.assertEqual((st.level, st.approx), (50, "about 50% (good)"))
+        self.assertEqual((st.ui_message, st.ui_params),
+                         ("state.approx_grade", {"level": 50, "grade": "good"}))
+
+    def test_localization_metadata_survives_sleep_cache(self):
+        dev = FakeHidpp({L.F_UNIFIED: (5, {1: [0, 4, 0, 0]})})
+        self.use(receiver(), {b"long": ({1: dev}, b"short")})
+        provider = L.LogitechProvider()
+        [awake] = provider.poll()
+        dev.silent = True
+        [asleep] = provider.poll()
+        self.assertFalse(asleep.online)
+        self.assertEqual(asleep.approx, awake.approx)
+        self.assertEqual((asleep.ui_message, asleep.ui_params), (awake.ui_message, awake.ui_params))
+        self.assertIsNot(asleep.ui_params, awake.ui_params)
 
 
 def win_path(instance, col):

@@ -191,6 +191,8 @@ class PollTest(ProviderTest):
         res = self.poll(e, {b"if0-ff01": FakeMouse(level=2)})
         self.assertEqual([(r.name, r.level, r.approx) for r in res],
                          [("ROG Keris Wireless", 50, "about 50%")])
+        self.assertEqual((res[0].ui_message, res[0].ui_params),
+                         ("state.approx", {"level": 50, "charging": False}))
 
     def test_unknown_asus_devices_are_not_opened(self):
         e = [dict(issue_81_entries()[0], product_id=0x1ACE)]    # OMNI receiver: not included

@@ -26,6 +26,7 @@ One icon per device. No vendor software.
 - **Stays out of the way.** Alerts wait until your full-screen game closes, and devices are polled less often while you play.
 - **Native look.** A Windows 11 style menu, sharp at any display scale, light or dark.
 - **Autoupdates.** A new release installs from the tray menu in one click.
+- **Your language.** English, Français, 繁體中文, 简体中文 or 日本語, selected in Preferences.
 
 <p align="center"><img src="docs/charging.gif" alt="The charging animation: the green arc slowly breathes" width="300"></p>
 

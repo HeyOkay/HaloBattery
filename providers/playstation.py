@@ -302,7 +302,7 @@ class PlayStationProvider(Provider):
                 self._pending_since.pop(key, None)
                 out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation",
                                         "level shown over Bluetooth only while Steam or a game "
-                                        "uses it"))
+                                        "uses it", ui_message="state.playstation_basic"))
                 continue
             if res is None:
                 # Present but no battery read: just connected, or another app (DS4Windows,
@@ -317,6 +317,7 @@ class PlayStationProvider(Provider):
                 if now - since < PENDING_WINDOW:
                     self.pending = True
                     approx = "connected, battery level not reported yet"
+                    ui_message = "state.pending"
                 else:
                     del self._pending_since[key]
                     self._diag.append(f"  {dev['name']}: no battery report for "
@@ -325,7 +326,9 @@ class PlayStationProvider(Provider):
                     log.info("[PlayStation] %s: no battery report for %.0f s, not re-checking "
                              "every 3 s any more", dev["name"], PENDING_WINDOW)
                     approx = "connected, battery not readable (another app may hold it)"
-                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation", approx))
+                    ui_message = "state.unreadable"
+                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation", approx,
+                                        ui_message=ui_message))
                 continue
             level, charging = res
             self._pending_since.pop(key, None)

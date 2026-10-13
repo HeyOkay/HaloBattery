@@ -87,6 +87,7 @@ class StuckDongleTests(unittest.TestCase):
         st = res[0]
         self.assertEqual((st.key, st.name, st.level, st.online, st.approx),
                          ("audeze:0000000000000000", "Audeze Maxwell", None, True, audeze.STUCK_TEXT))
+        self.assertEqual(st.ui_message, "state.audeze_stuck")
 
     def test_replug_brings_the_level_back_under_the_same_key(self):
         self.p.poll()
@@ -128,6 +129,7 @@ class ZeroAtPowerOnTests(unittest.TestCase):
     def test_zero_right_after_power_on_is_not_a_reading(self):
         res = self.p.poll()
         self.assertEqual([(s.level, s.approx) for s in res], [(None, audeze.WAKING_TEXT)])
+        self.assertEqual(res[0].ui_message, "state.pending")
         self.assertTrue(self.p.pending)             # the app re-checks in 3 s, not 60
         self.now += 3
         self.dongle.level = 80

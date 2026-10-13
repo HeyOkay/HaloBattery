@@ -404,7 +404,8 @@ class LogitechProvider(Provider):
                     self._last.pop(old, None)
                 self._slot_key[slot] = key
                 return DeviceStatus(key, name, level, chg, True, "logitech", approx=approx,
-                                    kind=kind)
+                                    kind=kind, ui_message="state.approx_grade" if approx else "",
+                                    ui_params={"level": level, "grade": APPROX_LEVELS[r[1]][1]} if approx else {})
         # nothing from the 2.0 features: an older device may answer its
         # registers instead (it has no feature table at all)
         st = self._register_battery(ch, slot, pid, idx, instance, multi)
@@ -439,7 +440,9 @@ class LogitechProvider(Provider):
                 self._last.pop(old, None)
             self._slot_key[slot] = key
             return DeviceStatus(key, name, level, chg, True, "logitech",
-                                approx=approx, kind="")
+                                approx=approx, kind="",
+                                ui_message="state.approx_grade" if approx else "",
+                                ui_params={"level": level, "grade": STATUS_LEVELS[r[0]][1]} if approx else {})
         return None
 
     @staticmethod
@@ -510,7 +513,8 @@ class LogitechProvider(Provider):
                 continue
             if now - t < ASLEEP_KEEP and groups:
                 out.append(DeviceStatus(key, st.name, st.level, st.charging, False, "logitech",
-                                        approx=st.approx, kind=st.kind))
+                                        approx=st.approx, kind=st.kind,
+                                        ui_message=st.ui_message, ui_params=dict(st.ui_params)))
             else:
                 del self._last[key]
         return out

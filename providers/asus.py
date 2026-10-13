@@ -217,7 +217,9 @@ class AsusProvider(Provider):
         out: List[DeviceStatus] = []
         for name, (level, charging, text) in found.items():
             key = "asus:" + name.lower().replace(" ", "-")
-            out.append(DeviceStatus(key, name, level, charging, True, "asus", text, kind="mouse"))
+            out.append(DeviceStatus(key, name, level, charging, True, "asus", text, kind="mouse",
+                                    ui_message="state.approx" if text else "",
+                                    ui_params={"level": level, "charging": charging} if text else {}))
         return out
 
     def diagnostics(self) -> List[str]:
