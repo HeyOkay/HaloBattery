@@ -74,6 +74,7 @@ KNOWN: Dict[int, Tuple[str, int]] = {
     0x1A8D: ("TX Gaming Mouse", PERCENT),
     0x1AF5: ("TX Gaming Mouse Mini", PERCENT),
     0x1AF3: ("TX Gaming Mouse Mini", PERCENT),
+    0x1C5A: ("ASUS TX Gaming Mouse Mini Miku", PERCENT),
     0x1C57: ("TUF Gaming Mini Miku Edition", PERCENT),
     0x1C56: ("TUF Gaming Mini Miku Edition", PERCENT),
     # older models: the battery byte is a level 0..4, G-Helper multiplies it by 25

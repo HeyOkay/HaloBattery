@@ -136,6 +136,24 @@ class ParseTest(unittest.TestCase):
 
 
 class PollTest(ProviderTest):
+    def test_tx_mini_miku_receiver_1c5a_captured_reply(self):
+        # Captured on the 0B05:1C5A 2.4 GHz receiver: 0x2e = 46%, not charging.
+        captured = [0x12, 0x07, 0, 0, 0x2e, 0x02, 0x14, 0xd7, 0x0e, 0, 0, 1]
+
+        class CapturedMouse(FakeMouse):
+            def on_write(self, data):
+                super().on_write(data)
+                self.queue[-1] = list(captured)
+
+        entries = [{"product_id": 0x1C5A, "interface_number": 0,
+                    "usage_page": 0xFF01, "usage": 1, "path": b"tx-mini-miku"}]
+        mouse = CapturedMouse()
+        result = self.poll(entries, {b"tx-mini-miku": mouse})
+        self.assertEqual([(r.name, r.level, r.charging, r.kind, r.source) for r in result],
+                         [("ASUS TX Gaming Mouse Mini Miku", 46, False, "mouse", "asus")])
+        self.assertEqual(mouse.writes, [A.REQUEST + [0] * (A.PACKET_LENGTH - len(A.REQUEST))])
+
+
     def test_gladius_iii_aimpoint_issue_81(self):
         mouse = FakeMouse(level=87)
         res = self.poll(issue_81_entries(), {b"if0-ff01": mouse})

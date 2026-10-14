@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- ASUS TX Gaming Mouse Mini Miku on its 2.4 GHz receiver (`0B05:1C5A`), using the existing ASUS percentage-battery exchange; verified on hardware at 46%.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
