@@ -58,6 +58,17 @@ class PortableModeTest(unittest.TestCase):
     def test_writable_check(self):
         self.assertTrue(hb._writable(self.app_dir))
         self.assertFalse(hb._writable(os.path.join(self.app_dir, "missing")))
+        self.assertEqual(os.listdir(self.app_dir), [])     # the probe file is gone again
+
+    def test_writable_check_does_not_use_tempfile(self):
+        # tempfile retried PermissionError forever in Program Files: start-up hung
+        with mock.patch.object(hb.tempfile, "TemporaryFile", side_effect=AssertionError):
+            self.assertTrue(hb._writable(self.app_dir))
+
+    def test_startup_retry_window(self):
+        self.assertTrue(hb.startup_retry_due(True, 5))
+        self.assertFalse(hb.startup_retry_due(False, 5))           # devices found: normal interval
+        self.assertFalse(hb.startup_retry_due(True, hb.STARTUP_RETRY_WINDOW))
         self.assertEqual(os.listdir(self.app_dir), [])   # the probe file is gone
 
     def test_default_appdata_is_the_module_one(self):

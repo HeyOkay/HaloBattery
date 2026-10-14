@@ -51,6 +51,21 @@ than by model list, which is what this provider does as well. The diagnostics in
 0xFF01:0x01 on interface 2) have exactly that shape, and the reference documents the status
 read on the *short* 0x11 report, so both report ids are tried before a poll gives up.
 
+The first-generation A5 Pro Max (0x2023 - the 1K receiver F013, the 4K receiver F015 and the
+wired mouse F019; issue #149) speaks a third exchange, taken from the community web driver
+z750sasr/mchose-a5-pro-max-web-driver (MIT, whose transport the independent Klegus/mchose-macos
+table agrees with for the same ids): 64-byte *feature* reports on the vendor collection, usage
+page 0xFFFF preferred, report id 0. The request carries route 2 (mouse) at byte 2, its own
+length 2 at byte 3, page 0 at byte 4 and command 0x83 at byte 5; the reply is the report read
+back, starting with the 0xA1 marker and echoing page and command at its bytes 4 and 5, with
+charging in byte 6 (non-zero) and the level in byte 7 - clamped to 100, exactly as the
+reference clamps it. The reference writes once, waits its 34 ms, then reads back up to eight
+times with one re-send in the middle; silent means the mouse is asleep. **Confirmed on the
+reporter's hardware** (@Pekish992, #149): his run showed 22 % and then 25 % while charging,
+matching the MCHOSE software and its charging animation. His diagnostics pinned the receiver
+(2023:f013, product string 'MCHOSE A5 2.4G', vendor collections ffa0:0001 and ffff:0001 on
+interface 1, ffff:0000 on interface 2); the 4K receiver and the wired ids are still untried.
+
 Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
 in every reading so far).
@@ -86,6 +101,25 @@ G7_LEVEL_BYTE = 8
 G7_CHARGE_BYTE = 9
 G7_READS = 25                 # a non-blocking read loop, ~0.5 s at G7_READ_GAP
 G7_READ_GAP = 0.02
+
+# The first-generation A5 Pro Max: a third exchange on vendor id 0x2023 (see the module
+# docstring). One icon for the mouse whether it sits on a dongle or on its cable.
+A5_VID = 0x2023
+A5_PIDS = {
+    0xF013: "MCHOSE A5 Pro Max (1K receiver)",
+    0xF015: "MCHOSE A5 Pro Max (4K receiver)",
+    0xF019: "MCHOSE A5 Pro Max (wired)",
+}
+A5_USAGE_PAGE = 0xFFFF        # the page the reference prefers
+A5_REPORT_ID = 0x00           # what both references report on Windows
+A5_PAGE = 0x00
+A5_CMD_BATTERY = 0x83
+A5_ROUTE = 0x02               # 2 = mouse-level commands (1 = pairing, 0 = receiver-local)
+A5_LEN = 2                    # the request's own length announcement
+A5_READS = 8                  # the reference's bounded response loop
+A5_RESEND_AT = 3              # it re-sends once per loop
+A5_WRITE_PAUSE = 0.034        # ... and waits its own 34 ms after a write
+A5_READ_GAP = 0.03
 
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
@@ -166,6 +200,34 @@ def parse_g7(resp) -> Optional[Tuple[int, bool]]:
     if level > 100:
         return None
     return level, bool(r[G7_CHARGE_BYTE])
+
+
+def make_a5_request() -> List[int]:
+    """The reference's frame: its report id 0, then route 2 / length 2 / page 0 / 0x83.
+
+    hidapi wants the report id as the first byte, so the reference's own payload - route
+    at its byte 2, length at 3, page at 4, command at 5 - sits one byte in.
+    """
+    frame = [0x00, 0x00, 0x00, A5_ROUTE, A5_LEN, A5_PAGE, A5_CMD_BATTERY]
+    return frame + [0x00] * 58
+
+
+def parse_a5(resp) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from the A5's reply, or None.
+
+    The reply starts with the 0xA1 marker (hidapi may keep the report id in front of it)
+    and echoes page and command; charging is byte 6, the level byte 7, clamped to 100 the
+    way the reference clamps it.
+    """
+    if not resp or len(resp) < 9:
+        return None
+    r = bytes(resp)
+    at = 0 if r[0] == 0xA1 else (1 if r[1] == 0xA1 else None)
+    if at is None or len(r) < at + 8:
+        return None
+    if r[at + 4] != A5_PAGE or r[at + 5] != A5_CMD_BATTERY:
+        return None
+    return min(100, r[at + 7]), r[at + 6] > 0
 
 
 def device_key(vid: int, pid: int) -> str:
@@ -265,11 +327,55 @@ class MchoseProvider(Provider):
             except Exception:
                 pass
 
+    def _read_a5(self, path: bytes) -> Optional[Tuple[int, bool]]:
+        """The A5 Pro Max's feature-report exchange, run as the reference runs it: write
+        once, wait, then read back up to eight times with one re-send in the middle. The
+        mouse only answers while awake, so a silent run reads as no level.
+        """
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            try:
+                dev.send_feature_report(make_a5_request())
+            except (OSError, ValueError) as e:
+                self._diag.append(f"    send: {e}")
+                return None
+            time.sleep(A5_WRITE_PAUSE)
+            for attempt in range(A5_READS):
+                if attempt == A5_RESEND_AT:
+                    try:
+                        dev.send_feature_report(make_a5_request())
+                    except (OSError, ValueError) as e:
+                        self._diag.append(f"    send: {e}")
+                        return None
+                    time.sleep(A5_WRITE_PAUSE)
+                try:
+                    resp = dev.get_feature_report(A5_REPORT_ID, 65)
+                except (OSError, ValueError):
+                    resp = None
+                got = parse_a5(resp) if resp else None
+                if got:
+                    self._diag.append(f"    answer (attempt {attempt + 1}): "
+                                      f"{hexdump(resp, 12)}")
+                    return got
+                time.sleep(A5_READ_GAP)
+            self._diag.append("    no A1 answer (mouse asleep?)")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def poll(self) -> List[DeviceStatus]:
         """One icon per device, whether it is on the dongle, on the cable or on radio."""
         self._diag = []
         infos: List[dict] = []
-        for vid in MCHOSE_VIDS + (G7_VID,):
+        for vid in MCHOSE_VIDS + (G7_VID, A5_VID):
             try:
                 infos += hidlist.enumerate(vid)
             except Exception as e:  # pragma: no cover
@@ -297,11 +403,22 @@ class MchoseProvider(Provider):
                 self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
                                   f"not the G7 ({G7_PID:04x}), leaving it alone")
                 continue
+            if vid == A5_VID and pid not in A5_PIDS:
+                # only the three A5 Pro Max identities are claimed; another 0x2023 model
+                # does not get this request written to it
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
+                                  f"not an A5 Pro Max identity, leaving it alone")
+                continue
             cols = [d for d in ifaces if (d.get("usage_page") or 0) >= 0xFF00]
             if vid == G7_VID:
                 # the G7 answers on 0xFF01 only; the other vendor collections are left
                 # alone (nothing off the documented path is written to)
                 cols = [d for d in cols if (d.get("usage_page") or 0) == CONFIG_PAGE]
+            elif vid == A5_VID:
+                # The A5 reference opens its 0xFFFF page only; 0xFFA0 next to it is
+                # never where the answer comes from, so it is not written to at all
+                # (the G7's rule; review by @ahmedkhursheed23).
+                cols = [d for d in cols if (d.get("usage_page") or 0) == A5_USAGE_PAGE]
             else:
                 # the configuration collection first; 0xFF0B is dead on the M7 Ultra
                 cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))
@@ -318,6 +435,10 @@ class MchoseProvider(Provider):
                     got_g7 = self._read_g7(d["path"])
                     if got_g7:
                         found.setdefault(key, []).append((got_g7[0], got_g7[1], pid, 0))
+                elif vid == A5_VID:
+                    got_a5 = self._read_a5(d["path"])
+                    if got_a5:
+                        found.setdefault(key, []).append((got_a5[0], got_a5[1], pid, 0))
                 else:
                     got = self._read_collection(d["path"])
                     if got:

@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 python -m pip install -r requirements.txt pyinstaller
 python tools\make_icon.py halo.ico
 python tools\make_version.py version_info.txt

@@ -336,6 +336,16 @@ class XInputProvider(Provider):
                 # Over Bluetooth, Windows.Gaming.Input's report is not usable: an
                 # Xbox Wireless Controller reported remain=100 full=1000 (10%) at
                 # 82%. The real level comes from the Bluetooth device instead.
+                # Windows does not report a Bluetooth battery for every pad, though: the
+                # first Xbox One S revision (045e:02e0) on AA cells gave "no Bluetooth
+                # devices found" while XInput still had its coarse level (#236). Show that
+                # level rather than nothing; when Windows does have a Bluetooth reading,
+                # dedupe_controllers() drops this entry in favour of it.
+                if res is not None and not res[1]:
+                    level, _, approx = res
+                    self._last[slot] = level
+                    connected.append((slot, name, level, False, f"{approx}, over Bluetooth"))
+                    continue
                 connected.append((slot, name, None, False,
                                   "connected over Bluetooth; turn on \"Windows Bluetooth devices\" "
                                   "to see its battery"))

@@ -21,6 +21,11 @@ class DeviceStatus:
     kind: str = ""               # headset / mouse / keyboard / gamepad when known
                                  # (picks the pictogram); "" = guess from the source
     via: str = ""                # "bluetooth": a controller connected over Bluetooth
+    wake_on_input: bool = False  # True: a greyed reading that new input can refresh (a
+                                 # sleeping receiver mouse wakes on movement). The
+                                 # tray's input wake fires only for these - an icon
+                                 # greyed because its device is off must not re-poll
+                                 # the app on every keystroke (review, #202).
 
 
 class Provider:
