@@ -56,6 +56,7 @@
 | [SteelSeries Arctis Nova Elite](protocols.md#steelseries-arctis-nova-elite) | Wireless base station | yes |
 | [SteelSeries Arctis Nova Pro Wireless (`1038:12E0`, `1038:12E5` X)](protocols.md#steelseries-arctis-nova-pro-wireless-103812e0-103812e5-x) | Wireless base station, interface 3 or 4 | no |
 | [SteelSeries Rival 3 Wireless](protocols.md#steelseries-rival-3-wireless) | 2.4 GHz dongle | no |
+| [Turtle Beach Stealth 700 Gen 3 (700 / 700X / 700P)](protocols.md#turtle-beach-stealth-700-gen-3) | USB transmitter | yes |
 | [WLmouse Beast X and Beast X Mini Pro](protocols.md#wlmouse-beast-x-and-beast-x-mini-pro) | 8K or 1K receiver, or USB cable | likely |
 | [WLmouse Beast X Max](protocols.md#wlmouse-beast-x-max) | 8K receiver and USB cable | yes |
 | [Xbox-compatible controllers (other models)](protocols.md#xbox-compatible-controllers-other-models) | USB or the Xbox wireless adapter | likely |

@@ -130,6 +130,16 @@ A read-only status request `01 b0` (a 64-byte output report, report id `01`) goe
 
 The same `b0` exchange as the other Nova headsets, asked for with report id `06` instead of `00`, as HeadsetControl asks for these base stations: the level is a nine-step code in byte 6 (shown as "about NN%") and the state in byte 15 (`01` off / out of range, `02` cable charging, `08` on battery). A reply with any other state byte, a level code above 8 or fewer than 16 bytes is refused rather than shown. The request goes only to a vendor collection of these two ids; the diagnostics in #41 show `1038:12e5` exposing `ffc0:0001` on interface 4 (plus a second vendor collection `ff00:0001` there), so both are tried and the answering one is remembered. The reply layout is HeadsetControl's - not yet seen on hardware here
 
+### Turtle Beach Stealth 700 Gen 3
+
+**Connection:** USB transmitter
+
+The transmitter (`10F5:2251`, with the `2250` / `2253` siblings) is an Airoha chip exposing the RACE protocol on its vendor collection (usage page 0xFF13 / usage 0x0001), picked by usage rather than interface number. Unlike the Audeze Maxwell, the direct battery attribute 0x0CD6 is refused on this transmitter (status 0x02); battery is read instead from the chip's CoAP server, the way Swarm II does it.
+
+Framing: HID output report id 0x06 = `06 <len16> <race>`; replies come back as input report id 0x07 with the same prefix. A RACE command is `05 5A <len16> <id16> <payload>` (0x5A expects a response, the length counts the two id bytes); the response starts `05 5B`.
+
+Read: enable the CoAP client (RACE id 0x9942), then send a CoAP `GET /GSI` tunnelled in RACE id 0x9902 (`05 5A 05 00 02 99` + `40 01 00 01 B3 "GSI"`). The reply payload is JSON; key `240` of the `GSI` resource is the battery percent, `230` the connection flag. Only the CoAP client is enabled - nothing is written to the device. The name comes from the transmitter's USB product string (e.g. "Stealth 700X Gen 3"), not the on-device nickname (which defaults to "My Headset"). **Verified** on a Stealth 700X Gen 3. Full write-up: https://github.com/PaulRichez/halobattery-stealth700
+
 ## Mice
 
 ### AM Infinity 8K (Angry Miao)
