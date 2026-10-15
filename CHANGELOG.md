@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Audeze Maxwell (Xbox dongle, `3329:4b18`): a switched-off headset is recognized
+  again. The dongle names itself "Audeze Maxwell XBOX Dongle" in that state, and the
+  check only knew the PC dongle's "Audeze Maxwell Dongle", so the Xbox dongle kept
+  serving the stored level as if the headset were on (#244).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

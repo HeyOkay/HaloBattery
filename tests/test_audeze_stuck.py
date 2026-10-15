@@ -103,6 +103,15 @@ class StuckDongleTests(unittest.TestCase):
         self.p.poll()
         self.assertEqual(self.p.poll(), [])
 
+    def test_the_xbox_dongle_string_counts_as_switched_off(self):
+        # #244: with the headset off the Xbox dongle names itself "Audeze Maxwell
+        # XBOX Dongle"; matching only the PC dongle's string left it reading the
+        # stored level as if the headset were on.
+        self.infos = ifaces("Audeze Maxwell XBOX Dongle", pid=0x4B18)
+        self.p.poll()
+        self.assertEqual(self.p.poll(), [])
+        self.assertTrue(any("no headset linked" in line for line in self.p.diagnostics()))
+
     def test_a_headset_that_answers_is_not_stuck(self):
         self.dongle.stuck = False
         for _ in range(3):
