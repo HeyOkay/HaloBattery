@@ -201,7 +201,7 @@ PROVIDER_LABELS = {
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
     "playstation": "PlayStation controllers",
-    "pulsar": "Pulsar / ATK VXE mice",
+    "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "razer": "Razer mice and headsets",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
