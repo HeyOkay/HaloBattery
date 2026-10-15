@@ -70,10 +70,10 @@ XBOX_BT_HID = {"vendor_id": 0x045E, "product_id": 0x02FD, "interface_number": -1
 
 class ProviderTest(unittest.TestCase):
     def setUp(self):
-        self._saved = (X.load_xinput, X.hidlist, X.wgi.query)
+        self._saved = (X.load_xinput, X.hidlist, X.wgi.query, X.flydigi)
 
     def tearDown(self):
-        X.load_xinput, X.hidlist, X.wgi.query = self._saved
+        X.load_xinput, X.hidlist, X.wgi.query, X.flydigi = self._saved
 
     def poll(self, slots, reports, hid_devices=(), paths=()):
         X.load_xinput = lambda: FakeDll(slots)
@@ -81,6 +81,7 @@ class ProviderTest(unittest.TestCase):
             enumerate=lambda vid=0: [d for d in hid_devices if d["vendor_id"] == vid],
             interface_paths=lambda: frozenset(paths))
         X.wgi.query = lambda diag: list(reports)
+        X.flydigi = types.SimpleNamespace(read_connected=lambda diag: None)
         p = X.XInputProvider()
         return p, p.poll()
 
