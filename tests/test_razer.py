@@ -166,6 +166,14 @@ class PollTest(unittest.TestCase):
         R.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
         return R.RazerProvider().poll()
 
+    def poll_with(self, provider, entries, mice):
+        # the same as poll(), but with the caller's provider - its caches must
+        # survive across polls for the recovery tests below
+        bus = FakeBus(mice)
+        R.hid = types.SimpleNamespace(device=bus.device_class())
+        R.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
+        return provider.poll()
+
     def test_the_blackwidow_answers_through_its_own_collection(self):
         # The keyboard answers on a control collection that is not a vendor page, so
         # the probe order (which ranks 0001/ff00 first) must still reach it. The fake's
@@ -226,6 +234,19 @@ class TableTest(unittest.TestCase):
         self.assertEqual(R.KNOWN[0x025C][0], "Razer BlackWidow V3 Pro")
         self.assertIn(R.KNOWN[0x025C][1], R.TRANSACTION_IDS)
 
+    def test_the_pro_type_ultra_receiver_is_known(self):
+        # #196: the reporter's diagnostics show the receiver answering 0x1F and
+        # rejecting 0x9F ("not supported"), so 0x1F is the preferred id - 0x9F stays
+        # reachable through TRANSACTION_IDS.
+        self.assertEqual(R.KNOWN[0x027B], ("Razer Pro Type Ultra", 0x1F))
+
+    def test_the_pro_type_ultra_wired_id_stays_out(self):
+        # 0x0277's only source is an open OpenRazer pull request (#2739); until a
+        # unit can be tested it is not listed, so it is left alone like any other
+        # unknown wired device.
+        self.assertNotIn(0x0277, R.KNOWN)
+        self.assertFalse(R.maybe_wireless(0x0277, "Razer Pro Type Ultra"))
+
 
 class PollRazerTest(PollTest):
     def test_pro_click_v2_vertical_issue_58(self):
@@ -264,6 +285,18 @@ class PollRazerTest(PollTest):
         res = self.poll([entry(0x0078, b"if0", "Razer Viper")], {b"if0": mouse})
         self.assertEqual(res, [])
         self.assertEqual(mouse.tids, [])
+
+    def test_pro_type_ultra_answers_on_its_wireless_tid(self):
+        # #196: the reporter's receiver answered with 0x1F while 0x9F came back "not
+        # supported"; the fake refuses every other transaction id, so the preferred
+        # one must go out first. (The collection is not pinned here: the fake
+        # answers on any path.)
+        e = entry(0x027B, b"kbd", "Razer Pro Type Ultra", iface=3, page=0x0059)
+        kbd = FakeMouse(tid=0x1F, raw_level=0xB5, charging=1)      # 0xB5 -> 71%
+        out = self.poll([e], {b"kbd": kbd})
+        self.assertEqual([(s.name, s.level, s.charging) for s in out],
+                         [("Razer Pro Type Ultra", round(0xB5 / 255 * 100), True)])
+        self.assertEqual(kbd.tids[0], 0x1F)
 
 
 # ------------------------------------------------------------------ receiver + cable
@@ -344,6 +377,52 @@ class CableTest(PollTest):
                              {b"da": AsleepMouse(0x3F), b"usb": FakeMouse(0xFF, charging=1)})
         self.assertEqual(sorted((s.key, s.online) for s in out),
                          [("razer:007a:000000000000", True), ("razer:007d:000000000000", False)])
+
+
+class SleepRecoveryTest(PollTest):
+    """#196 follow-up: the keyboard comes back after a sleep without a restart.
+
+    The Pro Type Ultra's receiver showed three faces in the reporter's run: the
+    keyboard answers on one collection, another collection of the same receiver
+    answers 04 ("not responding") no matter what, and the keyboard being asleep
+    (or its host restarting) changes which collection answers. A collection that
+    never answered OK must never be pinned by a timeout, and the collection that
+    did answer must survive a failed poll - otherwise a wrong collection's 04
+    shadows the walk forever (a cached timeout is returned before the walk can
+    run again) and only a restart cures it.
+    """
+
+    KBD = entry(0x027B, b"kbd", "Razer Pro Type Ultra", iface=3, page=0x0059)
+    SIBLING = entry(0x027B, b"sib", "Razer Pro Type Ultra", iface=5, page=0xFF00)
+    KEY = (0x027B, "000000000000")
+
+    def test_a_wrong_collection_is_never_pinned_and_answers_come_back(self):
+        p = R.RazerProvider()
+        # awake: the keyboard answers on its own collection
+        out = self.poll_with(p, [self.KBD, self.SIBLING],
+                             {b"kbd": FakeMouse(0x1F, raw_level=0x80),
+                              b"sib": AsleepMouse(0x1F)})
+        self.assertEqual([(s.online, s.level) for s in out], [(True, 50)])
+        # asleep: the working collection refuses to open for one poll (a sleeping
+        # device can do that) while the sibling answers 04 for the same command
+        out = self.poll_with(p, [self.KBD, self.SIBLING], {b"sib": AsleepMouse(0x1F)})
+        self.assertEqual([(s.online, s.level) for s in out], [(False, 50)])   # greyed
+        self.assertIsNone(p._cache.get(self.KEY))    # nothing pinned by the timeout
+        self.assertNotIn(b"kbd", p._dead)            # the proven collection is kept
+        # awake again - without restarting anything:
+        out = self.poll_with(p, [self.KBD, self.SIBLING],
+                             {b"kbd": FakeMouse(0x1F, raw_level=0x80),
+                              b"sib": AsleepMouse(0x1F)})
+        self.assertEqual([(s.online, s.level) for s in out], [(True, 50)])
+
+    def test_the_proven_collection_timing_out_keeps_its_cached_tid(self):
+        p = R.RazerProvider()
+        out = self.poll_with(p, [self.KBD], {b"kbd": FakeMouse(0x1F, raw_level=0x80)})
+        self.assertEqual([s.online for s in out], [True])
+        out = self.poll_with(p, [self.KBD], {b"kbd": AsleepMouse(0x1F)})
+        self.assertEqual([(s.online, s.level) for s in out], [(False, 50)])
+        cand = p._cache[self.KEY]
+        self.assertEqual((cand.path, cand.tid), (b"kbd", 0x1F))
 
 
 if __name__ == "__main__":
