@@ -166,12 +166,12 @@ class DeviceLowTests(HideRenameTestCase):
         app = make_app({"low": 20})
         app.apply([mouse(35)])
         ic = app.icons[KEY]
-        sub = item(app.build_menu(ic), "Low battery alert at").submenu
+        sub = item(app.build_menu(ic), "Low battery alert at (this device)").submenu
         self.assertEqual(sub.items[0].text, "Default (20%)")
         self.assertTrue(sub.items[0].checked)
         item(sub, "30%")(FakeTrayIcon())
         self.assertEqual(app.cfg["lows"], {KEY: 30})
-        self.assertTrue(item(item(app.build_menu(ic), "Low battery alert at").submenu, "30%").checked)
+        self.assertTrue(item(item(app.build_menu(ic), "Low battery alert at (this device)").submenu, "30%").checked)
         # a new level that the device is already under alerts on the next reading
         item(sub, "Default (20%)")(FakeTrayIcon())
         self.assertEqual(app.cfg["lows"], {})
