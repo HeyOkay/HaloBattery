@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **ATK X1 Ultimate on its 8K Nearlink receiver (373b:108c) shows its battery**: the
+  receiver is new silicon that neither ATK's older Compx panel nor the 17-byte frame of
+  the Pulsar provider reads. The protocol comes from ATK's own web driver (ATK HUB,
+  hub.atkgear.com), whose device table binds the receiver's 0xffb3 collection to this
+  product id and queries the battery there with a 63-byte frame (command 0x1a, report
+  id 5). The same mouse on its cable (373b:1083) is claimed from the driver's table.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
