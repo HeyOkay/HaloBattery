@@ -39,6 +39,10 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 ASUS_VID = 0x0B05
 INTERFACE = 0
+OMNI_PID = 0x1ACE
+OMNI_INTERFACE = 2
+OMNI_MOUSE_REPORT_ID = 0x03
+OMNI_KEYBOARD_REPORT_ID = 0x02
 
 REQUEST = [0x00, 0x12, 0x07]         # report id 0, battery command
 ECHO = (0x12, 0x07)
@@ -97,7 +101,7 @@ def _offset(r: List[int], pair: Tuple[int, int]) -> Optional[int]:
     in front). None when the reply does not start with it."""
     if len(r) > 1 and (r[0], r[1]) == pair:
         return 0
-    if len(r) > 2 and r[0] == 0x00 and (r[1], r[2]) == pair:
+    if len(r) > 2 and r[0] in (0x00, OMNI_MOUSE_REPORT_ID) and (r[1], r[2]) == pair:
         return 1
     return None
 
@@ -138,7 +142,9 @@ class AsusProvider(Provider):
         self._diag: List[str] = []
         self._failing: Dict[str, bool] = {}
 
-    def _read(self, path, scale: int) -> Optional[Reading]:
+    def _read(self, path, scale: int, report_id: int = 0x00,
+              packet_length: int = PACKET_LENGTH) -> Optional[Reading]:
+        request = [report_id, 0x12, 0x07]
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -150,19 +156,19 @@ class AsusProvider(Provider):
             try:
                 dev.set_nonblocking(True)
                 for _ in range(16):
-                    if not dev.read(PACKET_LENGTH):
+                    if not dev.read(packet_length):
                         break
                 dev.set_nonblocking(False)
             except (OSError, IOError, ValueError):
                 pass
             for _ in range(WRITE_ATTEMPTS):
                 try:
-                    dev.write(REQUEST + [0x00] * (PACKET_LENGTH - len(REQUEST)))
+                    dev.write(request + [0x00] * (packet_length - len(request)))
                 except (OSError, IOError, ValueError) as e:
                     self._diag.append(f"    write: {e}")
                     return None
                 for _ in range(READ_ATTEMPTS):
-                    r = list(dev.read(PACKET_LENGTH, READ_TIMEOUT_MS) or [])
+                    r = list(dev.read(packet_length, READ_TIMEOUT_MS) or [])
                     if not r:
                         break                        # timeout: send the request again
                     if is_error(r):
@@ -186,6 +192,51 @@ class AsusProvider(Provider):
             except Exception:
                 pass
 
+    def _read_omni_keyboard(self, path) -> Optional[Tuple[int, bool]]:
+        packet_length = 64
+        request = [OMNI_KEYBOARD_REPORT_ID, 0x12, 0x01]
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            try:
+                dev.set_nonblocking(True)
+                for _ in range(16):
+                    if not dev.read(packet_length):
+                        break
+                dev.set_nonblocking(False)
+            except (OSError, IOError, ValueError):
+                pass
+            for _ in range(WRITE_ATTEMPTS):
+                try:
+                    dev.write(request + [0x00] * (packet_length - len(request)))
+                except (OSError, IOError, ValueError) as e:
+                    self._diag.append(f"    write: {e}")
+                    return None
+                for _ in range(READ_ATTEMPTS):
+                    r = list(dev.read(packet_length, READ_TIMEOUT_MS) or [])
+                    if not r:
+                        break
+                    if len(r) >= 3 and r[0] == OMNI_KEYBOARD_REPORT_ID and r[1:3] == [0xFF, 0xAA]:
+                        return None
+                    if not any(r):
+                        return None
+                    if len(r) < 12 or r[0] != OMNI_KEYBOARD_REPORT_ID or r[1:3] != [0x12, 0x01]:
+                        continue
+                    level, charging = r[11], r[9] == 1
+                    if level > 100 or (level == 0 and not charging):
+                        return None
+                    return level, charging
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         if hid is None:
@@ -197,8 +248,22 @@ class AsusProvider(Provider):
             return []
 
         found: Dict[str, Reading] = {}
+        keyboard_reading: Optional[Tuple[int, bool]] = None
         for d in infos:
             pid = d["product_id"]
+            path = d.get("path", b"")
+            path_text = path.decode("latin-1", "ignore") if isinstance(path, bytes) else str(path)
+            if (pid == OMNI_PID and d.get("interface_number") == OMNI_INTERFACE
+                    and "&col03" in path_text.lower()):
+                name = "ROG Gladius III Wireless AimPoint"
+                res = self._read(d["path"], PERCENT, OMNI_MOUSE_REPORT_ID, 64)
+                if res is not None and (name not in found or (res[1] and not found[name][1])):
+                    found[name] = res
+                continue
+            if (pid == OMNI_PID and d.get("interface_number") == OMNI_INTERFACE
+                    and "&col02" in path_text.lower()):
+                keyboard_reading = self._read_omni_keyboard(d["path"])
+                continue
             if pid not in KNOWN:
                 continue
             if d.get("interface_number") != INTERFACE or d.get("usage_page", 0) < 0xFF00:
@@ -218,6 +283,11 @@ class AsusProvider(Provider):
         for name, (level, charging, text) in found.items():
             key = "asus:" + name.lower().replace(" ", "-")
             out.append(DeviceStatus(key, name, level, charging, True, "asus", text, kind="mouse"))
+        if keyboard_reading is not None:
+            level, charging = keyboard_reading
+            out.append(DeviceStatus("asus:rog-falchion-rx-low-profile",
+                                    "ROG Falchion RX Low Profile", level, charging, True,
+                                    "asus", kind="keyboard"))
         return out
 
     def diagnostics(self) -> List[str]:
