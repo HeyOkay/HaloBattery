@@ -372,3 +372,15 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 The provider reads HID++ 2.0 generically from the receiver's `ff00` vendor collections (slots 1-6), so most other HID++ 2.0 mice and keyboards on a Lightspeed, Unifying or Bolt receiver should answer the same `0x1004` unified battery request. The G-series headsets - G533, G535, G633, G635, G733, G933, G935, G PRO, G PRO X - are in the headset pid table and use feature `0x1F20` (the G535 on its consumer collection). Only the models listed in the support table above are confirmed so far.
 
 Devices with no feature table at all (the older HID++ 1.0 generation) are read through the old battery registers instead: a short report `10 <slot> 81 <register>` on the short collection reads register `0x0D` (a percentage with a charging status - `30` discharging, `50` recharging, `90` full) or register `0x07` (a discrete level - 7 full, 5 good, 3 low, 1 critical - beside a charging byte), the same registers and order Solaar uses. This was added for the M710 keyboard of the MK710 wireless desktop ([#159](https://github.com/HeyOkay/HaloBattery/issues/159)), built from Solaar's implementation; **confirmed on hardware** in the reporter's test-build run - the icon shows the keyboard's coarse level.
+
+### ATK X1 Ultimate (8K Nearlink receiver)
+
+**Connection:** 2.4 GHz receiver (373b:108c, "ATK 8k Dongle Nearlink Version"); the same mouse on its cable (373b:1083) should answer the same frame with report id 4
+
+The Nearlink receiver is new silicon with its own collection layout - five vendor collections on interface 1 (usage pages 0xffb0 to 0xffb4, report ids 4, 8, 9, 5 and 6) - and it does not answer the 17-byte command-0x04 frame of the Pulsar section above. The protocol was taken from ATK's own current web driver (ATK HUB, hub.atkgear.com, build 3.2.28), whose "Evision" mouse controller reads exactly these two product ids. The battery query is a 63-byte payload sent as output report 5 on the vendor collection with usage page 0xffb3 (64 bytes on the wire, report id first):
+
+    [0..1]  requestCode  little-endian, increments with every query, from 1
+    [2]     commandId    0x1a = power info
+    [3..62] zero
+
+The reply echoes the header and answers in the same frame - the percent in byte 7 of the payload (byte 8 on the wire) and the charging flag in byte 8 (byte 9 on the wire); a reply whose commandId does not echo 0x1a is not an answer but the receiver reporting that the mouse behind it is asleep or out of range. **Confirmed on hardware:** the reporter's own ATK X1 Ultimate on its 8K Nearlink receiver, read through this provider with the level agreeing with ATK's own panel.
