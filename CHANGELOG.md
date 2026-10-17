@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Finalmouse UltralightX (ULX) on its 2.4 GHz dongle (361D:0100)**, with the protocol of
+  Finalmouse's XPanel: battery (state of charge, or the voltage on firmware that does not
+  report it), charging, and whether the mouse is linked. A mouse that is off or asleep
+  keeps its last level on a greyed icon that movement can refresh. The provider is
+  [voiddog30](https://github.com/voiddog30/HaloBattery)'s; tested here on a ULX dongle,
+  whose firmware answers no state of charge at all, so the voltage curve carries every
+  reading - and reads high while the mouse charges, as XPanel's does.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

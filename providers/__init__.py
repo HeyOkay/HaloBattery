@@ -29,3 +29,4 @@ from .lamzu import LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
+from .finalmouse import FinalmouseProvider  # noqa: F401
