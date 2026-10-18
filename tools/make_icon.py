@@ -4,6 +4,7 @@ A green charge ring on a dark disc, so it reads well on both light and dark
 Explorer backgrounds. Rendered with the same code as the tray icons.
 
 Usage: python tools/make_icon.py [output.ico]
+       python tools/make_icon.py docs/logo.png   (the README logo, 256 px)
 """
 import os
 import sys
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 from PIL import Image, ImageDraw  # noqa: E402
 
-import icons  # noqa: E402
+from halo import icons  # noqa: E402
 
 SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 
@@ -32,7 +33,10 @@ def app_icon(size: int = 256) -> Image.Image:
 
 def main() -> None:
     out = sys.argv[1] if len(sys.argv) > 1 else "halo.ico"
-    app_icon(256).save(out, sizes=[(s, s) for s in SIZES])
+    if out.lower().endswith(".png"):
+        app_icon(256).save(out)
+    else:
+        app_icon(256).save(out, sizes=[(s, s) for s in SIZES])
     print(f"wrote {out}")
 
 

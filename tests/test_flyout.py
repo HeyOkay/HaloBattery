@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import flyout  # noqa: E402
+from halo import flyout  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 WORK = (0, 0, 1920, 1032)         # a 1080p screen above a 48 px taskbar

@@ -20,13 +20,25 @@ product ids and was written from the vendor's own traffic):
     to send_feature_report, so this does too. The diagnostics say which path was used,
     because that is the difference between a reading and none at all.
 
+The Cloud II Core Wireless (03F0:0995 its dongle, 03F0:0795 the second mode the same
+reporter's diagnostics show) speaks the same exchange, decoded from his own USBPcap
+capture of NGENUITY in #155: NGENUITY wrote `66 89` to interface 3 as a 62-byte output
+report and the dongle answered `66 89 0e d7 30 ...` (48 %), and `66 8a` was answered
+`66 8a 00 00` (off the cable) - same report id, same commands, same vendor collection as
+the Cloud III Wireless. The plain output report is what NGENUITY itself uses here, so
+write() is the path in use; the feature fallback stays for the dongles that need it.
+Both of its ids can answer in the same poll - the reporter's test-build diagnostics show
+the same level and charging state on 0995 and 0795 at once while charging - so each
+model's readings are merged into one icon and the charging one wins, the same rule the
+ASUS provider uses for a mouse answering on its cable and receiver.
+
 A reply that does not carry the expected command or response id is ignored, and a level
 above 100 is refused rather than shown as a made-up number.
 """
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 try:
     import hid
@@ -53,9 +65,24 @@ READ_TIMEOUT_MS = 200
 WRITE_PAUSE = 0.1                  # the reference waits between request and read
 
 # Cloud III Wireless. 0x05B7 is the dongle here, 0x0C9D the other id the reference lists.
+# Cloud II Core Wireless (#155): 0x0995 is its dongle (the one in the capture), 0x0795 the
+# second mode the reporter's diagnostics show - same vendor collection, same exchange.
 PIDS = {
     0x05B7: "HyperX Cloud III Wireless",
     0x0C9D: "HyperX Cloud III Wireless",
+    0x0795: "HyperX Cloud II Core Wireless",
+    0x0995: "HyperX Cloud II Core Wireless",
+}
+
+# One headset, two connection ids, one icon. The value keeps the icon's key stable:
+# the wireless id is what almost every user runs, and a changed key would throw away
+# the icon settings a user already made. Both ids of one model can answer in the same
+# poll (#155's diagnostics show the Cloud II Core on 0995 and 0795 at once while
+# charging), so per model the readings merge and the charging one wins - the same rule
+# the ASUS provider uses for a mouse answering on its cable and receiver.
+CANONICAL = {
+    0x05B7: 0x05B7, 0x0C9D: 0x05B7,     # Cloud III Wireless (0C9D is its alternate id)
+    0x0995: 0x0995, 0x0795: 0x0995,     # Cloud II Core Wireless and its charging mode
 }
 
 # The two error spellings Windows gives when the dongle wants a feature report.
@@ -182,7 +209,7 @@ class HyperXCloud3Provider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(hyperx cloud iii): %s", e)
             return []
-        out = []
+        found: Dict[int, Tuple[int, bool, str]] = {}     # canonical pid -> (level, charging, name)
         seen = set()
         for pid in PIDS:
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
@@ -202,7 +229,17 @@ class HyperXCloud3Provider(Provider):
                 continue
             charging = parse_charging(self._query(d["path"], CMD_CHARGING,
                                                  (CMD_CHARGING, RESP_CHARGING)))
-            out.append(DeviceStatus(f"hyperx:{pid:04x}", name, level, bool(charging), True,
+            canon = CANONICAL.get(pid, pid)
+            prev = found.get(canon)
+            if prev is None:
+                found[canon] = (level, bool(charging), name)
+            else:
+                if charging and not prev[1]:
+                    found[canon] = (level, bool(charging), name)
+                self._diag.append("  two connection ids answered; one icon")
+        out = []
+        for canon, (level, charging, name) in found.items():
+            out.append(DeviceStatus(f"hyperx:{canon:04x}", name, level, charging, True,
                                     "hyperx", kind="headset"))
         return out
 

@@ -740,6 +740,21 @@ class FlyoutHost:
             except Exception:
                 pass
 
+    def call(self, fn: Callable[[], None]) -> bool:
+        """Run fn in the tkinter thread (another window of the app, e.g. "What's new").
+        -> False when tkinter is not available."""
+        if self._failed:
+            return False
+        self.start()
+        if not self._ready.wait(5) or self._failed:
+            return False
+        try:
+            self._root.after(0, fn)
+        except Exception as e:
+            log.warning("menu: %s", e)
+            return False
+        return True
+
     def show(self, menu, icon, point: Optional[Tuple[int, int]] = None) -> bool:
         """Open the flyout for a tray icon (called from the icon's thread).
         -> False when it cannot be shown; the caller then shows the classic menu."""

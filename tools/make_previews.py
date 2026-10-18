@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
-import icons  # noqa: E402
+from halo import icons  # noqa: E402
 
 DARK_BG = (32, 32, 32)
 LIGHT_BG = (243, 243, 243)

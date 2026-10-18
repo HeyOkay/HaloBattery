@@ -18,7 +18,7 @@ How the app talks to a device:
                   11 <slot> ff <feature index> <function|swid> <error code> ...
     error code 0x08: the slot is empty
     error code 0x09 / 0x04: a device is paired, but it is off or out of range
-    error code 0x01: the device speaks the older HID++ 1.0 (not read yet)
+    error code 0x01: the device speaks the older HID++ 1.0 (read through registers, below)
   * a paired device that is asleep does not answer at all
 
 Features the app reads (the first battery feature that the device has):
@@ -32,6 +32,13 @@ Features the app reads (the first battery feature that the device has):
       headset is connected but inactive.
   * 0x0005 device name (fn 0 length, fn 1 characters, fn 2 device type)
   * 0x0003 device information, fn 0: <entities> <unit id: 4 bytes> ...
+
+Devices without a feature table are read through the old HID++ 1.0 registers
+instead, with a short report 10 <slot> 81 <register>:
+  * 0x0D charge:  <percent> .. <status: 30 discharging, 50 recharging, 90 full>
+  * 0x07 status:  <level 7 full / 5 good / 3 low / 1 critical> <charging byte>
+    (the byte's 0x21 flag = recharging, the 0x22 flag = full on the charger)
+Registers are only ever read, and only when no 2.0 feature answered.
 """
 from __future__ import annotations
 
@@ -54,6 +61,13 @@ ASLEEP_KEEP = 300        # how long a silent device keeps its (greyed-out) icon,
 F_ROOT, F_INFO, F_NAME = 0x0000, 0x0003, 0x0005
 F_UNIFIED, F_STATUS, F_VOLTAGE, F_ADC = 0x1004, 0x1000, 0x1001, 0x1F20
 BATTERY_FEATURES = (F_UNIFIED, F_STATUS, F_VOLTAGE, F_ADC)
+
+# HID++ 1.0 battery registers, for devices without a feature table (Solaar's
+# hidpp10): read with a short report, tried in this order when nothing else
+# answered. Never written.
+REG_BATTERY_CHARGE, REG_BATTERY_STATUS = 0x0D, 0x07
+# register 0x07's level byte -> (approximate percent, word); Solaar's table
+STATUS_LEVELS = {7: (90, "full"), 5: (50, "good"), 3: (20, "low"), 1: (5, "critical")}
 
 # HID++ error codes (Solaar: lib/logitech_receiver/hidpp10_constants.py, class ErrorCode)
 ERR_OLD_PROTOCOL = 0x01      # "invalid sub id": a HID++ 1.0 device answered
@@ -142,6 +156,29 @@ def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
     return None, False, ""
 
 
+def parse_register_battery(reg: int, p) -> Tuple[Optional[int], bool, str]:
+    """(level, charging, approximate text) from a HID++ 1.0 battery register.
+
+    Mirrored from Solaar (hidpp10.parse_battery_status). Register 0x07 carries
+    a discrete level (7 full ... 1 critical) beside a charging byte; register
+    0x0D a percentage and a status whose top nibble is 30 discharging, 50
+    recharging, 90 full. Nothing is claimed when the bytes do not fit.
+    """
+    if reg == REG_BATTERY_CHARGE:
+        charge = p[0]
+        if not 0 < charge <= 100:
+            return None, False, ""
+        return charge, p[2] & 0xF0 in (0x50, 0x90), ""
+    if reg == REG_BATTERY_STATUS:
+        status_byte, charging_byte = p[0], p[1]
+        charging = charging_byte & 0x21 == 0x21 or charging_byte & 0x22 == 0x22
+        if status_byte in STATUS_LEVELS:
+            level, word = STATUS_LEVELS[status_byte]
+            return level, charging, f"about {level}% ({word})"
+        return None, charging, ""     # a charging notification without a level
+    return None, False, ""
+
+
 class _Channel:
     """The HID++ collections of one receiver, cabled device or headset dongle."""
 
@@ -190,6 +227,36 @@ class _Channel:
                     self.error, self.error_code = True, r[5]
                     return None
                 if r[2] == feat and r[3] == fn:
+                    return list(r[4:]) + [0] * 16
+            time.sleep(0.005)
+        return None
+
+    def read_register(self, idx: int, reg: int, timeout: float = TIMEOUT) -> Optional[List[int]]:
+        """The data of a HID++ 1.0 register read, or None when none arrives.
+
+        The request is a short report, 10 <idx> 81 <reg>, on the short
+        collection - the shape Solaar sends to protocol 1.0 devices; the reply
+        may be short or long. An error reply (10 <idx> 8f 81 <reg> <code>, or
+        its HID++ 2.0 form with FF in place of 8F) leaves self.error set and is
+        recognised at once (review by @ahmedkhursheed23: a 2.0 device without a
+        battery feature answers every register read with the 2.0 error, and
+        without this it cost the full timeout per register). Registers are only
+        ever read.
+        """
+        if len(self.devs) < 2:        # register reads go on the short collection
+            return None
+        self.error, self.error_code = False, 0
+        self.devs[1].write([0x10, idx, 0x81, reg, 0, 0, 0])
+        end = time.time() + timeout
+        while time.time() < end:
+            for d in self.devs:
+                r = d.read(64)
+                if not r or len(r) < 4 or r[1] != idx:
+                    continue
+                if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == 0x81 and r[4] == reg:
+                    self.error, self.error_code = True, r[5]
+                    return None
+                if r[2] == 0x81 and r[3] == reg:
                     return list(r[4:]) + [0] * 16
             time.sleep(0.005)
         return None
@@ -282,7 +349,7 @@ class LogitechProvider(Provider):
         elif ch.error_code in (ERR_UNREACHABLE, ERR_CONNECT_FAIL):
             self._diag.append(f"  idx={idx} '{name}': switched off or out of range")
         elif ch.error_code == ERR_OLD_PROTOCOL:
-            self._diag.append(f"  idx={idx}: HID++ 1.0 device, not read yet")
+            self._diag.append(f"  idx={idx}: HID++ 1.0 device")
         else:
             self._diag.append(f"  idx={idx}: error {ch.error_code:02x}")
         return False
@@ -291,6 +358,12 @@ class LogitechProvider(Provider):
               instance: str = "", multi: bool = False) -> Optional[DeviceStatus]:
         slot = (pid, instance, idx)
         if not self._ping(ch, slot):
+            if ch.error and ch.error_code == ERR_OLD_PROTOCOL:
+                # HID++ 1.0: no feature table, but the old battery registers
+                st = self._register_battery(ch, slot, pid, idx, instance, multi)
+                if st is None:
+                    self._diag.append(f"  idx={idx}: no battery register answered")
+                return st
             return None
         if slot in self._ids:
             name, kind, unit = self._ids[slot]
@@ -332,7 +405,41 @@ class LogitechProvider(Provider):
                 self._slot_key[slot] = key
                 return DeviceStatus(key, name, level, chg, True, "logitech", approx=approx,
                                     kind=kind)
+        # nothing from the 2.0 features: an older device may answer its
+        # registers instead (it has no feature table at all)
+        st = self._register_battery(ch, slot, pid, idx, instance, multi)
+        if st is not None:
+            return st
         self._diag.append(f"  idx={idx} '{name}': no battery reading")
+        return None
+
+    def _register_battery(self, ch: _Channel, slot, pid: int, idx: int,
+                          instance: str, multi: bool) -> Optional[DeviceStatus]:
+        """Battery of a HID++ 1.0 device, from the old registers (Solaar's way).
+
+        A device without a feature table reports through registers instead; the
+        charge register (0x0D) is tried first, then the status one (0x07) - the
+        order Solaar uses for a register the device's descriptor does not name.
+        Registers are only ever read.
+        """
+        for reg in (REG_BATTERY_CHARGE, REG_BATTERY_STATUS):
+            r = ch.read_register(idx, reg)
+            if r is None:
+                continue
+            level, chg, approx = parse_register_battery(reg, r)
+            if level is None:
+                continue
+            name = self._ids.get(slot, ("",))[0] or "Logitech device"
+            self._diag.append(f"  idx={idx} '{name}': register {reg:02x}: "
+                              f"{approx or f'{level}%'}{' (charging)' if chg else ''}")
+            prefix = instance + ":" if multi else ""
+            key = f"logitech:{prefix}{pid:04x}:{idx}"
+            old = self._slot_key.get(slot)
+            if old and old != key:
+                self._last.pop(old, None)
+            self._slot_key[slot] = key
+            return DeviceStatus(key, name, level, chg, True, "logitech",
+                                approx=approx, kind="")
         return None
 
     @staticmethod

@@ -12,11 +12,11 @@ Before you report, do these steps:
 
 1. Close the maker's software (Synapse, G HUB, the web driver and similar). It can hold the receiver.
 2. Wake the device: move the mouse, press a key, or turn the headset on.
-3. Right-click a Halo Battery icon and select **Diagnostics…**. The "No devices found" icon has this item too. If you run the app from source, `probe.bat` shows the same information in a console window; copy all of it into the issue.
+3. Right-click a Halo Battery icon and select **Diagnostics…**. The "No devices found" icon has this item too. If you run the app from source, `scripts\probe.bat` shows the same information in a console window; copy all of it into the issue.
 
    <picture>
-     <source media="(prefers-color-scheme: dark)" srcset="docs/contributing/diagnostics-menu-dark.png">
-     <img src="docs/contributing/diagnostics-menu-light.png" alt="The tray menu of a device, with the Diagnostics item marked" width="381">
+     <source media="(prefers-color-scheme: dark)" srcset="../docs/contributing/diagnostics-menu-dark.png">
+     <img src="../docs/contributing/diagnostics-menu-light.png" alt="The tray menu of a device, with the Diagnostics item marked" width="381">
    </picture>
 
 4. The report opens in your text editor (usually Notepad). It is a text file, `diagnostics.txt`, in `%APPDATA%\HaloBattery`. It starts like this:
@@ -35,7 +35,7 @@ Before you report, do these steps:
 
    The **All HID devices** part is the most important for a device that is not supported: it shows the ids (`VID`, `PID`) and the collections (`usage`) of your device.
 
-Then [open an issue](../../issues/new) and:
+Then [open an issue](https://github.com/HeyOkay/HaloBattery/issues/new?template=device.yml) and:
 
 - Write the device name, and how it is connected (receiver, cable or Bluetooth).
 - Drag `diagnostics.txt` into the comment box (type `%APPDATA%\HaloBattery` in the address bar of File Explorer to find it). Do not paste only a part of it.
@@ -75,7 +75,7 @@ Bluetooth devices: Halo Battery shows the level that Windows itself reports. If 
    python -m unittest discover -s tests
    ```
 
-5. Add a line to `CHANGELOG.md` under `[Unreleased]`, and a row to the supported devices table.
+5. Add a line to `CHANGELOG.md` under `[Unreleased]`, a row to the table in `docs/devices.md`, and a section in `docs/protocols.md` that tells how the device is read and names the source.
 6. In the pull request description, write:
    - which issue it closes;
    - the source of the protocol;

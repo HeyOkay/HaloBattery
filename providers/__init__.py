@@ -7,13 +7,16 @@ from .mchose import MchoseProvider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401
+from .logitech_centurion import LogitechCenturionProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
+from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
 from .hyperx import HyperXProvider  # noqa: F401
 from .hyperx_alpha2 import HyperXAlpha2Provider  # noqa: F401
 from .hyperx_cloud3 import HyperXCloud3Provider  # noqa: F401
+from .hyperx_cloud3s import HyperXCloud3SProvider  # noqa: F401
 from .playstation import PlayStationProvider  # noqa: F401
 from .eightbitdo import EightBitDoProvider  # noqa: F401
 from .nintendo import NintendoProvider  # noqa: F401
@@ -24,3 +27,5 @@ from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
 from .lamzu import LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
+from .nzxt import NzxtProvider  # noqa: F401
+from .steam import SteamProvider  # noqa: F401

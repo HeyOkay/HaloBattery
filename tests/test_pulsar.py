@@ -10,7 +10,9 @@ interface-1 collection stays silent, which is what the real dongle does.
 
 The same mouse on its cable (3554:f58c) is the reporter's second report in that issue: it
 lists the same eight collections, so the same rule picks ff02:0002 and the same frame
-applies.
+applies. The keep-window tests at the end cover the reporter's later report: after 10-15
+idle minutes his mouse deep-sleeps, the receiver goes quiet, and the reading used to
+vanish from the tray until long after the mouse was used again.
 
 The Hitscan Hyperlight (3770:0200 on its receiver, 3770:0100 on the cable, #105) is
 faked with its own collection list and the frames sopparus/hitscan-battery captured
@@ -27,6 +29,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -54,6 +57,11 @@ HITSCAN_SHAPE = [
     (1, 0xFF02, 0x0002),
     (2, 0x0001, 0x0002),
 ]
+
+# the two frames the Pulsar X2 CrazyLight Mini answered on its reporter's hardware
+# (#164, both checksums valid): 3710:5406 the dongle, 3710:3414 the cable
+CRAZYLIGHT_DONGLE = bytes.fromhex("08 04 00 00 00 02 14 00 0d ea 00 00 00 00 00 00 3c")
+CRAZYLIGHT_CABLE = bytes.fromhex("08 04 00 00 00 02 19 01 0e 52 00 00 00 00 00 00 cd")
 
 
 def reply(level, power=0, mv=0, command=P.CMD_POWER, header=P.PAYLOAD_HEADER,
@@ -230,6 +238,23 @@ class PulsarTest(unittest.TestCase):
         self.one_receiver(replies=[])
         self.assertEqual([], P.PulsarProvider().poll())
 
+    def test_the_captured_crazylight_frames_parse(self):
+        self.assertEqual((20, False), P.parse_power(CRAZYLIGHT_DONGLE))
+        self.assertEqual(3562, P.voltage_mv(CRAZYLIGHT_DONGLE))
+        self.assertEqual((25, True), P.parse_power(CRAZYLIGHT_CABLE))
+        self.assertEqual(3666, P.voltage_mv(CRAZYLIGHT_CABLE))
+
+    def test_the_crazylight_mini_is_read_on_both_transports(self):
+        self.one_receiver(vid=0x3710, pid=0x5406, replies=[CRAZYLIGHT_DONGLE])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        self.assertEqual(("pulsar:37105406", "Pulsar X2 CrazyLight Mini (2.4 GHz)", 20, False),
+                         (found[0].key, found[0].name, found[0].level, found[0].charging))
+        self.one_receiver(vid=0x3710, pid=0x3414, replies=[CRAZYLIGHT_CABLE])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(("pulsar:37103414", "Pulsar X2 CrazyLight Mini (wired)", 25, True),
+                         (found[0].key, found[0].name, found[0].level, found[0].charging))
+
     def test_every_claimed_id_answers_the_same_request(self):
         for vid, pids in P.PIDS.items():
             for pid in pids:
@@ -340,6 +365,58 @@ class PulsarTest(unittest.TestCase):
             frame = bytes.fromhex(raw)
             self.assertEqual((level, False), P.parse_power(frame))
             self.assertEqual(mv, P.voltage_mv(frame))
+
+
+    # ------------------------------------------------- the idle mouse (#87, later report)
+
+    def test_a_mouse_that_stops_answering_keeps_its_reading_greyed(self):
+        self.one_receiver(replies=[reply(64, 1, 4020)])
+        provider = P.PulsarProvider()
+        with mock.patch.object(P.time, "time", return_value=1000.0):
+            first = provider.poll()
+        self.assertEqual(1, len(first))
+        self.assertTrue(first[0].online)
+        self.assertFalse(first[0].wake_on_input, "a fresh reading is not a wake candidate")
+        with mock.patch.object(P.time, "time", return_value=1060.0):
+            kept = provider.poll()          # idle now: the receiver goes quiet
+        self.assertEqual(1, len(kept), "the reading stays while the mouse is enumerated")
+        self.assertFalse(kept[0].online, "a held reading is greyed out")
+        self.assertEqual((64, True), (kept[0].level, kept[0].charging))
+        self.assertEqual("pulsar:3554f58a", kept[0].key)
+        self.assertTrue(kept[0].wake_on_input, "the kept reading can be woken by input")
+
+    def test_the_kept_reading_does_not_expire_while_the_receiver_is_present(self):
+        # the 2026-10-03 report: a screen-off let the greyed reading expire and the
+        # re-created icon came back at a new tray position - it must never expire
+        self.one_receiver(replies=[reply(64)])
+        provider = P.PulsarProvider()
+        with mock.patch.object(P.time, "time", return_value=1000.0):
+            self.assertEqual(1, len(provider.poll()))
+        with mock.patch.object(P.time, "time", return_value=1000.0 + 3600.0):
+            kept = provider.poll()
+        self.assertEqual(1, len(kept), "the receiver is still plugged in")
+        self.assertFalse(kept[0].online)
+        self.assertEqual(64, kept[0].level)
+
+    def test_an_unplugged_receiver_is_not_kept(self):
+        self.one_receiver(replies=[reply(64)])
+        provider = P.PulsarProvider()
+        with mock.patch.object(P.time, "time", return_value=1000.0):
+            self.assertEqual(1, len(provider.poll()))
+        self.bus.cols.clear()               # the receiver is pulled out of the machine
+        with mock.patch.object(P.time, "time", return_value=1005.0):
+            self.assertEqual([], provider.poll())
+
+    def test_the_diagnostic_says_the_reading_is_kept(self):
+        self.one_receiver(replies=[reply(64)])
+        provider = P.PulsarProvider()
+        with mock.patch.object(P.time, "time", return_value=1000.0):
+            provider.poll()
+        with mock.patch.object(P.time, "time", return_value=1060.0):
+            provider.poll()
+        diag = "\n".join(provider.diagnostics())
+        self.assertIn("did not answer", diag)
+        self.assertIn("greyed", diag)
 
 
 if __name__ == "__main__":
