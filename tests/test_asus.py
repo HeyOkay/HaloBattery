@@ -150,7 +150,7 @@ class PollTest(ProviderTest):
         mouse = CapturedMouse()
         result = self.poll(entries, {b"tx-mini-miku": mouse})
         self.assertEqual([(r.name, r.level, r.charging, r.kind, r.source) for r in result],
-                         [("ASUS TX Gaming Mouse Mini Miku", 46, False, "mouse", "asus")])
+                         [("TX Gaming Mouse Mini Miku", 46, False, "mouse", "asus")])
         self.assertEqual(mouse.writes, [A.REQUEST + [0] * (A.PACKET_LENGTH - len(A.REQUEST))])
 
 
