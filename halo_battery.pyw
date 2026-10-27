@@ -543,6 +543,7 @@ def fullscreen_app_running() -> bool:
 
 # ------------------------------------------------------------- tray icons
 WM_RBUTTONUP = 0x0205
+WM_QUERYENDSESSION = 0x0011
 ICON_HANDLE_CACHE = 64     # icon handles kept per tray icon (a charging cycle is 30 frames)
 IDLE_KEY = "HaloBattery:idle"   # the "no devices found" icon's id
 _tray_classes: Dict[type, type] = {}
@@ -660,6 +661,12 @@ def tray_icon(key: str, *args, **kwargs):
     ic = cls(*args, **kwargs)
     ic._hb_uid = icon_uid(key)
     ic._hb_handles = {}
+    handlers = getattr(ic, "_message_handlers", None)
+    if handlers is not None:
+        # pystray's window procedure answers every message it has no handler for with 0, and
+        # 0 to WM_QUERYENDSESSION means "do not end the session": the icon vetoed every
+        # shutdown, log-off and restart until Windows gave up on it (#242)
+        handlers.setdefault(WM_QUERYENDSESSION, lambda wparam, lparam: 1)
     return ic
 
 

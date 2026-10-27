@@ -13,6 +13,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   features and settings is in `docs/features.md` and the credits in `docs/credits.md`.
 
 ### Fixed
+- **Windows no longer waits on Halo Battery when it shuts down, logs off or restarts**
+  (#242): pystray's tray window answered the "may the session end?" message
+  (`WM_QUERYENDSESSION`) with 0, which means no, so Halo Battery blocked every shutdown
+  until Windows gave up and showed it as "not responding". Each tray icon now agrees.
 - **Start-up with portable mode no longer hangs in a folder it cannot write to**: the
   check whether the app folder is writable used `tempfile`, which on Windows retries
   forever when the folder's permissions deny creating files (Program Files). It is now one
