@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Jabra headsets through a Jabra Link 380 / Link 390 dongle** (Evolve2 65 and others,
+  Jabra Direct not needed): the headset's name, level and charging state are read over the
+  dongle's GN Protocol collection, as Watchdog0x/jabridge does. Confirmed with an Evolve2 65
+  on a Link 380 (0b0e:24c7).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

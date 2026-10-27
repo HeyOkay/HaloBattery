@@ -60,6 +60,12 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+### Jabra headsets through a Link 380 / Link 390 dongle
+
+**Connection:** Jabra Link 380 Bluetooth dongle (0B0E:24C7, and 24C8 / 24C9 / 24CA / 24E9) or Link 390 (0B0E:2E57)
+
+The dongle's vendor collection (usage page 0xFF00 / usage 0x0001) speaks Jabra's GN Protocol: report id 0x05 both ways, a query `05 04 00 <seq> 46 <class> <op>` addressed to destination 0x04 (the headset behind the dongle) is answered `05 00 04 <seq> <0xC0 | len> <class> <op> <payload>`. Class 0x12 / op 0x02 (`STATUS__HS_BATTERY`) returns `<flags> <level>` (flags bit 0 = charging), class 0x02 / op 0x00 the headset's name as a length-prefixed string; a reply with class 0xFE is a NAK, which is what a switched-off headset gets, and then no icon is shown. Only those two queries are sent. The protocol is [Watchdog0x/jabridge](https://github.com/Watchdog0x/jabridge)'s (Apache-2.0, `cmd/jabridge/jabraApi.go`), recovered from Jabra's libjabra and tested there on the Link 380 and Link 390. **Confirmed on a real unit**: a Link 380 (24C7) with an Evolve2 65 answered `Jabra Evolve2 65` and `04 15` (21 %)
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)

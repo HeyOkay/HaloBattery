@@ -8,6 +8,7 @@ Supported:
   * SteelSeries (Arctis Nova, Arctis 1 / 7 / 9 / Pro Wireless / 7+ headsets, GameBuds, Aerox mice,
     GG not needed)
   * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
+  * Jabra headsets behind a Link 380 / 390 dongle (Evolve2 and others, Jabra Direct not needed)
   * HyperX (Cloud II and Cloud III Wireless), JBL Quantum 910, Corsair, Astro A50 Gen 5,
     Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF, G-Wolves, LAMZU Maya X and AM Infinity 8K mice
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
@@ -136,7 +137,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXProvider, JblProvider,
+                       HyperXProvider, JabraProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
@@ -191,6 +192,7 @@ PROVIDER_LABELS = {
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
+    "jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
@@ -216,7 +218,8 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            JabraProvider(), JblProvider(listen_first=jbl_listen_first), LogitechProvider(),
+            SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
