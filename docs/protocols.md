@@ -106,6 +106,12 @@ On battery and after charge completion, it displays the reported level unchanged
 
 The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging)
 
+### Razer BlackShark V3
+
+**Connection:** 2.4 GHz dongle (1532:057A)
+
+64-byte frames, report id 0x02, on the vendor collection `ff14:0001`: transaction id 0x60 in byte 2, direction 0x80 in byte 9, class in byte 10 (0x21 battery, 0x2A charging), and the XOR of bytes 0-61 in byte 62. The answer is an input report on the same collection with the value in byte 13, where 0xFF means the radio link is not up yet. Three wake frames go out once per connection, in the order Synapse sends them. From [OpenRazer pull request #2794](https://github.com/openrazer/openrazer/pull/2794), not merged yet, and a Synapse capture of this dongle that its author posted in [#292](https://github.com/HeyOkay/HaloBattery/issues/292). Polling every 2 s reset the headset's radio link on OpenRazer, so the collection stays open between polls and the app reads what the headset pushes; it asks only at connect, after a link-up push (class 0x20) and after 5 silent minutes. A switched-off headset can therefore stay on screen for up to 5 minutes; at that check the dongle answers 0xFF, and the icon goes. **Confirmed on hardware** by the reporter of #292: the level matched Synapse, charging followed the cable both ways by itself, and a switched-off headset left the tray and came back
+
 ### SteelSeries Arctis and GameBuds (other models)
 
 **Connection:** wireless base station or dongle

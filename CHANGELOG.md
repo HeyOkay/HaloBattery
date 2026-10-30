@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Razer BlackShark V3 on its 2.4 GHz dongle (`1532:057A`, [#292](https://github.com/HeyOkay/HaloBattery/issues/292)): level and charging from the dongle's `ff14:0001` collection. The headset's radio link resets when it is polled all the time, so the collection stays open, the app listens to what the headset pushes, and it only asks at connect, after a link-up push and after 5 silent minutes; a switched-off headset can therefore stay on screen for up to 5 minutes. The frames come from OpenRazer's open pull request #2794 and a Synapse capture of this dongle. Confirmed on hardware by the reporter of #292: the level matched Synapse, charging followed the cable both ways, and a switched-off headset left the tray and came back.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
