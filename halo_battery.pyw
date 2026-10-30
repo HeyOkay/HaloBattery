@@ -137,7 +137,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
-                       KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
+                       KeychronProvider, LamzuAtlantisProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
@@ -219,7 +219,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider(),
+            LamzuProvider(), LamzuAtlantisProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider()]
 

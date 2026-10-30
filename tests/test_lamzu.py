@@ -63,12 +63,12 @@ def maya_x_entries(pid=L.DONGLE, prefix=b"dongle"):
 
 class PollTest(unittest.TestCase):
     def setUp(self):
-        self._saved = (L.hid, L.hidlist, L.time)
+        self._saved = (L.hid, L.hidlist, L.time, L.compx_output_length)
         L.time = types.SimpleNamespace(time=time.time, sleep=lambda s: None)
         self.provider = L.LamzuProvider()
 
     def tearDown(self):
-        L.hid, L.hidlist, L.time = self._saved
+        L.hid, L.hidlist, L.time, L.compx_output_length = self._saved
 
     def poll(self, entries, cols):
         L.hid = types.SimpleNamespace(device=fake_device_class(cols))
@@ -129,6 +129,87 @@ class PollTest(unittest.TestCase):
         cols = self.cols(e)
         self.assertEqual(self.poll(e, cols), [])
         self.assertEqual(cols[e[0]["path"]].opened, 0)
+
+
+class AtlantisProviderTest(unittest.TestCase):
+    def setUp(self):
+        self._saved = (L.hid, L.hidlist, L.compx_output_length)
+        self.sent = []
+        self.replies = []
+        self.entries = []
+        L.compx_output_length = lambda _path: None
+
+        owner = self
+        class FakeDevice:
+            def open_path(self, path):
+                self.path = path
+                self.sent_request = False
+            def read(self, length, timeout=0):
+                if self.sent_request and owner.replies:
+                    return owner.replies.pop(0)
+                return b""
+            def write(self, frame):
+                owner.sent.append((self.path, list(frame)))
+                self.sent_request = True
+                return len(frame)
+            def close(self):
+                pass
+        self.device = FakeDevice
+        L.hid = types.SimpleNamespace(device=lambda: self.device())
+        L.hidlist = types.SimpleNamespace(enumerate=lambda vid: list(self.entries)
+                                          if vid == L.COMPX_VID else [])
+
+    def tearDown(self):
+        L.hid, L.hidlist, L.compx_output_length = self._saved
+
+    def add_mouse(self, pid, prefix):
+        shapes = [(0, 0x0001, 0x0006), (1, 0xFF05, 0), (1, 0xFF03, 0),
+                  (1, 0x000C, 1), (1, 0x0001, 0x80), (1, 0xFF02, 2),
+                  (1, 0xFF04, 2), (2, 0x0001, 2)]
+        for n, (iface, page, usage) in enumerate(shapes):
+            self.entries.append({"vendor_id": L.COMPX_VID, "product_id": pid,
+                                 "interface_number": iface, "usage_page": page,
+                                 "usage": usage, "path": f"{prefix}-{n}".encode(),
+                                 "product_string": "LAMZU THORN"})
+
+    @staticmethod
+    def power_reply(level, charging=0, millivolts=0):
+        frame = [0x08, 0x04, 0, 0, 0, 2, level, charging]
+        frame += list(millivolts.to_bytes(2, "big")) + [0] * 6
+        frame.append((0x55 - sum(frame)) & 0xFF)
+        return bytes(frame)
+
+    def test_thorn_4k_receiver_is_reported_as_lamzu(self):
+        self.add_mouse(0xF510, "receiver")
+        self.replies = [self.power_reply(95, 0, 4092)]
+        provider = L.LamzuAtlantisProvider()
+        found = provider.poll()
+        self.assertEqual([("lamzu:3554f510", "LAMZU Thorn (4K receiver)", 95, False, "lamzu")],
+                         [(s.key, s.name, s.level, s.charging, s.source) for s in found])
+        self.assertEqual(1, len(self.sent))
+        self.assertEqual((0x08, 0x04), tuple(self.sent[0][1][:2]))
+
+    def test_thorn_cable_shares_identity_and_reports_charging(self):
+        self.add_mouse(0xF50F, "cable")
+        self.replies = [self.power_reply(95, 1, 4205)]
+        found = L.LamzuAtlantisProvider().poll()
+        self.assertEqual([("lamzu:3554f510", "LAMZU Thorn (wired)", 95, True, "lamzu")],
+                         [(s.key, s.name, s.level, s.charging, s.source) for s in found])
+
+    def test_cable_wins_when_receiver_and_cable_are_both_present(self):
+        self.add_mouse(0xF510, "receiver")
+        self.add_mouse(0xF50F, "cable")
+        self.replies = [self.power_reply(95, 1, 4205), self.power_reply(95, 0, 4092)]
+        found = L.LamzuAtlantisProvider().poll()
+        self.assertEqual(1, len(found))
+        self.assertTrue(found[0].charging)
+        self.assertEqual("lamzu:3554f510", found[0].key)
+        self.assertTrue(all(path.startswith(b"cable-") for path, _frame in self.sent))
+
+    def test_unlisted_compx_pid_is_not_opened(self):
+        self.add_mouse(0xF58F, "other")
+        self.assertEqual([], L.LamzuAtlantisProvider().poll())
+        self.assertEqual([], self.sent)
 
 
 if __name__ == "__main__":

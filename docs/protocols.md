@@ -174,6 +174,12 @@ The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection 
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
 
+### LAMZU Thorn
+
+**Connection:** 4K receiver/dongle (`3554:F510`) or USB cable (`3554:F50F`)
+
+The Thorn is a LAMZU device using CompX's 17-byte report-8 power exchange: command `0x04`, battery percentage in byte 6, cable/charging flag in byte 7, millivolts in bytes 8-9, and checksum in byte 16. The low-level frame codec is shared with Pulsar/ATK/VXE devices, but product identification, user-facing name and provider ownership are LAMZU-specific. Protocol and Atlantis-family IDs: [OpenMouse-Project/mouse-protocol PR #85](https://github.com/OpenMouse-Project/mouse-protocol/pull/85); the 4K receiver and cable IDs and the 95 % reading were cross-checked on a real Thorn. The cable reply sets byte 7 while charging. Receiver and cable use one LAMZU device key; the cable is queried first so its charging status wins.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)

@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **LAMZU Thorn** (`3554:F510` 4K receiver/dongle, `3554:F50F` USB cable): handled by the LAMZU provider using CompX report-8 framing, shared with some Pulsar/ATK/VXE models. Receiver and cable share one LAMZU icon; the cable's power flag reports charging. Confirmed on a real Thorn (95 % over both connections; charging detected on USB).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

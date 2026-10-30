@@ -25,7 +25,7 @@ from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
-from .lamzu import LamzuProvider  # noqa: F401
+from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
