@@ -10,6 +10,9 @@ Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
   * the Kysona M600 and the VXE Dragonfly R1 Pro use the same protocol (their ids are
     not in the tool, so they are not claimed here).
 
+The NearLink receiver 373b:1216 is listed here too, but speaks another protocol on
+another collection: see providers/atk_bitmouse.py. Everything below is about the rest.
+
 The cable id (3554:f58c) is claimed too, from the reporter's second report in #87: the
 wired mouse lists the same eight collections as the receiver, and the panel below reads it
 with the same command 0x04 frame. Both transports are confirmed on that reporter's
@@ -72,7 +75,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import hidlist
+from . import atk_bitmouse, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 CMD_POWER = 0x04
@@ -162,6 +165,7 @@ PIDS: Dict[int, Dict[int, str]] = {
     },
     0x373B: {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
+        0x1216: atk_bitmouse.PIDS[(0x373B, 0x1216)],   # another protocol: atk_bitmouse.py
     },
     0x3770: {
         0x0200: "Hitscan Hyperlight (2.4 GHz)",
@@ -302,16 +306,23 @@ class PulsarProvider(Provider):
                     continue
                 key = f"pulsar:{vid:04x}{pid:04x}"
                 present.add(key)
-                d = self._pick(mine)
+                bitmouse = (vid, pid) in atk_bitmouse.PIDS
+                d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine)
                 if d is None:
+                    self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x}: no collection "
+                                      f"to read among {len(mine)}")
                     continue
                 name = pids[pid]
                 self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x} '{name}' "
                                   f"iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}"
                                   f" output={output_length(d['path'])}")
-                reply = self._query(d["path"])
-                parsed = parse_power(reply)
+                if bitmouse:
+                    reply = None
+                    parsed = atk_bitmouse.read_power(d["path"], self._diag)
+                else:
+                    reply = self._query(d["path"])
+                    parsed = parse_power(reply)
                 if parsed is None:
                     if not reply:
                         self._diag.append("    no reply (asleep, or the mouse is idle)")

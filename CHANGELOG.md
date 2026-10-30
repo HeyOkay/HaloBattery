@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- ATK / VXE mice on the NearLink `NK mouse NANO dongle` (`373B:1216`, [#291](https://github.com/HeyOkay/HaloBattery/issues/291)), such as the VXE R1: level and charging over the receiver's `ff05:0001` collection, with the protocol of ATK's own configurator. The receiver is shared between models, so the icon says "ATK VXE NK mouse". The request and reply come from `@openmouse/protocol` and a capture of this receiver id in atk-tool's pull request #15. Confirmed on hardware by the reporter of #291 with a VXE R1: the level matched ATK's own app, and charging followed the cable both ways.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

@@ -138,6 +138,12 @@ The same `b0` exchange as the other Nova headsets, asked for with report id `06`
 
 The AJAZZ Control Center project's AJ-series exchange: a zero-payload `0xF7` status poll brings the receiver's 2.4G telemetry up, then the charge reads from status report `0x05` (`05 00 00 64 01 01 01 02`, charge at byte 3 on Windows). A zero charge or junk bytes are shown as no level rather than a wrong value, and no charging state is reported. **Unverified** - no AM Infinity was on hand; the exchange is confirmed on the reference project's own unit, so the layout stands until the reporter of #72 confirms it
 
+### ATK / VXE NearLink mice on the NK NANO dongle
+
+**Connection:** 2.4 GHz dongle (373B:1216)
+
+This receiver has no `ff02:0002` collection, so the Pulsar / ATK / VXE frames do not apply. It speaks the protocol [`@openmouse/protocol`](https://github.com/OpenMouse-Project/mouse-protocol) calls BITMOUSE, taken from ATK's own configurator, on `ff05:0001`: report id 0x08, 63 bytes, a sum checksum first, then the marker 0x72, the request length, a sequence byte, target 1 (the mouse behind the receiver), the command and the reply length. Command 7 is the level and command 15 the charging state, each in the first payload byte of a reply laid out `72 <status> <sequence> <target> <command> <length> <payload>`. [atk-tool pull request #15](https://github.com/noosxe/atk-tool/pull/15) (closed for its size, not merged) tested this id and captured the battery exchange, which fits that layout; the byte it reads as charging is the sequence byte and its voltage sits behind the payload, where OpenMouse says old bytes remain, so neither is used. A level of 0 is refused, because no source says what the receiver answers for a sleeping mouse. Several models share this receiver, so the icon does not name one. **Confirmed on hardware** by the reporter of #291 with a VXE R1: the level matched ATK's own app, charging followed the cable both ways by itself, and the icon went grey when the mouse was switched off or had been idle for a while, then recovered when the mouse was used again
+
 ### ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice
 
 **Connection:** 2.4 GHz receiver or USB cable (for example 0B05:1A72)

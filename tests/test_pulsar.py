@@ -258,6 +258,8 @@ class PulsarTest(unittest.TestCase):
     def test_every_claimed_id_answers_the_same_request(self):
         for vid, pids in P.PIDS.items():
             for pid in pids:
+                if (vid, pid) in P.atk_bitmouse.PIDS:
+                    continue        # another protocol: tests/test_atk_bitmouse.py
                 with self.subTest(vid=vid, pid=pid):
                     bus = FakeBus(vid, pid, [reply(33)])
                     P.output_length = lambda path: None
