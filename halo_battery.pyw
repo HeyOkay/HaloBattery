@@ -8,7 +8,8 @@ Supported:
   * SteelSeries (Arctis Nova, Arctis 1 / 7 / 9 / Pro Wireless / 7+ headsets, GameBuds, Aerox mice,
     GG not needed)
   * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
-  * HyperX (Cloud II and Cloud III Wireless), JBL Quantum 910, Corsair, Astro A50 Gen 5,
+  * HyperX (Cloud II, Cloud III Wireless and Cloud Flight Wireless), JBL Quantum 910,
+    Corsair, Astro A50 Gen 5,
     Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF, G-Wolves, LAMZU Maya X and AM Infinity 8K mice
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
   * PlayStation controllers (DualShock 4, DualSense): directly over USB/HID
@@ -136,7 +137,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXProvider, JblProvider,
+                       HyperXCloudFlightProvider, HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
@@ -189,6 +190,7 @@ PROVIDER_LABELS = {
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
+    "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "jbl": "JBL Quantum",
@@ -214,7 +216,8 @@ PROVIDER_LABELS = {
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
+            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXCloudFlightProvider(),
+            HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),

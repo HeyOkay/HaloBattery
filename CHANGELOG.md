@@ -6,6 +6,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- HyperX Cloud Flight Wireless (`0951:16C4` and `0951:1723`) using the battery-voltage protocol from HeadsetControl; charging is shown without a fabricated percentage ([#233](https://github.com/HeyOkay/HaloBattery/issues/233)).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

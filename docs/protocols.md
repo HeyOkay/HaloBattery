@@ -60,6 +60,12 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+### HyperX Cloud Flight Wireless
+
+**Connection:** 2.4 GHz receiver (`0951:16C4` older revision, `0951:1723` newer revision)
+
+The `0x0303` vendor collection is on usage page `0xFF53` for `16C4` and `0xFF90` for `1723`. A 20-byte output report `21 ff 05 ...` requests battery voltage; the receiver answers with 15 or 20 bytes, with big-endian millivolts at bytes 3-4. Above `0x100B` (4107 mV) the protocol reports charging but no dependable percentage, so Halo Battery shows charging without inventing a level. Otherwise it estimates a percentage using HeadsetControl's voltage curve ([source](https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/hyperx_cloud_flight.hpp)). **Unverified in Halo Battery** - the protocol is from HeadsetControl and has not yet returned a reading in an app run.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)
