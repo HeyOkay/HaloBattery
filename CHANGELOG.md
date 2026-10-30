@@ -6,6 +6,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **ATK A9 SE over its 2.4 GHz receiver (373B:10C9)**: the same 17-byte command-0x04
+  power exchange as the other Pulsar / ATK / VXE mice, probed on the user's hardware -
+  the level (35 %), the charging flag and the millivolts (3626 mV) answered on the
+  `ff02:0002` collection. The receiver carries two such collections and the first takes
+  only a 20-byte output report, so the length rule skips it and the frame goes to the
+  second one; the reading matches ATK's own panel (hub.atk.pro).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`
