@@ -4,6 +4,9 @@ from .audeze import AudezeProvider  # noqa: F401
 from .razer import RazerProvider  # noqa: F401
 from .wlmouse import WLmouseProvider  # noqa: F401
 from .mchose import MchoseProvider  # noqa: F401
+from .monsgeek import MonsGeekProvider  # noqa: F401
+from .eweadn import EweadnProvider  # noqa: F401
+from .mchose_kb import MchoseKbProvider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401

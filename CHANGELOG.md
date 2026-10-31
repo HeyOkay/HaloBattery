@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **EWEADN S9 (089D:062F)**: the level over its 2.4 GHz receiver, from the vendor's own web
+- **MCHOSE K87 (41E4:2001)**: the level from the `getBattery` exchange of MCHOSE's web
+- **MonsGeek FUN60 Pro (3151:5026)**: the level from the driver's own status request -
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

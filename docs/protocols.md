@@ -150,6 +150,23 @@ The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the ven
 
 The newer routed exchange that ckb-next calls "bragi" and OpenLinkHub "slipstream": 64-byte frames behind report id 0, route `0x09` asks the mouse behind the receiver (the receiver itself is `0x08`), command `0x02` "get property", property `0x0F` battery. The answer `01 02 00 <value:2 LE> ...` carries the level in tenths of a percent (`26 02` = 550 = 55 %). Frames that are not exactly that shape - the receiver's device records, its notices - are not levels. The request and the answer were captured from the reporter's dongle in #56 and the exchange is confirmed on hardware: KKiruano's test build run showed the same level SignalRGB does. Because the answer echoes the command and not the property, a second app on the same dongle (iCUE, SignalRGB) can put an answer for another property on the channel; the provider asks twice and takes only two equal answers, waits in a time window (traffic frames end a read early) and holds a per-dongle budget. No charging state is reported. The wired id 1B1C:1B7E is left out.
 
+### EWEADN S9
+
+**Connection:** 2.4 GHz receiver (089D:062F)
+
+The vendor collection (usage page 0xFF01, usage 0x0010, interface 2) takes a 33-byte **output**
+report on report id 0: `[0, 0x30, 0, 0, 0, 0 ... <sum of bytes 5..31> & 0xFF]`. Command 0x30
+asks for the device info block; the answer echoes the command, puts the status in byte 1
+(0 = ok, 2 = the mouse is asleep), the block length in byte 3, and then the block: device id
+ASCII at bytes 4..7 ("M156" for the S9), firmware at 8-9, ic type 10, report max 11, charge
+flag 12, **battery level 13**, connect status 14. The receiver also pushes unsolicited
+`D1 01 <level> ...` reports, which the vendor app uses for live updates; the provider polls
+instead. A `30 02` answer means the mouse is asleep - the last level is kept greyed out and
+the icon is re-read on the next input, the way a sleeping Razer or Pulsar mouse is handled.
+Source: the EWEADN web HUB - `hub.eweadn.cn/deviceJson/pq.json` maps this id to the protocol
+it names "zhanli-receiver" and `/pq/web/` implements the exchange. **Confirmed on hardware**:
+an S9 receiver answered 70 % and 69 % on successive sessions.
+
 ### G-Wolves HSK Pro ACE and the other models with a receiver of their own
 
 **Connection:** the model's own receiver (e.g. 33E4:5803 for the HSK Pro ACE, #105) or USB cable
@@ -310,6 +327,43 @@ The standard Razer commands (class `0x07` id `0x80` for the level, 0-255 shown a
 **Connection:** HyperSpeed receiver or USB cable
 
 The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfaces from OpenRazer's keyboard driver: DeathStalker V2 Pro 1532:0290 (receiver, `0x9F`, interface 2) and 1532:0292 (cable, `0x1F`, interface 3); BlackWidow V3 Mini HyperSpeed 1532:0271 / 0258 and BlackWidow V4 Mini HyperSpeed 1532:02BA / 02B9 (`0x9F` / `0x1F`, both on interface 3); BlackWidow V4 Tenkeyless HyperSpeed 1532:02D5 (receiver, `0x9F`, interface 2) and 1532:02D7 (cable, `0x1F`, interface 3). **Unverified** - only the DeathStalker V2 Pro TKL has been tested on hardware so far
+
+### MCHOSE K87
+
+**Connection:** 2.4 GHz receiver (41E4:2001)
+
+MCHOSE's web driver (M HUB, www.mchose.com.cn) carries the exchange in the command table of
+its `assets/purify.es-*.js` bundle:
+`["getBattery", {default: {wirelessCommand: "13 4a 01 00 ...", wirelessParser: batteryLevel:u8,
+fullStatus:bit4, chargeStatus:bit4}}]`. Report id 0x13, so the frame is `13 4a 01` and zeros
+on the 20-byte **output** report of the vendor collection (usage page 0xFF02, interface 1).
+The keyboard answers on its input report with the command echoed in byte 0, 0x02 in byte 2
+(the 2.4 GHz link), the level in byte 5 and a flag byte in byte 6; the last byte of the
+answer is the sum of the bytes before it, which is how the provider knows the frame is
+complete. The flag reads 0x01 on a full keyboard that is **not** on the cable, so the
+provider shows the level only and never claims charging. The sibling feature-report
+collection (usage page 0xFF04, report id 6, 7 bytes) answers `06 00 02 64 64 64 D9 88`, a
+second status channel with the same level, but the output report above is the one the vendor
+driver reads. **Confirmed on hardware**: a K87 answered `13 4A 01 00 02 64 01 ... C5` = 100 %,
+matching the keyboard's own 10/10 bar display.
+
+### MonsGeek FUN60 Pro
+
+**Connection:** 2.4 GHz receiver (3151:5026)
+
+The receiver's configuration collection (usage page 0xFFFF, usage 0x0002, interface 2) takes
+a 65-byte **feature** report on report id 0: `F7` at payload byte 0 and zeros after it, read
+back on the same report id. The answer carries the keyboard level at payload byte 1, the
+dongle's own mouse level at byte 2 (100 when no mouse is paired), the keyboard and mouse
+online flags at bytes 3 and 4, and the device type at byte 6 - 1 keyboard, 2 mouse, 3 both.
+This is the exchange MonsGeek's own Windows driver runs ("MonsGeek Driver v4" 500.3.3,
+`resources/app/dist/js/index.bc699543.js`, `___dongleCheck24GStatusByF7`), which re-asks
+before every read rather than re-reading; the provider does the same. A device type the
+driver does not define, or a level above 100, is refused rather than shown - an asleep
+receiver answers the same request with an all-zero frame. The wired id of the same board
+(3151:502F) exposes the same collection but answers with the request echoed and no level,
+so it is not claimed. **Confirmed on hardware**: a FUN60 Pro receiver read 54 %, 52 %, 51 %,
+48 %, 47 % and 42 % across a day of polling, matching the drops the keyboard itself showed.
 
 ## Controllers
 

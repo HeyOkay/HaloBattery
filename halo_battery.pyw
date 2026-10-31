@@ -139,7 +139,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider,
-                       MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
+                       MchoseProvider, MonsGeekProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
+                       EweadnProvider, MchoseKbProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        WLmouseProvider, XInputProvider, SteamProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
@@ -198,6 +199,9 @@ PROVIDER_LABELS = {
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "mchose": "MCHOSE mice",
+    "monsgeek": "MonsGeek keyboards",
+    "eweadn": "EWEADN / 前行者 mice",
+    "mchose_kb": "MCHOSE keyboards",
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
     "playstation": "PlayStation controllers",
@@ -214,6 +218,9 @@ PROVIDER_LABELS = {
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+            MonsGeekProvider(),
+            EweadnProvider(),
+            MchoseKbProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
