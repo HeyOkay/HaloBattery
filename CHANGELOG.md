@@ -8,7 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Razer Pro Type Ultra (`0x027B`): battery level on its 2.4 GHz receiver, confirmed on
-  @dawn-shao's own unit (#196). His retests fixed two things on the way: the keyboard
+  @dawn-shao's own unit (#196) - eleven days of use, sleep and wake included, next to a
+  Razer Cobra Pro whose icon recovered every time too. His retests fixed two things on the way: the keyboard
   reads with transaction id `0x9F` (`0x1F` comes back `04` even when it is awake), and
   the provider no longer pins a collection that has never answered - a wrong
   collection's timeout could shadow the real one, so a sleeping keyboard stayed missing
