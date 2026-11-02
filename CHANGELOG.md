@@ -8,6 +8,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
+  over the vendor feature-report protocol, on a VAXEE 4K dongle or on the cable.
+  Ported from [ryanlewis/mousebatt](https://github.com/ryanlewis/mousebatt), with
+  the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
+  confirmed on hardware on an E1 Wireless.
 - **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
 - Corsair HS80 RGB Wireless (original): battery level over direct USB
   (`1b1c:0a69`) or its wireless receiver (`1b1c:0a6b`), sharing one tray icon.

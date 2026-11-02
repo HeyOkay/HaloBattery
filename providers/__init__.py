@@ -35,6 +35,7 @@ from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
 from .dji import DjiProvider  # noqa: F401
 from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
+from .vaxee import VaxeeProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401

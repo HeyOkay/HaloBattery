@@ -11,7 +11,7 @@ Supported:
   * HyperX (Cloud II, Cloud III Wireless and Cloud Flight Wireless), JBL Quantum 910,
     Corsair, Astro A50 Gen 5,
     Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF (and ASUS ROG keyboards on the OMNI receiver), G-Wolves,
-    LAMZU Maya X, DAREU A950, MCHOSE V9 Pro and AM Infinity 8K mice
+    LAMZU Maya X, VAXEE, DAREU A950, MCHOSE V9 Pro and AM Infinity 8K mice
   * Finalmouse UltralightX (on its 2.4 GHz dongle)
   * Jabra headsets behind a Link 380 / 390 dongle (Evolve2 and others, Jabra Direct not needed)
   * NVIDIA SHIELD Controller (2017)
@@ -148,7 +148,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
-                       WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
+                       VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider)
@@ -247,6 +247,7 @@ PROVIDER_LABELS = {
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
     "turtlebeach": "Turtle Beach headsets",
+    "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
 }
@@ -260,7 +261,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), AmInfinityProvider(),
+            LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
