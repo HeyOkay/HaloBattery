@@ -255,6 +255,23 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(("pulsar:37103414", "Pulsar X2 CrazyLight Mini (wired)", 25, True),
                          (found[0].key, found[0].name, found[0].level, found[0].charging))
 
+    def test_the_cougar_revenger_pro_is_read_on_all_three_ids(self):
+        # a Revenger Pro 4K owner's diagnostics: the 4K receiver is 3554:f5df, the receiver in
+        # the box 3554:f5dc, the cable 3554:f5de; all list the same collections as the R1 Pro Max
+        for pid, name, level, charging, mv in (
+                (0xF5DF, "Cougar Revenger Pro 4K", 55, False, 3917),
+                (0xF5DC, "Cougar Revenger Pro (2.4 GHz)", 65, False, 3959),
+                (0xF5DE, "Cougar Revenger Pro 4K (wired)", 90, True, 4063)):
+            with self.subTest(pid=pid):
+                bus = self.one_receiver(vid=0x3554, pid=pid,
+                                        replies=[reply(level, int(charging), mv)])
+                found = P.PulsarProvider().poll()
+                self.assertEqual(1, len(found))
+                d = found[0]
+                self.assertEqual(("pulsar:3554%04x" % pid, name, level, charging),
+                                 (d.key, d.name, d.level, d.charging))
+                self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
     def test_every_claimed_id_answers_the_same_request(self):
         for vid, pids in P.PIDS.items():
             for pid in pids:

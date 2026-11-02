@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Cougar Revenger Pro 4K**: the mouse speaks the Pulsar / ATK VXE protocol (same Compx
+  chip) and shows its level on the 4K receiver (3554:F5DF), on the receiver in the box
+  (3554:F5DC) and on the cable (3554:F5DE), with the charging flag on the cable.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

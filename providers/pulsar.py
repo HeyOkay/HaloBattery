@@ -159,6 +159,9 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
+        0xF5DF: "Cougar Revenger Pro 4K",
+        0xF5DE: "Cougar Revenger Pro 4K (wired)",
+        0xF5DC: "Cougar Revenger Pro (2.4 GHz)",
     },
     0x373B: {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
