@@ -142,7 +142,11 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
-                       WLmouseProvider, XInputProvider, SteamProvider)
+                       WLmouseProvider, XInputProvider, SteamProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
+                       EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider,
+                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -182,32 +186,51 @@ DEFAULTS = {
 # devices keep their own switch ("bluetooth" above), as before.
 PROVIDER_LABELS = {
     "8bitdo": "8BitDo controllers",
+    "ajazz": "AJAZZ mice",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
     "astro": "Astro A50",
-    "asus": "ASUS ROG / TUF mice",
+    "asus": "ASUS ROG / TUF mice, keyboards and headsets",
+    "atk_keyboard": "ATK V75X keyboard",
+    "atk_nearlink": "ATK X1 Nearlink mice",
     "audeze": "Audeze Maxwell",
+    "aula": "AULA F87 Pro V2C keyboards",
     "barracuda": "Razer Barracuda Pro",
     "corsair": "Corsair headsets",
+    "dareu": "DAREU mice",
+    "eweadn": "EWEADN / 前行者 mice",
+    "finalmouse": "Finalmouse UltralightX",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
+    "hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
+    "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
+    "inphic": "Inphic / Attack Shark mice",
+    "jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
-    "lofree": "Lofree keyboards",
+    "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "mchose": "MCHOSE mice",
+    "mchose_kb": "MCHOSE keyboards",
+    "mchose_v9": "MCHOSE V9 Pro",
+    "monsgeek": "MonsGeek keyboards",
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
     "playstation": "PlayStation controllers",
-    "pulsar": "Pulsar / ATK VXE mice",
+    "pulsar": "Pulsar / ATK VXE / Redragon mice",
+    "rapoo": "Rapoo mice and keyboards",
     "razer": "Razer mice and headsets",
+    "shield": "NVIDIA SHIELD controllers",
+    "skullcandy": "Skullcandy headsets",
+    "sony_inzone": "Sony INZONE H9",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
+    "turtlebeach": "Turtle Beach headsets",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
 }
@@ -220,10 +243,15 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
-            AsusProvider(), GWolvesProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
+            AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider()]
+            SteamProvider(),
+            MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
+            InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
+            HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
+            EweadnProvider(), MchoseKbProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -839,6 +867,11 @@ def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "", *, la
 
 def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
+    if st.polling_paused:
+        # an idle keyboard whose polling is parked until it is used (#308): the last level
+        if st.level is None:
+            return i18n.translate("state.not_reported", language=language)
+        return i18n.translate("state.level", language=language, level=st.level)
     if st.approx:
         state = st.approx          # XInput: coarse levels or "not reported yet", never a fake "NN%"
         if language != "en" and getattr(st, "ui_message", ""):
@@ -858,9 +891,11 @@ def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> s
         state = i18n.translate("state.level", language=language, level=st.level)
         if st.charging:
             state = i18n.translate("state.charging", language=language, state=state)
+        elif not st.charging_known:
+            state = i18n.translate("state.charging_unknown", language=language, state=state)
         if not st.online:
             state = i18n.translate("state.asleep", language=language, state=state)
-        elif left and not st.charging:
+        elif left and not st.charging and st.charging_known:
             state = i18n.translate("state.time_left", language=language, state=state, left=left)
     return state
 
@@ -993,6 +1028,7 @@ class DeviceIcon:
             self._update(st)
 
     def _update(self, st: DeviceStatus) -> None:
+        paused_changed = bool(self.status and self.status.polling_paused) != st.polling_paused
         self.status = st
         badge = self.app.pictogram(st) if self.app.cfg["badges"] else ""
         animate = self.app.cfg["animation"] and st.charging and st.online
@@ -1000,8 +1036,8 @@ class DeviceIcon:
         # (st.approx) keeps its pictogram rather than showing a made-up exact number
         text = (str(st.level) if self.app.cfg.get("percent_in_icon") and st.level is not None
                 and not st.approx else "")
-        state = (st.level, st.charging, st.online, self.app.low_for(st),
-                 self.app.light_taskbar, badge, animate, text)
+        state = (st.level, st.charging, st.online or st.polling_paused, self.app.low_for(st),
+                 self.app.light_taskbar, badge, animate, text, st.polling_paused)
         if state != self._state:
             self._state = state
             art = self._art(state)
@@ -1018,7 +1054,7 @@ class DeviceIcon:
                          language=self.app.cfg.get("language", "en"))
         # the tray tooltip is limited to 127 characters
         title = i18n.tooltip(title)
-        if self.icon.title != title:
+        if self.icon.title != title or paused_changed:
             self.icon.title = title
             # pystray builds the Windows menu once and keeps its texts. The menu header
             # shows the same text as the tooltip, so rebuild the menu when it changes;
@@ -1041,8 +1077,8 @@ class DeviceIcon:
         draw anything again. The cache holds one state, in at most both colours."""
         art = self._images.get(state)
         if art is None:
-            level, charging, online, low, light, badge, animate, text = state
-            other = (level, charging, online, low, not light, badge, animate, text)
+            level, charging, online, low, light, badge, animate, text, paused = state
+            other = (level, charging, online, low, not light, badge, animate, text, paused)
             kept = self._images.get(other)
             self._images.clear()
             if kept is not None:
@@ -1050,7 +1086,7 @@ class DeviceIcon:
             if animate:
                 art = icons.charging_frames(level, online, low, light, badge, text=text)
             else:
-                art = icons.render(level, charging, online, low, light, badge, text=text)
+                art = icons.render(level, charging, online, low, light, badge, text=text, force_active=paused)
             self._images[state] = art
         return art
 
@@ -1188,6 +1224,10 @@ class App:
 
         def header_detail():
             if owner and owner.status:
+                if owner.status.polling_paused:
+                    return (device_state(owner.status, language=self.cfg.get("language", "en"))
+                            + "; " + i18n.translate("state.polling_paused",
+                                                    language=self.cfg.get("language", "en")))
                 return device_state(owner.status, self.time_left_text(owner.status),
                                     language=self.cfg.get("language", "en"))
             return ""
@@ -1546,7 +1586,7 @@ class App:
     # ---------------- time left
     def time_left_text(self, st: DeviceStatus, *, language: Optional[str] = None) -> str:
         """"about 5 h of use left", or "" when turned off or not known yet."""
-        if not self.cfg.get("time_left", True) or st.approx:
+        if not self.cfg.get("time_left", True) or st.approx or not st.charging_known:
             return ""
         seconds = self.history.seconds_left(st.key, st.level)
         return i18n.format_left(seconds, language=language if language is not None else
@@ -1720,6 +1760,8 @@ class App:
                 continue          # turned off in Preferences > Device types: not opened at all
             if isinstance(p, PlayStationProvider):
                 p.switch_bluetooth = bool(self.cfg.get("playstation_full_mode", False))
+            if isinstance(p, AtkKeyboardProvider):
+                p.activity.wake = self.wake.set
             try:
                 found = p.poll()
             except Exception:
@@ -1810,7 +1852,8 @@ class App:
                 if st.key in hidden:
                     continue      # hidden by the user: no icon and no low battery alert
                 seen.add(st.key)
-                self.history.record(st.key, st.level, st.charging, st.online, now,
+                self.history.record(st.key, st.level, st.charging,
+                                    st.online and st.charging_known, now,
                                     coarse=bool(st.approx))
                 self.missing.pop(st.key, None)
                 ic = self.icons.get(st.key)
@@ -1833,13 +1876,13 @@ class App:
             for key in list(self.icons):
                 if key not in seen and (may_go is None or may_go(key)):
                     st = self.icons[key].status
-                    if keep and st is not None and not st.online:
+                    if keep and st is not None and not st.online and not st.polling_paused:
                         continue      # already kept: greyed with its last level
                     self.missing[key] = self.missing.get(key, 0) + 1
                     limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                     if self.missing[key] >= limit and keep and st is not None:
                         # "keep disconnected devices": grey icon, last level, no alerts
-                        self.icons[key].update(replace(st, online=False, charging=False))
+                        self.icons[key].update(replace(st, online=False, charging=False, polling_paused=False))
                         self.missing.pop(key, None)
                     elif self.missing[key] >= limit:
                         gone.append(self.icons.pop(key))
@@ -1884,7 +1927,7 @@ class App:
 
     def check_alert(self, ic: DeviceIcon, st: DeviceStatus):
         low = self.low_for(st)
-        if not low or st.level is None or not st.online:
+        if not low or st.level is None or not st.online or not st.charging_known:
             return
         if st.charging or st.level > low + 5:
             self.alerted[st.key] = False
@@ -1904,6 +1947,8 @@ class App:
     def check_low_sound(self, st: DeviceStatus, low: int) -> None:
         """"Sound with the low battery alert": a Windows sound with the notification, and
         again every 5 minutes while the device stays low, awake and off the charger."""
+        if not st.charging_known:
+            return
         if not self.cfg.get("low_sound", False):
             self.low_sound_at.pop(st.key, None)
             return
@@ -1922,7 +1967,7 @@ class App:
         "charging" when they are full, so 100 % right after charging counts too. A level
         that goes 100 -> 99 -> 100 on the charger does not give a second one: the alert
         comes again only after the device leaves the charger or drops below 95 %."""
-        if st.level is None or not st.online:
+        if st.level is None or not st.online or not st.charging_known:
             return
         prev = self.full_state.get(st.key)
         if st.level >= 100 and prev == "charging" and self.cfg.get("full_alert", True):
@@ -2123,13 +2168,14 @@ class App:
             if st.key in hidden:
                 continue
             secs = None if st.approx else self.history.seconds_left(st.key, st.level)
-            if st.charging or not st.online:
+            if st.charging or not st.online or not st.charging_known:
                 secs = None
             devices.append({
                 "key": st.key,
                 "name": self.display_name(st),
                 "level": st.level,
                 "charging": st.charging,
+                "charging_known": st.charging_known,
                 "online": st.online,
                 "kind": self.pictogram(st),
                 "approx": st.approx or None,
@@ -2186,7 +2232,8 @@ class App:
             ic = self.icons.get(key)
             st = ic.status if ic is not None else None
             if notice_kind in ("low", "Low battery") and st is not None and (
-                    st.charging or (st.level is not None and st.level > self.low_for(st))):
+                    not st.charging_known or st.charging or
+                    (st.level is not None and st.level > self.low_for(st))):
                 continue
             self.notify_any(text, title, key, kind=kind, params=params)
 
@@ -2202,6 +2249,8 @@ class App:
         """Once a day ask GitHub for the latest release; "Check for updates now" wakes
         it at once. After an update: clean up and show "What's new"."""
         # what the last check found is shown right away, without waiting for the network
+        if updates.invalidate_cache_for_repo(self.cfg):
+            save_config(self.cfg)                # an offer cached from another repository is dropped
         seen = self.cfg.get("update_latest", "")
         if self.cfg.get("update_check", True) and updates.is_newer(seen, VERSION):
             self.update = updates.Release(seen, self.cfg.get("update_url") or updates.RELEASES_URL)
@@ -2242,7 +2291,8 @@ class App:
             if manual:
                 self.notify_update("notification.update_check_failed", error=str(e))
             return
-        self.cfg.update(update_last=time.time(), update_latest=rel.version, update_url=rel.url)
+        self.cfg.update(update_last=time.time(), update_latest=rel.version, update_url=rel.url,
+                        update_repo=updates.REPO)
         if updates.is_newer(rel.version, VERSION):
             log.info("update available: v%s (running v%s)", rel.version, VERSION)
             self.update = rel
@@ -2349,6 +2399,9 @@ class App:
 
     def quit(self):
         self.stop_evt.set()
+        for provider in self.providers:
+            if isinstance(provider, AtkKeyboardProvider):
+                provider.close()
         self.history.save(force=True)
         if self.cfg.get("status_file"):
             try:
@@ -2406,8 +2459,45 @@ def dump_hid() -> List[str]:
     return lines
 
 
+def _probe_emit(sections):
+    """Show the probe's output.
+
+    In a console this prints. Without one - a windowed build started plainly,
+    where `print()` goes nowhere - the text goes to `HaloBattery-probe.txt`
+    next to the executable and is opened with the default editor, so a probe
+    run is never silent (this is how the first probe build looked blank in #28).
+    """
+    text = "\n".join(sections)
+    if sys.stdout is not None:
+        try:
+            print(text)
+            return None
+        except (OSError, ValueError):
+            pass
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base = os.getcwd()
+    path = os.path.join(base, "HaloBattery-probe.txt")
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    except OSError:
+        path = os.path.join(tempfile.gettempdir(), "HaloBattery-probe.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    try:
+        os.startfile(path)
+    except OSError:
+        pass
+    return path
+
+
 def probe():
     """Console mode: a single poll with verbose output."""
+    # providers can deepen their diagnostics for this run (the Corsair receiver
+    # family logs every write and every frame; see #28)
+    os.environ["HALO_PROBE"] = "1"
     # device names come from Windows and may contain any characters; a cp1252
     # console would otherwise crash on them
     for stream in (sys.stdout, sys.stderr):
@@ -2420,20 +2510,22 @@ def probe():
     app.providers = make_providers(jbl_listen_first=JBL_PROBE_LISTEN_S)
     app.bt = BluetoothProvider()
     res = []
+    sections = []
     for p in app.providers + [app.bt]:
         if isinstance(p, PlayStationProvider):
             p.switch_bluetooth = bool(app.cfg.get("playstation_full_mode", False))
         res += p.poll()
-        print("\n".join(p.diagnostics()))
-    print("\n=== Summary ===")
+        sections.append("\n".join(p.diagnostics()))
+    sections.append("\n=== Summary ===")
     for s in res:
-        print(describe(s))
+        sections.append(describe(s))
     if not res:
-        print("Nothing found.")
+        sections.append("Nothing found.")
     # always list every HID device: the case worth dumping is a device that did
     # not answer while others did, and that never reaches the branch above
-    print("\nAll HID devices:")
-    print("\n".join(dump_hid()))
+    sections.append("\nAll HID devices:")
+    sections.append("\n".join(dump_hid()))
+    _probe_emit(sections)
 
 
 def show_whats_new_only() -> None:

@@ -188,6 +188,7 @@ class DeviceLowTests(HideRenameTestCase):
         drawn = []
         ic = REAL_DEVICE_ICON.__new__(REAL_DEVICE_ICON)
         ic.app, ic.key, ic._state, ic._images, ic.frames = app, KEY, None, {}, None
+        ic.status = None
         ic.icon = mock.Mock(title="", visible=True)
         with mock.patch.object(hb.icons, "render",
                                lambda level, ch, on, low, lt, badge, **kw: drawn.append(low) or object()):

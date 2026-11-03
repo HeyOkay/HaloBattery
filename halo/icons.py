@@ -240,7 +240,7 @@ def _number(d: ImageDraw.ImageDraw, text: str, col) -> None:
 # ---------------------------------------------------------------- icon
 def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            light_taskbar: Optional[bool] = None, badge: str = "",
-           pulse: float = 1.0, text: str = "") -> Image.Image:
+           pulse: float = 1.0, text: str = "", force_active: bool = False) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - arc brightness 0..1 (a frame of the charging "breathing" animation).
     text - drawn in the centre instead of the pictogram (the battery percentage); red or
@@ -248,7 +248,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if light_taskbar is None:
         light_taskbar = taskbar_is_light()
     fg = (0, 0, 0) if light_taskbar else (255, 255, 255)
-    active = online and (level is not None or charging)
+    active = online and (level is not None or charging or force_active)
     alpha = 255 if active else 110
 
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
