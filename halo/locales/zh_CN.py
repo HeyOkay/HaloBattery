@@ -105,6 +105,8 @@ MESSAGES = {
     "state.time_left": "{state}，{left}",
     "state.approx": "约 {level}%",
     "state.approx_grade": "约 {level}%（{grade}）",
+    "state.charging_was": "充电中（接入前约 {level}%）",
+    "state.charging_level_unknown": "充电中（充电时无法获取电量）",
     "state.pending": "已连接，尚未报告电量",
     "state.unreported": "已连接，尚未报告电量",
     "state.unreadable": "已连接，但无法读取电量（其他应用程序可能占用设备）",

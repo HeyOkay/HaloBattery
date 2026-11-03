@@ -130,6 +130,12 @@ def voltage_to_percent(mv: int) -> int:
     return 0
 
 
+def charge_complete(feature: int, p) -> bool:
+    """True when a voltage-only reply says the charger finished (Solaar's ChargeStatus
+    FULL: flags bit 7 charging, low bits 1). Only 0x1001 carries it."""
+    return feature == F_VOLTAGE and bool(p[2] & 0x80) and (p[2] & 0x03) == 1
+
+
 def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
     """(level, on the charger, approximate text) from the params of a battery reply.
     A full battery that is still on the charger counts as charging.
@@ -326,6 +332,10 @@ class LogitechProvider(Provider):
         self._asleep: Set[Tuple[int, str, int]] = set()   # paired slots that stopped answering
         self._last: Dict[str, Tuple[DeviceStatus, float]] = {}
         self._slot_key: Dict[Tuple[int, str, int], str] = {}   # slot -> last icon key
+        # last level seen while discharging, per icon key. A voltage-only battery
+        # (0x1001, 0x1F20) reads ~4.2 V on the charger whatever its charge, so the level
+        # measured while charging is meaningless (HeyOkay/HaloBattery#271).
+        self._discharge: Dict[str, int] = {}
 
     def _ping(self, ch: _Channel, slot: Tuple[int, str, int]) -> bool:
         """True if a device in this slot answers. Also records why a slot did not answer."""
@@ -406,6 +416,21 @@ class LogitechProvider(Provider):
                 if old and old != key:
                     self._last.pop(old, None)
                 self._slot_key[slot] = key
+                if feature in (F_VOLTAGE, F_ADC):
+                    if not chg:
+                        self._discharge[key] = level
+                    elif not charge_complete(feature, r):
+                        before = self._discharge.get(key)
+                        if before is not None:
+                            text = f"charging (about {before}% before it was plugged in)"
+                            return DeviceStatus(key, name, before, True, True, "logitech", approx=text,
+                                                kind=kind, ui_message="state.charging_was",
+                                                ui_params={"level": before})
+                        return DeviceStatus(key, name, None, True, True, "logitech",
+                                            approx="charging (level not reported while charging)",
+                                            kind=kind, ui_message="state.charging_level_unknown")
+                    else:
+                        level = 100
                 return DeviceStatus(key, name, level, chg, True, "logitech", approx=approx,
                                     kind=kind, ui_message="state.approx_grade" if approx else "",
                                     ui_params={"level": level, "grade": APPROX_LEVELS[r[1]][1]} if approx else {})

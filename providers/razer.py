@@ -393,7 +393,11 @@ class RazerProvider(Provider):
                 # providers/barracuda.py reads.
                 self._diag.append("  skipped: read by the barracuda provider (own PA protocol)")
                 continue
-            is_headset = pid in blackshark.PA_PIDS or "blackshark" in name.lower()
+            # A Barracuda receiver that is not in PA_PIDS (the Barracuda X 2.4, 1532:0550) shows
+            # the same collections and the same failed mouse request as the receivers that
+            # speak PA (#332, #264), so it gets the PA fallback a BlackShark gets.
+            is_headset = (pid in blackshark.PA_PIDS or "blackshark" in name.lower()
+                          or "barracuda" in name.lower())
             if pid == blackshark2020.PID:
                 # Deliberately no generic/PA fallback: the 0528 hardware rejects
                 # their reads/writes. A missing fresh feature reply means no reading.

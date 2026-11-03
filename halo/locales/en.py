@@ -104,6 +104,8 @@ MESSAGES = {
     "state.time_left": "{state}, {left}",
     "state.approx": "about {level}%",
     "state.approx_grade": "about {level}% ({grade})",
+    "state.charging_was": "charging (about {level}% before it was plugged in)",
+    "state.charging_level_unknown": "charging (level not reported while charging)",
     "state.pending": "connected, battery level not reported yet",
     "state.unreported": "connected, battery level not reported",
     "state.unreadable": "connected, battery not readable (another app may hold it)",

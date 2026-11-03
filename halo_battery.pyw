@@ -8,8 +8,13 @@ Supported:
   * SteelSeries (Arctis Nova, Arctis 1 / 7 / 9 / Pro Wireless / 7+ headsets, GameBuds, Aerox mice,
     GG not needed)
   * MCHOSE (M7 Ultra and the rest of the 0x5253 family, on the 2.4 GHz receiver)
-  * HyperX (Cloud II and Cloud III Wireless), JBL Quantum 910, Corsair, Astro A50 Gen 5,
-    Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF, G-Wolves, LAMZU Maya X and AM Infinity 8K mice
+  * HyperX (Cloud II, Cloud III Wireless and Cloud Flight Wireless), JBL Quantum 910,
+    Corsair, Astro A50 Gen 5,
+    Keychron, Lofree, Pulsar / ATK / VXE, ASUS ROG / TUF (and ASUS ROG keyboards on the OMNI receiver), G-Wolves,
+    LAMZU Maya X, DAREU A950, MCHOSE V9 Pro and AM Infinity 8K mice
+  * Finalmouse UltralightX (on its 2.4 GHz dongle)
+  * Jabra headsets behind a Link 380 / 390 dongle (Evolve2 and others, Jabra Direct not needed)
+  * NVIDIA SHIELD Controller (2017)
   * Xbox-compatible controllers (Windows.Gaming.Input / XInput)
   * PlayStation controllers (DualShock 4, DualSense): directly over USB/HID
   * 8BitDo controllers in D-input mode (Pro 2, Pro 3, SN30 / SF30 Pro), while Steam
@@ -38,7 +43,7 @@ from typing import Callable, Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
 APP_TITLE = "Halo Battery"
-VERSION = "1.15.0"
+VERSION = "1.16.0"
 PRETEND_VERSION = ""             # --pretend-version 1.0.0: test the updater with a built copy
 LEGACY_NAME = "BatteryTray"      # the app's previous name (settings and autostart are migrated)
 

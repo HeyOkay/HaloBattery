@@ -4,7 +4,9 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.16.0] - 2026-11-04
+
+First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
 
 ### Added (integrated open upstream pull requests)
 New devices (each links to the upstream pull request and its author):
@@ -79,6 +81,19 @@ App and fixes:
   (#236): Windows reports no Bluetooth battery for it, and the icon said only
   "connected". The controller's own coarse level (empty / low / medium / full) is shown
   instead; when Windows does report a Bluetooth level, that one is still used.
+- **A Logitech mouse or headset on the charger no longer shows a false 100%** (#271): mice
+  and headsets that report only the battery voltage read about 4.2 V while charging, which
+  the app turned into 100%. While charging, the app now shows the level seen before the
+  cable was connected ("charging, about 94% before it was plugged in"), or "level not
+  reported while charging" if it never saw one; a charge-complete report still shows 100%.
+- **VXE R1 Pro is no longer called "R1 Pro Max"** (#334): the R1 Pro and the R1 Pro Max
+  share one 2.4 GHz dongle (`3554:F58A`) and the app cannot tell them apart, so the
+  dongle's device is now named "VXE R1 Pro / R1 Pro Max (2.4 GHz)".
+- **Razer Barracuda X 2.4 (`1532:0550`) is read with the headset protocol** (#332, #264):
+  the receiver was found but its mouse-style battery request got no reply. Like the
+  BlackShark headsets, a Barracuda receiver now also gets the headset ("PA") battery
+  request when the first one fails. Not yet confirmed on a Barracuda X; a diagnostics
+  report from one would settle it.
 
 ## [1.15.0] - 2026-10-12
 
