@@ -66,12 +66,13 @@ class History:
         except (OSError, ValueError):
             return
         now = time.time()
-        for key, d in (data.get("devices") or {}).items() if isinstance(data, dict) else ():
+        devices = data.get("devices") if isinstance(data, dict) else None
+        for key, d in (devices.items() if isinstance(devices, dict) else ()):
             try:
                 samples = [[float(u), int(l)] for u, l in d.get("samples", [])][-MAX_SAMPLES:]
                 entry = {"use": float(d.get("use", 0.0)), "last": None,
                          "seen": float(d.get("seen", now)), "samples": samples}
-            except (AttributeError, TypeError, ValueError):
+            except (AttributeError, OverflowError, TypeError, ValueError):
                 continue                      # a damaged entry: start that device over
             if now - entry["seen"] < FORGET_AFTER:
                 self.devices[str(key)] = entry

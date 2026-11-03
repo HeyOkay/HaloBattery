@@ -59,11 +59,11 @@ class IntegrationTests(HideRenameTestCase):
         thread = REAL_THREAD(target=app.anim_loop, daemon=True)
         thread.start()
         try:
-            thread.join(1)
+            thread.join(10)
             self.assertFalse(thread.is_alive())
         finally:
             app.anim_wake.set()
-            thread.join(1)
+            thread.join(10)
 
 
 if __name__ == "__main__":

@@ -8,10 +8,12 @@ Run from the repository root:
 """
 import os
 import sys
-import tempfile
 import time
 import unittest
 from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -273,7 +275,7 @@ class HistoryTests(unittest.TestCase):
         self.assertGreater(h.seconds_left(KEY, 85), fast)
 
     def test_save_and_load(self):
-        folder = tempfile.mkdtemp(prefix="halo_battery_test_")
+        folder = _sandbox.mkdtemp(prefix="halo_battery_test_")
         path = os.path.join(folder, "history.json")
         h = history.History(path)
         self.drain(h, 100, 3, 5, start=time.time() - 4 * H)
@@ -285,7 +287,7 @@ class HistoryTests(unittest.TestCase):
 
     def test_use_without_a_drop_is_saved(self):
         """Hours at one level slow the estimate down; a restart must not forget them."""
-        folder = tempfile.mkdtemp(prefix="halo_battery_test_")
+        folder = _sandbox.mkdtemp(prefix="halo_battery_test_")
         path = os.path.join(folder, "history.json")
         h = history.History(path)
         t = self.drain(h, 100, 3, 5, start=time.time() - 7 * H)
@@ -298,7 +300,7 @@ class HistoryTests(unittest.TestCase):
         self.assertAlmostEqual(again.seconds_left(KEY, 85), h.seconds_left(KEY, 85), delta=1)
 
     def test_damaged_file_is_ignored(self):
-        folder = tempfile.mkdtemp(prefix="halo_battery_test_")
+        folder = _sandbox.mkdtemp(prefix="halo_battery_test_")
         path = os.path.join(folder, "history.json")
         for text in ("not json", "[1, 2]", '{"devices": {"a": {"samples": [["x", 1]]}, "b": 5}}'):
             with self.subTest(text=text):

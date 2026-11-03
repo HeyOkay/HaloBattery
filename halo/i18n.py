@@ -121,7 +121,9 @@ def tooltip(text: str) -> str:
     A supplementary Unicode character (e.g. emoji in a device name) takes two
     UTF-16 code units. Do not split its surrogate pair at the buffer boundary.
     """
-    return text.encode("utf-16-le")[:254].decode("utf-16-le", "ignore")
+    # surrogatepass: a lone surrogate in a device name (a broken string from the driver)
+    # must not raise here; decoding with "ignore" then drops it
+    return text.encode("utf-16-le", "surrogatepass")[:254].decode("utf-16-le", "ignore")
 
 
 def format_left(seconds: float, *, language: str = "en") -> str:

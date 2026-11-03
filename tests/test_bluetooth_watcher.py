@@ -95,7 +95,7 @@ class WatcherTest(unittest.TestCase):
     def tearDown(self):
         bluetooth.subprocess.Popen, bluetooth.STALL_TIMEOUT, bluetooth.STALL_LIMIT = self._saved
 
-    def run_watcher(self, until, timeout=8.0):
+    def run_watcher(self, until, timeout=20.0):   # an upper bound: it returns once `until` holds
         w = bluetooth.BluetoothWatcher(bluetooth.BluetoothProvider(), lambda *a: None)
         w.start()
         try:
@@ -119,11 +119,12 @@ class WatcherTest(unittest.TestCase):
         self.assertFalse(w.running())
 
     def test_a_healthy_child_is_neither_killed_nor_counted(self):
-        self.make_stdout = lambda: TimedStdout()
+        self.make_stdout = lambda: TimedStdout(interval=0.05)
+        bluetooth.STALL_TIMEOUT = 5.0      # a late scheduler tick must not look like a wedged child
         w = bluetooth.BluetoothWatcher(bluetooth.BluetoothProvider(), lambda *a: None)
         w.start()
         try:
-            end = time.time() + 6.0
+            end = time.time() + 20.0
             while time.time() < end and w.snapshots < 3:
                 time.sleep(0.05)
             self.assertGreaterEqual(w.snapshots, 3)

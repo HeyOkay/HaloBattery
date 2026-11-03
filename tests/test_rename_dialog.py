@@ -23,7 +23,12 @@ class RenameDialogTests(unittest.TestCase):
         with mock.patch.object(hb.subprocess, "run", return_value=types.SimpleNamespace(stdout=b"")) as capture:
             hb.ask_name('Écouteurs 🎧 "Bureau"', language=language)
         args = list(capture.call_args.args[0])
-        kwargs = dict(capture.call_args.kwargs, timeout=20)
+        # stdin must be closed: the regression control below uses PowerShell's automatic
+        # $input variable, which reads the process's standard input to its end. Inherited
+        # from an interactive console or an open pipe (a developer's terminal, an IDE or an
+        # agent) it blocks forever, so the run only looked flaky. A fresh PowerShell needs
+        # ~1 s here; 60 s is a bound for a loaded machine, not an expectation.
+        kwargs = dict(capture.call_args.kwargs, timeout=60, stdin=subprocess.DEVNULL)
         script = args[-1]
         if automatic_variable:
             script = script.replace("$tb", "$input")  # reproduce the reviewed regression
@@ -35,6 +40,14 @@ $form.ShowInTaskbar = $false
 $form.Add_Shown({
     try {
         $box = @($layout.Controls | Where-Object { $_ -is [System.Windows.Forms.TextBox] })[0]
+        # Windows may not give a hidden, just-created window the foreground at once (busy
+        # desktop, CI session). Activate it and let the message loop run for up to ~3 s
+        # instead of reading Focused in the very first tick.
+        for ($i = 0; $i -lt 30 -and -not $box.Focused; $i++) {
+            [void]$form.Activate()
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 100
+        }
         if (-not $box.Focused) { throw 'TextBox did not receive focus' }
         if ($box.SelectionStart -ne 0 -or $box.SelectionLength -ne $box.Text.Length) {
             throw 'The current name was not fully selected'

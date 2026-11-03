@@ -10,11 +10,13 @@ import io
 import os
 import shutil
 import sys
-import tempfile
 import types
 import unittest
 import zipfile
 from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests"))
@@ -64,7 +66,7 @@ class FakeResponse(io.BytesIO):
 
 class TempDirTestCase(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.mkdtemp()
+        self.tmp = _sandbox.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def write(self, path, data=b""):

@@ -114,6 +114,9 @@ KINDS = {0: "keyboard", 2: "keyboard", 3: "mouse", 4: "mouse", 5: "mouse"}
 VOLTAGE_CURVE = ((4186, 100), (4067, 90), (3989, 80), (3922, 70), (3859, 60), (3811, 50),
                  (3778, 40), (3751, 30), (3717, 20), (3671, 10), (3646, 5), (3579, 2), (3500, 0))
 
+# no single Li-ion cell reads above this; 0xFFFF is filler, not "100 % and charging"
+MAX_BATTERY_MV = 5000
+
 # battery status values that mean "on the charger" (0x1004 and 0x1000)
 ON_CHARGER = (1, 2, 3, 4)
 
@@ -155,7 +158,7 @@ def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
         mv = (p[0] << 8) | p[1]
         if feature == F_ADC and not p[2] & 0x01:      # headset not connected
             return None, False, ""
-        if mv < 2500:                                 # not a real battery voltage
+        if not 2500 <= mv <= MAX_BATTERY_MV:          # not a real battery voltage (0xFFFF is filler)
             return None, False, ""
         charging = bool(p[2] & 0x80) if feature == F_VOLTAGE else bool(p[2] & 0x02)
         return voltage_to_percent(mv), charging, ""

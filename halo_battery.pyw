@@ -301,7 +301,7 @@ def load_config(*, initialize_language: bool = False) -> dict:
     technical tools have no language initialization side effects."""
     cfg = dict(DEFAULTS)
     try:
-        with open(CONFIG_PATH, encoding="utf-8") as f:
+        with open(CONFIG_PATH, encoding="utf-8-sig") as f:      # editors may add a BOM
             data = json.load(f)
     except FileNotFoundError:
         data = {}                                # no settings yet
@@ -2269,7 +2269,10 @@ class App:
             # cleared before the check: a click on "Check for updates now" during the
             # check wakes the next round instead of being lost
             self.update_wake.clear()
-            last = float(self.cfg.get("update_last", 0) or 0)
+            try:
+                last = float(self.cfg.get("update_last", 0) or 0)
+            except (TypeError, ValueError):      # a hand-edited settings file: check now
+                last = 0.0
             manual, self.update_manual = self.update_manual, False
             if manual or (self.cfg.get("update_check", True)
                           and time.time() - last >= updates.CHECK_EVERY):
