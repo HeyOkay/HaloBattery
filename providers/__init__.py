@@ -1,9 +1,11 @@
 from .base import DeviceStatus, Provider  # noqa: F401
+from .aula import AulaProvider  # noqa: F401
 from .barracuda import BarracudaProvider  # noqa: F401
 from .audeze import AudezeProvider  # noqa: F401
 from .razer import RazerProvider  # noqa: F401
 from .wlmouse import WLmouseProvider  # noqa: F401
 from .mchose import MchoseProvider  # noqa: F401
+from .mchose_v9 import MchoseV9Provider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401
@@ -13,6 +15,7 @@ from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
+from .dareu import DareuProvider  # noqa: F401
 from .hyperx import HyperXProvider  # noqa: F401
 from .hyperx_alpha2 import HyperXAlpha2Provider  # noqa: F401
 from .hyperx_cloud3 import HyperXCloud3Provider  # noqa: F401
@@ -20,12 +23,28 @@ from .hyperx_cloud3s import HyperXCloud3SProvider  # noqa: F401
 from .playstation import PlayStationProvider  # noqa: F401
 from .eightbitdo import EightBitDoProvider  # noqa: F401
 from .nintendo import NintendoProvider  # noqa: F401
+from .shield import ShieldProvider  # noqa: F401
 from .asus import AsusProvider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
-from .lamzu import LamzuProvider  # noqa: F401
+from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
+from .inphic import InphicProvider  # noqa: F401
+from .turtlebeach import TurtleBeachProvider  # noqa: F401
+from .skullcandy import SkullcandyProvider  # noqa: F401
+from .rapoo import RapooProvider  # noqa: F401
+from .ajazz import AjazzProvider  # noqa: F401
+from .sony_inzone import SonyInzoneProvider  # noqa: F401
+from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
+from .finalmouse import FinalmouseProvider  # noqa: F401
+from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
+from .hyperx_alpha_wireless import HyperXAlphaWirelessProvider  # noqa: F401
+from .jabra import JabraProvider  # noqa: F401
+from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
+from .monsgeek import MonsGeekProvider  # noqa: F401
+from .eweadn import EweadnProvider  # noqa: F401
+from .mchose_kb import MchoseKbProvider  # noqa: F401

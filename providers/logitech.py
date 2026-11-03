@@ -389,14 +389,17 @@ class LogitechProvider(Provider):
             self._diag.append(f"  idx={idx} '{name}' unit={unit or '?'} feature {feature:04x}: "
                               f"{hexdump(r, 4)} -> {approx or f'{level}%'}{' (charging)' if chg else ''}")
             if level is not None:
-                # The unit id is stable across receiver and cable and tells identical
-                # devices apart; without one, fall back to the receiver slot. Two
-                # receivers of the same kind hand out the same unit ids, so the
-                # receiver's instance joins the key only when there is more than one - a
-                # single receiver keeps the plain key, and its devices keep their icons
-                # between the receiver and the cable.
+                # The unit id is the device's own serial: the same on every receiver and
+                # on the cable, and different for two devices of the same model, so it is
+                # the key on its own. It must not carry the receiver's instance: the cable
+                # has no receiver, and a mouse whose receiver shares its product id with
+                # another one (a G502 X PLUS and a G915 are both 0xC547) got a second icon
+                # as soon as it was plugged in to charge. Without a unit id, fall back to
+                # the receiver slot; two receivers of the same kind have the same slot
+                # numbers, so that key gains the receiver's instance when there is more
+                # than one.
                 prefix = instance + ":" if multi else ""
-                key = f"logitech:{prefix}{unit}" if unit else f"logitech:{prefix}{pid:04x}:{idx}"
+                key = f"logitech:{unit}" if unit else f"logitech:{prefix}{pid:04x}:{idx}"
                 # the key of a slot can change (the unit id was read later, or another
                 # device took the slot): drop the old icon now, not after ASLEEP_KEEP
                 old = self._slot_key.get(slot)
@@ -404,7 +407,8 @@ class LogitechProvider(Provider):
                     self._last.pop(old, None)
                 self._slot_key[slot] = key
                 return DeviceStatus(key, name, level, chg, True, "logitech", approx=approx,
-                                    kind=kind)
+                                    kind=kind, ui_message="state.approx_grade" if approx else "",
+                                    ui_params={"level": level, "grade": APPROX_LEVELS[r[1]][1]} if approx else {})
         # nothing from the 2.0 features: an older device may answer its
         # registers instead (it has no feature table at all)
         st = self._register_battery(ch, slot, pid, idx, instance, multi)
@@ -439,7 +443,9 @@ class LogitechProvider(Provider):
                 self._last.pop(old, None)
             self._slot_key[slot] = key
             return DeviceStatus(key, name, level, chg, True, "logitech",
-                                approx=approx, kind="")
+                                approx=approx, kind="",
+                                ui_message="state.approx_grade" if approx else "",
+                                ui_params={"level": level, "grade": STATUS_LEVELS[r[0]][1]} if approx else {})
         return None
 
     @staticmethod
@@ -510,7 +516,8 @@ class LogitechProvider(Provider):
                 continue
             if now - t < ASLEEP_KEEP and groups:
                 out.append(DeviceStatus(key, st.name, st.level, st.charging, False, "logitech",
-                                        approx=st.approx, kind=st.kind))
+                                        approx=st.approx, kind=st.kind,
+                                        ui_message=st.ui_message, ui_params=dict(st.ui_params)))
             else:
                 del self._last[key]
         return out

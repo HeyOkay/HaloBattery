@@ -166,12 +166,12 @@ class DeviceLowTests(HideRenameTestCase):
         app = make_app({"low": 20})
         app.apply([mouse(35)])
         ic = app.icons[KEY]
-        sub = item(app.build_menu(ic), "Low battery alert at").submenu
+        sub = item(app.build_menu(ic), "Low battery alert at (this device)").submenu
         self.assertEqual(sub.items[0].text, "Default (20%)")
         self.assertTrue(sub.items[0].checked)
         item(sub, "30%")(FakeTrayIcon())
         self.assertEqual(app.cfg["lows"], {KEY: 30})
-        self.assertTrue(item(item(app.build_menu(ic), "Low battery alert at").submenu, "30%").checked)
+        self.assertTrue(item(item(app.build_menu(ic), "Low battery alert at (this device)").submenu, "30%").checked)
         # a new level that the device is already under alerts on the next reading
         item(sub, "Default (20%)")(FakeTrayIcon())
         self.assertEqual(app.cfg["lows"], {})
@@ -188,6 +188,7 @@ class DeviceLowTests(HideRenameTestCase):
         drawn = []
         ic = REAL_DEVICE_ICON.__new__(REAL_DEVICE_ICON)
         ic.app, ic.key, ic._state, ic._images, ic.frames = app, KEY, None, {}, None
+        ic.status = None
         ic.icon = mock.Mock(title="", visible=True)
         with mock.patch.object(hb.icons, "render",
                                lambda level, ch, on, low, lt, badge, **kw: drawn.append(low) or object()):
@@ -282,6 +283,20 @@ class HistoryTests(unittest.TestCase):
         self.assertAlmostEqual(again.seconds_left(KEY, 85), h.seconds_left(KEY, 85), delta=1)
         self.assertIsNone(again.devices[KEY]["last"])   # the time the app was closed does not count
 
+    def test_use_without_a_drop_is_saved(self):
+        """Hours at one level slow the estimate down; a restart must not forget them."""
+        folder = tempfile.mkdtemp(prefix="halo_battery_test_")
+        path = os.path.join(folder, "history.json")
+        h = history.History(path)
+        t = self.drain(h, 100, 3, 5, start=time.time() - 7 * H)
+        h.save(force=True)
+        feed(h, [85] * 180, start=t)               # 3 more hours without a drop
+        h.save(force=True)
+        again = history.History(path)
+        again.load()
+        self.assertAlmostEqual(again.devices[KEY]["use"], h.devices[KEY]["use"], delta=1)
+        self.assertAlmostEqual(again.seconds_left(KEY, 85), h.seconds_left(KEY, 85), delta=1)
+
     def test_damaged_file_is_ignored(self):
         folder = tempfile.mkdtemp(prefix="halo_battery_test_")
         path = os.path.join(folder, "history.json")
@@ -297,6 +312,13 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(history.format_left(1800), "less than 1 h of use left")
         self.assertEqual(history.format_left(5.4 * H), "about 5 h of use left")
         self.assertEqual(history.format_left(72 * H), "about 3 days of use left")
+        # 0% with a known rate: seconds_left returns 0.0, not None
+        self.assertEqual(history.format_left(0), "no use left")
+        self.assertEqual(history.format_left(-1), "no use left")
+        h = history.History()
+        self.drain(h, 100, 3, 5)
+        self.assertEqual(h.seconds_left(KEY, 0), 0.0)
+        self.assertEqual(history.format_left(h.seconds_left(KEY, 0)), "no use left")
 
 
 class TimeLeftTooltipTests(HideRenameTestCase):

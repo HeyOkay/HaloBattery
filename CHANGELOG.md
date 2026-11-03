@@ -6,6 +6,60 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added (integrated open upstream pull requests)
+New devices (each links to the upstream pull request and its author):
+- **Mice**: Hitscan Hyperlight 8K receiver ([#158](https://github.com/HeyOkay/HaloBattery/pull/158) @FisiFla); Scyrox 8K dongle and mice
+  ([#182](https://github.com/HeyOkay/HaloBattery/pull/182) @antuganov); ASUS ROG OMNI receiver mice, and ASUS TX Gaming Mini Miku
+  ([#185](https://github.com/HeyOkay/HaloBattery/pull/185) @metalgitter, [#205](https://github.com/HeyOkay/HaloBattery/pull/205) @miguotw); Redragon M991 ([#200](https://github.com/HeyOkay/HaloBattery/pull/200) @casparas123);
+  DAREU A950 ([#212](https://github.com/HeyOkay/HaloBattery/pull/212) @6UADA); Pulsar X2 V3 Mini 8K ([#213](https://github.com/HeyOkay/HaloBattery/pull/213) @NikolaJyun); Rapoo VT7 Gen 2 /
+  V700DIY-98 ([#215](https://github.com/HeyOkay/HaloBattery/pull/215) @casparas123); AJAZZ AJ179 V2 MAX ([#246](https://github.com/HeyOkay/HaloBattery/pull/246) @casparas123); ATK X1
+  Ultimate Nearlink ([#279](https://github.com/HeyOkay/HaloBattery/pull/279) @mspw11); Finalmouse UltralightX ([#284](https://github.com/HeyOkay/HaloBattery/pull/284) @ArnavD74); ATK A9
+  Ultimate, ATK A9 SE, NK NANO Nearlink ([#305](https://github.com/HeyOkay/HaloBattery/pull/305) @zichuanlin806-cyber,
+  [#347](https://github.com/HeyOkay/HaloBattery/pull/347) @Heartestrella, [#350](https://github.com/HeyOkay/HaloBattery/pull/350) @ChristmasPika); Inphic / Attack Shark ODM family
+  ([#181](https://github.com/HeyOkay/HaloBattery/pull/181) @casparas123); Razer Pro Type Ultra receiver, Viper V3 Pro SE
+  ([#203](https://github.com/HeyOkay/HaloBattery/pull/203) @casparas123, [#316](https://github.com/HeyOkay/HaloBattery/pull/316) @ahmedkhursheed23); G-Wolves 8K receiver
+  ([#317](https://github.com/HeyOkay/HaloBattery/pull/317) @ahmedkhursheed23); AULA V9 Max+ ([#327](https://github.com/HeyOkay/HaloBattery/pull/327) @Arborflux); LAMZU Thorn
+  ([#348](https://github.com/HeyOkay/HaloBattery/pull/348) @netjabellan); EWEADN S9 ([#352](https://github.com/HeyOkay/HaloBattery/pull/352) @Rum-right); Cougar Revenger Pro 4K
+  ([#354](https://github.com/HeyOkay/HaloBattery/pull/354) @Squl032).
+- **Keyboards**: Lofree Flow Lite84 ([#169](https://github.com/HeyOkay/HaloBattery/pull/169) @casparas123); ASUS ROG OMNI keyboards
+  ([#185](https://github.com/HeyOkay/HaloBattery/pull/185) @metalgitter); ATK V75X, with polling paused while idle ([#308](https://github.com/HeyOkay/HaloBattery/pull/308) @joeabouserhal);
+  AULA F87 Pro V2C ([#327](https://github.com/HeyOkay/HaloBattery/pull/327) @Arborflux); MCHOSE K87 and MonsGeek FUN60 Pro
+  ([#352](https://github.com/HeyOkay/HaloBattery/pull/352) @Rum-right); Corsair K65 PLUS Wireless ([#293](https://github.com/HeyOkay/HaloBattery/pull/293) @casparas123).
+- **Headsets**: Turtle Beach Stealth Pro II and Stealth 700 Gen 3 ([#194](https://github.com/HeyOkay/HaloBattery/pull/194) @casparas123,
+  [#211](https://github.com/HeyOkay/HaloBattery/pull/211) @PaulRichez); HyperX Cloud II Wireless, Kingston revision ([#198](https://github.com/HeyOkay/HaloBattery/pull/198) @casparas123);
+  Skullcandy PLYR ([#207](https://github.com/HeyOkay/HaloBattery/pull/207) @casparas123); MCHOSE V9 Pro ([#248](https://github.com/HeyOkay/HaloBattery/pull/248) @AdrianH23); Sony INZONE H9
+  ([#278](https://github.com/HeyOkay/HaloBattery/pull/278) @BoringMan314; needs the new `pyserial` dependency); ASUS ROG Strix Go 2.4
+  ([#296](https://github.com/HeyOkay/HaloBattery/pull/296) @casparas123); HyperX Cloud Alpha Wireless ([#318](https://github.com/HeyOkay/HaloBattery/pull/318) @ahmedkhursheed23); Jabra on a
+  Link 380 / 390 dongle ([#337](https://github.com/HeyOkay/HaloBattery/pull/337) @realCmdData); HyperX Cloud Flight Wireless
+  ([#346](https://github.com/HeyOkay/HaloBattery/pull/346) @hahuerta); Razer BlackShark V3 and Barracuda Pro receiver
+  ([#349](https://github.com/HeyOkay/HaloBattery/pull/349) @ChristmasPika, [#315](https://github.com/HeyOkay/HaloBattery/pull/315) @ahmedkhursheed23); Audeze Maxwell off-state
+  ([#254](https://github.com/HeyOkay/HaloBattery/pull/254) @casparas123); SteelSeries Nova 3P confirmed on hardware ([#175](https://github.com/HeyOkay/HaloBattery/pull/175) @casparas123).
+- **Controllers**: NVIDIA SHIELD Controller 2017 ([#250](https://github.com/HeyOkay/HaloBattery/pull/250) @pierreski; a charger state the
+  device does not report is shown as unknown and never triggers alerts); FlyDigi Vader 5 Pro
+  ([#216](https://github.com/HeyOkay/HaloBattery/pull/216) @casparas123).
+
+App and fixes:
+- **Six interface languages** (English, Spanish, French, Japanese, Simplified and Traditional
+  Chinese): picked from the Windows language at first start, switchable in Preferences,
+  technical output stays English. Catalogs live in `halo/i18n.py` and `halo/locales/`
+  (upstream #188 Teeti, #249 AdrianH23, #345 Kosmos, with miguotw's Asian translations;
+  per-device alert wording #187 casparas123).
+- Windows end-session consent ([#338](https://github.com/HeyOkay/HaloBattery/pull/338) @realCmdData); idle charging animation stops waking the
+  app ([#314](https://github.com/HeyOkay/HaloBattery/pull/314) @ahmedkhursheed23); history is saved when the level did not change
+  ([#311](https://github.com/HeyOkay/HaloBattery/pull/311) @ahmedkhursheed23); no "use left" estimate that is not positive
+  ([#223](https://github.com/HeyOkay/HaloBattery/pull/223) @kevin9327); MCHOSE G7 smoothing ([#306](https://github.com/HeyOkay/HaloBattery/pull/306) @joeabouserhal); PlayStation and Steam
+  Controller polling fixes ([#312](https://github.com/HeyOkay/HaloBattery/pull/312) @ahmedkhursheed23, [#313](https://github.com/HeyOkay/HaloBattery/pull/313) @ahmedkhursheed23);
+  Logitech devices are keyed by unit id alone so a cable shares the receiver's icon
+  ([#253](https://github.com/HeyOkay/HaloBattery/pull/253) @Willshaper); Corsair Void v2 frames written as Windows passes them, and `--probe`
+  output goes to `HaloBattery-probe.txt` when no console exists ([#176](https://github.com/HeyOkay/HaloBattery/pull/176) @casparas123).
+
+### Changed (fork)
+- **Updates come from this fork** (`ahmedkhursheed23/HaloBattery`). An update offer cached by a
+  build that checked another repository is dropped at start-up and the cache is tagged with the
+  repository (`update_repo`), so upstream versions are not offered again.
+- Build: `pyserial>=3.5` in `requirements.txt` and `--hidden-import serial` /
+  `serial.tools.list_ports` in the PyInstaller commands.
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

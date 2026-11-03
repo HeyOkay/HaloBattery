@@ -45,11 +45,29 @@ from typing import Callable, List, Optional, Tuple
 
 log = logging.getLogger("halo_battery")
 
-REPO = "HeyOkay/HaloBattery"
+REPO = "ahmedkhursheed23/HaloBattery"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 TAG_URL = f"https://api.github.com/repos/{REPO}/releases/tags/v{{version}}"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
 CHECK_EVERY = 24 * 3600          # seconds between checks
+# settings that remember what the last check found; they belong to one repository
+CACHE_KEYS = ("update_latest", "update_url", "update_notified", "update_last")
+
+
+def invalidate_cache_for_repo(cfg: dict, repo: Optional[str] = None) -> bool:
+    """Drop the remembered update offer when it came from another repository.
+
+    The cache is tagged with the repository it was fetched from ("update_repo").
+    A settings file written by a build that checked a different repository (the
+    upstream project, before this fork) would otherwise show that repository's
+    offer and link until the next check. Returns True when `cfg` was changed."""
+    repo = repo or REPO
+    if cfg.get("update_repo") == repo:
+        return False
+    for key in CACHE_KEYS:
+        cfg.pop(key, None)
+    cfg["update_repo"] = repo
+    return True
 TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 30            # per read of the zip, not the whole download
 CHUNK = 64 * 1024

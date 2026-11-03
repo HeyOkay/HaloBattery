@@ -414,6 +414,7 @@ class BragiPollTest(unittest.TestCase):
             0x0A3D: "Corsair Virtuoso RGB Wireless SE",
             0x0A64: "Corsair Virtuoso RGB Wireless XT",
             0x0A62: "Corsair Virtuoso RGB Wireless XT",
+            0x2B07: "Corsair K65 PLUS Wireless",       # #293 (K65 PLUS receiver)
         })
         # a headset's receiver and cable ids share one icon; the session the
         # 0A40 was measured with stays scoped to it

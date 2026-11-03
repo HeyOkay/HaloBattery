@@ -39,7 +39,7 @@ ATTEMPTS = 3
 WAKE_ATTEMPTS = 4
 REPLY_TIMEOUT_MS = 150
 
-PA_PIDS = {0x0555, 0x0556}
+PA_PIDS = {0x0555, 0x0556, 0x0583}
 
 
 def frame_query(cmd_id: int, cmd_type: int = TYPE_QUERY) -> bytes:

@@ -7,10 +7,10 @@
 **Battery levels of your wireless mouse, keyboard, headset and controller, right in the Windows tray.**<br>
 One icon per device. No vendor software.
 
-[![Latest release](https://img.shields.io/github/v/release/HeyOkay/HaloBattery?label=release&color=2ea043)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/HeyOkay/HaloBattery/total?color=2ea043)](../../releases)
+[![Latest release](https://img.shields.io/github/v/release/ahmedkhursheed23/HaloBattery?label=release&color=2ea043)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ahmedkhursheed23/HaloBattery/total?color=2ea043)](../../releases)
 [![Windows 10 / 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
-[![License: MIT](https://img.shields.io/github/license/HeyOkay/HaloBattery?color=lightgrey)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/ahmedkhursheed23/HaloBattery?color=lightgrey)](LICENSE)
 
 ### [⬇ Download the latest version](../../releases/latest)
 
@@ -26,6 +26,7 @@ One icon per device. No vendor software.
 - **Stays out of the way.** Alerts wait until your full-screen game closes, and devices are polled less often while you play.
 - **Native look.** A Windows 11 style menu, sharp at any display scale, light or dark.
 - **Autoupdates.** A new release installs from the tray menu in one click.
+- **Six languages.** English, Spanish, French, Japanese and Simplified / Traditional Chinese, chosen from Windows at first start and changeable in Preferences.
 
 <p align="center"><img src="docs/charging.gif" alt="The charging animation: the green arc slowly breathes" width="300"></p>
 

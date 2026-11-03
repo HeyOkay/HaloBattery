@@ -137,6 +137,7 @@ class PlayStationProvider(Provider):
         self._diag: List[str] = []
         self.pending = False        # a controller is connected but has not reported battery yet
         self._pending_since: Dict[str, float] = {}   # key -> when its reading first went missing
+        self._gave_up: set = set()  # keys whose pending window ran out (reported once)
         # False (default): a Bluetooth controller is never switched to its full report, see
         # the module docstring. Set by the app from Preferences before each poll.
         self.switch_bluetooth = False
@@ -300,9 +301,10 @@ class PlayStationProvider(Provider):
                 # Bluetooth, basic mode, not switched on purpose: this is the normal state,
                 # not a controller that is still starting, so no fast re-check either
                 self._pending_since.pop(key, None)
+                self._gave_up.discard(key)
                 out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation",
                                         "level shown over Bluetooth only while Steam or a game "
-                                        "uses it"))
+                                        "uses it", ui_message="state.playstation_basic"))
                 continue
             if res is None:
                 # Present but no battery read: just connected, or another app (DS4Windows,
@@ -317,19 +319,30 @@ class PlayStationProvider(Provider):
                 if now - since < PENDING_WINDOW:
                     self.pending = True
                     approx = "connected, battery level not reported yet"
+                    ui_message = "state.pending"
                 else:
-                    del self._pending_since[key]
-                    self._diag.append(f"  {dev['name']}: no battery report for "
-                                      f"{PENDING_WINDOW:.0f} s, another app may be holding the "
-                                      f"controller - back to the normal poll interval")
-                    log.info("[PlayStation] %s: no battery report for %.0f s, not re-checking "
-                             "every 3 s any more", dev["name"], PENDING_WINDOW)
+                    # keep the timestamp: deleting it would start a new window next poll
+                    if key not in self._gave_up:
+                        self._gave_up.add(key)
+                        self._diag.append(f"  {dev['name']}: no battery report for "
+                                          f"{PENDING_WINDOW:.0f} s, another app may be holding the "
+                                          f"controller - back to the normal poll interval")
+                        log.info("[PlayStation] %s: no battery report for %.0f s, not re-checking "
+                                 "every 3 s any more", dev["name"], PENDING_WINDOW)
                     approx = "connected, battery not readable (another app may hold it)"
-                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation", approx))
+                    ui_message = "state.unreadable"
+                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation", approx,
+                                        ui_message=ui_message))
                 continue
             level, charging = res
             self._pending_since.pop(key, None)
+            self._gave_up.discard(key)
             out.append(DeviceStatus(key, dev["name"], level, charging, True, "playstation"))
+        # a controller that went away gets a fresh window when it comes back
+        present = {s.key for s in out}
+        for key in [k for k in self._pending_since if k not in present]:
+            del self._pending_since[key]
+        self._gave_up &= present
         return out
 
     def _merge(self, conns: List[dict]) -> List[dict]:

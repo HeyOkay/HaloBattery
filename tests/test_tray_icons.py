@@ -220,5 +220,49 @@ class RenderOnceTests(unittest.TestCase):
         self.assertEqual(len(self.ic._images), 2)
 
 
+class AnimIdleTests(unittest.TestCase):
+    """The animation thread sleeps while nothing charges, and wakes when an icon starts
+    its charging frames: not ten wakeups a second for the life of the app."""
+
+    setUp = RenderOnceTests.setUp
+    charging = staticmethod(RenderOnceTests.charging)
+
+    def test_no_ticks_without_a_charging_icon(self):
+        app = self.app
+        app.stop_evt, app.anim_wake = threading.Event(), threading.Event()
+        app.icons[self.ic.key] = self.ic
+        self.ic.update(dev())
+        t = threading.Thread(target=app.anim_loop, daemon=True)
+        t.start()
+        time.sleep(0.4)                       # four animation steps
+        self.assertEqual(app.anim_tick, 0)
+        self.ic.update(self.charging(50))     # starts the frames: the loop wakes
+        deadline = time.time() + 2
+        while app.anim_tick == 0 and time.time() < deadline:
+            time.sleep(0.02)
+        self.assertGreater(app.anim_tick, 0)
+        app.stop_evt.set()
+        app.anim_wake.set()                   # as quit() does
+        t.join(2)
+        self.assertFalse(t.is_alive())
+
+    def test_the_loop_goes_back_to_sleep_when_charging_ends(self):
+        app = self.app
+        app.stop_evt, app.anim_wake = threading.Event(), threading.Event()
+        app.icons[self.ic.key] = self.ic
+        self.ic.update(self.charging(50))
+        t = threading.Thread(target=app.anim_loop, daemon=True)
+        t.start()
+        self.ic.update(dev())                 # off the charger: no frames
+        time.sleep(0.25)
+        ticks = app.anim_tick
+        time.sleep(0.4)
+        self.assertEqual(app.anim_tick, ticks)
+        app.stop_evt.set()
+        app.anim_wake.set()
+        t.join(2)
+        self.assertFalse(t.is_alive())
+
+
 if __name__ == "__main__":
     unittest.main()
