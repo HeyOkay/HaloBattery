@@ -87,6 +87,11 @@ App and fixes:
 - **VXE R1 Pro is no longer called "R1 Pro Max"** (#334): the R1 Pro and the R1 Pro Max
   share one 2.4 GHz dongle (`3554:F58A`) and the app cannot tell them apart, so the
   dongle's device is now named "VXE R1 Pro / R1 Pro Max (2.4 GHz)".
+- **Razer Barracuda X 2.4 (`1532:0550`) is read with the headset protocol** (#332, #264):
+  the receiver was found but its mouse-style battery request got no reply. Like the
+  BlackShark headsets, a Barracuda receiver now also gets the headset ("PA") battery
+  request when the first one fails. Not yet confirmed on a Barracuda X; a diagnostics
+  report from one would settle it.
 
 ## [1.15.0] - 2026-10-12
 
