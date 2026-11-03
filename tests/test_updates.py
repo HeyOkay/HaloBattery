@@ -568,5 +568,34 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(shown, [])
 
 
+class ForkRepositoryTests(unittest.TestCase):
+    def test_the_fork_is_the_update_source(self):
+        self.assertEqual(updates.REPO, "ahmedkhursheed23/HaloBattery")
+        for url in (updates.API_URL, updates.TAG_URL, updates.RELEASES_URL):
+            self.assertIn("ahmedkhursheed23/HaloBattery", url)
+            self.assertNotIn("HeyOkay", url)
+
+    def test_an_offer_cached_from_upstream_is_dropped(self):
+        cfg = {"update_latest": "99.0", "update_url": "https://github.com/HeyOkay/HaloBattery/releases/latest",
+               "update_notified": "99.0", "update_last": 123.0, "low": 30}
+        self.assertTrue(updates.invalidate_cache_for_repo(cfg))
+        for key in updates.CACHE_KEYS:
+            self.assertNotIn(key, cfg)
+        self.assertEqual(cfg["update_repo"], updates.REPO)
+        self.assertEqual(cfg["low"], 30)                 # unrelated settings stay
+
+    def test_an_offer_cached_from_this_repository_is_kept(self):
+        cfg = {"update_repo": updates.REPO, "update_latest": "99.0", "update_last": 5.0}
+        self.assertFalse(updates.invalidate_cache_for_repo(cfg))
+        self.assertEqual(cfg["update_latest"], "99.0")
+        self.assertEqual(cfg["update_last"], 5.0)
+
+    def test_the_cache_follows_a_repository_change(self):
+        cfg = {"update_repo": "a/b", "update_latest": "9.9"}
+        self.assertTrue(updates.invalidate_cache_for_repo(cfg, "c/d"))
+        self.assertNotIn("update_latest", cfg)
+        self.assertEqual(cfg["update_repo"], "c/d")
+
+
 if __name__ == "__main__":
     unittest.main()
