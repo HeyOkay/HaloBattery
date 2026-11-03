@@ -452,7 +452,7 @@ class AppUpdateTests(unittest.TestCase):
         app.update_lock = hb.threading.Lock()
         app.install_ok, app.install_why = install_ok, "" if install_ok else "running from source"
         app.notes = []
-        app.notify_any = lambda text, title, key="": app.notes.append(text)
+        app.notify_any = lambda text, title, key="", kind="", params=None: app.notes.append(text)
         app.refresh_menus = lambda: None
         app.opened = []
         app.open_update = lambda: app.opened.append(True)

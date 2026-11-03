@@ -167,6 +167,7 @@ class SteamProvider(Provider):
                     parsed = parse_battery(data)
                     if parsed is not None:
                         res["battery"] = parsed
+                        break            # what the long window is for: stop here
                     else:
                         self._diag.append(f"    report 0x43 carries no level: "
                                           f"{hexdump(data, 16)}")
@@ -258,7 +259,7 @@ class SteamProvider(Provider):
                 if last is None:
                     self._diag.append(f"    -> {NOT_REPORTED}")
                     out.append(DeviceStatus(key, NAME, None, False, True, "steam",
-                                            NOT_REPORTED, kind="gamepad"))
+                                            NOT_REPORTED, kind="gamepad", ui_message="state.pending"))
                 else:
                     level, charging = last
                     self._diag.append(f"    -> {level}%"

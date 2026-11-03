@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark, blackshark2020, hidlist
+from . import blackshark, blackshark2020, blackshark_v3, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -40,6 +40,7 @@ KNOWN = {
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
+    0x057A: ("Razer BlackShark V3", 0x3F),         # its transaction id is not used
     0x00A4: ("Razer Mouse Dock Pro", 0x1F),
     # ---- keyboards with a battery, from OpenRazer's keyboard driver (razerkbd_driver.c:
     # razer_attr_read_charge_level). The wireless id is the HyperSpeed receiver, the
@@ -104,6 +105,8 @@ KNOWN = {
     0x00BF: ("Razer DeathAdder V4 Pro", 0x1F),
     0x00C0: ("Razer Viper V3 Pro", 0x1F),
     0x00C1: ("Razer Viper V3 Pro", 0x1F),
+    0x00DE: ("Razer Viper V3 Pro SE", 0x1F),
+    0x00DF: ("Razer Viper V3 Pro SE", 0x1F),
     0x00C2: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C3: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C4: ("Razer DeathAdder V3 HyperSpeed", 0x1F),
@@ -128,6 +131,14 @@ KNOWN = {
     # goes only to 0x025A.
     0x025A: ("Razer BlackWidow V3 Pro", 0x3F),
     0x025C: ("Razer BlackWidow V3 Pro", 0x9F),
+    # The Pro Type Ultra's 2.4 GHz receiver (#196): level and icon confirmed on the
+    # reporter's own unit. His careful retest (Oct 14) is the deciding one: the
+    # receiver answers 0x9F (status 02), while 0x1F - the first guess from the
+    # earlier diagnostics - comes back 04 even with the keyboard awake. 0x9F is the
+    # preferred id; 0x1F stays reachable through TRANSACTION_IDS. Its wired id
+    # (0x0277) is not listed - the only source for it is an open OpenRazer pull
+    # request (#2739).
+    0x027B: ("Razer Pro Type Ultra", 0x9F),
 }
 
 # The keyboards above take the commands on one USB interface: OpenRazer sends them with
@@ -217,10 +228,13 @@ class RazerProvider(Provider):
 
     def __init__(self):
         self._cache: Dict[Tuple[int, str], _Cand] = {}
+        self._good: Dict[Tuple[int, str], Tuple[bytes, int]] = {}   # collection+tid that
+        # answered OK at least once: the only one a timeout may keep
         self._dead: Dict[bytes, float] = {}   # interfaces known not to respond
         self._diag: List[str] = []
         self._failing: Dict[str, str] = {}    # key -> reason of the ongoing failure
         self._last: Dict[str, Tuple[int, bool, float]] = {}   # last good level per device
+        self._v3: Dict[bytes, blackshark_v3.Session] = {}     # collections kept open
 
     # ---- low level -------------------------------------------------------
     def _send(self, dev, req: bytes, tid: int) -> bool:
@@ -354,6 +368,10 @@ class RazerProvider(Provider):
             if not serial and len(named.get(pid, [])) == 1:
                 groups[(pid, named[pid][0])] += groups.pop((pid, serial))
 
+        present = {d["path"] for d in infos}
+        for path in [p for p in self._v3 if p not in present]:
+            self._v3.pop(path).close()      # the dongle is gone
+
         out: List[DeviceStatus] = []
         for (pid, serial), ifaces in groups.items():
             name, pref_tid = KNOWN.get(pid, (None, None))
@@ -380,6 +398,10 @@ class RazerProvider(Provider):
                 # Deliberately no generic/PA fallback: the 0528 hardware rejects
                 # their reads/writes. A missing fresh feature reply means no reading.
                 st = self._poll_2020(ifaces)
+            elif pid == blackshark_v3.PID:
+                # Deliberately no generic/PA fallback either: the V3 answers neither, and
+                # sustained traffic on this dongle resets the headset's radio link.
+                st = self._poll_v3(ifaces)
             elif pid in blackshark.PA_PIDS:
                 # 2023 headset: its own protocol first
                 st = self._poll_pa((pid, serial), ifaces)
@@ -438,6 +460,8 @@ class RazerProvider(Provider):
         cached = self._cache.get(gkey)
         if cached:
             status, level, charging = self._read(cached.path, cached.tid)
+            if status == STATUS_OK:
+                self._good[gkey] = (cached.path, cached.tid)
             if status in (STATUS_OK, STATUS_TIMEOUT, STATUS_FOREIGN):
                 return status, level, charging
             self._cache.pop(gkey, None)
@@ -456,10 +480,12 @@ class RazerProvider(Provider):
         tids = [pref_tid] if pref_tid else []
         tids += [t for t in TRANSACTION_IDS if t not in tids]
         now = time.time()
+        good = self._good.get(gkey)          # the collection that answered OK before
         timeout_hit = None
         for d in sorted(ifaces, key=rank):
             path = d["path"]
-            if self._dead.get(path, 0) > now:
+            proven = good is not None and path == good[0]
+            if not proven and self._dead.get(path, 0) > now:
                 continue
             self._diag.append(
                 f"  iface={d.get('interface_number')} usage={d.get('usage_page', 0):04x}:"
@@ -471,19 +497,40 @@ class RazerProvider(Provider):
                     break          # the interface rejects feature reports, next one
                 answered = True
                 if status == STATUS_OK:
+                    self._good[gkey] = (path, tid)
                     self._cache[gkey] = _Cand(path, tid)
                     return status, level, charging
                 if status == STATUS_TIMEOUT:
                     timeout_hit = (status, None, None)
-                    self._cache[gkey] = _Cand(path, tid)
-                    break
+                    if proven:
+                        # The collection that answered before is the one saying "not
+                        # responding": the device is asleep or switched off. Keep THAT
+                        # one and stop - never cache a timeout from a collection that
+                        # has never answered. A wrong sibling that always answers 04
+                        # pinned the cache once and every later poll read only it (a
+                        # cached timeout returns before the walk can run again), so the
+                        # device never came back after waking and only a restart
+                        # cleared it (#196).
+                        self._cache[gkey] = _Cand(good[0], good[1])
+                        return timeout_hit
+                    # Not our collection (it has never answered OK): try its OTHER
+                    # transaction ids before the walk moves on. A 04 is one quick
+                    # reply from the receiver, and on the Pro Type Ultra's unit the
+                    # preferred id came back 04 while the next one read (#196) -
+                    # ending the list here made the TRANSACTION_IDS fallback
+                    # unreachable.
+                    continue
                 if status == STATUS_FOREIGN:
                     # Another app's replies arrive here, so this is the collection that
                     # takes the Razer commands. The other transaction ids and interfaces
                     # would only cost another second each: keep this one and stop.
                     self._cache[gkey] = _Cand(path, tid)
                     return status, None, None
-            if not answered:
+            if not answered and not proven:
+                # A collection that fails to open is skipped for a while - but never
+                # the one that answered before: a sleeping device's collection can
+                # refuse to open, and losing it is the other half of #196 (the
+                # keyboard stayed missing until the app was restarted).
                 self._dead[path] = now + 300   # leave this interface alone for 5 minutes
         return timeout_hit
 
@@ -501,6 +548,31 @@ class RazerProvider(Provider):
             if res == "offline":
                 offline = (STATUS_TIMEOUT, None, None)
         return offline
+
+    def _poll_v3(self, ifaces):
+        """BlackShark V3: the collection stays open between polls, see blackshark_v3.py."""
+        d = next((d for d in ifaces if blackshark_v3.is_candidate(d)), None)
+        if d is None:
+            self._diag.append(f"  no {blackshark_v3.USAGE_PAGE:04x}:{blackshark_v3.USAGE:04x} "
+                              f"collection among {len(ifaces)}")
+            return None
+        path = d["path"]
+        self._diag.append(f"  [V3] iface={d.get('interface_number')} usage="
+                          f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+        try:
+            session = self._v3.get(path)
+            if session is None:
+                session = self._v3[path] = blackshark_v3.Session(path)
+            level, charging = session.poll(self._diag)
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"    HID: {e}")
+            stale = self._v3.pop(path, None)
+            if stale is not None:
+                stale.close()
+            return None
+        if level is None:
+            return STATUS_TIMEOUT, None, None
+        return STATUS_OK, level, charging
 
     def _poll_pa(self, gkey, ifaces):
         """BlackShark V2 Pro 2023: the "PA" protocol over output/input reports."""

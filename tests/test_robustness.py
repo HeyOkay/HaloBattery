@@ -40,6 +40,7 @@ class FakeWinIcon:
         self._icon_handle = None
         self.icon = None
         self.released = []
+        self._message_handlers = {}            # pystray's window message -> handler table
 
     def _assert_icon_handle(self):
         if self._icon_handle:
@@ -92,6 +93,11 @@ class TrayIconTests(unittest.TestCase):
         ic.forget_handles()
         self.assertEqual(ic._hb_handles, {})
         self.assertIsNone(ic._icon_handle)
+
+    def test_icon_does_not_veto_the_end_of_the_session(self):
+        # pystray answers an unhandled message with 0, which for WM_QUERYENDSESSION is "no" (#242)
+        ic = hb.tray_icon("x")
+        self.assertEqual(ic._message_handlers[hb.WM_QUERYENDSESSION](0, 0), 1)
 
     def test_the_class_follows_pystray_icon(self):
         self.assertIsInstance(hb.tray_icon("x"), FakeWinIcon)
