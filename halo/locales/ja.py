@@ -105,6 +105,8 @@ MESSAGES = {
     "state.time_left": "{state}、{left}",
     "state.approx": "約 {level}%",
     "state.approx_grade": "約 {level}%（{grade}）",
+    "state.charging_was": "充電中（接続前は約 {level}%）",
+    "state.charging_level_unknown": "充電中（充電中は残量を取得できません）",
     "state.pending": "接続済み、バッテリー残量は未報告",
     "state.unreported": "接続済み、バッテリー残量は未報告",
     "state.unreadable": "接続済み、残量を取得できません（他のアプリが使用中の可能性があります）",

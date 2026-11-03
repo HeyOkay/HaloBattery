@@ -400,15 +400,62 @@ class TwoReceiverTests(LogitechTestCase):
         self.assertEqual((st.key, st.online, st.charging), ("logitech:C15E09CD", True, True))
 
 
+class VoltageChargingTests(LogitechTestCase):
+    """A voltage-only battery reads ~4.2 V on the charger: never a fake 100% (#271)."""
+
+    CABLE = [entry(0xC08D, 0xFF00, 1, b"cshort", "G502 LIGHTSPEED"),
+             entry(0xC08D, 0xFF00, 2, b"clong", "G502 LIGHTSPEED")]
+
+    def cable(self, params):
+        self.use(self.CABLE, {b"clong": ({0xFF: g502({L.F_VOLTAGE: (6, {0: params})})}, b"cshort")})
+
+    def test_keeps_level_from_before_charging(self):
+        p = L.LogitechProvider()
+        self.cable([0x10, 0x12, 0x00])                       # 4114 mV, discharging -> 94 %
+        [st] = p.poll()
+        self.assertEqual((st.level, st.charging, st.approx), (94, False, ""))
+        self.cable([0x10, 0x6A, 0x80])                       # 4202 mV on the cable
+        [st] = p.poll()
+        self.assertEqual((st.level, st.charging, st.ui_message), (94, True, "state.charging_was"))
+        self.assertIn("94%", st.approx)
+
+    def test_unknown_level_when_first_seen_charging(self):
+        self.cable([0x10, 0x6A, 0x80])
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.level, st.charging, st.ui_message),
+                         (None, True, "state.charging_level_unknown"))
+
+    def test_charge_complete_reports_full(self):
+        self.cable([0x10, 0x6A, 0x81])
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.level, st.charging, st.approx), (100, True, ""))
+
+    def test_adc_headset_charging(self):
+        self.use([entry(0x0A87, 0xFF43, 0x0202, b"hs")],
+                 {b"hs": ({0xFF: FakeHidpp(adc([0x0F, 0x7B, 0x01]))}, None)})
+        p = L.LogitechProvider()
+        [st] = p.poll()
+        self.assertEqual((st.level, st.charging), (76, False))
+        self.use([entry(0x0A87, 0xFF43, 0x0202, b"hs")],
+                 {b"hs": ({0xFF: FakeHidpp(adc([0x10, 0x68, 0x03]))}, None)})
+        [st] = p.poll()
+        self.assertEqual((st.level, st.charging), (76, True))
+
+    def test_charge_complete_helper(self):
+        self.assertTrue(L.charge_complete(L.F_VOLTAGE, [0x10, 0x6A, 0x81]))
+        self.assertFalse(L.charge_complete(L.F_VOLTAGE, [0x10, 0x6A, 0x80]))
+        self.assertFalse(L.charge_complete(L.F_ADC, [0x10, 0x6A, 0x81]))
+
+
 # ------------------------------------------------------------------ headsets
 class HeadsetTests(LogitechTestCase):
     def headset(self, pid, params, page=0xFF43, usage=0x0202):
         self.use([entry(pid, page, usage, b"hs")], {b"hs": ({0xFF: FakeHidpp(adc(params))}, None)})
         return L.LogitechProvider()
 
-    def test_g935_charging(self):
+    def test_g935_charging_level_not_shown(self):
         [st] = self.headset(0x0A87, [0x0F, 0x7B, 0x03]).poll()
-        self.assertEqual((st.name, st.level, st.charging, st.kind), ("Logitech G935", 76, True, "headset"))
+        self.assertEqual((st.name, st.level, st.charging, st.kind), ("Logitech G935", None, True, "headset"))
 
     def test_headset_off(self):
         self.assertEqual(self.headset(0x0ABA, [0x0F, 0x7B, 0x00]).poll(), [])

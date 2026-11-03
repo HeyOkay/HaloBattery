@@ -79,6 +79,11 @@ App and fixes:
   (#236): Windows reports no Bluetooth battery for it, and the icon said only
   "connected". The controller's own coarse level (empty / low / medium / full) is shown
   instead; when Windows does report a Bluetooth level, that one is still used.
+- **A Logitech mouse or headset on the charger no longer shows a false 100%** (#271): mice
+  and headsets that report only the battery voltage read about 4.2 V while charging, which
+  the app turned into 100%. While charging, the app now shows the level seen before the
+  cable was connected ("charging, about 94% before it was plugged in"), or "level not
+  reported while charging" if it never saw one; a charge-complete report still shows 100%.
 
 ## [1.15.0] - 2026-10-12
 

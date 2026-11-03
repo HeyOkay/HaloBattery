@@ -104,6 +104,8 @@ MESSAGES = {
     "state.time_left": "{state}, {left}",
     "state.approx": "environ {level} %",
     "state.approx_grade": "environ {level} % ({grade})",
+    "state.charging_was": "en charge (environ {level} % avant le branchement)",
+    "state.charging_level_unknown": "en charge (niveau non communiqué pendant la charge)",
     "state.pending": "connecté, niveau de batterie pas encore communiqué",
     "state.unreported": "connecté, niveau de batterie non communiqué",
     "state.unreadable": "connecté, batterie illisible (une autre application peut bloquer l’accès)",
