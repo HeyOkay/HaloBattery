@@ -115,4 +115,4 @@ feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--
 - Sustained good pull requests and reviews lead to an invitation from the owner.
 - Even leads use pull requests: no direct pushes to `main` or `pre-release`. Only the owner may bypass this in an emergency.
 
-Current leads: @ahmedkhursheed23. Invited and pending acceptance: `HeyOkay` (the upstream author) and `casparas123` (top contributor). Leads are added to CODEOWNERS once they accept.
+Current leads: `ahmedkhursheed23`, `casparas123` (top contributor) and `HeyOkay` (the upstream author; counts once the invitation is accepted). A lead's pull request into `main` needs approval from another lead.
