@@ -136,7 +136,7 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF508: "Pulsar X2 V2 Mini (wireless)",
         0xF507: "Pulsar X2 V2 Mini (wired)",
         0xF58F: "ATK VXE R1 SE+ (wired)",
-        0xF58A: "VXE R1 Pro Max (2.4 GHz)",
+        0xF58A: "VXE R1 Pro / R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",

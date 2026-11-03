@@ -167,13 +167,13 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(1, len(found))
         d = found[0]
         self.assertEqual("pulsar:3554f58a", d.key)
-        self.assertEqual("VXE R1 Pro Max (2.4 GHz)", d.name)
+        self.assertEqual("VXE R1 Pro / R1 Pro Max (2.4 GHz)", d.name)
         self.assertEqual(78, d.level)
         self.assertFalse(d.charging)
         self.assertTrue(d.online)
         self.assertEqual("mouse", d.kind)
         diag = "\n".join(provider.diagnostics())
-        self.assertIn("[Pulsar] pid=3554:f58a 'VXE R1 Pro Max (2.4 GHz)'", diag)
+        self.assertIn("[Pulsar] pid=3554:f58a 'VXE R1 Pro / R1 Pro Max (2.4 GHz)'", diag)
         self.assertIn("3900 mV", diag)
 
     def test_the_r1_pro_max_on_its_cable_is_read(self):

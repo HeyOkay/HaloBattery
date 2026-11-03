@@ -84,6 +84,9 @@ App and fixes:
   the app turned into 100%. While charging, the app now shows the level seen before the
   cable was connected ("charging, about 94% before it was plugged in"), or "level not
   reported while charging" if it never saw one; a charge-complete report still shows 100%.
+- **VXE R1 Pro is no longer called "R1 Pro Max"** (#334): the R1 Pro and the R1 Pro Max
+  share one 2.4 GHz dongle (`3554:F58A`) and the app cannot tell them apart, so the
+  dongle's device is now named "VXE R1 Pro / R1 Pro Max (2.4 GHz)".
 
 ## [1.15.0] - 2026-10-12
 
