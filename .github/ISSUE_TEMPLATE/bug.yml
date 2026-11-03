@@ -1,0 +1,30 @@
+name: Bug
+description: Something in Halo Battery does not work (not a device that is missing or shows a wrong level: use the device form for that).
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Halo Battery version
+      description: The first line of the diagnostics report, or the name of the zip you downloaded.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: For example "Windows 11 23H2".
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: Drag `diagnostics.txt` here (tray menu, **Diagnostics…**; it is in `%APPDATA%\HaloBattery`). You can replace MAC addresses and serial numbers with `xx`.

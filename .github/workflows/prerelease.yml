@@ -1,0 +1,77 @@
+name: Pre-release build
+
+# Every push to pre-release (each merged pull request) builds Halo Battery and
+# replaces the single rolling GitHub release "prerelease-build" with the new zip,
+# so testers always download the latest integration build from one place.
+# It is marked as a pre-release: the app's updater only reads /releases/latest,
+# which never returns pre-releases, so normal users are not offered it.
+
+on:
+  push:
+    branches: [pre-release]
+  workflow_dispatch:
+
+concurrency:
+  group: prerelease-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: prerelease-build
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
+      - name: Smoke test
+        run: python halo_battery.pyw --probe
+
+      - name: Build HaloBattery
+        run: |
+          python tools/make_icon.py halo.ico
+          python tools/make_version.py version_info.txt
+          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports halo_battery.pyw
+
+      - name: Zip and write notes
+        shell: pwsh
+        run: |
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $zip = "HaloBattery-$ver-pre-$sha.zip"
+          Compress-Archive -Path dist/HaloBattery -DestinationPath $zip
+          "ZIP=$zip" >> $env:GITHUB_ENV
+          "SHORT=$sha" >> $env:GITHUB_ENV
+          @"
+          **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. It is rebuilt on every merge.
+
+          It has the changes merged since the last stable release that are not yet in ``main``; see the ``[Unreleased]`` section of [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md). It may have bugs. For everyday use, take the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
+
+          It still calls itself v$ver, so please write **pre-release $sha** in any bug report.
+          "@ | Out-File -Encoding utf8 notes.md
+
+      - name: Replace the rolling pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+          gh release create "$TAG" "$ZIP" --prerelease --target "$GITHUB_SHA" \
+            --title "Pre-release build ($SHORT)" --notes-file notes.md

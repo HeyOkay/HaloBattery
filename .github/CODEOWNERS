@@ -1,0 +1,4 @@
+# Code owners = the lead maintainers. They can approve pull requests into main
+# (releases and hotfixes). Add a lead here once they have accepted the invitation:
+#   * @ahmedkhursheed23 @another-lead
+* @ahmedkhursheed23
