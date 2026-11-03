@@ -158,7 +158,6 @@ class EweadnProvider(Provider):
             out.append(DeviceStatus(key, name, level, charging or wired, True,
                                     "eweadn", kind="mouse", wake_on_input=True))
 
-        now = time.time()
         if "eweadn" not in seen and targets:
             # the receiver answers 0x02 while the mouse sleeps. Keep an icon either way:
             # the last known level greyed out, or "no link" when there is nothing yet -
