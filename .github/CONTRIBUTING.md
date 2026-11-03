@@ -88,18 +88,18 @@ AI coding agents: read [AGENTS.md](../AGENTS.md) first.
   - the source of the protocol;
   - if you tested it on real hardware, and with which device;
   - which other open pull requests change the same files.
-- The `Tests` check must pass and one maintainer must approve. It is squash-merged.
+- The `Tests` check must pass; a maintainer then squash-merges it. No approval is required for `pre-release`, but maintainers should still read the diff.
 
 Look at the open issues and pull requests first, so that two people do not do the same work.
 
 ## 4. Branches and releases
 
 - `main`: stable, released code only. Tags `vX.Y.Z` are cut from `main`; `.github/workflows/release.yml` builds and publishes on a tag. The app's updater uses `/releases/latest`, so only `main` releases reach users.
-- `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI and 1 approving review from any maintainer with write access. Squash merge.
+- `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI (no approval required); any maintainer with write access merges them. Squash merge.
 - Release: a maintainer opens a "Release X.Y.Z" pull request from `pre-release` into `main`. It bumps `VERSION` in `halo_battery.pyw` and moves the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit (not squash), then tag on `main`.
 - Hotfix: branch `hotfix/<name>` from `main`, pull request into `main` (code-owner approval).
 - After **every** release or hotfix, merge `main` back into `pre-release` (fast-forward when possible), so the two never drift apart.
-- Test build of `pre-release`: Actions, "Build and release", **Run workflow** on `pre-release`. It makes an artifact and no release.
+- **Test builds**: every merge into `pre-release` publishes the [Pre-release build](https://github.com/ahmedkhursheed23/HaloBattery/releases/tag/prerelease-build) (`.github/workflows/prerelease.yml`). It is one rolling GitHub release, marked as a pre-release, so the app's updater never offers it. Testers download it there and report bugs with its commit id.
 
 ```
 feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--> main --tag vX.Y.Z--> release
