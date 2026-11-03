@@ -25,6 +25,11 @@ class RegistrationTests(unittest.TestCase):
         missing = names - set(hb.PROVIDER_LABELS) - {"bluetooth"}
         self.assertEqual(missing, set())
 
+    def test_every_provider_is_an_instance_not_a_class(self):
+        # upstream #194: a class in make_providers() fails every poll() silently
+        for p in hb.make_providers():
+            self.assertNotIsInstance(p, type, f"{p!r} needs ()")
+
     def test_aula_is_polled_before_lofree(self):
         order = [type(p).__name__ for p in hb.make_providers()]
         self.assertLess(order.index("AulaProvider"), order.index("LofreeProvider"))
