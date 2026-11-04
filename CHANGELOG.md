@@ -8,7 +8,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver and the level matches Synapse.
+- **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
 
 ## [1.16.0] - 2026-11-04
 
