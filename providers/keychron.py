@@ -49,6 +49,7 @@ FLUSH_TIMEOUT_MS = 30
 PIDS = {
     0xD028: "Keychron Ultra-Link 8K",
     0xD048: "Keychron M5",
+    0xD026: "Keychron Nape Pro",      # "Keychron Link-KM" (#270): vendor channel on iface 1
 }
 
 
@@ -76,6 +77,15 @@ class KeychronProvider(Provider):
         for d in infos:
             if d.get("interface_number") == VENDOR_INTERFACE:
                 return d
+        # the Nape Pro's Link-KM receiver puts its vendor collection on interface 1
+        # (ffc1:0001), not interface 4: pick the vendor page wherever it is (#270)
+        vendor = [d for d in infos if (d.get("usage_page") or 0) >= 0xFF00]
+        if vendor:
+            self._diag.append(f"  no interface {VENDOR_INTERFACE} collection; using "
+                              f"iface={vendor[0].get('interface_number')} "
+                              f"{vendor[0].get('usage_page', 0):04x}:"
+                              f"{vendor[0].get('usage', 0):04x}")
+            return vendor[0]
         self._diag.append(f"  no interface {VENDOR_INTERFACE} collection; "
                           f"falling back to the first of {len(infos)}")
         return infos[0] if infos else None

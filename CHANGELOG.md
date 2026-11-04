@@ -36,6 +36,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   8K are unverified, with a test build out for
   [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
 - **Logitech PRO X 3 LIGHTSPEED** (`046D:0B45`) - read over its receiver with the PRO X 2's Centurion path. Its diagnostic report shows the same collections on the same interface, but no PRO X 3 has been tested yet (**unverified**, [#343](https://github.com/HeyOkay/HaloBattery/issues/343)).
+- **Keychron Nape Pro** (`3434:d026`, the Link-KM receiver) - the same `b3 06` exchange as the
+  Ultra-Link 8K / M5, with its vendor collection on interface 1 (`ffc1:0001`) instead of 4, so
+  the provider now picks the vendor page wherever it is. Unverified on hardware; a test build
+  is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
 
 ## [1.16.0] - 2026-11-04
 
