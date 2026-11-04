@@ -30,8 +30,9 @@ CLEAR = (0, 0, 0, 0)
 
 # device kind aliases (single letters are accepted too)
 KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "keyboard",
+         "C": "microphone",
          "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
-         "keyboard": "keyboard",
+         "keyboard": "keyboard", "microphone": "microphone", "mic": "microphone",
          "dualshock": "dualshock", "dualsense": "dualsense",
          "ps4": "dualshock", "ps5": "dualsense", "xbox": "gamepad"}
 
@@ -105,6 +106,32 @@ def _keyboard(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
     d.rounded_rectangle((_r(cx - a), _r(cy - a), _r(cx + a), _r(cy + a)),
                         radius=_r(a * 0.3), fill=col)
     _keycap_k(d, cx + a * 0.02, cy, a * 0.58, max(3.2, s * 0.25))
+
+
+def _microphone(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
+    """Microphone silhouette: a capsule in a cradle, with the grille cut out.
+
+    The capsule is a tall pill and the cradle an arc tightened until its arms reach the
+    capsule's lower corners - at r = 0.62 they stopped short and the seam read as a notch
+    once the icon was scaled down. The two grille slits are cut out (transparent) rather
+    than drawn, so the shape reads on a light and a dark taskbar alike, the same trick as
+    the mouse's buttons. Their width is measured rather than guessed: at 0.12*s they
+    vanished when the 64 px icon was scaled to 16 px, at 0.24*s both survive as bands.
+    """
+    w = s * 0.42                       # capsule half-width
+    top, bot = cy - s * 1.05, cy + s * 0.22
+    d.rounded_rectangle((_r(cx - w), _r(top), _r(cx + w), _r(bot)), radius=_r(w), fill=col)
+
+    lw = _r(max(2.5, s * 0.16))
+    r = s * 0.56                       # cradle radius: its arms reach the capsule's corners
+    d.arc((_r(cx - r), _r(cy - r), _r(cx + r), _r(cy + r)), 20, 160, fill=col, width=lw)
+    d.line((_r(cx), _r(cy + r), _r(cx), _r(cy + s * 0.8)), fill=col, width=lw)
+    d.line((_r(cx - s * 0.34), _r(cy + s * 0.8), _r(cx + s * 0.34), _r(cy + s * 0.8)),
+           fill=col, width=lw)
+
+    for dy in (-0.60, -0.24):          # grille: wide enough to survive 16 px
+        d.line((_r(cx - w * 0.55), _r(cy + s * dy), _r(cx + w * 0.55), _r(cy + s * dy)),
+               fill=CLEAR, width=_r(max(2.0, s * 0.24)))
 
 
 def _bluetooth(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
@@ -194,7 +221,7 @@ def _dualshock(d: ImageDraw.ImageDraw, cx: float, cy: float, s: float, col):
 
 PICTOS = {"headset": (_headset, 0, 2, 18), "mouse": (_mouse, 0, 0, 19.5),
           "bluetooth": (_bluetooth, 0, 0, 18), "gamepad": (_gamepad, 0, 0, 18.4),
-          "keyboard": (_keyboard, 0, 0, 17),
+          "keyboard": (_keyboard, 0, 0, 17), "microphone": (_microphone, 0, 1.5, 17),
           "dualshock": (_dualshock, 0, -0.2, 18.4),
           "dualsense": (_dualshock, 0, -0.2, 18.4)}   # its own silhouette is still to come
 

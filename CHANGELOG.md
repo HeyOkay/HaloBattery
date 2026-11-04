@@ -63,6 +63,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
   hardware until the second test build is run;
   see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
+- **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
+  read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
+  per transmitter. It needs WinUSB bound to that interface with
+  [Zadig](https://zadig.akeo.ie); without it the provider stays silent and says so in the
+  diagnostics, and no other device is affected. Protocol from
+  [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control)
+  (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
+  dependencies, and the release workflow bundles libusb.
 
 ## [1.16.0] - 2026-11-04
 

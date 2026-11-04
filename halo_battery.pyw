@@ -140,6 +140,7 @@ from halo import i18n  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
+                       DjiProvider,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
@@ -202,6 +203,7 @@ PROVIDER_LABELS = {
     "aula": "AULA F87 Pro V2C keyboards",
     "barracuda": "Razer Barracuda Pro",
     "corsair": "Corsair headsets",
+    "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "finalmouse": "Finalmouse UltralightX",
@@ -262,7 +264,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider()]
+            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -748,10 +750,17 @@ def tray_icon(key: str, *args, **kwargs):
 
 
 # ------------------------------------------------------------ formatting
+# a device that reports its own kind wins; otherwise the name decides. " mic" catches
+# "DJI Mic Mini 2 TX1" without dragging in names that merely contain the letters.
+MIC_WORDS = ("microphone", " mic", "mic ")
+
+
 def badge_for(st: DeviceStatus) -> str:
-    if st.kind in ("headset", "mouse", "gamepad", "keyboard"):   # reported by the device itself
+    if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone"):   # from the device
         return st.kind
     n = st.name.lower()
+    if any(w in n for w in MIC_WORDS):
+        return "microphone"
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
     if st.source == "playstation":
@@ -765,6 +774,7 @@ def badge_for(st: DeviceStatus) -> str:
 
 # the pictograms a user can pick for one device ("Icon" in its menu); "" = automatic
 PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboard"),
+                     ("microphone", "Microphone"),
                      ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")
