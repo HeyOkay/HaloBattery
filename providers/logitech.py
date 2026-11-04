@@ -227,8 +227,13 @@ def parse_register_battery(reg: int, p) -> Tuple[Optional[int], bool, str]:
 class _Channel:
     """The HID++ collections of one receiver, cabled device or headset dongle."""
 
-    def __init__(self, short_path: Optional[bytes], long_path: bytes):
+    def __init__(self, short_path: Optional[bytes], long_path: bytes,
+                 alt_path: Optional[bytes] = None):
         self.devs = []
+        # a long-only headset can publish two candidate collections (the G535: its
+        # consumer one and ff43:0202); the charge register is tried on both (#339)
+        self.alt_path = alt_path
+        self.alt = None
         self.error = False       # the last request got an error reply (not a timeout)
         self.error_code = 0      # the error code of that reply
         self._swid = 0
@@ -246,7 +251,7 @@ class _Channel:
                 pass
 
     def close(self):
-        for d in self.devs:
+        for d in self.devs + ([self.alt] if self.alt is not None else []):
             try:
                 d.close()
             except Exception:
@@ -289,16 +294,29 @@ class _Channel:
         registers are only ever read.
         """
         self.error, self.error_code = False, 0
-        self.long.write([0x11, idx, HEADSET_REG_SUBID, reg] + [0] * 16)
+        handles = [self.long]
+        if self.alt_path and self.alt is None:
+            try:
+                alt = hid.device()
+                alt.open_path(self.alt_path)
+                alt.set_nonblocking(True)
+                self.alt = alt
+            except (OSError, IOError):
+                self.alt_path = None
+        if self.alt is not None:
+            handles.append(self.alt)
+        for h in handles:
+            h.write([0x11, idx, HEADSET_REG_SUBID, reg] + [0] * 16)
         end = time.time() + timeout
         while time.time() < end:
-            for d in self.devs:
+            for d in handles:
                 r = d.read(64)
                 if not r or len(r) < 4 or r[1] != idx:
                     continue
                 if r[2] in (0x8F, 0xFF):
+                    # one collection may refuse; the other can still answer
                     self.error, self.error_code = True, r[5] if len(r) > 5 else 0
-                    return None
+                    continue
                 if r[2] == HEADSET_REG_SUBID and r[3] == reg:
                     return list(r)
             time.sleep(0.005)
@@ -579,6 +597,7 @@ class LogitechProvider(Provider):
         the same kind (any two Unifying receivers are 0xC52B). A headset has only a long path."""
         groups: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         headset: Dict[Tuple[int, str], bytes] = {}
+        alt: Dict[Tuple[int, str], Optional[bytes]] = {}
         for d in infos:
             pid, page, usage = d["product_id"], d.get("usage_page"), d.get("usage")
             key = (pid, _instance(d))
@@ -588,10 +607,16 @@ class LogitechProvider(Provider):
                 # only the headsets in the list: other devices never got a request on
                 # these collections, and must not get one now
                 headset[key] = d["path"]
+                if (page, usage) != (0xFF43, 0x0202) and pid in HEADSET_COLLECTION:
+                    alt[key] = next((x["path"] for x in infos
+                                     if x["product_id"] == pid
+                                     and (x.get("usage_page"), x.get("usage")) == (0xFF43, 0x0202)), None)
         # the ff00 collections win; the headset collection is used only without them
         for key, path in headset.items():
             if 2 not in groups.get(key, {}):
                 groups.setdefault(key, {})[2] = path
+                if alt.get(key):
+                    groups[key][3] = alt[key]
         return groups
 
     def poll(self) -> List[DeviceStatus]:
@@ -615,7 +640,7 @@ class LogitechProvider(Provider):
             self._diag.append(f"[Logitech] pid={pid:04x} '{product}'{tag}"
                               f"{' (headset)' if pid in HEADSETS else ''}")
             try:
-                ch = _Channel(paths.get(1), paths[2])
+                ch = _Channel(paths.get(1), paths[2], paths.get(3))
             except (OSError, IOError) as e:
                 self._diag.append(f"  open: {e}")
                 continue
