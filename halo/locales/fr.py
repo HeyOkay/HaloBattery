@@ -89,6 +89,7 @@ MESSAGES = {
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
+    "provider.hyperx_ngenuity": "Souris HyperX Pulsefire",
     "provider.inphic": "Souris Inphic / Attack Shark",
     "provider.jabra": "Casques Jabra (dongle Link 380 / 390)",
     "provider.mchose_kb": "Claviers MCHOSE",

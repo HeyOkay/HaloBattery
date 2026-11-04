@@ -45,6 +45,7 @@ from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
 from .hyperx_alpha_wireless import HyperXAlphaWirelessProvider  # noqa: F401
 from .jabra import JabraProvider  # noqa: F401
 from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
+from .hyperx_ngenuity import HyperXNgenuityProvider  # noqa: F401
 from .monsgeek import MonsGeekProvider  # noqa: F401
 from .eweadn import EweadnProvider  # noqa: F401
 from .mchose_kb import MchoseKbProvider  # noqa: F401
