@@ -74,6 +74,7 @@ PIDS = {
     VT7_CABLE: ("Rapoo VT7 (Gen-2)", "mouse", VT7_RECEIVER),
     V700DIY_RECEIVER: ("Rapoo V700DIY-98", "keyboard", V700DIY_KEYBOARD),
     V700DIY_KEYBOARD: ("Rapoo V700DIY-98", "keyboard", V700DIY_KEYBOARD),
+    0x14A9: ("Rapoo VT9 Pro V2", "mouse", 0x14A9),
 }
 
 VENDOR_PAGE = 0xFF00
