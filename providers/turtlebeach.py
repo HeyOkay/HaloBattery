@@ -94,17 +94,20 @@ KNOWN = {
     0x2251: "Turtle Beach Stealth 700 Gen 3",
     0x2253: "Turtle Beach Stealth 700 Gen 3 headset",
     0x225E: "Turtle Beach Atlas Air",
+    0x2232: "Turtle Beach Stealth 600X Gen 3",
 }
 
 # The Stealth 700 Gen 3 reads through the CoAP tunnel (#211): 2250/2251 are its
 # transmitters, 2253 the headset on its own USB cable (its author's hardware run). The
 # Stealth Pro II ids read through the Swarm II SInf/GSI asks. Same record, same parsers.
 COAP_PIDS = frozenset((0x2250, 0x2251, 0x2253))
-# The Atlas Air (#310) is on the same ff13:0001 collection as both families, but
-# which of the two exchanges it answers is not known yet. It is read with the Swarm
-# II asks first, because they send no enable frame, and the CoAP tunnel after them.
-DUAL_PIDS = frozenset((0x225E,))
+# The Atlas Air (#310) and the Stealth 600X Gen 3 (#239) are on the same ff13:0001
+# collection as both families, but which of the two exchanges each answers is not
+# known yet. They are read with the Swarm II asks first, because they send no enable
+# frame, and the CoAP tunnel after them.
+DUAL_PIDS = frozenset((0x225E, 0x2232))
 ATLAS_KEY = "turtlebeach:atlasair"
+DUAL_KEYS = {0x225E: ATLAS_KEY, 0x2232: "turtlebeach:stealth600x"}
 # The 700's dongle and cable are one headset (#211, as the Pro II's pair is): one icon,
 # so plugging the cable does not add a second entry.
 STEALTH700_KEY = "turtlebeach:stealth700"
@@ -526,7 +529,7 @@ class TurtleBeachProvider(Provider):
             elif pid in DUAL_PIDS:
                 name = (KNOWN.get(pid) or (ifaces[0].get("product_string") or "")
                         or f"TurtleBeach {pid:04x}").strip()
-                key = ATLAS_KEY
+                key = DUAL_KEYS.get(pid, f"turtlebeach:{pid:04x}")
             else:
                 name = (KNOWN.get(pid) or (ifaces[0].get("product_string") or
                                            f"TurtleBeach {pid:04x}")).strip()

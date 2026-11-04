@@ -179,6 +179,15 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level) for s in res],
                          [("turtlebeach:atlasair", "Turtle Beach Atlas Air", 86)])
 
+    def test_the_stealth_600x_gen_3_is_read_and_keeps_its_own_key(self):
+        # #239: same ff13:0001 collection as the rest of the family, exchange unknown,
+        # so the asks go first and the model gets its own icon key
+        self.infos = ifaces(pid=0x2232, product="Stealth 600X Gen 3")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealth600x", "Turtle Beach Stealth 600X Gen 3", 86)])
+
     def test_the_coap_tunnel_is_tried_when_the_asks_stay_silent(self):
         calls = []
         self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
@@ -203,6 +212,8 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual(calls, ["sinf"])
         self.assertEqual(turtlebeach.KNOWN[0x225E], "Turtle Beach Atlas Air")
         self.assertIn(0x225E, turtlebeach.DUAL_PIDS)
+        self.assertEqual(turtlebeach.KNOWN[0x2232], "Turtle Beach Stealth 600X Gen 3")
+        self.assertIn(0x2232, turtlebeach.DUAL_PIDS)
 
     def test_the_fresh_token_is_tried_when_the_captured_one_gets_nothing(self):
         # only the third write is answered: the captured token got idle frames
