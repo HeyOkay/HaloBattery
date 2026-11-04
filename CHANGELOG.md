@@ -12,6 +12,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   provider's 2.0 ping never got an answer and the headset was shown as asleep. It is now
   read through its 1.0 charge register (`11 FF 05 0D`) before the ping, with
   HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
+  The register is answered on the `ff43:0202` collection, not the consumer one, so both are
+  tried. Confirmed on hardware by @ti-henrq: `4069 mV -> 85 %` and the icon appears.
 
 ## [1.16.0] - 2026-11-04
 
