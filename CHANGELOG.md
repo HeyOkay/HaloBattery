@@ -48,6 +48,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
   and charge status (plus voltage and temperature in the diagnostics). Unverified on
   hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
+  different transport: the request is a feature report on `ff02:0002`, the reply an
+  input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because
+  it answers a power query from cache while the mouse sleeps. Confirmed on hardware by
+  @jimchen5209 in [#309](https://github.com/HeyOkay/HaloBattery/issues/309): level matches
+  the vendor app, charging follows the cable, the sleeping receiver greys out and returns,
+  and with receiver + cable the wired mouse shows while the wireless one is greyed.
 
 ## [1.16.0] - 2026-11-04
 

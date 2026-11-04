@@ -265,6 +265,21 @@ The vendor collection (usage page 0xFF01; the sibling 0xFF0B never answers): fea
 its receiver publishes ff02:0002 and no ff42 at all, so it is read here rather than by
 the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange behind the 'RapidSync' product string, with its keyboard collection on interface 2. The ATK X1 Pro is confirmed on hardware by @gnrlk3nobi in #230: it read immediately, the level stayed within about 5 % of ATK HUB in both states (the two apps sample at different moments, so the sign flips), and the charging state followed the cable. The keyboard receiver and the Fire X 8K are still waiting for their testers.
 
+### iRocks M31R
+
+**Connection:** 2.4 GHz receiver (14A5:C009) and USB cable (14A5:C010)
+
+The same 17-byte Compx frame (command 0x04, level byte 6, on-cable byte 7, checksum 0x55 minus the sum of bytes 0-15) over a **different transport**, measured on hardware by @jimchen5209 in #309:
+
+- The request goes out as a **feature report** on `ff02:0002` (that collection has no output report); the reply arrives as an **input report** on `ff01:0000`, so both collections are opened.
+- Replies may carry header **0x09** as well as 0x08; the checksum still counts the header. Bytes 8-9 are always zero on this model (no millivolt field).
+- The receiver answers a power query from a **cache** while its mouse is off or asleep, so it is asked command **0x03** (connection status) first: only a valid answer with byte 2 == 0 and byte 6 == 1 means online, and only then is the battery read. Offline: no level is read, and the last online reading stays greyed for 300 s.
+- The cable has no offline state and is never asked 0x03; a silent poll reports nothing for it.
+
+Captured examples: `09 04 00 00 00 02 37 00 ... 0f` = 55 %, not charging; `09 04 00 00 00 02 4b 01 ... fa` = 75 %, charging; `09 03 00 00 00 01 01 ... 47` = online, `... 01 00 ... 48` = offline.
+
+**Confirmed on hardware** by @jimchen5209 in #309, on the receiver and on the cable: the level matched the vendor app (80 %), charging showed 90 % and cleared to 85 % when unplugged, the sleeping receiver greyed out and came back, and with both transports connected the wired mouse was shown while the wireless one was greyed until the cable came out.
+
 ### Razer Basilisk V3 Pro, Razer Basilisk Ultimate
 
 **Connection:** 2.4 GHz receiver

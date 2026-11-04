@@ -91,6 +91,7 @@ MESSAGES = {
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.hyperx_ngenuity": "Souris HyperX Pulsefire",
     "provider.inphic": "Souris Inphic / Attack Shark",
+    "provider.irocks": "iRocks M31R",
     "provider.jabra": "Casques Jabra (dongle Link 380 / 390)",
     "provider.mchose_kb": "Claviers MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",

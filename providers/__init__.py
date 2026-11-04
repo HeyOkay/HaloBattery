@@ -34,6 +34,7 @@ from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
 from .inphic import InphicProvider  # noqa: F401
+from .irocks import IRocksProvider  # noqa: F401
 from .turtlebeach import TurtleBeachProvider  # noqa: F401
 from .skullcandy import SkullcandyProvider  # noqa: F401
 from .rapoo import RapooProvider  # noqa: F401

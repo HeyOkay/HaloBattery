@@ -92,6 +92,7 @@ MESSAGES = {
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.hyperx_ngenuity": "HyperX Pulsefire 滑鼠",
     "provider.inphic": "Inphic / Attack Shark 滑鼠",
+    "provider.irocks": "iRocks M31R",
     "provider.jabra": "Jabra 耳機（Link 380 / 390 接收器）",
     "provider.mchose_kb": "MCHOSE 鍵盤",
     "provider.mchose_v9": "MCHOSE V9 Pro",
