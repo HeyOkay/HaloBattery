@@ -4,6 +4,18 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
+  read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
+  per transmitter. It needs WinUSB bound to that interface with
+  [Zadig](https://zadig.akeo.ie); without it the provider stays silent and says so in the
+  diagnostics, and no other device is affected. Protocol from
+  [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control)
+  (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
+  dependencies, and the release workflow bundles libusb.
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.

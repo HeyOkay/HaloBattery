@@ -1,4 +1,6 @@
 hidapi>=0.14
 pystray>=0.19
 pillow>=10
+pyusb>=1.2
+libusb-package>=1.0
 pyserial>=3.5

@@ -355,6 +355,20 @@ Listened to, never written: the puck relays each controller on its own vendor co
 
 Any Xbox-compatible controller is read the same way as the GameSir G7 Pro: the battery level from `Windows.Gaming.Input.RawGameControllers`, with XInput's coarse level (low / medium / full) as the fallback. Controllers other than the GameSir have not been individually tested.
 
+## Microphones
+
+### DJI Mic Mini 2
+
+**Connection:** USB receiver (`2CA3:4011`, "Wireless Mic Rx") - interface 6, which needs WinUSB
+
+The receiver keeps its status on a vendor-specific USB interface (class `ff`, subclass `f0`, bulk IN `0x86` / bulk OUT `0x06`), not on HID: its four HID collections are silent, and Windows reports no battery for a USB microphone. The frames are DJI's DUML framing - `0x55`, total length, `0x04`, a CRC-8 over the first three bytes, the body, then a reflected CRC-16 (`0x8408` / X-25); v2 firmware seeds that CRC with `0x3692` and the whole frame then checksums to zero. The device pushes on its own, and nothing is ever sent to it.
+
+Three pushes arrive: a **status** push with one 32-byte slot per connected transmitter, an **identity** push (serials and product names) and an **audio-level** push. In the status push, header offset 44 is the connected bitmask (bit 0 = TX1, bit 1 = TX2) and each slot carries, at slot offset +7, the docked/charging bit (`0x02`) and a **seven-step gauge** in bits 2-4 (`1` = full, `7` = the last reading before the transmitter shuts off). That is a gauge, not a percentage, so the tray shows an estimate and says so, while the raw gauge stays in the diagnostics. A transmitter that is switched off has no slot and loses its bit, so its icon leaves the tray - after a short grace period, so a dropped push does not make it blink.
+
+Protocol from [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control) (PROTOCOL.md, Unlicense; its USB id table is this receiver's id). The frame layout, both CRC seeds and the gauge were re-derived against a receiver here - 118-byte status pushes, 182-byte identity pushes naming both transmitters, every frame CRC-valid - and **confirmed on hardware** with two Mic Mini 2 transmitters.
+
+**The driver step.** Windows cannot open interface 6 until WinUSB (or libusbK) is bound to it: with [Zadig](https://zadig.akeo.ie), pick the receiver's "Interface 6", target driver **WinUSB**, Replace Driver, then replug. Nothing else changes and the audio path keeps its own driver. Without that, or without `pyusb`, this provider reports nothing and says so in the diagnostics; every other device is unaffected. It is the only device in the app that needs a driver step, which is why it is documented here instead of being assumed.
+
 ## Bluetooth
 
 ### Bluetooth devices, tested on the 1MORE SonoFlow headset

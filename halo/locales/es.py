@@ -55,6 +55,7 @@ MESSAGES = {
     "icon.headset": "Auriculares",
     "icon.gamepad": "Mando",
     "icon.bluetooth": "Bluetooth",
+    "icon.microphone": "Micrófono",
     # Additional provider-family labels (not translated in #249).
     "provider.8bitdo": "Mandos 8BitDo",
     "provider.am_infinity": "AM Infinity 8K (Angry Miao)",
@@ -63,6 +64,7 @@ MESSAGES = {
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
     "provider.corsair": "Auriculares Corsair",
+    "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Ratones G-Wolves",
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",
