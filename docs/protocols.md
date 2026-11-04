@@ -217,6 +217,8 @@ The same 17-byte Compx frame (command 0x04, level byte 6, on-cable byte 7, check
 
 Captured examples: `09 04 00 00 00 02 37 00 ... 0f` = 55 %, not charging; `09 04 00 00 00 02 4b 01 ... fa` = 75 %, charging; `09 03 00 00 00 01 01 ... 47` = online, `... 01 00 ... 48` = offline.
 
+**Confirmed on hardware** by @jimchen5209 in #309, on the receiver and on the cable: the level matched the vendor app (80 %), charging showed 90 % and cleared to 85 % when unplugged, the sleeping receiver greyed out and came back, and with both transports connected the wired mouse was shown while the wireless one was greyed until the cable came out.
+
 ### Razer Basilisk V3 Pro, Razer Basilisk Ultimate
 
 **Connection:** 2.4 GHz receiver
