@@ -69,6 +69,7 @@ MESSAGES = {
     "provider.mchose": "MCHOSE マウス",
     "provider.nintendo": "Nintendo Switch コントローラー",
     "provider.playstation": "PlayStation コントローラー",
+    "provider.plantronics": "Plantronics ヘッドセット（BT600 アダプター）",
     "provider.pulsar": "Pulsar / ATK VXE / Redragon マウス",
     "provider.razer": "Razer マウスとヘッドセット",
     "provider.steelseries": "SteelSeries",

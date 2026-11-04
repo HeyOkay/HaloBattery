@@ -68,6 +68,7 @@ MESSAGES = {
     "provider.mchose": "MCHOSE mice",
     "provider.nintendo": "Nintendo Switch controllers",
     "provider.playstation": "PlayStation controllers",
+    "provider.plantronics": "Plantronics headsets (BT600 adapter)",
     "provider.pulsar": "Pulsar / ATK VXE / Redragon mice",
     "provider.razer": "Razer mice and headsets",
     "provider.steelseries": "SteelSeries",

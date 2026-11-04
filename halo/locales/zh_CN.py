@@ -69,6 +69,7 @@ MESSAGES = {
     "provider.mchose": "MCHOSE 鼠标",
     "provider.nintendo": "Nintendo Switch 控制器",
     "provider.playstation": "PlayStation 控制器",
+    "provider.plantronics": "Plantronics 耳机（BT600 适配器）",
     "provider.pulsar": "Pulsar / ATK VXE / Redragon 鼠标",
     "provider.razer": "Razer 鼠标和耳机",
     "provider.steelseries": "SteelSeries",

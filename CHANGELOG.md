@@ -4,6 +4,12 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. Unverified on hardware; a test build is out for [#328](https://github.com/HeyOkay/HaloBattery/issues/328).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
