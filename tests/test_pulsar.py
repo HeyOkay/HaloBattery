@@ -47,6 +47,19 @@ SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the i-Rocks M31R receiver (14a5:c009) as #309's diagnostics list its collections:
+# no ff05/ff06 pair, but the same ff02:0002 control collection
+M31R_SHAPE = [
+    (0, 0x0001, 0x0002),
+    (1, 0x0001, 0x0006),
+    (1, 0xFF03, 0x0000),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0xFF01, 0x0000),
+    (1, 0xFF04, 0x0002),
+    (1, 0xFF02, 0x0002),
+]
+
 # the Hitscan Hyperlight receiver (3770:0200) as #105's diagnostics list its collections
 HITSCAN_SHAPE = [
     (1, 0xFF04, 0x0002),
@@ -159,6 +172,20 @@ class PulsarTest(unittest.TestCase):
         P.hidlist = types.SimpleNamespace(enumerate=self.bus.enumerate)
         P.hid = types.SimpleNamespace(device=self.bus.device_class())
         return self.bus
+
+    def test_the_irocks_m31r_is_read(self):
+        # #309: 14a5:c009 'Compx' 'Wireless Mouse' publishes ff02:0002, the family's
+        # control collection, on a receiver with fewer vendor collections than the R1
+        bus = self.one_receiver(vid=0x14A5, pid=0xC009, replies=[reply(35, 0, 3800)],
+                                shape=M31R_SHAPE)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:14a5c009", d.key)
+        self.assertEqual("i-Rocks M31R (2.4 GHz)", d.name)
+        self.assertEqual(35, d.level)
+        self.assertEqual("mouse", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
     def test_the_r1_pro_max_receiver_is_read(self):
         bus = self.one_receiver(replies=[reply(78, 0, 3900)])

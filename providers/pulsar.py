@@ -152,6 +152,9 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x0200: "Hitscan Hyperlight (2.4 GHz)",
         0x0100: "Hitscan Hyperlight (wired)",
     },
+    0x14A5: {
+        0xC009: "i-Rocks M31R (2.4 GHz)",
+    },
     0x3710: {
         0x5406: "Pulsar X2 CrazyLight Mini (2.4 GHz)",
         0x3414: "Pulsar X2 CrazyLight Mini (wired)",
