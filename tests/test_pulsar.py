@@ -47,6 +47,18 @@ SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the AULA F75's receiver (3554:fa09) as #247's diagnostics list its collections: a
+# keyboard collection, the consumer one and the same ff02:0002 control collection
+F75_SHAPE = [
+    (0, 0x0001, 0x0006),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0x0001, 0x0002),
+    (1, 0xFF04, 0x0002),
+    (1, 0x0001, 0x0006),
+    (1, 0xFF02, 0x0002),
+]
+
 # the Hitscan Hyperlight receiver (3770:0200) as #105's diagnostics list its collections
 HITSCAN_SHAPE = [
     (1, 0xFF04, 0x0002),
@@ -175,6 +187,55 @@ class PulsarTest(unittest.TestCase):
         diag = "\n".join(provider.diagnostics())
         self.assertIn("[Pulsar] pid=3554:f58a 'VXE R1 Pro / R1 Pro Max (2.4 GHz)'", diag)
         self.assertIn("3900 mV", diag)
+
+    def test_the_atk_fire_x_8k_receiver_is_read(self):
+        # #247: 373b:101b 'ATK Mouse 8K Dongle' lists the same eight collections as
+        # the R1 Pro Max receiver, ff02:0002 among them
+        bus = self.one_receiver(vid=0x373B, pid=0x101B, replies=[reply(88, 0, 4000)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:373b101b", d.key)
+        self.assertEqual("ATK Fire X 8K (2.4 GHz dongle)", d.name)
+        self.assertEqual(88, d.level)
+        self.assertFalse(d.charging)
+        self.assertEqual("mouse", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_atk_x1_pro_1k_receiver_is_read(self):
+        # #230: 373b:101a 'ATK Mouse 1K Dongle' publishes the same ff02:0002
+        # collection as its 8K sibling
+        bus = self.one_receiver(vid=0x373B, pid=0x101A, replies=[reply(71, 0, 3970)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:373b101a", d.key)
+        self.assertEqual("ATK X1 Pro (2.4 GHz)", d.name)
+        self.assertEqual(71, d.level)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_aula_f75_keyboard_is_read_and_keeps_its_keyboard_icon(self):
+        # #247: the F75's receiver publishes a keyboard collection and the same
+        # ff02:0002 control collection, so the same frame is asked - only the
+        # pictogram differs from the mice of this file
+        bus = self.one_receiver(vid=0x3554, pid=0xFA09, replies=[reply(64)], shape=F75_SHAPE)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554fa09", d.key)
+        self.assertEqual("Compx 2.4 GHz keyboard", d.name)
+        self.assertEqual(64, d.level)
+        self.assertEqual("keyboard", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_a_keyboard_that_stops_answering_keeps_its_keyboard_kind(self):
+        self.one_receiver(vid=0x3554, pid=0xFA09, replies=[reply(64)], shape=F75_SHAPE)
+        provider = P.PulsarProvider()
+        self.assertEqual("keyboard", provider.poll()[0].kind)
+        kept = provider.poll()
+        self.assertEqual(1, len(kept))
+        self.assertEqual("keyboard", kept[0].kind)
+        self.assertTrue(any("keeping 64%" in line for line in provider.diagnostics()))
 
     def test_the_r1_pro_max_on_its_cable_is_read(self):
         # the reporter's second report: the wired mouse is 3554:f58c, product string

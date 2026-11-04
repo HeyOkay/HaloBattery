@@ -4,6 +4,16 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro), **ATK X1 Pro**
+  (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
+  Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
+  the same 17-byte power query; the keyboard keeps a keyboard pictogram. Unverified on
+  hardware; a test build is out for [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
