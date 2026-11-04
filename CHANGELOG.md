@@ -14,8 +14,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   [#262](https://github.com/HeyOkay/HaloBattery/issues/262).
 - **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
   receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
-  at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. Unverified
-  on hardware; a test build is out for [#281](https://github.com/HeyOkay/HaloBattery/issues/281).
+  at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. **Level
+  confirmed on hardware by @gumocska** (#281): the percentage matched Glorious Core. While
+  the mouse charges over USB it leaves the 2.4 GHz link, so the wired id (`258a:2011`) now
+  tells the app it is on the cable and the icon shows charging with the last level; a wall
+  adapter gives no signal, because the mouse is not talking to the receiver.
 
 ## [1.16.0] - 2026-11-04
 

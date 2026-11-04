@@ -50,6 +50,13 @@ RF_DELAY_S = 0.10                  # the SetFeature -> RF -> GetFeature round tr
 READ_ATTEMPTS = 2                  # a waking mouse answers 0xA2 first; retry once
 ASLEEP_KEEP = 300
 
+# Wired ids of the same model, from GloriousBatteryMonitor-Go's DeviceDatabase.cs. Charging
+# over a USB cable takes the mouse off the 2.4 GHz link and it appears as the wired id
+# instead - that project reads "on the charger" from the pid change, not from the reply
+# ("Charging is detected via PID change ... not via byte[3]", HidDeviceService.cs), so the
+# same signal is used here. 0x2011 is the wired Model O.
+WIRED_PIDS = {0x2011: "Model O"}
+
 
 def make_request(length: int) -> List[int]:
     """The captured query as a feature report of `length` bytes (id + body)."""
@@ -100,6 +107,11 @@ class GloriousProvider(Provider):
         if not mine:
             return []
         self._diag.append(f"[Glorious] pid={PID:04x} '{NAME}'")
+        wired = [d for d in infos if d.get("product_id") in WIRED_PIDS]
+        if wired:
+            self._diag.append("  on the cable: " + ", ".join(
+                f"{d.get('product_id', 0):04x} ({WIRED_PIDS.get(d.get('product_id'), '?')})"
+                for d in wired))
         parsed = None
         for d in pick(mine):
             length = feature_length(d["path"]) or 65
@@ -111,11 +123,17 @@ class GloriousProvider(Provider):
                 break
         if parsed is None:
             self._diag.append("  no battery answer (asleep, off, or not this collection)")
+            if wired:
+                # The mouse is on the cable: it is present and charging, but the receiver
+                # cannot say what the level is now, so keep the last one if there is one.
+                level = self._last[0] if self._last else None
+                return [DeviceStatus(KEY, NAME, level, True, True, "glorious", kind="mouse")]
             if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
                 return [DeviceStatus(KEY, NAME, self._last[0], False, False, "glorious",
                                      kind="mouse")]
             return [DeviceStatus(KEY, NAME, None, False, False, "glorious", kind="mouse")]
         level, charging = parsed
+        charging = charging or bool(wired)
         self._last = (level, time.time())
         self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
         return [DeviceStatus(KEY, NAME, level, charging, True, "glorious", kind="mouse")]

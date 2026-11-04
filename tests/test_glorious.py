@@ -122,6 +122,33 @@ class PollTest(unittest.TestCase):
         out, _dev = self.poll([CAPTURED_75_CHARGING])
         self.assertTrue(out[0].charging)
 
+    WIRED = {"path": b"wired", "interface_number": 0, "product_id": 0x2011,
+             "product_string": "Model O"}
+
+    def test_a_plugged_cable_counts_as_charging(self):
+        # the wired id's presence is how GloriousBatteryMonitor-Go reads "on the charger"
+        out, _dev = self.poll([CAPTURED_75], infos=self.INFO + [self.WIRED])
+        self.assertEqual((75, True, True), (out[0].level, out[0].charging, out[0].online))
+
+    def test_the_cable_alone_keeps_the_last_level_and_says_charging(self):
+        provider = G.GloriousProvider()
+        dev = FakeDevice([CAPTURED_75])
+        G.feature_length = lambda path: 65
+        G.time = types.SimpleNamespace(time=lambda: self.now[0], sleep=lambda s: None)
+        G.hid = types.SimpleNamespace(device=lambda: dev)
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
+        self.assertEqual(75, provider.poll()[0].level)
+        # on the cable: the receiver goes quiet, the wired id appears
+        dev.replies = []
+        G.hidlist = types.SimpleNamespace(
+            enumerate=lambda vid=0: list(self.INFO + [self.WIRED]))
+        out = provider.poll()
+        self.assertEqual((75, True, True), (out[0].level, out[0].charging, out[0].online))
+
+    def test_the_cable_with_no_history_is_charging_without_a_level(self):
+        out, _dev = self.poll([], infos=self.INFO + [self.WIRED])
+        self.assertEqual((None, True, True), (out[0].level, out[0].charging, out[0].online))
+
     def test_no_answer_keeps_the_last_reading_greyed(self):
         provider = G.GloriousProvider()
         dev = FakeDevice([CAPTURED_75])
