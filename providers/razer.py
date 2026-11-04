@@ -107,6 +107,8 @@ KNOWN = {
     0x00C1: ("Razer Viper V3 Pro", 0x1F),
     0x00DE: ("Razer Viper V3 Pro SE", 0x1F),
     0x00DF: ("Razer Viper V3 Pro SE", 0x1F),
+    0x00E5: ("Razer Viper V4 Pro", 0x1F),
+    0x00E6: ("Razer Viper V4 Pro", 0x1F),
     0x00C2: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C3: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C4: ("Razer DeathAdder V3 HyperSpeed", 0x1F),
