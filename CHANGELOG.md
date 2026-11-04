@@ -4,6 +4,15 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Logitech G535**: its dongle is long-only and has no HID++ 2.0 feature table, so the
+  provider's 2.0 ping never got an answer and the headset was shown as asleep. It is now
+  read through its 1.0 charge register (`11 FF 05 0D`) before the ping, with
+  HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
