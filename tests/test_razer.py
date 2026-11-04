@@ -86,6 +86,8 @@ OPENRAZER_CHARGE_LEVEL = {
     0x00D4: 0x1F,   # BASILISK_MOBILE_RECEIVER
     0x00D6: 0x1F,   # BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRED
     0x00D7: 0x1F,   # BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS
+    0x00E5: 0x1F,   # VIPER_V4_PRO_WIRED (OpenRazer PR #2751)
+    0x00E6: 0x1F,   # VIPER_V4_PRO_WIRELESS
 }
 
 # In OpenRazer's list, but not in the app's table on purpose (see providers/razer.py).
@@ -228,6 +230,19 @@ class TableTest(unittest.TestCase):
 
 
 class PollRazerTest(PollTest):
+    def test_viper_v4_pro_wireless_issue_333(self):
+        """The collections from the report: input pages on interfaces 1 and 3, the
+        vendor page ff13:0001 on interface 4 - where the 90-byte report answers."""
+        name = "Razer Viper V4 Pro"
+        entries = [entry(0x00E6, b"if1", name, 1, 0x0001),
+                   entry(0x00E6, b"if3", name, 3, 0x000C),
+                   entry(0x00E6, b"if4", name, 4, 0xFF13)]
+        mouse = FakeMouse(tid=0x1F, raw_level=0xB5, charging=0)      # 0xB5 -> 71 %
+        out = self.poll(entries, {b"if4": mouse})
+        self.assertEqual([(s.name, s.level, s.charging) for s in out],
+                         [(name, round(0xB5 / 255 * 100), False)])
+        self.assertEqual(mouse.tids[0], 0x1F)
+
     def test_pro_click_v2_vertical_issue_58(self):
         # The interfaces are the ones in the diagnostics report of issue #58.
         name = "Razer Pro Click V2 Vertical Edition"
