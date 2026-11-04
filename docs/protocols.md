@@ -365,6 +365,36 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 
 ## Others
 
+### Razer Barracuda X (2022) (2.4 GHz)
+
+**Connection:** 2.4 GHz dongle (1532:0552, "Razer Barracuda X 2.4", Macronix bridge)
+
+This dongle does not answer the Razer mouse request, and the headset ("PA") frames are refused
+with `WriteFile: 0x00000001 Incorrect function` - the dongle bridges USB HID to an **Airoha**
+chip and speaks Airoha's RACE protocol instead, framed for the Macronix bridge:
+
+    app mode   > 01 40                    < 01 40 01 01
+    request    > 01 80 <len> 50 41 <group> <seq> <body...>
+    reply      < 01 80 <len> 50 49 ....... payload: [group, 0x80|seq, status, data...]
+
+    remote mode  group 0x0E, body 02 E1 01   (the dongle forwards to the headset only then;
+                                              in local mode it answers GET_BATTERY itself
+                                              with a meaningless value)
+    GET_BATTERY  group 0x06, body 01 00 31   -> payload[3..4] = millivolts (LE)
+    local mode   group 0x0E, body 02 E1 00   (always, on the way out)
+
+The headset reports **voltage only** over 2.4 GHz - no percentage, no charging flag (its
+Bluetooth side has a standard battery level). The percentage is interpolated on a Li-ion
+curve (3300 mV = 0 %, 4150 mV = 100 %), and charging is inferred the way
+[mehdibouchami/razer-barracuda-x-battery](https://github.com/mehdibouchami/razer-barracuda-x-battery)
+does it: several samples ~350 ms apart, charging when their spread is at least 12 mV or the
+lowest is at or above 4180 mV. The read takes about 2.5 s because of those samples.
+
+Only the Macronix bridge (`0552`) is read. The `0550` variant uses the YS-Tech bridge: the
+same RACE commands wrapped in `02 80 <len> <crcLo> <crcHi> payload` with a CRC-16/XMODEM
+over the whole report and an `'O'`/`'F'` input-report acknowledgement - documented in that
+project, not implemented here until a 0550 unit can test it.
+
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
 **Connection:** Lightspeed, Unifying or Bolt receiver

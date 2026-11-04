@@ -62,6 +62,7 @@ MESSAGES = {
     "provider.asus": "Ratones ASUS ROG / TUF, teclados, auriculares",
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
+    "provider.barracuda_x": "Razer Barracuda X",
     "provider.corsair": "Auriculares Corsair",
     "provider.gwolves": "Ratones G-Wolves",
     "provider.hyperx": "HyperX Cloud II Wireless",

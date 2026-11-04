@@ -54,6 +54,7 @@ MESSAGES = {
     "provider.asus": "ASUS ROG / TUF マウス、キーボード、ヘッドセット",
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
+    "provider.barracuda_x": "Razer Barracuda X",
     "provider.corsair": "Corsair ヘッドセット",
     "provider.gwolves": "G-Wolves マウス",
     "provider.hyperx": "HyperX Cloud II Wireless",

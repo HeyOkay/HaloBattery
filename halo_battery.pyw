@@ -139,7 +139,7 @@ from halo import flyout, history, icons, updates, whatsnew, winevents  # noqa: E
 from halo import i18n  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
+                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
@@ -200,6 +200,7 @@ PROVIDER_LABELS = {
     "audeze": "Audeze Maxwell",
     "aula": "AULA F87 Pro V2C keyboards",
     "barracuda": "Razer Barracuda Pro",
+    "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
@@ -247,7 +248,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
-            PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
+            PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),

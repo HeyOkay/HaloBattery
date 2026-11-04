@@ -388,6 +388,12 @@ class RazerProvider(Provider):
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
                 continue
+            if pid == 0x0552:
+                # The Barracuda X (2022) dongle speaks Airoha RACE, not PA: its vendor
+                # collection refuses the PA writes outright ("Incorrect function", #287),
+                # so providers/barracuda_x.py reads it.
+                self._diag.append("  skipped: read by the barracuda_x provider (Airoha RACE)")
+                continue
             if pid == 0x053A:
                 # The Barracuda Pro's receiver does not answer the mouse request this
                 # provider sends; it speaks the headset "PA" protocol instead, which

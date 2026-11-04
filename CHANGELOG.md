@@ -8,6 +8,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Razer Barracuda X (2022)** (`1532:0552`, 2.4 GHz dongle) - the dongle bridges to an
+  Airoha chip and speaks RACE (`50 41`), not the Razer PA protocol the other Barracudas use;
+  the PA writes were refused with "Incorrect function". Level comes from the headset's
+  battery voltage through remote mode + `GET_BATTERY` (group 0x06), converted on a Li-ion
+  curve, with charging inferred from the voltage spread between samples. Mirrored from
+  mehdibouchami/razer-barracuda-x-battery. Unverified on hardware; a test build is out for
+  [#332](https://github.com/HeyOkay/HaloBattery/issues/332).
+
+### Added
+
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
