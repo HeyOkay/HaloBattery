@@ -293,6 +293,13 @@ class CenturionTest(unittest.TestCase):
         self.assertEqual(self.poll(rx), [])
         self.assertIn("error", " ".join(self.provider.diagnostics()))
 
+    def test_the_pro_x_3_is_read_the_same_way(self):
+        rx = Receiver(self.clock, level=64, state=2)
+        res = self.poll(rx, issue_103_entries(0x0B45))
+        self.assertEqual([(r.name, r.key, r.level, r.charging, r.online, r.kind) for r in res],
+                         [("Logitech PRO X 3 LIGHTSPEED", "logitech-centurion:0b45",
+                           64, True, True, "headset")])
+
     def test_only_the_ffa0_collection_of_0af7_is_opened(self):
         rx = Receiver(self.clock)
         entries = issue_103_entries(0x0AFB) + [dict(issue_103_entries()[0])]

@@ -72,6 +72,8 @@ The receiver exposes one vendor collection, `ff13:0001` (interface 5 on a real u
 
 Not HID++ on ff43: Logitech's "Centurion" transport on the vendor collection `ffa0:0001`, report 0x51. The app lists the receiver's features, reaches the headset through the receiver's bridge feature (0x0003), lists the headset's features and reads its battery feature 0x0104 (percent, charging state), all with read-only functions. From Solaar (tested on this headset) and HeadsetControl; firmware without 0x0104 gets HeadsetControl's fixed request. Confirmed on hardware in #103 (75 %, level and charging equal to G HUB)
 
+The PRO X 3 LIGHTSPEED (`046D:0B45`) lists the same three collections on the same interface in a reporter's diagnostics, so it is read the same way. **Unverified** - no PRO X 3 was on hand; a test build for [#343](https://github.com/HeyOkay/HaloBattery/issues/343) is out.
+
 ### Razer Barracuda Pro (2.4 GHz)
 
 **Connection:** 2.4 GHz dongle (1532:053a)
