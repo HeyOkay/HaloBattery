@@ -151,7 +151,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider,
-                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider)
+                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider,
+                       GloriousProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -204,6 +205,7 @@ PROVIDER_LABELS = {
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "finalmouse": "Finalmouse UltralightX",
+    "glorious": "Glorious Model O Wireless",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
@@ -256,7 +258,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider()]
+            EweadnProvider(), MchoseKbProvider(), GloriousProvider()]
 
 
 # ---------------------------------------------------------------- config

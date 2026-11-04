@@ -55,6 +55,7 @@ MESSAGES = {
     "provider.barracuda": "Razer Barracuda Pro",
     "provider.corsair": "Corsair headsets",
     "provider.gwolves": "G-Wolves mice",
+    "provider.glorious": "Glorious Model O Wireless",
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",
     "provider.hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
