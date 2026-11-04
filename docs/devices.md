@@ -77,7 +77,7 @@ Devices added by integrating the open upstream pull requests; details and author
 
 | Family | Devices |
 |---|---|
-| Mice | Hitscan Hyperlight 8K, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Rapoo VT7 Gen 2 / V700DIY-98, AJAZZ AJ179 V2 MAX, ATK X1 Ultimate / A9 Ultimate / A9 SE / NK NANO Nearlink, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K |
+| Mice | Hitscan Hyperlight 8K, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, ATK X1 Ultimate / A9 Ultimate / A9 SE / NK NANO Nearlink, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K |
 | Keyboards | Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X, AULA F87 Pro V2C, MCHOSE K87, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless |
 | Headsets | Turtle Beach Stealth Pro II / Stealth 700 Gen 3, HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3 and Barracuda Pro receiver, SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Controllers | NVIDIA SHIELD (2017), FlyDigi Vader 5 Pro |
