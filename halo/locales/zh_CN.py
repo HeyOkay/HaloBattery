@@ -64,6 +64,7 @@ MESSAGES = {
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
     "provider.lamzu": "LAMZU 鼠标",
+    "provider.lamzu_sw": "Lamzu Tachi (8K receiver)",
     "provider.lofree": "Lofree 键盘、AULA V9 鼠标",
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",

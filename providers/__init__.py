@@ -26,6 +26,7 @@ from .nintendo import NintendoProvider  # noqa: F401
 from .shield import ShieldProvider  # noqa: F401
 from .asus import AsusProvider  # noqa: F401
 from .glorious import GloriousProvider  # noqa: F401
+from .lamzu_sw import LamzuSinowealthProvider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401

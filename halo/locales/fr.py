@@ -63,6 +63,7 @@ MESSAGES = {
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
     "provider.lamzu": "Souris LAMZU",
+    "provider.lamzu_sw": "Lamzu Tachi (8K receiver)",
     "provider.lofree": "Claviers Lofree, souris AULA V9",
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",

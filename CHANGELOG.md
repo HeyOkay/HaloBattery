@@ -8,6 +8,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Lamzu Tachi** (`37b0:000c`, the 8K receiver) - its collections match the Glorious
+  Model O's (`ffa0:0001`, `ffff:0001/0000`), so the same Sinowealth query is tried; that is
+  the only evidence so far. Unverified on hardware; a test build is out for
+  [#262](https://github.com/HeyOkay/HaloBattery/issues/262).
 - **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
   receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
   at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. Unverified
