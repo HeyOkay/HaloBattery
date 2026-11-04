@@ -20,7 +20,7 @@ treated as a claim about the cable.
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from . import hidlist
 from .base import DeviceStatus, Provider, log

@@ -77,7 +77,7 @@ what the mouse answers and corrects itself as soon as a fresh answer arrives.
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import hid

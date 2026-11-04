@@ -57,7 +57,7 @@ try:
 except ImportError:                    # pragma: no cover
     libusb_package = None
 
-from .base import DeviceStatus, Provider, log
+from .base import DeviceStatus, Provider
 
 VID, PID = 0x2CA3, 0x4011
 IFACE = 6
