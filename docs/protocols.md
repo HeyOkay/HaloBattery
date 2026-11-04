@@ -152,6 +152,24 @@ The AJAZZ Control Center project's AJ-series exchange: a zero-payload `0xF7` sta
 
 The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. The OMNI receiver and models with other layouts are not included. **Unverified** - no ASUS mouse was on hand
 
+### ASUS ROG OMNI receiver (mice and keyboards)
+
+**Connection:** ROG OMNI receiver (0B05:1ACE), vendor collections on interface 2
+
+The receiver holds a mouse and a keyboard and names both in a pair list, which is what lets one icon follow a device between the receiver and its own cable:
+
+    ff02:0001 report 1   01 a0 00 00 ...   pair list from byte 5: four bytes a slot,
+                                           the device pid little-endian, 0 ends
+    ff01:0003 report 3   03 12 07          the mouse; the reply is the `12 07` battery
+                                           frame one byte later (level byte 5, charging 10)
+    ff00:0002 report 2   02 12 01          the keyboard; battery in byte 6 (byte 11 on
+                                           the Falchion family, where byte 6 is a 0..10
+                                           gauge) and charging in byte 9
+
+A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
+
+Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile, and on a Keris II Ace and an Azoth by @comipa in [#231](https://github.com/HeyOkay/HaloBattery/issues/231).
+
 ### Corsair Dark Core RGB Pro SE
 
 **Connection:** 2.4 GHz dongle (1B1C:1B7F)
