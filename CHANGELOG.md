@@ -17,6 +17,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   bragi vendor collections (`ff42:0001`/`0002`), so it is read with the Dark Core's
   framed get-property exchange. Confirmed on hardware by @SpaceJesusCosmic in
   [#301](https://github.com/HeyOkay/HaloBattery/issues/301).
+- **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Confirmed on the receiver by @TweaknFreak (#323): the percentage agreed with the vendor tool. The cable id is claimed from the report; charging over the cable is not yet reported back.
 
 ## [1.16.0] - 2026-11-04
 
