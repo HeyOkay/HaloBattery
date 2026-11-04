@@ -43,6 +43,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
   (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
 - **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
+- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. Unverified on hardware; a test build is out for [#328](https://github.com/HeyOkay/HaloBattery/issues/328).
 
 ## [1.16.0] - 2026-11-04
 

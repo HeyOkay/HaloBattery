@@ -151,8 +151,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider,
-                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider,
-                       SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider)
+                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -228,6 +227,7 @@ PROVIDER_LABELS = {
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
+    "plantronics": "Plantronics headsets (BT600 adapter)",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
@@ -259,7 +259,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider()]
+            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider()]
 
 
 # ---------------------------------------------------------------- config

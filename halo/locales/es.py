@@ -77,6 +77,7 @@ MESSAGES = {
     "provider.mchose": "Ratones MCHOSE",
     "provider.nintendo": "Mandos Nintendo Switch",
     "provider.playstation": "Mandos PlayStation",
+    "provider.plantronics": "Auriculares Plantronics (adaptador BT600)",
     "provider.pulsar": "Ratones Pulsar / ATK VXE / Redragon",
     "provider.razer": "Ratones y auriculares Razer",
     "provider.steelseries": "SteelSeries",
