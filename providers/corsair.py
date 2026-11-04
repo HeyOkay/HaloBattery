@@ -235,6 +235,7 @@ def make_software_mode(endpoint: int) -> List[int]:
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
     0x2B07: "Corsair K65 PLUS Wireless",
+    0x1BDC: "Corsair M75 Wireless",
     0x0A40: "Corsair Virtuoso RGB Wireless SE",
     0x0A3E: "Corsair Virtuoso RGB Wireless SE",
     0x0A3D: "Corsair Virtuoso RGB Wireless SE",
@@ -243,11 +244,12 @@ BRAGI_PIDS = {
 }
 # the pictogram each family member draws: the Dark Core is a mouse, the K65 PLUS a
 # keyboard; the Virtuoso ids are headsets
-BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard"}
+BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard", 0x1BDC: "mouse"}
 # one icon per product: a headset's receiver and cable ids share the key
 BRAGI_KEYS = {
     0x1B7F: "corsair:1b7f",
     0x2B07: "corsair:2b07",
+    0x1BDC: "corsair:1bdc",
     0x0A40: "corsair:virtuoso-se",
     0x0A3E: "corsair:virtuoso-se",
     0x0A3D: "corsair:virtuoso-se",

@@ -403,6 +403,17 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(out[0].level, 76)
         self.assertEqual(bus.opened, [b"d"])
 
+    def test_the_m75_slipstream_receiver_is_read(self):
+        # #301: 1b1c:1bdc 'CORSAIR SLIPSTREAM WIRELESS USB Receiver' publishes the same
+        # ff42:0001/0002 pair as the Dark Core dongle, so the same framed ask applies
+        out, bus = self.poll(
+            [entry(0x1BDC, b"m75", 1, 0xFF42, 0x0001)],
+            {b"m75": FakeDongle(bragi_reply(750))})
+        self.assertEqual(len(out), 1)
+        st = out[0]
+        self.assertEqual((st.key, st.level, st.kind), ("corsair:1bdc", 75, "mouse"))
+        self.assertFalse(st.charging)
+
     def test_the_headset_family_is_untouched(self):
         self.assertEqual(C.PIDS, {0x2A08: "Corsair Void v2 Wireless",
                                   0x2A02: "Corsair Virtuoso Max Wireless",
@@ -415,6 +426,7 @@ class BragiPollTest(unittest.TestCase):
             0x0A64: "Corsair Virtuoso RGB Wireless XT",
             0x0A62: "Corsair Virtuoso RGB Wireless XT",
             0x2B07: "Corsair K65 PLUS Wireless",       # #293 (K65 PLUS receiver)
+            0x1BDC: "Corsair M75 Wireless",            # #301 (Slipstream receiver)
         })
         # a headset's receiver and cable ids share one icon; the session the
         # 0A40 was measured with stays scoped to it
