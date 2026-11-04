@@ -87,6 +87,8 @@ class BluetoothSnapshotTests(unittest.TestCase):
             mock.patch.object(hb, "DeviceIcon", FakeIcon),
             mock.patch.object(hb.pystray, "Icon", FakeTrayIcon),
             mock.patch.object(hb, "save_config", lambda cfg: None),
+            # The real foreground window must not change the fake HID poll interval.
+            mock.patch.object(hb, "fullscreen_app_running", lambda: False),
         ]
         for p in patches:
             p.start()
