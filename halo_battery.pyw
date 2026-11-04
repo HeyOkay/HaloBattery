@@ -545,6 +545,35 @@ def refresh_autostart() -> bool:
         return False
 
 
+# Written by the installer (installer/HaloBattery.iss, AppId + "_is1").
+UNINSTALL_KEY = (r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+                 r"\{1E3A3904-9F39-4150-82EA-25D23968E2D6}_is1")
+
+
+def sync_installed_version(app_dir: str = BASE_DIR, version: str = VERSION) -> bool:
+    """After an in-app update, show the new version in Settings > Apps. Only when this
+    copy is the one the installer put there; a portable copy leaves the entry alone."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False) or PRETEND_VERSION:
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY, 0,
+                            winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as k:
+            where, _ = winreg.QueryValueEx(k, "InstallLocation")
+            if os.path.normcase(os.path.abspath(str(where))) != os.path.normcase(os.path.abspath(app_dir)):
+                return False
+            try:
+                shown, _ = winreg.QueryValueEx(k, "DisplayVersion")
+            except OSError:
+                shown = ""
+            if shown == version:
+                return False
+            winreg.SetValueEx(k, "DisplayVersion", 0, winreg.REG_SZ, version)
+            return True
+    except OSError:
+        return False                         # not installed by setup
+
+
 def single_instance() -> bool:
     if sys.platform != "win32":
         return True
@@ -2591,6 +2620,8 @@ def main():
         log.info("autostart entry migrated from %s", LEGACY_NAME)
     elif refresh_autostart():
         log.info("autostart entry now points at %s", sys.executable)
+    if sync_installed_version():
+        log.info("uninstall entry now shows v%s", VERSION)
     App().run()
 
 

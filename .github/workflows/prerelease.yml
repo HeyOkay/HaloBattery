@@ -1,8 +1,8 @@
 name: Pre-release build
 
 # Every push to pre-release (each merged pull request) builds Halo Battery and
-# replaces the single rolling GitHub release "prerelease-build" with the new zip,
-# so testers always download the latest integration build from one place.
+# replaces the single rolling GitHub release "prerelease-build" with the new zip
+# and installer, so testers always download the latest integration build from one place.
 # It is marked as a pre-release: the app's updater only reads /releases/latest,
 # which never returns pre-releases, so normal users are not offered it.
 
@@ -48,7 +48,7 @@ jobs:
           python tools/make_version.py version_info.txt
           python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports halo_battery.pyw
 
-      - name: Zip and write notes
+      - name: Zip, installer and notes
         shell: pwsh
         run: |
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
@@ -57,6 +57,11 @@ jobs:
           $zip = "HaloBattery-$ver-pre-$sha.zip"
           Compress-Archive -Path dist/HaloBattery -DestinationPath $zip
           "ZIP=$zip" >> $env:GITHUB_ENV
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          & $iscc /Q "/DAppVersion=$ver" "/FHaloBattery-$ver-pre-$sha-setup" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "SETUP=dist/HaloBattery-$ver-pre-$sha-setup.exe" >> $env:GITHUB_ENV
           "SHORT=$sha" >> $env:GITHUB_ENV
           @"
           **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. It is rebuilt on every merge.
@@ -73,5 +78,5 @@ jobs:
         run: |
           gh release delete "$TAG" --cleanup-tag --yes || true
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
-          gh release create "$TAG" "$ZIP" --prerelease --target "$GITHUB_SHA" \
+          gh release create "$TAG" "$ZIP" "$SETUP" --prerelease --target "$GITHUB_SHA" \
             --title "Pre-release build ($SHORT)" --notes-file notes.md

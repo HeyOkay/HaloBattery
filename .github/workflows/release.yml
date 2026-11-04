@@ -2,8 +2,10 @@ name: Build and release
 
 # Push a tag like v1.8.0 and GitHub builds Halo Battery on a Windows runner and
 # attaches HaloBattery-<version>.zip (a HaloBattery folder with HaloBattery.exe
-# and its libraries) to the release for that tag (the release is created if it
-# does not exist yet). The release text is the matching section of CHANGELOG.md.
+# and its libraries, also what the in-app updater downloads) and
+# HaloBattery-<version>-setup.exe (installer/HaloBattery.iss) to the release for
+# that tag (the release is created if it does not exist yet). The release text
+# is the matching section of CHANGELOG.md.
 # "Run workflow" on the Actions tab builds it without releasing; download it
 # from the run's artifacts.
 #
@@ -68,6 +70,19 @@ jobs:
           "zip=$zip" >> $env:GITHUB_OUTPUT
           Write-Host "Built $zip"
 
+      - name: Build the installer
+        # Inno Setup turns dist/HaloBattery into HaloBattery-<version>-setup.exe (installer/HaloBattery.iss)
+        id: setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "setup=dist/HaloBattery-$ver-setup.exe" >> $env:GITHUB_OUTPUT
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -83,6 +98,8 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ steps.zip.outputs.zip }}
+          files: |
+            ${{ steps.zip.outputs.zip }}
+            ${{ steps.setup.outputs.setup }}
           fail_on_unmatched_files: true
           body_path: release_notes.md

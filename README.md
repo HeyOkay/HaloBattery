@@ -35,9 +35,9 @@ The [pre-release build](https://github.com/ahmedkhursheed23/HaloBattery/releases
 
 ## Install
 
-1. Download `HaloBattery-<version>.zip` from the **[latest release](../../releases/latest)**.
-2. Extract it to a folder of its own, e.g. `C:\Tools`, and run `HaloBattery\HaloBattery.exe`. Keep the folder together: the .exe needs the `_internal` folder next to it.
-3. Right-click a tray icon → **Start with Windows**.
+**Installer (recommended):** download `HaloBattery-<version>-setup.exe` from the **[latest release](../../releases/latest)** and run it. No admin rights needed: it installs for your user only, adds a Start menu entry and can start the app with Windows. Remove it from **Settings → Apps**.
+
+**Portable zip:** download `HaloBattery-<version>.zip`, extract it to a folder of its own, e.g. `C:\Tools`, and run `HaloBattery\HaloBattery.exe`. Keep the folder together: the .exe needs the `_internal` folder next to it. Right-click a tray icon → **Start with Windows**.
 
 Windows SmartScreen may warn about an unrecognized app, because the file is not code-signed: **More info → Run anyway**. The release is built by GitHub Actions straight from this repository, with public build logs.
 
