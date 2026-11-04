@@ -25,6 +25,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
   The register is answered on the `ff43:0202` collection, not the consumer one, so both are
   tried. Confirmed on hardware by @ti-henrq: `4069 mV -> 85 %` and the icon appears.
+- **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro; `3554:f523`:
+  Teevolution Terra Pro), **Corsair Sabre v2 Pro Ultralight** (`1b1c:2b2a`),
+  **ATK X1 Pro**
+  (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
+  Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
+  the same 17-byte power query; the keyboard keeps a keyboard pictogram. The ATK X1 Pro is
+  confirmed on hardware in [#230](https://github.com/HeyOkay/HaloBattery/issues/230) (level
+  within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
+  8K are unverified, with a test build out for
+  [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
 
 ## [1.16.0] - 2026-11-04
 
