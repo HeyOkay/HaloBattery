@@ -18,6 +18,10 @@ Halo Battery reads each device the way its maker's software does. These projects
   @Squl032, @kevin9327; interface translations by @TiagoFerreiraDomingues (Teeti), @AdrianH23,
   @miguotw and @KosmoSakura. Further protocol sources are named in the provider modules
   (voiddog30 for Finalmouse, jabridge for Jabra, OpenLinkHub for the Corsair K65 PLUS).
+- DJI Mic Mini / Mic Mini 2 receiver protocol: @ShadowBitBasher ([ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control), PROTOCOL.md, Unlicense).
 - The reference implementations behind individual devices - HeadsetControl, rivalcfg, Solaar, G-Helper, HyperHeadset, mouse.xyz, [`@openmouse/protocol`](https://github.com/OpenMouse-Project/openmouse), keychron-battery-dkms, JBL_Baterry_Monitor and others - are credited next to the device they were used for in [docs/protocols.md](protocols.md).
 
 The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #1280](https://github.com/openrazer/openrazer/issues/1280) and [Modzeleczek/RazerNariBatteryLevel](https://github.com/Modzeleczek/RazerNariBatteryLevel).
+
+- XM2we receiver protocol: [okms/xm2we-linux](https://github.com/okms/xm2we-linux)
+  (MIT), its protocol documentation and battery/link status queries.

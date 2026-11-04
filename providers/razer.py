@@ -37,6 +37,7 @@ RAZER_VID = 0x1532
 # copy of that OpenRazer list and checks this table against it.
 KNOWN = {
     0x0528: ("Razer BlackShark V2 Pro (2020)", 0x3F),
+    0x0536: ("Razer Barracuda X (2022)", 0x1F),
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
@@ -107,6 +108,8 @@ KNOWN = {
     0x00C1: ("Razer Viper V3 Pro", 0x1F),
     0x00DE: ("Razer Viper V3 Pro SE", 0x1F),
     0x00DF: ("Razer Viper V3 Pro SE", 0x1F),
+    0x00E5: ("Razer Viper V4 Pro", 0x1F),
+    0x00E6: ("Razer Viper V4 Pro", 0x1F),
     0x00C2: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C3: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C4: ("Razer DeathAdder V3 HyperSpeed", 0x1F),
@@ -386,6 +389,12 @@ class RazerProvider(Provider):
                 continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
+                continue
+            if pid == 0x0552:
+                # The Barracuda X (2022) dongle speaks Airoha RACE, not PA: its vendor
+                # collection refuses the PA writes outright ("Incorrect function", #287),
+                # so providers/barracuda_x.py reads it.
+                self._diag.append("  skipped: read by the barracuda_x provider (Airoha RACE)")
                 continue
             if pid == 0x053A:
                 # The Barracuda Pro's receiver does not answer the mouse request this

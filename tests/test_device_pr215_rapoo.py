@@ -187,6 +187,14 @@ class PollTest(unittest.TestCase):
         self.assertEqual((s.key, s.name, s.level, s.charging, s.online, s.source, s.kind),
                          ("rapoo:1413", "Rapoo VT7 (Gen-2)", 100, False, True, "rapoo", "mouse"))
 
+    def test_the_vt9_pro_v2_is_read_on_the_same_exchange(self):
+        # #235: 24ae:14a9 'Rapoo Gaming Device' publishes ff00:000e, the collection the
+        # VT7's report-7 frame is read on
+        entries = receiver_entries(pid=0x14A9, prefix=b"vt9")
+        out = self.poll(entries, first_vendor(entries))
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("rapoo:14a9", "Rapoo VT9 Pro V2", 100, "mouse")])
+
     def test_the_keyboard_is_read_listen_only(self):
         # the keyboard answers with its own 0xBD frame, not report 7
         entries = keyboard_entries()

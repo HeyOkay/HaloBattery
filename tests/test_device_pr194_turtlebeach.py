@@ -169,6 +169,52 @@ class TurtleBeachTests(unittest.TestCase):
         self.p.poll()
         self.assertEqual(self.transmitter.written[:2], [CAPTURE_SINF, CAPTURE_GSI])
 
+    def test_the_atlas_air_is_read_through_the_swarm_asks_first(self):
+        # #310: the Atlas Air is on the family's ff13:0001 collection, but which of the
+        # two exchanges it speaks is unknown, so the asks go first - they send no
+        # enable frame - and the capture's own frames answer them here
+        self.infos = ifaces(pid=0x225E, product="Atlas Air")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:atlasair", "Turtle Beach Atlas Air", 86)])
+
+    def test_the_stealth_600x_gen_3_is_read_and_keeps_its_own_key(self):
+        # #239: same ff13:0001 collection as the rest of the family, exchange unknown,
+        # so the asks go first and the model gets its own icon key
+        self.infos = ifaces(pid=0x2232, product="Stealth 600X Gen 3")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealth600x", "Turtle Beach Stealth 600X Gen 3", 86)])
+
+    def test_the_coap_tunnel_is_tried_when_the_asks_stay_silent(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (60, "Atlas Air", False))[1]
+        self.assertEqual(self.p._read_status(b"x", 0x225E), (60, "Atlas Air", False))
+        self.assertEqual(calls, ["sinf", "coap"])
+        self.assertTrue(any("CoAP tunnel" in line for line in self.p.diagnostics()))
+
+    def test_the_tunnel_is_not_tried_when_the_asks_answer(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (86, "x", False))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (1, "y", False))[1]
+        self.assertEqual(self.p._read_status(b"x", 0x225E), (86, "x", False))
+        self.assertEqual(calls, ["sinf"])
+
+    def test_only_unknown_models_get_the_second_exchange(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (1, "y", False))[1]
+        # the Pro II id has one known exchange: no tunnel attempt
+        self.p._read_status(b"x", 0x229B)
+        self.assertEqual(calls, ["sinf"])
+        self.assertEqual(turtlebeach.KNOWN[0x225E], "Turtle Beach Atlas Air")
+        self.assertIn(0x225E, turtlebeach.DUAL_PIDS)
+        self.assertEqual(turtlebeach.KNOWN[0x2232], "Turtle Beach Stealth 600X Gen 3")
+        self.assertIn(0x2232, turtlebeach.DUAL_PIDS)
+
     def test_the_fresh_token_is_tried_when_the_captured_one_gets_nothing(self):
         # only the third write is answered: the captured token got idle frames
         self.transmitter.queues = {(1, 3): GSI_REPLY}

@@ -366,7 +366,8 @@ class PresentationTests(unittest.TestCase):
                     self.assertEqual(set(labels), set(hb.PROVIDER_LABELS.values()))
         owner = types.SimpleNamespace(status=dev())
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
-        self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Casque", "Manette", "Bluetooth"])
+        self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Casque",
+                                  "Manette", "Bluetooth"])
 
     def test_immediate_switch_all_icons_placeholder_and_both_directions(self):
         app = self.app

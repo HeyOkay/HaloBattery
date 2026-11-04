@@ -201,6 +201,33 @@ class PollTest(unittest.TestCase):
         self.assertEqual(list(A.make_request())[:2], [0x00, 0x10])   # report id + the app's read
         self.assertEqual(len(A.make_request()), A.REPORT_SIZE + 1)
 
+    def alt(self, index, product, reply_frame=CAPTURED75):
+        vid, pid, name = A.ALT_TARGETS[index]
+        entries = [{"path": b"alt-vendor", "interface_number": 2,
+                    "usage_page": 0xFFFF, "usage": 0x0002,
+                    "product_id": pid, "product_string": product}]
+        cols = {b"alt-vendor": FakeCollection((reply_frame,))}
+        A.hid = types.SimpleNamespace(device=fake_device_class(cols, self.order))
+        A.hidlist = types.SimpleNamespace(
+            enumerate=lambda v=0: entries if v == vid else [])
+        A.output_length = lambda path: None
+        return A.AjazzProvider().poll()
+
+    def test_the_aj159_pros_8k_receiver_is_read(self):
+        # #289: 3151:402d 'AJAZZ 2.4G 8K' - the vendor channel sits on usage page
+        # FFFF instead of the AJ179's unlabelled mi_02; the AJ179 notes say the
+        # AJ159 family speaks the same CompX protocol, so the same read is sent
+        out = self.alt(0, "AJAZZ 2.4G 8K")
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("ajazz:402d", "AJAZZ AJ159 PRO", 75, "mouse")])
+
+    def test_the_kysona_uranus_is_read_on_the_same_family(self):
+        # #251: 3151:5031 '2.4G Wireless Mouse' publishes the same ffff:0001/0002
+        # collections as the AJ159's receiver
+        out = self.alt(1, "2.4G Wireless Mouse")
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("ajazz:5031", "Kysona Uranus", 75, "mouse")])
+
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()
         cols = self.cols(entries)

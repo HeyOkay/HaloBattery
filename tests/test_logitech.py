@@ -29,8 +29,12 @@ class FakeHidpp:
     """
 
     def __init__(self, features=None, name=None, error=None, silent=False, registers=None,
-                 register_error_form=0x8F, register_noise=None):
+                 register_error_form=0x8F, register_noise=None, headset_registers=None,
+                 headset_only=False):
         self.features = features or {}
+        # a long-only HID++ 1.0 headset: 11 <idx> 05 <reg> in, 10 <idx> 05 <reg> ... out
+        self.headset_registers = headset_registers
+        self.headset_only = headset_only
         self.name = name
         self.error = error
         self.silent = silent
@@ -109,6 +113,18 @@ class FakeBus:
         owner = next((lp for lp, sp in self.short_of.items() if sp == path), path)
         if owner not in self.slots:
             return
+        if len(data) >= 4 and data[2] == 0x05:      # possibly a headset register read
+            dev0 = self.slots.get(owner, {}).get(data[1])
+            if dev0 is not None and dev0.headset_only:
+                if dev0.silent:
+                    return
+                regs = dev0.headset_registers or {}
+                if regs.get(data[3]) is None:       # stays unanswered
+                    return
+                self.queues.setdefault(owner, []).append(
+                    [0x10, data[1], 0x05, data[3]] + list(regs[data[3]]))
+                return
+            # otherwise 0x05 is a feature index: fall through to the 2.0 path
         if len(data) >= 4 and data[2] == 0x81:      # a HID++ 1.0 register read
             idx, reg = data[1], data[3]
             dev = self.slots[owner].get(idx)
@@ -466,6 +482,32 @@ class HeadsetTests(LogitechTestCase):
         p = L.LogitechProvider()
         self.assertEqual(p.poll(), [])
         self.assertTrue(any("inactive" in line for line in p.diagnostics()))
+
+    def g535(self, reply=None, silent=False):
+        dev = FakeHidpp(headset_only=True, silent=silent,
+                        headset_registers={0x0D: reply} if reply else None)
+        bus = self.use([entry(0x0AC4, 0x000C, 0x0001, b"hs")], {b"hs": ({0xFF: dev}, None)})
+        return bus, L.LogitechProvider()
+
+    def test_g535_long_only_reads_its_charge_register(self):
+        """The G535 on its dongle has one long collection, no ff00 pair and no feature
+        table: it answers the old charge register, 11 ff 05 0d (HeadsetControl)."""
+        bus, p = self.g535([0x0F, 0x4C, 0x03])       # 3916 mV, charging
+        [st] = p.poll()
+        self.assertEqual((st.name, st.level, st.charging, st.kind),
+                         ("Logitech G535", 64, True, "headset"))
+        self.assertEqual(bus.writes[0][1][:4], [0x11, 0xFF, 0x05, 0x0D])
+        self.assertEqual(len(bus.writes), 1)
+
+    def test_g535_discharging_level(self):
+        bus, p = self.g535([0x0E, 0xE9, 0x01])       # 3817 mV, on battery
+        [st] = p.poll()
+        self.assertEqual((st.level, st.charging), (50, False))
+
+    def test_g535_off_shows_nothing(self):
+        bus, p = self.g535(silent=True)
+        self.assertEqual(p.poll(), [])
+        self.assertTrue(any("asleep" in line for line in p.diagnostics()))
 
     def test_g535_uses_consumer_collection(self):
         [st] = self.headset(0x0AC4, [0x0E, 0xA0, 0x01], page=0x000C, usage=0x0001).poll()

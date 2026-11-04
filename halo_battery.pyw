@@ -139,7 +139,8 @@ from halo import flyout, history, icons, updates, whatsnew, winevents  # noqa: E
 from halo import i18n  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BluetoothProvider, CorsairProvider, DeviceStatus,
+                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
+                       DeviceStatus, DjiProvider,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
@@ -147,11 +148,10 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        LogitechCenturionProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
-                       WLmouseProvider, XInputProvider, SteamProvider,
+                       WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider,
-                       MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider)
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -190,8 +190,10 @@ DEFAULTS = {
 # Preferences > Device types: provider name -> what the user sees. Windows Bluetooth
 # devices keep their own switch ("bluetooth" above), as before.
 PROVIDER_LABELS = {
+    "endgame_we": "Endgame Gear XM2we",
     "8bitdo": "8BitDo controllers",
     "ajazz": "AJAZZ mice",
+    "alienware": "Alienware Pro Wireless keyboard",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
     "astro": "Astro A50",
     "asus": "ASUS ROG / TUF mice, keyboards and headsets",
@@ -200,10 +202,13 @@ PROVIDER_LABELS = {
     "audeze": "Audeze Maxwell",
     "aula": "AULA F87 Pro V2C keyboards",
     "barracuda": "Razer Barracuda Pro",
+    "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
+    "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "finalmouse": "Finalmouse UltralightX",
+    "glorious": "Glorious Model O Wireless",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
@@ -211,11 +216,14 @@ PROVIDER_LABELS = {
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
+    "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
+    "irocks": "iRocks M31R",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
+    "lamzu_sw": "Lamzu Tachi (8K receiver)",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
@@ -225,6 +233,8 @@ PROVIDER_LABELS = {
     "monsgeek": "MonsGeek keyboards",
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
+    "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
+    "plantronics": "Plantronics headsets (BT600 adapter)",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
@@ -247,16 +257,17 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
-            PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), NintendoProvider(),
+            PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider(),
+            SteamProvider(), EndgameWEProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider()]
+            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -742,10 +753,17 @@ def tray_icon(key: str, *args, **kwargs):
 
 
 # ------------------------------------------------------------ formatting
+# a device that reports its own kind wins; otherwise the name decides. " mic" catches
+# "DJI Mic Mini 2 TX1" without dragging in names that merely contain the letters.
+MIC_WORDS = ("microphone", " mic", "mic ")
+
+
 def badge_for(st: DeviceStatus) -> str:
-    if st.kind in ("headset", "mouse", "gamepad", "keyboard"):   # reported by the device itself
+    if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone"):   # from the device
         return st.kind
     n = st.name.lower()
+    if any(w in n for w in MIC_WORDS):
+        return "microphone"
     if any(w in n for w in HEADSET_WORDS):
         return "headset"
     if st.source == "playstation":
@@ -759,6 +777,7 @@ def badge_for(st: DeviceStatus) -> str:
 
 # the pictograms a user can pick for one device ("Icon" in its menu); "" = automatic
 PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboard"),
+                     ("microphone", "Microphone"),
                      ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")

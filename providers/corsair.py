@@ -235,6 +235,7 @@ def make_software_mode(endpoint: int) -> List[int]:
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
     0x2B07: "Corsair K65 PLUS Wireless",
+    0x1BDC: "Corsair M75 Wireless",
     0x0A40: "Corsair Virtuoso RGB Wireless SE",
     0x0A3E: "Corsair Virtuoso RGB Wireless SE",
     0x0A3D: "Corsair Virtuoso RGB Wireless SE",
@@ -243,11 +244,12 @@ BRAGI_PIDS = {
 }
 # the pictogram each family member draws: the Dark Core is a mouse, the K65 PLUS a
 # keyboard; the Virtuoso ids are headsets
-BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard"}
+BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard", 0x1BDC: "mouse"}
 # one icon per product: a headset's receiver and cable ids share the key
 BRAGI_KEYS = {
     0x1B7F: "corsair:1b7f",
     0x2B07: "corsair:2b07",
+    0x1BDC: "corsair:1bdc",
     0x0A40: "corsair:virtuoso-se",
     0x0A3E: "corsair:virtuoso-se",
     0x0A3D: "corsair:virtuoso-se",
@@ -255,6 +257,20 @@ BRAGI_KEYS = {
     0x0A62: "corsair:virtuoso-xt",
 }
 BRAGI_VENDOR_PAGE = 0xFF42       # the dongle's two vendor collections, from the #56 dump
+
+# --- third family: the older Void headsets (HeadsetControl's "rich" Void, 0x0A55) ---
+# The dongle's battery collection is the vendor page 0xFFC5 on interface 3 (HeadsetControl's
+# RichVoidDevice capability detail). The exchange is short: an output report C9 with the
+# byte 64, and a five-byte input report 64 00 <level> B1 <status>. No session, no framing.
+VOID_VENDOR_PAGE = 0xFFC5
+VOID_USAGE = 0x0001
+VOID_REPORT_ID = 0xC9
+VOID_ASK = 0x64                  # the byte after the report id
+VOID_REPLY_ID = 0x64             # the input report the answer arrives in
+VOID_MARKER = 0xB1               # byte 3 of a battery reply
+VOID_STATUS_OFF = 0              # the receiver has no headset on it
+VOID_CHARGING = (4, 5)           # 1 normal, 2 low, 4/5 charging (HeadsetControl)
+VOID_PIDS = {0x0A55: "Corsair Void Elite Wireless"}
 BRAGI_USAGE = 0x0001             # the one that answers; 0x0002 is its notice channel
 BRAGI_MSG_SIZE = 64              # ckb-next: MSG_SIZE (structures.h)
 BRAGI_ROUTE_DONGLE = 0x08        # the receiver itself
@@ -344,6 +360,31 @@ def parse_bragi(reply) -> Optional[int]:
     if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
         return None
     return value // 10
+
+
+def void_request() -> List[int]:
+    """The battery ask: an output report 0xC9 whose first byte is 0x64."""
+    return [VOID_REPORT_ID, VOID_ASK]
+
+
+def parse_void(reply) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from a Void battery reply, or None.
+
+    The reply is 64 00 <level|mic flag> B1 <status>. A status of 0 means the receiver
+    has no headset on it; 1 and 2 are on-battery (normal and low), 4 and 5 charging.
+    Bit 7 of the level byte is the microphone-lifted flag, not part of the level.
+    """
+    if not reply or len(reply) < 5:
+        return None
+    if reply[0] != VOID_REPLY_ID or reply[3] != VOID_MARKER:
+        return None
+    status = reply[4]
+    if status == VOID_STATUS_OFF:
+        return None
+    level = reply[2] & 0x7F
+    if not 0 <= level <= 100:
+        return None
+    return level, status in VOID_CHARGING
 
 
 def parse_bragi_charge(reply) -> Optional[bool]:
@@ -806,6 +847,44 @@ class CorsairProvider(Provider):
             except Exception:
                 pass
 
+    def _query_void(self, path: bytes) -> Optional[Tuple[int, bool]]:
+        """The older Void exchange: write C9 64, read 64 00 <level> B1 <status>."""
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  open: {e}")
+            return None
+        try:
+            # HeadsetControl writes the two bytes as they are; on Windows a short write
+            # is refused when the descriptor's output report is longer, so the padded
+            # form is tried after it. Both carry the same command.
+            for form in (void_request(), void_request() + [0] * (MSG_SIZE_WRITE - 2)):
+                try:
+                    n = dev.write(form)
+                except (OSError, IOError, ValueError) as e:
+                    self._diag.append(f"  write ({len(form)} bytes): {e}")
+                    continue
+                self._diag.append(f"  [w] ({len(form)} bytes) -> {n}")
+                for _ in range(ATTEMPTS):
+                    r = dev.read(MSG_SIZE_READ, READ_TIMEOUT_MS)
+                    if not r:
+                        break
+                    self._diag.append(f"  reply: {hexdump(r, 6)}")
+                    got = parse_void(r)
+                    if got is not None:
+                        return got
+            self._diag.append("  no battery answer")
+            return None
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"  query error: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         try:
@@ -869,6 +948,26 @@ class CorsairProvider(Provider):
         for key, (level, charging, name, kind) in found.items():
             out.append(DeviceStatus(key, name, level, charging, True, "corsair",
                                     kind=kind))
+        for pid, name in VOID_PIDS.items():
+            mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
+            if not mine:
+                continue
+            vend = [d for d in mine if d.get("usage_page") == VOID_VENDOR_PAGE]
+            self._diag.append(f"[Corsair void] pid={pid:04x} '{name}'"
+                              + ("" if vend else f" (no {VOID_VENDOR_PAGE:04x} collection)"))
+            for d in sorted(vend or mine,
+                            key=lambda x: (0 if x.get("usage") == VOID_USAGE else 1,
+                                           x.get("interface_number") or 0)):
+                self._diag.append(f"  iface={d.get('interface_number')} "
+                                  f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                seen.add(d["path"])
+                got = self._query_void(d["path"])
+                if got is None:
+                    continue
+                level, charging = got
+                out.append(DeviceStatus(f"corsair:void:{pid:04x}", name, level,
+                                        charging, True, "corsair", kind="headset"))
+                break
         return out
 
     def diagnostics(self) -> List[str]:

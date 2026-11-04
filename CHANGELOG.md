@@ -8,6 +8,106 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
+- **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
+- **Rapoo VT9 Pro V2** (`24ae:14a9`) - the receiver publishes the same `ff00:000e`
+  vendor collection the VT7 is read on, so it joins that table entry. Unverified on
+  hardware; a test build is out for [#235](https://github.com/HeyOkay/HaloBattery/issues/235).
+- **Corsair M75 Wireless** (`1b1c:1bdc`, the Slipstream receiver) - it publishes the
+  bragi vendor collections (`ff42:0001`/`0002`), so it is read with the Dark Core's
+  framed get-property exchange. Confirmed on hardware by @SpaceJesusCosmic in
+  [#301](https://github.com/HeyOkay/HaloBattery/issues/301).
+- **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Confirmed on the receiver by @TweaknFreak (#323): the percentage agreed with the vendor tool. The cable id is claimed from the report; charging over the cable is not yet reported back.
+- **Logitech G535**: its dongle is long-only and has no HID++ 2.0 feature table, so the
+  provider's 2.0 ping never got an answer and the headset was shown as asleep. It is now
+  read through its 1.0 charge register (`11 FF 05 0D`) before the ping, with
+  HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
+  The register is answered on the `ff43:0202` collection, not the consumer one, so both are
+  tried. Confirmed on hardware by @ti-henrq: `4069 mV -> 85 %` and the icon appears.
+- **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro; `3554:f523`:
+  Teevolution Terra Pro), **Corsair Sabre v2 Pro Ultralight** (`1b1c:2b2a`),
+  **ATK X1 Pro**
+  (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
+  Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
+  the same 17-byte power query; the keyboard keeps a keyboard pictogram. The ATK X1 Pro is
+  confirmed on hardware in [#230](https://github.com/HeyOkay/HaloBattery/issues/230) (level
+  within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
+  8K are unverified, with a test build out for
+  [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
+- **Logitech PRO X 3 LIGHTSPEED** (`046D:0B45`) - read over its receiver with the PRO X 2's Centurion path. Its diagnostic report shows the same collections on the same interface, but no PRO X 3 has been tested yet (**unverified**, [#343](https://github.com/HeyOkay/HaloBattery/issues/343)).
+- **Keychron Nape Pro** (`3434:d026`, the Link-KM receiver) - the same `b3 06` exchange as the
+  Ultra-Link 8K / M5, with its vendor collection on interface 1 (`ffc1:0001`) instead of 4, so
+  the provider now picks the vendor page wherever it is. Unverified on hardware; a test build
+  is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
+- Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
+  (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
+- **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
+- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. Unverified on hardware; a test build is out for [#328](https://github.com/HeyOkay/HaloBattery/issues/328).
+- **HyperX Pulsefire Haste 2 Wireless** (`03f0:0d97`, `03f0:0f98`) - NGENUITY's
+  universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
+  and charge status (plus voltage and temperature in the diagnostics). Unverified on
+  hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
+  different transport: the request is a feature report on `ff02:0002`, the reply an
+  input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because
+  it answers a power query from cache while the mouse sleeps. Confirmed on hardware by
+  @jimchen5209 in [#309](https://github.com/HeyOkay/HaloBattery/issues/309): level matches
+  the vendor app, charging follows the cable, the sleeping receiver greys out and returns,
+  and with receiver + cable the wired mouse shows while the wireless one is greyed.
+- **Alienware Pro Wireless Gaming Keyboard** (`413c:211d`, 2.4 GHz receiver) - the level Command Center
+  reads from the receiver's `ff00:0001` collection (feature report `0e a1`, answer
+  `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
+  report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
+  ignored the writes and the keyboard sat at "no link". The charging capture also settles the
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
+  hardware until the second test build is run;
+  see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
+- **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
+  read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
+  per transmitter. It needs WinUSB bound to that interface with
+  [Zadig](https://zadig.akeo.ie); without it the provider stays silent and says so in the
+  diagnostics, and no other device is affected. Protocol from
+  [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control)
+  (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
+  dependencies, and the release workflow bundles libusb.
+- **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+- **Turtle Beach Atlas Air** (`10f5:225e`) and **Stealth 600X Gen 3** (`10f5:2232`) - the
+  family's `ff13:0001` collection, read with the Swarm II SInf/GSI asks first (they send
+  no enable frame) and the CoAP tunnel after them, since which of the two each model
+  speaks is not known yet. Unverified on hardware; test builds are out for
+  [#310](https://github.com/HeyOkay/HaloBattery/issues/310) and
+  [#239](https://github.com/HeyOkay/HaloBattery/issues/239).
+- **Sony INZONE H9 II** (`054c:0fa8`) - the same serial-port exchange the H9 uses,
+  keyed on its own id so the two models do not merge. Unverified on hardware; a test
+  build is out for [#294](https://github.com/HeyOkay/HaloBattery/issues/294).
+- **AJAZZ AJ159 PRO** (`3151:402d`, the 8K receiver) - the same CompX read as the
+  AJ179 on a newer receiver whose vendor channel is `ffff:0002`. Unverified on
+  hardware; a test build is out for [#289](https://github.com/HeyOkay/HaloBattery/issues/289).
+- **Kysona Uranus** (`3151:5031`) - the same `3151` receiver family layout as the AJ159
+  (`ffff:0001`/`0002`, no `ff02:0002`), read with the same frames. Unverified on
+  hardware; a test build is out for [#251](https://github.com/HeyOkay/HaloBattery/issues/251).
+- **Lamzu Tachi** (`37b0:000c`, the 8K receiver) - its collections match the Glorious
+  Model O's (`ffa0:0001`, `ffff:0001/0000`), so the same Sinowealth query is tried; that is
+  the only evidence so far. Unverified on hardware; a test build is out for
+  [#262](https://github.com/HeyOkay/HaloBattery/issues/262).
+- **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
+  receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
+  at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. **Level
+  confirmed on hardware by @gumocska** (#281): the percentage matched Glorious Core. While
+  the mouse charges over USB it leaves the 2.4 GHz link, so the wired id (`258a:2011`) now
+  tells the app it is on the cable and the icon shows charging with the last level; a wall
+  adapter gives no signal, because the mouse is not talking to the receiver.
+- **Razer Barracuda X (2022)** (`1532:0552`, 2.4 GHz dongle) - the dongle bridges to an
+  Airoha chip and speaks RACE (`50 41`), not the Razer PA protocol the other Barracudas use;
+  the PA writes were refused with "Incorrect function". Level comes from the headset's
+  battery voltage through remote mode + `GET_BATTERY` (group 0x06), converted on a Li-ion
+  curve, with charging inferred from the voltage spread between samples. Mirrored from
+  mehdibouchami/razer-barracuda-x-battery. **Confirmed on hardware** in the test-build run:
+  `3822 mV -> 38 %`, samples within 9 mV, reported as not charging; the charging inference
+  still needs a run with the cable in.
+
+- **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
+  collection the PA headset path reads, and the id was simply not routed there. Unverified
+  on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
 
 ## [1.16.0] - 2026-11-04
 

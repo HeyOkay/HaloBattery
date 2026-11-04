@@ -138,14 +138,23 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro / R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
+        0xF505: "VGN Dragonfly 4K (receiver)",
+        0xF506: "VGN Dragonfly 4K (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",
+        0xFA09: "Compx 2.4 GHz keyboard",
+        0xF523: "Teevolution Terra Pro (2.4 GHz)",
+    },
+    0x1B1C: {
+        0x2B2A: "Corsair Sabre v2 Pro Ultralight",
     },
     0x373B: {
         0x11B6: "ATK A9 Ultimate (wired)",
         0x11D9: "ATK A9 Ultimate (2.4 GHz dongle)",
         0x10C9: "ATK A9 SE (2.4 GHz)",
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
+        0x101A: "ATK X1 Pro (2.4 GHz)",
+        0x101B: "ATK Fire X 8K (2.4 GHz dongle)",
     },
     0x3770: {
         0x0300: "Hitscan Hyperlight (8K receiver)",
@@ -163,6 +172,12 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x3854: "G-Wolves mouse (8K receiver)",
     },
 }
+
+# ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
+# and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
+KINDS: Dict[Tuple[int, int], str] = {(0x3554, 0xFA09): "keyboard",
+                                     (0x3554, 0xF523): "keyboard",
+                                     (0x1B1C, 0x2B2A): "mouse"}
 
 
 def make_sonix_request() -> List[int]:
@@ -193,8 +208,8 @@ class PulsarProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        # key -> (name, level, charging, when it was last read)
-        self._last: Dict[str, Tuple[str, int, bool, float]] = {}
+        # key -> (name, level, charging, when it was last read, pictogram)
+        self._last: Dict[str, Tuple[str, int, bool, float, str]] = {}
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         """The collection to open.
@@ -369,10 +384,11 @@ class PulsarProvider(Provider):
                 mv = voltage_mv(reply)
                 if mv:
                     self._diag.append(f"  {mv} mV")
-                self._last[key] = (name, level, on_cable, now)
+                kind = KINDS.get((vid, pid), "mouse")
+                self._last[key] = (name, level, on_cable, now, kind)
                 found.add(key)
                 out.append(DeviceStatus(key, name, level, on_cable, True, "pulsar",
-                                        kind="mouse"))
+                                        kind=kind))
         # A mouse that stopped answering is not necessarily a mouse that went away
         # (idle it stops answering - see the docstring), so its last reading stays
         # greyed out for as long as its receiver is still in the USB tree, however
@@ -380,7 +396,7 @@ class PulsarProvider(Provider):
         # re-creates a removed icon at a new tray position, which is what the
         # 2026-10-03 screen-off report was about.
         for key in list(self._last):
-            name, level, charging, seen = self._last[key]
+            name, level, charging, seen, kind = self._last[key]
             if key in found:
                 continue
             if key in present:
@@ -388,7 +404,7 @@ class PulsarProvider(Provider):
                                   f"{' (charging)' if charging else ''} greyed "
                                   f"(its receiver is still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
-                                        kind="mouse", wake_on_input=True))
+                                        kind=kind, wake_on_input=True))
             else:
                 del self._last[key]
         return out

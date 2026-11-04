@@ -103,6 +103,15 @@ class PollTest(unittest.TestCase):
         self.assertEqual(self.port.writes, [S.INIT_1, S.INIT_2, S.QUERY])
         self.assertLess(self.clock.now, 1.5)
 
+    def test_the_h9_ii_port_is_read_with_its_own_key(self):
+        # #294: the H9 II's dongle opens the same kind of serial port under 054c:0fa8,
+        # so the same exchange is tried and the model gets its own icon
+        S.list_ports = types.SimpleNamespace(comports=lambda: [
+            types.SimpleNamespace(vid=S.VID, pid=0x0FA8, device="COM9")])
+        result = S.SonyInzoneProvider().poll()
+        self.assertEqual([(r.key, r.name, r.level) for r in result],
+                         [("sony_inzone_h9ii", "Sony INZONE H9 II", 88)])
+
     def test_poll_reports_charging_state(self):
         self.port.answer = frame(88, 1)
         result = S.SonyInzoneProvider().poll()
