@@ -40,6 +40,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Ultra-Link 8K / M5, with its vendor collection on interface 1 (`ffc1:0001`) instead of 4, so
   the provider now picks the vendor page wherever it is. Unverified on hardware; a test build
   is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
+- Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
+  (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
 
 ## [1.16.0] - 2026-11-04
 

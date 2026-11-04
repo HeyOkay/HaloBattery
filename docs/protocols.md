@@ -405,3 +405,25 @@ The provider reads HID++ 2.0 generically from the receiver's `ff00` vendor colle
 The **G535** (0AC4) is long-only: its dongle exposes just the consumer collection `000C:0001`, with no `ff00` pair, so there is no feature table to ask. Its charge register is read with a *long* report instead - `11 FF 05 0D` is answered by `10 FF 05 0D <mV hi> <mV lo> <state>` (state `01` discharging, `03` charging) - and the voltage is mapped through HeadsetControl's G535 curve. It is read *before* the HID++ 2.0 ping, because a 1.0 headset does not answer one and otherwise looks asleep. The register is answered on the `ff43:0202` collection; the consumer collection is silent, so both are tried (#339). **Confirmed on hardware** by @ti-henrq: `register 0d: 4069 mV -> 85%`, icon shown.
 
 Devices with no feature table at all (the older HID++ 1.0 generation) are read through the old battery registers instead: a short report `10 <slot> 81 <register>` on the short collection reads register `0x0D` (a percentage with a charging status - `30` discharging, `50` recharging, `90` full) or register `0x07` (a discrete level - 7 full, 5 good, 3 low, 1 critical - beside a charging byte), the same registers and order Solaar uses. This was added for the M710 keyboard of the MK710 wireless desktop ([#159](https://github.com/HeyOkay/HaloBattery/issues/159)), built from Solaar's implementation; **confirmed on hardware** in the reporter's test-build run - the icon shows the keyboard's coarse level.
+
+### Endgame Gear XM2we
+
+Connection: original 2.4 GHz receiver (3367:1961). Windows exposes feature
+report 0x08 on ff02:0002 and input report 0x09 on ff01:0000, confirmed from
+the owner's receiver descriptors. Open both collections on the same receiver.
+
+Source: [okms/xm2we-linux protocol documentation](https://github.com/okms/xm2we-linux/blob/main/PROTOCOL.md),
+Framing and Battery sections, and its `xm2we` query/battery implementation.
+Feature report 0x08 sends a 17-byte checksummed status request; input report 0x09
+returns the same opcode. Command 0x04 returns percentage and a charging flag;
+0x03 returns radio link status. Battery is queried first because charging can
+briefly interrupt the radio link. No configuration commands are sent.
+
+The receiver can return a cached battery level while the mouse is offline; such
+readings are marked offline unless charging. Percentage is a coarse voltage
+estimate. Wired XM2we, OP1we and the newer XM2w family are not enabled by this
+provider. Verified on an XM2we receiver on Windows: 90% matched the official
+tool, charging became true with USB power connected and false after unplugging.
+While charging, link returned 0 but the valid charging flag kept the device online.
+Verification used the provider probe; the complete tray application has not yet
+been tested with this provider.
