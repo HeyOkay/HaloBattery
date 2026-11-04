@@ -87,6 +87,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Kysona Uranus** (`3151:5031`) - the same `3151` receiver family layout as the AJ159
   (`ffff:0001`/`0002`, no `ff02:0002`), read with the same frames. Unverified on
   hardware; a test build is out for [#251](https://github.com/HeyOkay/HaloBattery/issues/251).
+- **Lamzu Tachi** (`37b0:000c`, the 8K receiver) - its collections match the Glorious
+  Model O's (`ffa0:0001`, `ffff:0001/0000`), so the same Sinowealth query is tried; that is
+  the only evidence so far. Unverified on hardware; a test build is out for
+  [#262](https://github.com/HeyOkay/HaloBattery/issues/262).
+- **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
+  receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
+  at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. **Level
+  confirmed on hardware by @gumocska** (#281): the percentage matched Glorious Core. While
+  the mouse charges over USB it leaves the 2.4 GHz link, so the wired id (`258a:2011`) now
+  tells the app it is on the cable and the icon shows charging with the last level; a wall
+  adapter gives no signal, because the mouse is not talking to the receiver.
 
 ## [1.16.0] - 2026-11-04
 

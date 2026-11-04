@@ -304,6 +304,16 @@ Same mice protocol: transaction id 0x1F, command class 0x07, command 0x80 answer
 
 The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. Battery is only read for the models OpenRazer itself reads.
 
+### Glorious Model O Wireless
+
+**Connection:** 2.4 GHz receiver (258A:2022)
+
+Sinowealth's framed battery query, documented and confirmed on hardware by Rodrigo-200/GloriousBatteryMonitor-Go (crediting AwesomeTy18/GloriousBatteryMonitor, glorious-mouse-battery-system-tray, glorious-indicator and OpenRGB's SinowealthGMOWController): a **feature report**, report id 0, of 65 bytes (id + 64) shaped `00 | 00 00 02 02 00 83 | 00 ...` - DevSel `0x02` wireless, CmdType `0x02` battery, Func `0x83` - then a ~100 ms wait for the RF round trip and a GetFeature of the same report. The answer carries `0x83` at byte 6, the charging byte at 7 (0 = no, non-zero = on the charger) and the level at 8; status byte 1 is `A1` awake, `A2` waking, `A4` asleep. The receiver publishes vendor collections on `ffa0` and `ffff`; the one whose feature report is 65 bytes is tried first.
+
+The level is **confirmed in this app on hardware by @gumocska** (#281): the icon appeared and the percentage matched Glorious Core. Charging over a cable is read the way GloriousBatteryMonitor-Go reads it - from the **wired id appearing** (`258a:2011` for the Model O, `DeviceDatabase.cs`), not from the reply: while the mouse charges over USB it leaves the 2.4 GHz link, so the receiver goes quiet and the provider reports the wired id as charging, keeping the last level. Charging from a wall adapter gives no signal at all - the mouse is not talking to the receiver, so there is nothing to read and the icon keeps its last value.
+
+The **Lamzu Tachi** (`37B0:000C`, 8K receiver, #262) publishes the same collection layout (`ffa0:0001`, `ffff:0001/0000`), so the same query is tried on it - that layout is the only evidence, and the test build decides whether the Tachi is another Sinowealth device. **Unverified** on hardware; a test build is with the reporter of #262.
+
 ### SteelSeries Aerox 3 Wireless
 
 **Connection:** 2.4 GHz dongle (1038:1838)
