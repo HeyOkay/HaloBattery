@@ -81,6 +81,7 @@ MESSAGES = {
     "state.charging": "{state}、充電中",
     "state.asleep": "{state}（前回の残量、デバイスはスリープ中）",
     "provider.ajazz": "AJAZZ マウス",
+    "provider.alienware": "Alienware Pro Wireless キーボード",
     "provider.atk_keyboard": "ATK V75X キーボード",
     "provider.atk_nearlink": "ATK X1 Nearlink マウス",
     "provider.aula": "AULA F87 Pro V2C キーボード",

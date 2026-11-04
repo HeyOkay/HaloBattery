@@ -55,6 +55,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   @jimchen5209 in [#309](https://github.com/HeyOkay/HaloBattery/issues/309): level matches
   the vendor app, charging follows the cable, the sleeping receiver greys out and returns,
   and with receiver + cable the wired mouse shows while the wireless one is greyed.
+- **Alienware Pro Wireless Gaming Keyboard** (`413c:211d`, 2.4 GHz receiver) - the level Command Center
+  reads from the receiver's `ff00:0001` collection (feature report `0e a1`, answer
+  `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
+  report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
+  ignored the writes and the keyboard sat at "no link". The charging capture also settles the
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
+  hardware until the second test build is run;
+  see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
 
 ## [1.16.0] - 2026-11-04
 

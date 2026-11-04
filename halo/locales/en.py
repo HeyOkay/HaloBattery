@@ -80,6 +80,7 @@ MESSAGES = {
     "state.charging": "{state}, charging",
     "state.asleep": "{state} (last known value, device asleep)",
     "provider.ajazz": "AJAZZ mice",
+    "provider.alienware": "Alienware Pro Wireless keyboard",
     "provider.atk_keyboard": "ATK V75X keyboard",
     "provider.atk_nearlink": "ATK X1 Nearlink mice",
     "provider.aula": "AULA F87 Pro V2C keyboards",
