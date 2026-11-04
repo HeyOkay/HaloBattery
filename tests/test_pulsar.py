@@ -189,6 +189,22 @@ class PulsarTest(unittest.TestCase):
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
+    def test_the_vgn_dragonfly_4k_receiver_is_read(self):
+        # #323: the receiver is 3554:f505 with six vendor pages on interface 1, the
+        # battery one (ff02:0002) among them; the same mouse on its cable is f506
+        bus = self.one_receiver(vid=0x3554, pid=0xF505, replies=[reply(53, 0, 3980)])
+        [d] = P.PulsarProvider().poll()
+        self.assertEqual(("pulsar:3554f505", "VGN Dragonfly 4K (receiver)", 53),
+                         (d.key, d.name, d.level))
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_vgn_dragonfly_4k_on_its_cable_is_read(self):
+        self.one_receiver(vid=0x3554, pid=0xF506, replies=[reply(53, 1, 4010)])
+        [d] = P.PulsarProvider().poll()
+        self.assertEqual(("pulsar:3554f506", "VGN Dragonfly 4K (wired)", 53),
+                         (d.key, d.name, d.level))
+        self.assertTrue(d.charging)
+
     def test_the_vendor_control_collection_is_the_one_that_gets_the_request(self):
         bus = self.one_receiver(replies=[reply(64)])
         P.PulsarProvider().poll()
