@@ -2,7 +2,9 @@
 
 The fake mouse answers the battery command 12 07 the way G-Helper's AsusMouse.cs
 reads it: the echo, the battery in byte 5 and charging in byte 10 of the report
-(bytes 4 and 9 once hidapi leaves out report id 0).
+(bytes 4 and 9 once hidapi leaves out report id 0). The Harpe II Ace asks the same on
+its receiver's mi_02&col03 with report id 3; keyboards on the OMNI receiver are found in
+its pair list (01 a0) and answer 02 12 01 with the battery in byte 6, charging in byte 9.
 
 Run from the repository root:
 
@@ -21,6 +23,39 @@ from providers import asus as A  # noqa: E402
 def reply(level, charging=0, report_id=False):
     r = [0x12, 0x07, 0x00, 0x00, level, 0x00, 0x00, 0x00, 0x00, charging] + [0] * 54
     return ([0x00] + r) if report_id else r
+
+
+OMNI_PATH = b"\\\\?\\HID#VID_0B05&PID_1ACE&MI_%s#8&1a2b3c4d&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}"
+HARPE_PATH = b"\\\\?\\HID#VID_0B05&PID_1AD0&MI_%s#8&55aa66bb&0&0002#{4d1e55b2-f16f-11cf-88cb-001111000030}"
+
+
+def kb_reply(level, charging=0):
+    return [0x02, 0x12, 0x01, 0, 0, 0, level, 0x03, 0, charging] + [0] * 54
+
+
+def pair_list(*pids):
+    r = [0x01, 0xA0, 0x00, 0x00, 0x00]
+    for pid in pids:
+        r += [pid & 0xFF, pid >> 8, 0x00, 0x00]
+    return r + [0] * (64 - len(r))
+
+
+class Scripted:
+    """A collection that answers a request (matched on its first bytes) with replies."""
+
+    def __init__(self, answers=None):
+        self.answers = answers or {}
+        self.writes, self.queue, self.opened = [], [], 0
+        self.nonblocking = False
+
+    def on_write(self, data):
+        self.writes.append(list(data))
+        for head, replies in self.answers.items():
+            if tuple(data[:len(head)]) == head:
+                self.queue += [list(x) for x in replies]
+
+    def on_read(self):
+        return self.queue.pop(0) if self.queue else []
 
 
 class FakeMouse:
@@ -131,8 +166,35 @@ class ParseTest(unittest.TestCase):
         self.assertIsNone(A.parse_reply([0x12, 0x07, 0, 0], A.PERCENT))     # too short
 
     def test_every_model_has_a_known_scale(self):
-        for pid, (name, scale) in A.KNOWN.items():
-            self.assertIn(scale, (A.PERCENT, A.STEPS), hex(pid))
+        for pid, model in A.MODELS.items():
+            self.assertIn(model.scale, (A.PERCENT, A.STEPS), hex(pid))
+            self.assertIn(model.length, (64, 65), hex(pid))
+
+    def test_report_id_3(self):
+        # Harpe II Ace on its receiver: hidapi keeps report id 3 in front
+        r = [0x03, 0x12, 0x07, 0, 0, 66, 0, 0, 0, 0, 1] + [0] * 53
+        self.assertEqual(A.parse_reply(r, A.PERCENT, 0x03), (66, True, ""))
+        self.assertIsNone(A.parse_reply(r, A.PERCENT, 0x00))
+        self.assertTrue(A.is_empty([0x03] + [0] * 63, 0x03))
+        self.assertTrue(A.is_error([0x03, 0xFF, 0xAA] + [0] * 61, 0x03))
+
+    def test_keyboard_reply(self):
+        self.assertEqual(A.parse_keyboard_reply(kb_reply(72)), (72, False, ""))
+        self.assertEqual(A.parse_keyboard_reply(kb_reply(15, 1)), (15, True, ""))
+        self.assertIsNone(A.parse_keyboard_reply(kb_reply(0)))
+        self.assertIsNone(A.parse_keyboard_reply(kb_reply(101)))
+        self.assertIsNone(A.parse_keyboard_reply(reply(50)))           # a mouse reply
+
+    def test_pair_list(self):
+        self.assertEqual(A.parse_pair_list(pair_list(0x1B7A, 0x1B65)), [0x1B7A, 0x1B65])
+        self.assertEqual(A.parse_pair_list(pair_list()), [])
+
+    def test_windows_paths(self):
+        d = {"path": OMNI_PATH % b"02&col02"}
+        self.assertEqual(A.collection_of(d), "mi_02&col02")
+        self.assertEqual(A.receiver_instance(d), A.receiver_instance({"path": OMNI_PATH % b"02&col01"}))
+        self.assertNotEqual(A.receiver_instance(d),
+                            A.receiver_instance({"path": OMNI_PATH.replace(b"&1a2b", b"&9f9f") % b"02&col02"}))
 
 
 class PollTest(ProviderTest):
@@ -197,6 +259,118 @@ class PollTest(ProviderTest):
         mouse = FakeMouse()
         self.assertEqual(self.poll(e, {b"if0-ff01": mouse}), [])
         self.assertEqual(mouse.opened, 0)
+
+
+def harpe_entries(pid=0x1AD0, product="ROG HARPE II ACE"):
+    # collections of the receiver as Windows lists them; only col03 is the battery channel
+    out = []
+    for col, page in ((b"00", 0x0001), (b"02&col01", 0x0001), (b"02&col02", 0xFF00),
+                      (b"02&col03", 0xFF01)):
+        ifn = 0 if col == b"00" else 2
+        out.append({"product_id": pid, "interface_number": ifn, "usage_page": page, "usage": 1,
+                    "path": HARPE_PATH % col, "product_string": product})
+    return out
+
+
+def omni_entries(path=OMNI_PATH):
+    out = []
+    for col, page in ((b"00", 0x0001), (b"02&col01", 0xFF00), (b"02&col02", 0xFF00),
+                      (b"02&col03", 0xFF01)):
+        out.append({"product_id": 0x1ACE, "interface_number": 0 if col == b"00" else 2,
+                    "usage_page": page, "usage": 1, "path": path % col,
+                    "product_string": "ROG OMNI RECEIVER"})
+    return out
+
+
+class HarpeIITest(ProviderTest):
+    def harpe(self, level=66, charging=0):
+        r = [0x03, 0x12, 0x07, 0, 0, level, 0, 0, 0, 0, charging] + [0] * 53
+        return Scripted({(0x03, 0x12, 0x07): [[0x03, 0x05, 0x01, 0x00], r]})
+
+    def test_receiver_reads_col03_with_report_id_3(self):
+        devs = {e["path"]: Scripted() for e in harpe_entries()}
+        devs[HARPE_PATH % b"02&col03"] = mouse = self.harpe(66)
+        res = self.poll(harpe_entries(), devs)
+        self.assertEqual([(r.name, r.level, r.charging, r.kind) for r in res],
+                         [("ROG Harpe II Ace", 66, False, "mouse")])
+        self.assertEqual(mouse.writes[0][:3], [0x03, 0x12, 0x07])
+        self.assertEqual(len(mouse.writes[0]), 64)
+        self.assertEqual([m.opened for p, m in devs.items() if m is not mouse], [0, 0, 0])
+
+    def test_extreme_on_the_same_receiver(self):
+        entries = harpe_entries(product="ROG HARPE II EXTREME")
+        res = self.poll(entries, {HARPE_PATH % b"02&col03": self.harpe(40, 1)})
+        self.assertEqual([(r.name, r.level, r.charging) for r in res],
+                         [("ROG Harpe II Extreme", 40, True)])
+
+    def test_mouse_off(self):
+        off = Scripted({(0x03, 0x12, 0x07): [[0x03] + [0] * 63]})
+        self.assertEqual(self.poll(harpe_entries(), {HARPE_PATH % b"02&col03": off}), [])
+        self.assertEqual(len(off.writes), 1)
+
+    def test_cable(self):
+        e = [dict(issue_81_entries()[0], product_id=0x1C69)]
+        mouse = FakeMouse(level=90, charging=1)
+        res = self.poll(e, {b"if0-ff01": mouse})
+        self.assertEqual([(r.name, r.level, r.charging) for r in res],
+                         [("ROG Harpe II Ace", 90, True)])
+        self.assertEqual(len(mouse.writes[0]), 64)
+
+
+class OmniKeyboardTest(ProviderTest):
+    def receiver(self, paired, kb_answers, path=OMNI_PATH):
+        devs = {e["path"]: Scripted() for e in omni_entries(path)}
+        devs[path % b"02&col01"] = Scripted({(0x01, 0xA0): [pair_list(*paired)]})
+        devs[path % b"02&col02"] = Scripted({(0x02, 0x12, 0x01): kb_answers})
+        return devs
+
+    def test_strix_scope_ii_96_rx(self):
+        devs = self.receiver([0x1B7A], [[0x02, 0x70, 0x01, 0x00], kb_reply(72)])
+        res = self.poll(omni_entries(), devs)
+        self.assertEqual([(r.name, r.level, r.charging, r.kind, r.key) for r in res],
+                         [("ROG Strix Scope II 96 RX", 72, False, "keyboard",
+                           "asus:rog-strix-scope-ii-96-rx")])
+        lst, kb = devs[OMNI_PATH % b"02&col01"], devs[OMNI_PATH % b"02&col02"]
+        self.assertEqual(lst.writes[0][:4], [0x01, 0xA0, 0x00, 0x00])
+        self.assertEqual(kb.writes[0][:3], [0x02, 0x12, 0x01])
+        self.assertEqual({len(lst.writes[0]), len(kb.writes[0])}, {64})
+        self.assertEqual(devs[OMNI_PATH % b"02&col03"].opened, 0)     # the mouse channel
+        self.assertEqual(devs[OMNI_PATH % b"00"].opened, 0)
+
+    def test_charging(self):
+        res = self.poll(omni_entries(), self.receiver([0x1AB0], [kb_reply(30, 1)]))
+        self.assertEqual([(r.name, r.level, r.charging) for r in res],
+                         [("ROG Strix Scope II 96", 30, True)])
+
+    def test_no_known_keyboard_paired(self):
+        devs = self.receiver([0x1B65], [kb_reply(72)])                # a mouse only
+        self.assertEqual(self.poll(omni_entries(), devs), [])
+        self.assertEqual(devs[OMNI_PATH % b"02&col02"].opened, 0)
+
+    def test_keyboard_off(self):
+        for answer in ([0x02] + [0] * 63, [0x02, 0xFF, 0xAA] + [0] * 61, kb_reply(0)):
+            self.assertEqual(self.poll(omni_entries(), self.receiver([0x1B7A], [answer])), [])
+        devs = self.receiver([0x1B7A], [])                             # silence
+        self.assertEqual(self.poll(omni_entries(), devs), [])
+        self.assertEqual(len(devs[OMNI_PATH % b"02&col02"].writes), A.WRITE_ATTEMPTS)
+
+    def test_two_receivers_use_their_own_channel(self):
+        other = OMNI_PATH.replace(b"&1a2b3c4d", b"&9f9f9f9f")
+        devs = self.receiver([0x1B7A], [kb_reply(72)])
+        devs.update(self.receiver([], [kb_reply(11)], other))
+        res = self.poll(omni_entries() + omni_entries(other), devs)
+        self.assertEqual([(r.name, r.level) for r in res], [("ROG Strix Scope II 96 RX", 72)])
+        self.assertEqual(devs[other % b"02&col02"].opened, 0)
+
+    def test_receiver_and_harpe_ii_together(self):
+        # the setup of the request: keyboard on the OMNI, Harpe II Ace on its own receiver
+        devs = self.receiver([0x1B7A], [kb_reply(72)])
+        r = [0x03, 0x12, 0x07, 0, 0, 55, 0, 0, 0, 0, 0] + [0] * 53
+        devs[HARPE_PATH % b"02&col03"] = Scripted({(0x03, 0x12, 0x07): [r]})
+        res = self.poll(harpe_entries() + omni_entries(), devs)
+        self.assertEqual(sorted((r.name, r.level, r.kind) for r in res),
+                         [("ROG Harpe II Ace", 55, "mouse"),
+                          ("ROG Strix Scope II 96 RX", 72, "keyboard")])
 
 
 if __name__ == "__main__":

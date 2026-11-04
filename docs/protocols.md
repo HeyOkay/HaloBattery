@@ -144,6 +144,18 @@ The AJAZZ Control Center project's AJ-series exchange: a zero-payload `0xF7` sta
 
 The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. The OMNI receiver and models with other layouts are not included. **Unverified** - no ASUS mouse was on hand
 
+### ASUS ROG Harpe II Ace / Harpe II Extreme
+
+**Connection:** its own 2.4 GHz receiver (0B05:1AD0) or USB cable (0B05:1C69)
+
+The same `12 07` battery command as the other ROG mice, from G-Helper (`app/Peripherals/Mouse/Models/HarpeIIAce.cs`, `AsusMouse.cs`), but on the receiver it goes to the collection `mi_02&col03` with report id 3, in a 64-byte packet: `03 12 07`, answered by `03 12 07 ..` with the battery in byte 5 and charging in byte 10 (hidapi keeps report id 3 in front). On the cable it is report id 0 on the vendor collection of interface 0. The receiver is shared with the Harpe II Extreme; as in G-Helper, "EXTREME" in the product name tells them apart. 0 without charging, `ff aa` and an all-zero reply give no level. **Unverified** - no Harpe II was on hand
+
+### ASUS ROG Strix Scope II 96 / 96 RX and Azoth keyboards on the OMNI receiver
+
+**Connection:** OMNI receiver (0B05:1ACE)
+
+From G-Helper (`PeripheralsProvider.cs` DedectOmniMouse / KeyboardFromOmniPid, `Keyboard/AsusKeyboard.cs` ReadBattery, `StrixScopeII.cs`, `Azoth.cs`). The receiver's pair list is asked on `mi_02&col01`: `01 a0 00 00` (64 bytes); the reply lists the paired devices from byte 5 on, four bytes each, the product id little-endian first. Only when it names a known keyboard (Scope II 96 `1AB0`, Scope II 96 RX `1B7A`, Azoth `1A85`, Azoth Extreme `1B42`, Azoth Extreme SE `1CF1`) is the battery asked, on `mi_02&col02` of the same receiver: `02 12 01`, answered by `02 12 01 ..` with the battery in byte 6 and charging in byte 9 (1 = charging). 0 without charging, `ff aa` and an all-zero reply give no level. Mice on the OMNI receiver and the keyboards on their own receiver are not included. **Unverified** - no OMNI receiver was on hand
+
 ### Corsair Dark Core RGB Pro SE
 
 **Connection:** 2.4 GHz dongle (1B1C:1B7F)
