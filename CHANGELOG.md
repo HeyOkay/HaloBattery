@@ -72,6 +72,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
   dependencies, and the release workflow bundles libusb.
 - **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+- **Turtle Beach Atlas Air** (`10f5:225e`) and **Stealth 600X Gen 3** (`10f5:2232`) - the
+  family's `ff13:0001` collection, read with the Swarm II SInf/GSI asks first (they send
+  no enable frame) and the CoAP tunnel after them, since which of the two each model
+  speaks is not known yet. Unverified on hardware; test builds are out for
+  [#310](https://github.com/HeyOkay/HaloBattery/issues/310) and
+  [#239](https://github.com/HeyOkay/HaloBattery/issues/239).
 
 ## [1.16.0] - 2026-11-04
 
