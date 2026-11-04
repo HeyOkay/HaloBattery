@@ -4,6 +4,14 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
+  collection the PA headset path reads, and the id was simply not routed there. Unverified
+  on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.

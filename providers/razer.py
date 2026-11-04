@@ -37,6 +37,7 @@ RAZER_VID = 0x1532
 # copy of that OpenRazer list and checks this table against it.
 KNOWN = {
     0x0528: ("Razer BlackShark V2 Pro (2020)", 0x3F),
+    0x0536: ("Razer Barracuda X (2022)", 0x1F),
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
