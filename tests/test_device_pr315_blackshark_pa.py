@@ -54,6 +54,10 @@ class BarracudaProReceiverTest(unittest.TestCase):
 
     def test_0583_is_a_pa_receiver_and_a_wireless_candidate(self):
         self.assertIn(0x0583, blackshark.PA_PIDS)
+        # #256: the Barracuda X (2022) publishes ff00:0001 on its receiver, so it is
+        # routed through the same PA path and named from the table
+        self.assertIn(0x0536, blackshark.PA_PIDS)
+        self.assertEqual("Razer Barracuda X (2022)", razer.KNOWN[0x0536][0])
         self.assertTrue(razer.maybe_wireless(0x0583, "Razer Barracuda Pro 2.4"))
 
     def test_0583_is_polled_with_pa_frames_under_its_product_name(self):

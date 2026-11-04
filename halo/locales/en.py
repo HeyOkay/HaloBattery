@@ -54,6 +54,7 @@ MESSAGES = {
     "provider.asus": "ASUS ROG / TUF mice, keyboards and headsets",
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
+    "provider.barracuda_x": "Razer Barracuda X",
     "provider.corsair": "Corsair headsets",
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "G-Wolves mice",

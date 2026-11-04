@@ -54,6 +54,7 @@ MESSAGES = {
     "provider.asus": "Souris ASUS ROG / TUF, claviers, casques",
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
+    "provider.barracuda_x": "Razer Barracuda X",
     "provider.corsair": "Casques Corsair",
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Souris G-Wolves",

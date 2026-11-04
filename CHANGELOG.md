@@ -98,6 +98,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the mouse charges over USB it leaves the 2.4 GHz link, so the wired id (`258a:2011`) now
   tells the app it is on the cable and the icon shows charging with the last level; a wall
   adapter gives no signal, because the mouse is not talking to the receiver.
+- **Razer Barracuda X (2022)** (`1532:0552`, 2.4 GHz dongle) - the dongle bridges to an
+  Airoha chip and speaks RACE (`50 41`), not the Razer PA protocol the other Barracudas use;
+  the PA writes were refused with "Incorrect function". Level comes from the headset's
+  battery voltage through remote mode + `GET_BATTERY` (group 0x06), converted on a Li-ion
+  curve, with charging inferred from the voltage spread between samples. Mirrored from
+  mehdibouchami/razer-barracuda-x-battery. **Confirmed on hardware** in the test-build run:
+  `3822 mV -> 38 %`, samples within 9 mV, reported as not charging; the charging inference
+  still needs a run with the cable in.
+
+### Added
+
+- **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
+  collection the PA headset path reads, and the id was simply not routed there. Unverified
+  on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
 
 ## [1.16.0] - 2026-11-04
 
