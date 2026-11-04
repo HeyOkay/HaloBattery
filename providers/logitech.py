@@ -107,6 +107,17 @@ HEADSETS = {
 # headsets whose long collection is not ff43:0202 (usage page, usage)
 HEADSET_COLLECTION = {0x0AC4: (0x000C, 0x0001)}
 
+# A headset whose long collection carries the old HID++ 1.0 registers instead of a
+# feature table: the charge register, read with sub-id 0x05 on the long report, and
+# answered with a battery voltage and a state byte (HeadsetControl, G533/G535 and
+# logitech_g535.hpp). Only the pids in HEADSET_COLLECTION are read this way.
+HEADSET_CHARGE_REG = 0x0D
+HEADSET_REG_SUBID = 0x05
+HEADSET_CHARGING = 0x03
+
+# HeadsetControl's G535 calibration: (mV, percent), their measurements on this model.
+HEADSET_CURVE = ((4175, 100), (3817, 50), (3766, 30), (3730, 20), (3664, 5), (3310, 0))
+
 # 0x0005 device type -> DeviceStatus.kind
 KINDS = {0: "keyboard", 2: "keyboard", 3: "mouse", 4: "mouse", 5: "mouse"}
 
@@ -131,6 +142,31 @@ def voltage_to_percent(mv: int) -> int:
         if mv >= lo_mv:
             return round(lo_p + (mv - lo_mv) * (hi_p - lo_p) / (hi_mv - lo_mv))
     return 0
+
+
+def headset_voltage_to_percent(mv: int) -> int:
+    """Percent from a headset battery voltage, on HEADSET_CURVE (G535)."""
+    if mv >= HEADSET_CURVE[0][0]:
+        return 100
+    for (hi_mv, hi_p), (lo_mv, lo_p) in zip(HEADSET_CURVE, HEADSET_CURVE[1:]):
+        if mv >= lo_mv:
+            return round(lo_p + (mv - lo_mv) * (hi_p - lo_p) / (hi_mv - lo_mv))
+    return 0
+
+
+def parse_headset_voltage(r) -> Tuple[Optional[int], bool]:
+    """(level, charging) from the reply to a headset charge-register read.
+
+    The reply carries the battery voltage big-endian at bytes 4-5 and the state at
+    byte 6: 0x01 discharging, 0x03 charging (HeadsetControl). A voltage outside a
+    single Li-ion cell is no reading, not a percentage.
+    """
+    if len(r) < 7:
+        return None, False
+    mv = (r[4] << 8) | r[5]
+    if not 2500 <= mv <= MAX_BATTERY_MV:
+        return None, False
+    return headset_voltage_to_percent(mv), r[6] == HEADSET_CHARGING
 
 
 def charge_complete(feature: int, p) -> bool:
@@ -191,8 +227,13 @@ def parse_register_battery(reg: int, p) -> Tuple[Optional[int], bool, str]:
 class _Channel:
     """The HID++ collections of one receiver, cabled device or headset dongle."""
 
-    def __init__(self, short_path: Optional[bytes], long_path: bytes):
+    def __init__(self, short_path: Optional[bytes], long_path: bytes,
+                 alt_path: Optional[bytes] = None):
         self.devs = []
+        # a long-only headset can publish two candidate collections (the G535: its
+        # consumer one and ff43:0202); the charge register is tried on both (#339)
+        self.alt_path = alt_path
+        self.alt = None
         self.error = False       # the last request got an error reply (not a timeout)
         self.error_code = 0      # the error code of that reply
         self._swid = 0
@@ -210,7 +251,7 @@ class _Channel:
                 pass
 
     def close(self):
-        for d in self.devs:
+        for d in self.devs + ([self.alt] if self.alt is not None else []):
             try:
                 d.close()
             except Exception:
@@ -237,6 +278,47 @@ class _Channel:
                     return None
                 if r[2] == feat and r[3] == fn:
                     return list(r[4:]) + [0] * 16
+            time.sleep(0.005)
+        return None
+
+    def has_short(self) -> bool:
+        """True when the device also offers the short HID++ collection (0xFF00)."""
+        return len(self.devs) > 1
+
+    def read_headset_register(self, idx: int, reg: int,
+                              timeout: float = TIMEOUT) -> Optional[List[int]]:
+        """A HID++ 1.0 register read on a long-only collection, as the old headsets do.
+
+        The request is a long report, 11 <idx> 05 <reg>, and the reply comes back as
+        10 <idx> 05 <reg> <hi> <lo> <state> (HeadsetControl's logitech_g535.hpp). The
+        registers are only ever read.
+        """
+        self.error, self.error_code = False, 0
+        handles = [self.long]
+        if self.alt_path and self.alt is None:
+            try:
+                alt = hid.device()
+                alt.open_path(self.alt_path)
+                alt.set_nonblocking(True)
+                self.alt = alt
+            except (OSError, IOError):
+                self.alt_path = None
+        if self.alt is not None:
+            handles.append(self.alt)
+        for h in handles:
+            h.write([0x11, idx, HEADSET_REG_SUBID, reg] + [0] * 16)
+        end = time.time() + timeout
+        while time.time() < end:
+            for d in handles:
+                r = d.read(64)
+                if not r or len(r) < 4 or r[1] != idx:
+                    continue
+                if r[2] in (0x8F, 0xFF):
+                    # one collection may refuse; the other can still answer
+                    self.error, self.error_code = True, r[5] if len(r) > 5 else 0
+                    continue
+                if r[2] == HEADSET_REG_SUBID and r[3] == reg:
+                    return list(r)
             time.sleep(0.005)
         return None
 
@@ -370,6 +452,13 @@ class LogitechProvider(Provider):
     def _read(self, ch: _Channel, pid: int, idx: int,
               instance: str = "", multi: bool = False) -> Optional[DeviceStatus]:
         slot = (pid, instance, idx)
+        if pid in HEADSET_COLLECTION and not ch.has_short():
+            # long-only HID++ 1.0 headset (the G535): no feature table to ping, the
+            # registers answer. Read before the ping so a reading does not report
+            # the device as asleep first.
+            st = self._headset_register(ch, slot, pid, idx, instance, multi)
+            if st is not None:
+                return st
         if not self._ping(ch, slot):
             if ch.error and ch.error_code == ERR_OLD_PROTOCOL:
                 # HID++ 1.0: no feature table, but the old battery registers
@@ -445,6 +534,31 @@ class LogitechProvider(Provider):
         self._diag.append(f"  idx={idx} '{name}': no battery reading")
         return None
 
+    def _headset_register(self, ch: _Channel, slot, pid: int, idx: int,
+                          instance: str, multi: bool) -> Optional[DeviceStatus]:
+        """Battery of a long-only HID++ 1.0 headset, from its charge register."""
+        r = ch.read_headset_register(idx, HEADSET_CHARGE_REG)
+        if r is None:
+            # say so: a silent register read otherwise looks exactly like the old
+            # 2.0 ping failing, and a diagnostics cannot tell the builds apart (#339)
+            self._diag.append(f"  idx={idx}: register {HEADSET_CHARGE_REG:02x}: no answer")
+            return None
+        level, chg = parse_headset_voltage(r)
+        if level is None:
+            self._diag.append(f"  idx={idx}: register {HEADSET_CHARGE_REG:02x}: "
+                              f"{hexdump(r, 7)} (no battery voltage)")
+            return None
+        name = HEADSETS.get(pid, "Logitech headset")
+        prefix = instance + ":" if multi else ""
+        key = f"logitech:{prefix}{pid:04x}:{idx}"
+        old = self._slot_key.get(slot)
+        if old and old != key:
+            self._last.pop(old, None)
+        self._slot_key[slot] = key
+        self._diag.append(f"  idx={idx} '{name}': register {HEADSET_CHARGE_REG:02x}: "
+                          f"{(r[4] << 8) | r[5]} mV -> {level}%{' (charging)' if chg else ''}")
+        return DeviceStatus(key, name, level, chg, True, "logitech", kind="headset")
+
     def _register_battery(self, ch: _Channel, slot, pid: int, idx: int,
                           instance: str, multi: bool) -> Optional[DeviceStatus]:
         """Battery of a HID++ 1.0 device, from the old registers (Solaar's way).
@@ -483,6 +597,7 @@ class LogitechProvider(Provider):
         the same kind (any two Unifying receivers are 0xC52B). A headset has only a long path."""
         groups: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         headset: Dict[Tuple[int, str], bytes] = {}
+        alt: Dict[Tuple[int, str], Optional[bytes]] = {}
         for d in infos:
             pid, page, usage = d["product_id"], d.get("usage_page"), d.get("usage")
             key = (pid, _instance(d))
@@ -492,10 +607,16 @@ class LogitechProvider(Provider):
                 # only the headsets in the list: other devices never got a request on
                 # these collections, and must not get one now
                 headset[key] = d["path"]
+                if (page, usage) != (0xFF43, 0x0202) and pid in HEADSET_COLLECTION:
+                    alt[key] = next((x["path"] for x in infos
+                                     if x["product_id"] == pid
+                                     and (x.get("usage_page"), x.get("usage")) == (0xFF43, 0x0202)), None)
         # the ff00 collections win; the headset collection is used only without them
         for key, path in headset.items():
             if 2 not in groups.get(key, {}):
                 groups.setdefault(key, {})[2] = path
+                if alt.get(key):
+                    groups[key][3] = alt[key]
         return groups
 
     def poll(self) -> List[DeviceStatus]:
@@ -519,7 +640,7 @@ class LogitechProvider(Provider):
             self._diag.append(f"[Logitech] pid={pid:04x} '{product}'{tag}"
                               f"{' (headset)' if pid in HEADSETS else ''}")
             try:
-                ch = _Channel(paths.get(1), paths[2])
+                ch = _Channel(paths.get(1), paths[2], paths.get(3))
             except (OSError, IOError) as e:
                 self._diag.append(f"  open: {e}")
                 continue

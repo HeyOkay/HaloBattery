@@ -8,6 +8,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
+### Fixed
 
 - **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
 - **Rapoo VT9 Pro V2** (`24ae:14a9`) - the receiver publishes the same `ff00:000e`
@@ -18,6 +19,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   framed get-property exchange. Confirmed on hardware by @SpaceJesusCosmic in
   [#301](https://github.com/HeyOkay/HaloBattery/issues/301).
 - **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Confirmed on the receiver by @TweaknFreak (#323): the percentage agreed with the vendor tool. The cable id is claimed from the report; charging over the cable is not yet reported back.
+- **Logitech G535**: its dongle is long-only and has no HID++ 2.0 feature table, so the
+  provider's 2.0 ping never got an answer and the headset was shown as asleep. It is now
+  read through its 1.0 charge register (`11 FF 05 0D`) before the ping, with
+  HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
+  The register is answered on the `ff43:0202` collection, not the consumer one, so both are
+  tried. Confirmed on hardware by @ti-henrq: `4069 mV -> 85 %` and the icon appears.
 
 ## [1.16.0] - 2026-11-04
 
