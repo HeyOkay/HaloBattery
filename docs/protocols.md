@@ -279,7 +279,7 @@ last value on a greyed icon, so live readings want CAM closed.
 
 **Connection:** 2.4 GHz receiver (3434:D028) and USB cable (3434:D048)
 
-Keychron's vendor protocol on interface 4: a 64-byte feature report `b3 06` (status), answered by a 64-byte input report `b4 06` whose byte 20 is the level, retried up to three times. From csutcliff/keychron-battery-dkms, which implements it for these two ids. **Unverified** - no Keychron device was on hand, so a level above 100 is refused rather than shown
+Keychron's vendor protocol on interface 4: a 64-byte feature report `b3 06` (status), answered by a 64-byte input report `b4 06` whose byte 20 is the level, retried up to three times. From csutcliff/keychron-battery-dkms, which implements it for these two ids. The **Nape Pro** (`3434:d026`, the "Keychron Link-KM" receiver, #270) speaks the same exchange but publishes its vendor collection on **interface 1** (`ffc1:0001`), not 4, so the provider picks interface 4 first and then any vendor page. **Unverified** on hardware; a test build is with the reporter. **Unverified** - no Keychron device was on hand, so a level above 100 is refused rather than shown
 
 ### Lofree Hyzen
 
