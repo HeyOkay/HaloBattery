@@ -145,6 +145,7 @@ MESSAGES = {
     "preferences.check_now": "今すぐ更新を確認",
     "provider.nzxt": "NZXT マウス",
     "provider.steam": "Steam Controller (2025)",
+    "provider.endgame_we": "Endgame Gear XM2we",
     "menu.install_update": "v{version} に更新",
     "menu.downloading": "v{version} をダウンロード中… {progress}%",
     "notification.update_install": "新しいバージョン {version} が利用できます。バッテリーアイコンを右クリックして「v{version} に更新」を選択してください。",

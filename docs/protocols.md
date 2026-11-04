@@ -372,3 +372,25 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 The provider reads HID++ 2.0 generically from the receiver's `ff00` vendor collections (slots 1-6), so most other HID++ 2.0 mice and keyboards on a Lightspeed, Unifying or Bolt receiver should answer the same `0x1004` unified battery request. The G-series headsets - G533, G535, G633, G635, G733, G933, G935, G PRO, G PRO X - are in the headset pid table and use feature `0x1F20` (the G535 on its consumer collection). Only the models listed in the support table above are confirmed so far.
 
 Devices with no feature table at all (the older HID++ 1.0 generation) are read through the old battery registers instead: a short report `10 <slot> 81 <register>` on the short collection reads register `0x0D` (a percentage with a charging status - `30` discharging, `50` recharging, `90` full) or register `0x07` (a discrete level - 7 full, 5 good, 3 low, 1 critical - beside a charging byte), the same registers and order Solaar uses. This was added for the M710 keyboard of the MK710 wireless desktop ([#159](https://github.com/HeyOkay/HaloBattery/issues/159)), built from Solaar's implementation; **confirmed on hardware** in the reporter's test-build run - the icon shows the keyboard's coarse level.
+
+### Endgame Gear XM2we
+
+Connection: original 2.4 GHz receiver (3367:1961). Windows exposes feature
+report 0x08 on ff02:0002 and input report 0x09 on ff01:0000, confirmed from
+the owner's receiver descriptors. Open both collections on the same receiver.
+
+Source: [okms/xm2we-linux protocol documentation](https://github.com/okms/xm2we-linux/blob/main/PROTOCOL.md),
+Framing and Battery sections, and its `xm2we` query/battery implementation.
+Feature report 0x08 sends a 17-byte checksummed status request; input report 0x09
+returns the same opcode. Command 0x04 returns percentage and a charging flag;
+0x03 returns radio link status. Battery is queried first because charging can
+briefly interrupt the radio link. No configuration commands are sent.
+
+The receiver can return a cached battery level while the mouse is offline; such
+readings are marked offline unless charging. Percentage is a coarse voltage
+estimate. Wired XM2we, OP1we and the newer XM2w family are not enabled by this
+provider. Verified on an XM2we receiver on Windows: 90% matched the official
+tool, charging became true with USB power connected and false after unplugging.
+While charging, link returned 0 but the valid charging flag kept the device online.
+Verification used the provider probe; the complete tray application has not yet
+been tested with this provider.

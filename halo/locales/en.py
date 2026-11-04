@@ -140,6 +140,7 @@ MESSAGES = {
     "preferences.check_now": "Check for updates now",
     "provider.nzxt": "NZXT mice",
     "provider.steam": "Steam Controller (2025)",
+    "provider.endgame_we": "Endgame Gear XM2we",
     "menu.install_update": "Update to v{version}",
     "menu.downloading": "Downloading v{version}… {progress}%",
     "notification.update_install": "Version {version} is available. Right-click a battery icon and choose \"Update to v{version}\".",

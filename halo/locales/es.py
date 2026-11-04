@@ -155,6 +155,7 @@ MESSAGES = {
     "preferences.check_now": "Buscar actualizaciones ahora",
     "provider.nzxt": "Ratones NZXT",
     "provider.steam": "Steam Controller (2025)",
+    "provider.endgame_we": "Endgame Gear XM2we",
     "menu.install_update": "Actualizar a v{version}",
     "menu.downloading": "Descargando v{version}… {progress}%",
     "notification.update_install": 'La versión {version} está disponible. Haz clic con el botón derecho en un icono de batería y elige «Actualizar a v{version}».',
