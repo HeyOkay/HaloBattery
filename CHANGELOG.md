@@ -35,6 +35,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
   8K are unverified, with a test build out for
   [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
+- **Logitech PRO X 3 LIGHTSPEED** (`046D:0B45`) - read over its receiver with the PRO X 2's Centurion path. Its diagnostic report shows the same collections on the same interface, but no PRO X 3 has been tested yet (**unverified**, [#343](https://github.com/HeyOkay/HaloBattery/issues/343)).
 
 ## [1.16.0] - 2026-11-04
 
