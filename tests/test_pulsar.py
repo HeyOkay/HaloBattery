@@ -47,6 +47,22 @@ SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the Teevolution Terra Pro's 'RapidSync' receiver (3554:f523) from #300: a
+# keyboard collection on interface 2 and the same ff02:0002 control collection
+RAPIDSYNC_SHAPE = [
+    (0, 0x0001, 0x0002),
+    (1, 0xFF05, 0x0000),
+    (1, 0xFF03, 0x0000),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0xFF02, 0x0002),
+    (1, 0xFF04, 0x0002),
+    (1, 0xFF06, 0x0002),
+    (1, 0xFF08, 0x0002),
+    (1, 0x0001, 0x0002),
+    (2, 0x0001, 0x0006),
+]
+
 # the AULA F75's receiver (3554:fa09) as #247's diagnostics list its collections: a
 # keyboard collection, the consumer one and the same ff02:0002 control collection
 F75_SHAPE = [
@@ -200,6 +216,20 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(88, d.level)
         self.assertFalse(d.charging)
         self.assertEqual("mouse", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_teevolution_terra_pro_is_read_as_a_keyboard(self):
+        # #300: 3554:f523 'Compx' 'RapidSync' - the dongle's product string does not
+        # name the model, but it publishes the family's ff02:0002 collection
+        bus = self.one_receiver(vid=0x3554, pid=0xF523, replies=[reply(88, 0)],
+                                shape=RAPIDSYNC_SHAPE)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f523", d.key)
+        self.assertEqual("Teevolution Terra Pro (2.4 GHz)", d.name)
+        self.assertEqual(88, d.level)
+        self.assertEqual("keyboard", d.kind)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
     def test_the_atk_x1_pro_1k_receiver_is_read(self):
