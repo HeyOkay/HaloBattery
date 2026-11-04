@@ -390,6 +390,8 @@ curve (3300 mV = 0 %, 4150 mV = 100 %), and charging is inferred the way
 does it: several samples ~350 ms apart, charging when their spread is at least 12 mV or the
 lowest is at or above 4180 mV. The read takes about 2.5 s because of those samples.
 
+**Confirmed on hardware** in the test-build run: `3822 mV -> 38 %` on a Barracuda X (2022), the seven samples within 9 mV and reported as not charging. The charging inference itself still needs a run with the cable in.
+
 Only the Macronix bridge (`0552`) is read. The `0550` variant uses the YS-Tech bridge: the
 same RACE commands wrapped in `02 80 <len> <crcLo> <crcHi> payload` with a CRC-16/XMODEM
 over the whole report and an `'O'`/`'F'` input-report acknowledgement - documented in that

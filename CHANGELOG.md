@@ -13,8 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the PA writes were refused with "Incorrect function". Level comes from the headset's
   battery voltage through remote mode + `GET_BATTERY` (group 0x06), converted on a Li-ion
   curve, with charging inferred from the voltage spread between samples. Mirrored from
-  mehdibouchami/razer-barracuda-x-battery. Unverified on hardware; a test build is out for
-  [#332](https://github.com/HeyOkay/HaloBattery/issues/332).
+  mehdibouchami/razer-barracuda-x-battery. **Confirmed on hardware** in the test-build run:
+  `3822 mV -> 38 %`, samples within 9 mV, reported as not charging; the charging inference
+  still needs a run with the cable in.
 
 ### Added
 
