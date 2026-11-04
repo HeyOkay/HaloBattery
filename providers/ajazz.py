@@ -95,6 +95,15 @@ WIRED_PID = 0x5D2E
 NAME = "AJAZZ AJ179 V2 MAX"
 KEY = f"ajazz:{PID:04x}"
 
+# The AJ159 PRO's 8K receiver (#289): a different vendor id and product string
+# ("AJAZZ 2.4G 8K"), with the vendor channel on usage page FFFF instead of the
+# AJ179's unlabelled mi_02. The AJ179 reverse-engineering notes say the AJ159
+# family speaks the same CompX protocol, so the same frames are tried.
+ALT_VID = 0x3151
+ALT_PID = 0x402D
+ALT_NAME = "AJAZZ AJ159 PRO"
+ALT_KEY = f"ajazz:{ALT_PID:04x}"
+
 REPORT_SIZE = 32                 # both directions; hidapi adds the report id on Windows
 OUTPUT_LEN = REPORT_SIZE + 1     # what OutputReportByteLength reports for the vendor
                                  # channel (33, the report id included - #74's dump)
@@ -203,6 +212,10 @@ class AjazzProvider(Provider):
         self._charging = False                            # from the info block's flag
         self._chosen: Optional[bytes] = None
         self._wired_chosen: Optional[bytes] = None
+        # the AJ159 PRO target keeps its own state (#289)
+        self._alt_chosen: Optional[bytes] = None
+        self._alt_last: Optional[Tuple[int, float]] = None
+        self._alt_charging = False
 
     def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.
@@ -295,6 +308,55 @@ class AjazzProvider(Provider):
         return got, True
 
     def poll(self) -> List[DeviceStatus]:
+        self._diag = []
+        if hid is None:
+            return []
+        found = self._poll_primary()
+        if found:
+            return found
+        return self._poll_alt()
+
+    def _poll_alt(self) -> List[DeviceStatus]:
+        """The AJ159 PRO's receiver, tried only when the AJ179 is not there."""
+        try:
+            infos = hidlist.enumerate(ALT_VID)
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(ajazz alt): %s", e)
+            return []
+        mine = [d for d in infos if d.get("product_id") == ALT_PID]
+        got = None
+        if mine:
+            self._diag.append(f"[AJAZZ] pid={ALT_PID:04x} '{ALT_NAME}' "
+                              f"product='{(mine[0].get('product_string') or '').strip()}'")
+            order = candidates(mine)
+            if self._alt_chosen is not None:
+                order = sorted(order, key=lambda d: d["path"] != self._alt_chosen)
+            for d in order[:MAX_CANDIDATES]:
+                self._diag.append(f"  asking iface={d.get('interface_number')} "
+                                  f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                got, accepted = self._ask(d)
+                if accepted:
+                    self._alt_chosen = d["path"]
+                    break
+                if got is not None:
+                    break
+        if got is not None:
+            level, _kind, charging = got
+            if charging is None:
+                charging = self._alt_charging
+            else:
+                self._alt_charging = charging
+            self._alt_last = (level, time.time())
+            return [DeviceStatus(ALT_KEY, ALT_NAME, level, charging, True, "ajazz",
+                                 kind="mouse")]
+        if not mine:
+            return []
+        if self._alt_last and time.time() - self._alt_last[1] < ASLEEP_KEEP:
+            return [DeviceStatus(ALT_KEY, ALT_NAME, self._alt_last[0], self._alt_charging,
+                                 False, "ajazz", kind="mouse")]
+        return [DeviceStatus(ALT_KEY, ALT_NAME, None, False, False, "ajazz", kind="mouse")]
+
+    def _poll_primary(self) -> List[DeviceStatus]:
         self._diag = []
         if hid is None:
             return []

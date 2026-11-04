@@ -201,6 +201,22 @@ class PollTest(unittest.TestCase):
         self.assertEqual(list(A.make_request())[:2], [0x00, 0x10])   # report id + the app's read
         self.assertEqual(len(A.make_request()), A.REPORT_SIZE + 1)
 
+    def test_the_aj159_pros_8k_receiver_is_read(self):
+        # #289: 3151:402d 'AJAZZ 2.4G 8K' - the vendor channel sits on usage page
+        # FFFF instead of the AJ179's unlabelled mi_02; the AJ179 notes say the
+        # AJ159 family speaks the same CompX protocol, so the same read is sent
+        entries = [{"path": b"alt-vendor", "interface_number": 2,
+                    "usage_page": 0xFFFF, "usage": 0x0002,
+                    "product_id": A.ALT_PID, "product_string": "AJAZZ 2.4G 8K"}]
+        cols = {b"alt-vendor": FakeCollection((CAPTURED75,))}
+        A.hid = types.SimpleNamespace(device=fake_device_class(cols, self.order))
+        A.hidlist = types.SimpleNamespace(
+            enumerate=lambda vid=0: entries if vid == A.ALT_VID else [])
+        A.output_length = lambda path: None
+        out = self.provider.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("ajazz:402d", "AJAZZ AJ159 PRO", 75, "mouse")])
+
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()
         cols = self.cols(entries)
