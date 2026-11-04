@@ -89,6 +89,7 @@ MESSAGES = {
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.inphic": "Inphic / Attack Shark マウス",
+    "provider.irocks": "iRocks M31R",
     "provider.jabra": "Jabra ヘッドセット（Link 380 / 390 ドングル）",
     "provider.mchose_kb": "MCHOSE キーボード",
     "provider.mchose_v9": "MCHOSE V9 Pro",
