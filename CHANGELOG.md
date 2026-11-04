@@ -10,7 +10,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - **Corsair M75 Wireless** (`1b1c:1bdc`, the Slipstream receiver) - it publishes the
   bragi vendor collections (`ff42:0001`/`0002`), so it is read with the Dark Core's
-  framed get-property exchange. Unverified on hardware; a test build is out for
+  framed get-property exchange. Confirmed on hardware by @SpaceJesusCosmic in
   [#301](https://github.com/HeyOkay/HaloBattery/issues/301).
 
 ## [1.16.0] - 2026-11-04
