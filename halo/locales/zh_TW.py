@@ -85,6 +85,7 @@ MESSAGES = {
     "provider.aula": "AULA F87 Pro V2C 鍵盤",
     "provider.dareu": "DAREU 滑鼠",
     "provider.eweadn": "EWEADN / 前行者 滑鼠",
+    "provider.endgame_4k": "Endgame Gear 4K 滑鼠（XM2w / OP1w）",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",

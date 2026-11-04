@@ -42,6 +42,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
 - Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
   (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
+- **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
 
 ## [1.16.0] - 2026-11-04
 
