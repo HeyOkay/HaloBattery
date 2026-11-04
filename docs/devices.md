@@ -15,6 +15,7 @@
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
 | [Corsair Virtuoso RGB Wireless SE / XT](protocols.md#corsair-virtuoso-rgb-wireless-se--xt) | Slipstream receiver or USB cable | yes for the SE on the Multi-Device receiver; XT untried |
+| [Corsair Void Elite Wireless](protocols.md#corsair-void-elite-wireless) | 2.4 GHz receiver | likely |
 | [Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless](protocols.md#corsair-void-v2-wireless-virtuoso-max-wireless-hs80-max-wireless) | Wireless receiver | no |
 | [Endgame Gear XM2w 4K, OP1w 4K (4K dongle)](protocols.md#endgame-gear-xm2w-4k-op1w-4k-4k-dongle) | 4K dongle or USB cable | likely |
 | [DJI Mic Mini 2](protocols.md#dji-mic-mini-2) | USB receiver, interface 6 with WinUSB | yes |

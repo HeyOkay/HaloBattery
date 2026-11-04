@@ -18,6 +18,12 @@ The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte 
 
 The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, whose answer carries the battery as attribute 0x0CD6 (`05 5D <len> 00 D6 0C <percent>`). One packet is enough — the query for that attribute is answered with the marker on its own (0.19 s against 1.48 s for the whole sequence) — with the full sequence as the fallback. Dongle and cable are one headset and share one icon; charging is inferred from the cable answering, so the icon breathes while it sits on USB-C. With the headset switched off the dongle keeps answering with the last value it held, so the provider goes by the dongle's own product string — `"Audeze Maxwell Dongle"` with no headset linked, `"Audeze Maxwell HID"` with one — and reports nothing: the icon leaves the tray the way any switched-off device does
 
+### Corsair Void Elite Wireless
+
+**Connection:** 2.4 GHz receiver (1b1c:0a55)
+
+The older Void exchange, from HeadsetControl's Void device: the battery collection is the vendor page `ffc5:0001` (interface 3), and a single output report asks for it - `c9 64` - with the answer arriving as a five-byte input report `64 00 <level> b1 <status>`. Bit 7 of the level byte is the microphone-lifted flag and is masked off; the status byte is 0 when the receiver has no headset on it, 1 normal, 2 low, 4 or 5 charging. No session and no framing are involved, unlike the family above. **Unverified** - read from HeadsetControl, a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+
 ### Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless
 
 **Connection:** Wireless receiver (1B1C:2A08, 1B1C:2A02, 1B1C:0A97)

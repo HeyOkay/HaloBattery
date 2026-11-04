@@ -71,6 +71,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control)
   (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
   dependencies, and the release workflow bundles libusb.
+- **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
 
 ## [1.16.0] - 2026-11-04
 
