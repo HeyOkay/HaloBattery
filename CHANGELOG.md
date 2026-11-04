@@ -8,7 +8,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Unverified on this id; a test build is out for [#323](https://github.com/HeyOkay/HaloBattery/issues/323).
+- **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Confirmed on the receiver by @TweaknFreak (#323): the percentage agreed with the vendor tool. The cable id is claimed from the report; charging over the cable is not yet reported back.
 
 ## [1.16.0] - 2026-11-04
 
