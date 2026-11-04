@@ -521,6 +521,9 @@ class LogitechProvider(Provider):
         """Battery of a long-only HID++ 1.0 headset, from its charge register."""
         r = ch.read_headset_register(idx, HEADSET_CHARGE_REG)
         if r is None:
+            # say so: a silent register read otherwise looks exactly like the old
+            # 2.0 ping failing, and a diagnostics cannot tell the builds apart (#339)
+            self._diag.append(f"  idx={idx}: register {HEADSET_CHARGE_REG:02x}: no answer")
             return None
         level, chg = parse_headset_voltage(r)
         if level is None:
