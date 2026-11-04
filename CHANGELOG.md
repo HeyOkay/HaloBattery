@@ -11,8 +11,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro), **ATK X1 Pro**
   (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
   Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
-  the same 17-byte power query; the keyboard keeps a keyboard pictogram. Unverified on
-  hardware; a test build is out for [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
+  the same 17-byte power query; the keyboard keeps a keyboard pictogram. The ATK X1 Pro is
+  confirmed on hardware in [#230](https://github.com/HeyOkay/HaloBattery/issues/230) (level
+  within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
+  8K are unverified, with a test build out for
+  [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
 
 ## [1.16.0] - 2026-11-04
 
