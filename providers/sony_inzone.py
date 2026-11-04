@@ -42,6 +42,8 @@ class SonyInzoneProvider(Provider):
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         if serial is None or list_ports is None:
+            self._diag.append("[Sony] pyserial is not installed - the INZONE H9 provider is "
+                              "off (pip install pyserial)")
             return []
         for info in list_ports.comports():
             if info.vid != VID or info.pid != PID:

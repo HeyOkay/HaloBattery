@@ -108,6 +108,16 @@ class PollTest(unittest.TestCase):
         result = S.SonyInzoneProvider().poll()
         self.assertEqual([(r.level, r.charging) for r in result], [(88, True)])
 
+    def test_missing_pyserial_is_reported_in_the_diagnostics(self):
+        saved = S.serial, S.list_ports
+        S.serial = S.list_ports = None
+        try:
+            provider = S.SonyInzoneProvider()
+            self.assertEqual(provider.poll(), [])
+            self.assertTrue(any("pyserial" in line for line in provider.diagnostics()))
+        finally:
+            S.serial, S.list_ports = saved
+
     def test_no_response_returns_no_status_after_single_query(self):
         self.port.answer = None
         result = S.SonyInzoneProvider().poll()
