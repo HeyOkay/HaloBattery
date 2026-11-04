@@ -78,6 +78,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   speaks is not known yet. Unverified on hardware; test builds are out for
   [#310](https://github.com/HeyOkay/HaloBattery/issues/310) and
   [#239](https://github.com/HeyOkay/HaloBattery/issues/239).
+- **Sony INZONE H9 II** (`054c:0fa8`) - the same serial-port exchange the H9 uses,
+  keyed on its own id so the two models do not merge. Unverified on hardware; a test
+  build is out for [#294](https://github.com/HeyOkay/HaloBattery/issues/294).
 
 ## [1.16.0] - 2026-11-04
 
