@@ -88,6 +88,7 @@ MESSAGES = {
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
+    "provider.hyperx_ngenuity": "HyperX Pulsefire マウス",
     "provider.inphic": "Inphic / Attack Shark マウス",
     "provider.jabra": "Jabra ヘッドセット（Link 380 / 390 ドングル）",
     "provider.mchose_kb": "MCHOSE キーボード",

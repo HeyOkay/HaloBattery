@@ -168,6 +168,25 @@ The same feature report exchange as the WLmouse mice (`00 00 02 02 00 83` out, `
 
 The same 17-byte frames as the Pulsar / ATK / VXE row, on the vendor collection `ff02:0002`: [sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery) mapped them from USB captures of Hitscan Utility 1.0.2 (command 0x04, level in byte 6, charging in byte 7, millivolts in bytes 8-9) and reads them on Linux. Note the vendor application's own battery indicator is broken - it showed 100 % while the device answered 75 - so the raw byte is the truth. **Unverified** here: no Hyperlight was on hand, [so #105's reporter confirming the level](https://github.com/HeyOkay/HaloBattery/issues/105) would settle it
 
+### HyperX Pulsefire Haste 2 Wireless (NGENUITY protocol)
+
+**Connection:** 2.4 GHz dongle (03F0:0D97 and 03F0:0F98), vendor collection on interface 2 with usage page 0xFF00, 64-byte packets
+
+NGENUITY's "universal" HID protocol, from [PMarinov1994/ngenuity-linux-cli](https://github.com/PMarinov1994/ngenuity-linux-cli), reverse engineered from NGENUITY 3.1.0's communication hub and confirmed on a Pulsefire Haste 2 Wireless:
+
+    request   50 02                 report id = command byte, then the sub-command, zero padded to 64
+    reply     51 02                 id = command + 1, byte 1 = sub-command
+              [2]    level 0..100
+              [3]    charge status: 0 not charging, 1 charging, 2 full, 3 charger error, FF unknown
+              [4..5] temperature, i16 LE (degrees C)
+              [6..7] voltage, u16 LE (mV)
+              [8]    gauge chip type, [9] charger chip type
+    link      52 01 -> 53 01 <connected>, 0 = asleep or off
+
+Packets are paced at least 10 ms apart, as NGENUITY does. A full battery on the charger (status 2) counts as charging; a charger error and an unknown status still show the level but suppress the charging state and its alerts. A sleeping mouse keeps its last reading greyed for a while, the way the Finalmouse provider does.
+
+Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collection list - `03F0:0D97` publishes exactly `ff00:0001` on interface 2 - and the reference project's dongle is `03F0:0F98`, while `0x0D97` appears in the device-information reply of that hardware. **Unverified on this app's side** until the reporter runs the test build.
+
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)

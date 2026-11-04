@@ -4,6 +4,15 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **HyperX Pulsefire Haste 2 Wireless** (`03f0:0d97`, `03f0:0f98`) - NGENUITY's
+  universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
+  and charge status (plus voltage and temperature in the diagnostics). Unverified on
+  hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.

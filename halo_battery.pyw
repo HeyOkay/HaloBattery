@@ -150,7 +150,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        WLmouseProvider, XInputProvider, SteamProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider,
+                       HyperXNgenuityProvider, InphicProvider, JabraProvider,
+                       LamzuAtlantisProvider, MchoseKbProvider,
                        MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -211,6 +212,7 @@ PROVIDER_LABELS = {
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
+    "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "jbl": "JBL Quantum",
@@ -256,7 +258,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider()]
+            EweadnProvider(), MchoseKbProvider(), HyperXNgenuityProvider()]
 
 
 # ---------------------------------------------------------------- config
