@@ -80,6 +80,7 @@ MESSAGES = {
     "state.charging": "{state}，充電中",
     "state.asleep": "{state}（上次記錄的電量，裝置休眠中）",
     "provider.ajazz": "AJAZZ 滑鼠",
+    "provider.alienware": "Alienware Pro Wireless 鍵盤",
     "provider.atk_keyboard": "ATK V75X 鍵盤",
     "provider.atk_nearlink": "ATK X1 Nearlink 滑鼠",
     "provider.aula": "AULA F87 Pro V2C 鍵盤",
