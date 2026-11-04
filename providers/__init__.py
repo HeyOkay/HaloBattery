@@ -48,3 +48,4 @@ from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
 from .monsgeek import MonsGeekProvider  # noqa: F401
 from .eweadn import EweadnProvider  # noqa: F401
 from .mchose_kb import MchoseKbProvider  # noqa: F401
+from .endgame_4k import Endgame4kProvider  # noqa: F401

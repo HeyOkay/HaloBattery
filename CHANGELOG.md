@@ -4,6 +4,12 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
