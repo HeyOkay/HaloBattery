@@ -9,7 +9,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro; `3554:f523`:
-  Teevolution Terra Pro), **ATK X1 Pro**
+  Teevolution Terra Pro), **Corsair Sabre v2 Pro Ultralight** (`1b1c:2b2a`),
+  **ATK X1 Pro**
   (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
   Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
   the same 17-byte power query; the keyboard keeps a keyboard pictogram. The ATK X1 Pro is

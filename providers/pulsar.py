@@ -143,6 +143,9 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xFA09: "Compx 2.4 GHz keyboard",
         0xF523: "Teevolution Terra Pro (2.4 GHz)",
     },
+    0x1B1C: {
+        0x2B2A: "Corsair Sabre v2 Pro Ultralight",
+    },
     0x373B: {
         0x11B6: "ATK A9 Ultimate (wired)",
         0x11D9: "ATK A9 Ultimate (2.4 GHz dongle)",
@@ -171,7 +174,8 @@ PIDS: Dict[int, Dict[int, str]] = {
 # ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
 # and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
 KINDS: Dict[Tuple[int, int], str] = {(0x3554, 0xFA09): "keyboard",
-                                     (0x3554, 0xF523): "keyboard"}
+                                     (0x3554, 0xF523): "keyboard",
+                                     (0x1B1C, 0x2B2A): "mouse"}
 
 
 def make_sonix_request() -> List[int]:

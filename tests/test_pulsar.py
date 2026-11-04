@@ -47,6 +47,21 @@ SHAPE = [
     (2, 0x0001, 0x0002),
 ]
 
+# the Corsair Sabre v2 Pro Ultralight's receiver (1b1c:2b2a) from #290: no ff42
+# bragi collection at all, but the family's ff02:0002 on interface 1
+SABRE_SHAPE = [
+    (0, 0x0001, 0x0002),
+    (1, 0xFF05, 0x0000),
+    (1, 0xFF03, 0x0000),
+    (1, 0x000C, 0x0001),
+    (1, 0x0001, 0x0080),
+    (1, 0xFF02, 0x0002),
+    (1, 0xFF04, 0x0002),
+    (1, 0xFF06, 0x0002),
+    (1, 0x0001, 0x0002),
+    (2, 0x0001, 0x0006),
+]
+
 # the Teevolution Terra Pro's 'RapidSync' receiver (3554:f523) from #300: a
 # keyboard collection on interface 2 and the same ff02:0002 control collection
 RAPIDSYNC_SHAPE = [
@@ -230,6 +245,20 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual("Teevolution Terra Pro (2.4 GHz)", d.name)
         self.assertEqual(88, d.level)
         self.assertEqual("keyboard", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_corsair_sabre_v2_pro_is_read(self):
+        # #290: 1b1c:2b2a 'Sabre v2 Pro Ultralight Wireless Receiver' publishes
+        # ff02:0002 but no ff42, so the Corsair bragi reader never touches it
+        bus = self.one_receiver(vid=0x1B1C, pid=0x2B2A, replies=[reply(64, 0)],
+                                shape=SABRE_SHAPE)
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:1b1c2b2a", d.key)
+        self.assertEqual("Corsair Sabre v2 Pro Ultralight", d.name)
+        self.assertEqual(64, d.level)
+        self.assertEqual("mouse", d.kind)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
     def test_the_atk_x1_pro_1k_receiver_is_read(self):
