@@ -4,15 +4,18 @@ The receiver (413c:211d, "Alienware Pro KB Gaming Receiver") publishes one vendo
 collection, ff00:0001 on interface 1. Alienware Command Center's own traffic, captured
 with USBPcap for #287, shows the read:
 
-  * SET_REPORT, class/interface, wValue 0x0300 (unnumbered, report type 3 = feature),
-    wIndex 1, 64 bytes: ``0e a1 00 ...``
-  * the answer arrives as a 64-byte input report on the same collection:
-    ``0e a1 25 ...`` - 0x25 = 37, which is exactly the percentage Command Center showed
-    in both captures (process1 and process2).
+  * SET_REPORT, class/interface, wValue 0x0300 (report id 0, report type 3 = feature),
+    wIndex 1: ``00 | 0e a1 00 ...`` - 65 bytes on the wire, the report id in front
+  * the answer arrives as an input report on the same collection:
+    ``0e a1 25 [state] ...`` - 0x25 = 37, exactly the percentage Command Center showed in
+    both captures; the charging capture (process3) shows byte 3 at 0x04 while the cable is
+    in and 0x00 otherwise.
 
-Only the level command (0xA1) is mirrored here. The captures were taken on the wireless
-link and carry no charging bit, so the charger state is reported as unknown rather than
-guessed (``charging_known=False`` keeps alerts quiet).
+The first build sent the frame without the report id, so hidapi took 0x0e as the id and the
+receiver never answered (#287: "no link" on every poll). Byte 3 is the charger state: 0 on
+battery, 4 while charging - the only two values the captures contain - so it is reported as
+charging while 4 and not charging otherwise; a value never seen is logged rather than
+treated as a claim about the cable.
 """
 from __future__ import annotations
 
@@ -33,7 +36,9 @@ NAME = "Alienware Pro Wireless Gaming Keyboard"
 KEY = f"alienware:{PID:04x}"
 
 VENDOR_PAGE = 0xFF00             # the receiver's vendor collection (#287 diagnostics)
-REPORT_SIZE = 64                 # feature write and input report, as captured
+REPORT_ID = 0x00                 # wValue 0x0300 in the capture
+REPORT_SIZE = 64                 # the frame itself, without the report id
+WIRE_SIZE = REPORT_SIZE + 1      # what hidapi is handed: [report id, frame...]
 BATTERY_CMD = 0xA1               # Command Center's battery read
 REPORT_MARK = 0x0E               # first byte of every vendor frame
 
@@ -43,21 +48,30 @@ ASLEEP_KEEP = 300                # s, as in the other receiver providers
 
 
 def make_request() -> List[int]:
-    """The captured feature report: mark, 0xA1, zero padding to 64 bytes."""
+    """``00 | 0e a1 00 ...`` - report id 0, then the captured 64-byte frame."""
     frame = [0] * REPORT_SIZE
     frame[0] = REPORT_MARK
     frame[1] = BATTERY_CMD
-    return frame
+    return [REPORT_ID] + frame
 
 
-def parse_reply(frame) -> Optional[int]:
-    """The level from ``0e a1 <level> ...``, or None for any other report."""
-    if frame is None or len(frame) < 3:
+def parse_reply(frame) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from ``[00 |] 0e a1 <level> <state> ...``, or None.
+
+    The mark is looked for at 0 and 1 because hidapi returns the report id in front on
+    some Windows builds and strips it on others.
+    """
+    if frame is None or len(frame) < 4:
         return None
-    if frame[0] != REPORT_MARK or frame[1] != BATTERY_CMD:
+    start = next((i for i in (0, 1) if len(frame) > i + 2 and frame[i] == REPORT_MARK
+                  and frame[i + 1] == BATTERY_CMD), None)
+    if start is None:
         return None
-    level = frame[2]
-    return level if 0 < level <= 100 else None
+    level = frame[start + 2]
+    if not 0 < level <= 100:
+        return None
+    state = frame[start + 3] if len(frame) > start + 3 else 0
+    return level, state == 0x04
 
 
 def pick(infos: List[dict]) -> Optional[dict]:
@@ -94,20 +108,21 @@ class AlienwareProvider(Provider):
         self._diag.append(f"[Alienware] pid={PID:04x} '{NAME}' "
                           f"iface={d.get('interface_number')} "
                           f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-        level = self._ask(d)
-        if level is not None:
+        parsed = self._ask(d)
+        if parsed is not None:
+            level, charging = parsed
             self._last = (level, time.time())
-            return [DeviceStatus(KEY, NAME, level, False, True, "alienware",
-                                 kind="keyboard", charging_known=False)]
+            return [DeviceStatus(KEY, NAME, level, charging, True, "alienware",
+                                 kind="keyboard")]
         # The receiver is still plugged in, so the keyboard is asleep or switched off:
         # keep the last reading greyed while it is fresh, then show "no link".
         if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, self._last[0], False, False, "alienware",
-                                 kind="keyboard", charging_known=False)]
+                                 kind="keyboard")]
         return [DeviceStatus(KEY, NAME, None, False, False, "alienware",
-                             kind="keyboard", charging_known=False)]
+                             kind="keyboard")]
 
-    def _ask(self, d: dict) -> Optional[int]:
+    def _ask(self, d: dict) -> Optional[Tuple[int, bool]]:
         dev = hid.device()  # type: ignore[union-attr]
         try:
             dev.open_path(d["path"])
@@ -120,10 +135,13 @@ class AlienwareProvider(Provider):
                 self._diag.append(f"  feature write refused ({sent})")
                 return None
             for _ in range(READ_ATTEMPTS):
-                frame = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
-                level = parse_reply(frame)
-                if level is not None:
-                    return level
+                frame = dev.read(WIRE_SIZE, READ_TIMEOUT_MS)
+                if not frame:
+                    continue
+                self._diag.append(f"  reply: {bytes(frame[:8]).hex()}")
+                parsed = parse_reply(frame)
+                if parsed is not None:
+                    return parsed
         except Exception as e:  # pragma: no cover - hidapi raises OSError
             self._diag.append(f"  read: {e}")
         return None

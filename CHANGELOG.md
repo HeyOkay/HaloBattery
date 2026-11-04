@@ -8,10 +8,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Alienware Pro Wireless Gaming Keyboard** (`413c:211d`) - the level Command Center
+- **Alienware Pro Wireless Gaming Keyboard** (`413c:211d`, 2.4 GHz receiver) - the level Command Center
   reads from the receiver's `ff00:0001` collection (feature report `0e a1`, answer
-  `0e a1 <level>`), taken from the #287 USBPcap captures. Unverified on hardware;
-  a test build is out for [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
+  `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
+  report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
+  ignored the writes and the keyboard sat at "no link". The charging capture also settles the
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
+  hardware until the second test build is run;
+  see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
 
 ## [1.16.0] - 2026-11-04
 

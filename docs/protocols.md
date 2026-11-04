@@ -369,9 +369,11 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 
 **Connection:** 2.4 GHz receiver (413C:211D, "Alienware Pro KB Gaming Receiver"), vendor collection `ff00:0001` on interface 1.
 
-Alienware Command Center v6.14.54.0 was captured with USBPcap for #287. It sends an unnumbered 64-byte **feature** report (`SET_REPORT`, wValue 0x0300) starting `0e a1 00 ...`, and the receiver answers with a 64-byte input report `0e a1 <level> ...` - `0x25` = 37 %, exactly what Command Center displayed in both captures. The same stream carries unsolicited state reports (`0e 05`, `0e 17`, `0e 83`, `0e 88`, `0e 89`, `0e 97`), so a reader must filter on the `a1` command rather than take the next report.
+Alienware Command Center v6.14.54.0 was captured with USBPcap for #287. It sends a 64-byte **feature** report (`SET_REPORT`, **wValue 0x0300 = report id 0**) starting `0e a1 00 ...`, and the receiver answers with an input report `0e a1 <level> <state> ...` - `0x25` = 37 %, exactly what Command Center displayed in both captures. The same stream carries unsolicited state reports (`0e 05`, `0e 17`, `0e 83`, `0e 88`, `0e 89`, `0e 97`), so a reader must filter on the `a1` command rather than take the next report.
 
-Only the level is read. The captures were taken on the wireless link and contain no charging bit, so the app reports the charger state as unknown (`charging_known=False`) rather than guessing.
+The report id is the detail that matters: hidapi treats the first byte of the buffer as the report id, so the frame must be handed over as `00 | 0e a1 ...` (65 bytes). The first build passed `0e` as the report id, the receiver ignored the writes and every poll ended in "no link (off or asleep)" - the test build's report in #287. The reply may come back with the same `0x00` in front or without it, so the mark is looked for at either position.
+
+Byte 3 is the charger state: `0x00` on battery and `0x04` with the cable in, the only two values in the captures (the charging one is `process3`). It is reported as charging while `0x04` and as not charging otherwise; a state never seen is written to the diagnostics rather than interpreted.
 
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 

@@ -3,9 +3,9 @@
 The frames are the ones Alienware Command Center v6.14.54.0 exchanged with the
 Alienware Pro Wireless keyboard's receiver in the #287 USBPcap captures:
 
-  * SET_REPORT, feature, unnumbered, 64 bytes: ``0e a1 00 ...``
-  * input report, 64 bytes: ``0e a1 25 ...`` -> 0x25 = 37 %, the percentage Command
-    Center showed in both captures.
+  * SET_REPORT, feature, report id 0, 64 bytes: ``00 | 0e a1 00 ...``
+  * input report: ``0e a1 25 <state> ...`` -> 0x25 = 37 %, the percentage Command Center
+    showed; the charging capture (process3) has byte 3 at 0x04 while the cable is in.
 
 The collection is the one from the reporter's 2.4 GHz diagnostics: 413c:211d, vendor
 usage ff00:0001 on interface 1 (the keyboard and consumer collections carry no battery
@@ -31,6 +31,9 @@ def frame(cmd, value, pad=0x00):
 
 
 CAPTURED_37 = frame(A.BATTERY_CMD, 0x25)
+CAPTURED_37_PREFIXED = [A.REPORT_ID] + CAPTURED_37   # hidapi keeps the report id in front
+CAPTURED_CHARGING = frame(A.BATTERY_CMD, 0x13)       # 19 %, charging
+CAPTURED_CHARGING[3] = 0x04
 CAPTURED_STATE = frame(0x05, 0x00, pad=0xAC)      # the receiver's unsolicited state report
 
 
@@ -72,14 +75,20 @@ class PollTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- frames
 
-    def test_the_request_is_the_captured_feature_report(self):
+    def test_the_request_carries_the_report_id_in_front(self):
         req = A.make_request()
-        self.assertEqual(A.REPORT_SIZE, len(req))
-        self.assertEqual([0x0E, 0xA1], req[:2])
-        self.assertEqual([0] * (A.REPORT_SIZE - 2), req[2:])
+        self.assertEqual(A.WIRE_SIZE, len(req))
+        self.assertEqual([A.REPORT_ID, 0x0E, 0xA1], req[:3])
+        self.assertEqual([0] * (A.WIRE_SIZE - 3), req[3:])
 
     def test_the_captured_reply_reads_37(self):
-        self.assertEqual(37, A.parse_reply(CAPTURED_37))
+        self.assertEqual((37, False), A.parse_reply(CAPTURED_37))
+
+    def test_a_reply_that_keeps_the_report_id_in_front_is_read_too(self):
+        self.assertEqual((37, False), A.parse_reply(CAPTURED_37_PREFIXED))
+
+    def test_the_charging_capture_sets_the_charging_state(self):
+        self.assertEqual((19, True), A.parse_reply(CAPTURED_CHARGING))
 
     def test_other_reports_are_ignored(self):
         self.assertIsNone(A.parse_reply(CAPTURED_STATE))
@@ -93,13 +102,19 @@ class PollTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- polling
 
+    def test_a_charging_reply_shows_charging(self):
+        self.device.replies = [CAPTURED_CHARGING]
+        out = self.provider.poll()
+        self.assertEqual(19, out[0].level)
+        self.assertTrue(out[0].charging)
+
     def test_the_level_is_read_from_the_vendor_collection(self):
         out = self.provider.poll()
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.source, s.kind)
                           for s in out],
                          [("alienware:211d", "Alienware Pro Wireless Gaming Keyboard", 37,
                            False, True, "alienware", "keyboard")])
-        self.assertFalse(out[0].charging_known)     # the captures carry no charging bit
+        self.assertTrue(out[0].charging_known)      # byte 3 tells the cable apart
         self.assertEqual([b"kb-vendor"], self.device.opened)
         self.assertEqual([bytes(A.make_request())], self.device.sent)
 
