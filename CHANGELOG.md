@@ -4,6 +4,12 @@ All notable changes to Halo Battery are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+
 ## [1.16.0] - 2026-11-04
 
 First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
