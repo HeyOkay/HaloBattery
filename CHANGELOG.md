@@ -11,6 +11,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **AJAZZ AJ159 PRO** (`3151:402d`, the 8K receiver) - the same CompX read as the
   AJ179 on a newer receiver whose vendor channel is `ffff:0002`. Unverified on
   hardware; a test build is out for [#289](https://github.com/HeyOkay/HaloBattery/issues/289).
+- **Kysona Uranus** (`3151:5031`) - the same `3151` receiver family layout as the AJ159
+  (`ffff:0001`/`0002`, no `ff02:0002`), read with the same frames. Unverified on
+  hardware; a test build is out for [#251](https://github.com/HeyOkay/HaloBattery/issues/251).
 
 ## [1.16.0] - 2026-11-04
 
