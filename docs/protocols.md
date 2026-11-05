@@ -508,6 +508,8 @@ same RACE commands wrapped in `02 80 <len> <crcLo> <crcHi> payload` with a CRC-1
 over the whole report and an `'O'`/`'F'` input-report acknowledgement - documented in that
 project, not implemented here until a 0550 unit can test it.
 
+**Confirmed on hardware by @notisv** on the second test build: the icon showed the level continuously (`reply: 0e a1 5c 00` = 92 %), agreed with Bluetooth, Windows and Command Center at the same time, and the charging state followed the cable in and out. They kept it running for over an hour before reporting.
+
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
 **Connection:** Lightspeed, Unifying or Bolt receiver

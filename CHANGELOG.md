@@ -64,9 +64,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
   report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
   ignored the writes and the keyboard sat at "no link". The charging capture also settles the
-  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
-  hardware until the second test build is run;
-  see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. **Confirmed on
+  hardware by @notisv** (#287): the level matched Bluetooth, Windows and Command Center
+  (`0e a1 5c 00` = 92 %) and the charging state followed the cable.
 - **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
   read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
   per transmitter. It needs WinUSB bound to that interface with
