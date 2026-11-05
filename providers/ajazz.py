@@ -132,7 +132,9 @@ ANNOUNCE_LEVEL_INDEX = 2
 
 MOUSE_USAGE = (0x0001, 0x0002)   # never opened: the OS owns the pointer stream
 VENDOR_PAGE = 0xFF00
-MAX_CANDIDATES = 4               # the receiver has a handful of collections at most
+MAX_CANDIDATES = 6               # the 8K receiver has five: four on interface 1 plus
+                                 # the vendor pair on interface 2 (#289 - the fourth one
+                                 # cut the dump below the channel that actually answers)
 ASLEEP_KEEP = 300                # s, as in the other receiver providers
 
 

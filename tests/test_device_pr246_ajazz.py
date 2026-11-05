@@ -228,6 +228,24 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
                          [("ajazz:5031", "Kysona Uranus", 75, "mouse")])
 
+    def test_the_fifth_collection_is_reached_on_the_8k_receiver(self):
+        # #289: 3151:402d has five collections - four on interface 1, none of them with an
+        # output report, plus ffff:0002 on interface 2, which is the one that answers.
+        # Only the first four were tried, so the icon appeared with "no link".
+        vid, pid, _name = A.ALT_TARGETS[0]
+        shape = [(1, 0x0001, 0x0006), (1, 0x000C, 0x0001), (1, 0x0001, 0x0080),
+                 (1, 0xFFFF, 0x0001), (2, 0xFFFF, 0x0002)]
+        entries = [{"product_id": pid, "interface_number": i, "usage_page": p, "usage": u,
+                    "path": b"k8-%d-%04x-%02x" % (i, p, u),
+                    "product_string": "AJAZZ 2.4G 8K"}
+                   for i, p, u in shape]
+        cols = self.cols(entries, answer=entries[4]["path"])
+        # every collection reports some output length, so none of them is preferred:
+        # the answer channel is simply last in the dump order, as on the reporter's unit
+        out = self.poll(entries, cols, lengths={e["path"]: 64 for e in entries})
+        self.assertEqual([(s.key, s.level) for s in out], [("ajazz:402d", 75)])
+        self.assertEqual(5, len(self.order))      # every collection got a turn
+
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()
         cols = self.cols(entries)
