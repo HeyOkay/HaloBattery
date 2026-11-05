@@ -530,9 +530,10 @@ The report-id byte is required: without it the keyboard answers `ff 07 ...`. VIA
 protocol-version read (`01`) answers `01 00 0d`, i.e. version 13, which is what URX HUB
 expects for this model.
 
-**Confirmed on hardware** in the reporter's probe run (#245): the frame above returned 76 %
-on a Core75 on its dongle. The reply carries no charging state - every byte after the level
-was 0 - so the charger is reported as unknown rather than guessed.
+**Confirmed on hardware by @TheLastGamer18** (#245): the app detected the keyboard and the
+percentage matched URX HUB. The charging state is **not exposed**: a second probe run with
+the charging cable in returned byte-identical replies (`08 00 07 4c ...`), so the app shows
+the level only rather than inventing a charger state.
 
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 

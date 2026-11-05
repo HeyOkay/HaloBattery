@@ -24,8 +24,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **URX Core75** (`36b0:3002`, 2.4 GHz dongle) - read through its VIA raw HID channel
   (`ff60:0061`, report id 0, 32-byte packets): custom-channel value 7 answers the battery,
   `08 00 07 <level>`. The framing comes from URX HUB's own device table and the reply was
-  confirmed on hardware in [#245](https://github.com/HeyOkay/HaloBattery/issues/245)
-  (76 %). Charging is not reported by this board, so it stays unknown.
+  **confirmed on hardware by @TheLastGamer18** ([#245](https://github.com/HeyOkay/HaloBattery/issues/245)):
+  the app detected the keyboard and the percentage matched URX HUB. A probe run with the
+  charging cable in returned the same bytes, so this board does not expose a charger state -
+  the app shows the level only.
 
 ### Added
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
