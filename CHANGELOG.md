@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Corsair HS80 RGB Wireless (original): battery level over direct USB
+  (`1b1c:0a69`) or its wireless receiver (`1b1c:0a6b`), sharing one tray icon.
+  Charging is inferred from USB presence; the powered-off charging identity
+  (`1b1c:0a6a`) keeps an unknown-level icon when no battery reading is available.
+  Protocol from [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
+
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
   package (`halo_battery.pyw` stays the entry point), the .bat helpers into `scripts/`

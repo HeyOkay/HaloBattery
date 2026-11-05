@@ -18,6 +18,10 @@ The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte 
 
 The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, whose answer carries the battery as attribute 0x0CD6 (`05 5D <len> 00 D6 0C <percent>`). One packet is enough — the query for that attribute is answered with the marker on its own (0.19 s against 1.48 s for the whole sequence) — with the full sequence as the fallback. Dongle and cable are one headset and share one icon; charging is inferred from the cable answering, so the icon breathes while it sits on USB-C. With the headset switched off the dongle keeps answering with the last value it held, so the provider goes by the dongle's own product string — `"Audeze Maxwell Dongle"` with no headset linked, `"Audeze Maxwell HID"` with one — and reports nothing: the icon leaves the tray the way any switched-off device does
 
+### Corsair HS80 RGB Wireless (original), direct USB and wireless receiver
+
+The powered-on headset identifies as `1b1c:0a69` by direct USB; when switched off but charging it re-enumerates as `1b1c:0a6a`; its receiver is `1b1c:0a6b`. The powered-on device and receiver expose the control HID collection on interface 3, usage page `ff42`. Halo Battery sends the 64-byte battery query `02 <target> 02 0f`: target `08` in direct USB mode and `09` through the receiver. It accepts only a matching response report `01 <channel> 02 00`, where channel is target minus `08`, with a little-endian battery value in tenths of a percent at bytes 4-5 (0..1000). The `0a6a` charging identity has no battery-control collection, so when only it is present Halo Battery keeps an unknown-level headset icon and infers charging from that USB identity; if a receiver reading is available, it reuses the level and adds the charging animation. This is distinct from the HS80 Max protocol. Reference: [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
+
 ### Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless
 
 **Connection:** Wireless receiver (1B1C:2A08, 1B1C:2A02, 1B1C:0A97)
