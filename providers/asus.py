@@ -201,6 +201,10 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
     0x1AB0: ("ROG Strix Scope II 96 Wireless", 6),
     0x1B7A: ("ROG Strix Scope II 96 RX Wireless", 6),
     0x1B06: ("ROG Falchion RX Low Profile", 11),
+    # #340: the pair list's own id for the Morph 96 ("01 a0 00 01 00 ea 1c 02 04");
+    # G-Helper has no entry for it yet, so it takes the family default byte 6 -
+    # unverified until the reporter's test build is read
+    0x1CEA: ("ROG Strix Morph 96 Wireless", 6),
 }
 
 Reading = Tuple[int, bool, str]     # level %, charging, approximate text ("" = exact)

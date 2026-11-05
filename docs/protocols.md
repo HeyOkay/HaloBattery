@@ -185,6 +185,11 @@ The receiver holds a mouse and a keyboard and names both in a pair list, which i
                                            the Falchion family, where byte 6 is a 0..10
                                            gauge) and charging in byte 9
 
+The keyboards are named from the pair list: Azoth, Azoth Extreme (and its SE), Strix Scope II 96
+(and its RX), Falchion RX Low Profile, and the **Strix Morph 96 Wireless** (`1cea`, #340) -
+the last on the family's byte-6 layout, since G-Helper has no entry for that id yet and the
+reporter's pair list is the only evidence. Unverified until its test build is read.
+
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
 
 Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile, and on a Keris II Ace and an Azoth by @comipa in [#231](https://github.com/HeyOkay/HaloBattery/issues/231).
