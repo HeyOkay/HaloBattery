@@ -7,15 +7,15 @@
 **Battery levels of your wireless mouse, keyboard, headset and controller, right in the Windows tray.**<br>
 One icon per device. No vendor software.
 
-[![Latest release](https://img.shields.io/github/v/release/ahmedkhursheed23/HaloBattery?label=release&color=2ea043)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/ahmedkhursheed23/HaloBattery/total?color=2ea043)](../../releases)
+[![Latest release](https://img.shields.io/github/v/release/HeyOkay/HaloBattery?label=release&color=2ea043)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/HeyOkay/HaloBattery/total?color=2ea043)](../../releases)
 [![Windows 10 / 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
-[![License: MIT](https://img.shields.io/github/license/ahmedkhursheed23/HaloBattery?color=lightgrey)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/HeyOkay/HaloBattery?color=lightgrey)](LICENSE)
 
 ### [⬇ Download the latest version](../../releases/latest)
 
-Community fork of [HeyOkay/HaloBattery](https://github.com/HeyOkay/HaloBattery). To help, read [Contributing](.github/CONTRIBUTING.md).<br>
-The [pre-release build](https://github.com/ahmedkhursheed23/HaloBattery/releases/tag/prerelease-build) has fixes that are not released yet. It is rebuilt on every merge and may have bugs.
+Maintained together with the community. To help, read [Contributing](.github/CONTRIBUTING.md).<br>
+The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) has fixes that are not released yet. It is rebuilt on every merge and may have bugs.
 
 <img src="docs/icons.png" alt="Every icon state: headset, mouse, keyboard, controllers and Bluetooth at 100 % down to 15 %, charging and asleep" width="560">
 

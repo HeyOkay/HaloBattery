@@ -7,7 +7,7 @@ body:
         Thank you. Before you fill in this form:
         1. Close the maker's software (Synapse, G HUB, the web driver and similar).
         2. Turn the device on and wake it up (move the mouse, press a key).
-        3. Right-click a Halo Battery icon and select **Diagnostics…**. The steps with a screenshot are in [Add your device](https://github.com/ahmedkhursheed23/HaloBattery#add-your-device).
+        3. Right-click a Halo Battery icon and select **Diagnostics…**. The steps with a screenshot are in [Add your device](https://github.com/HeyOkay/HaloBattery#add-your-device).
   - type: input
     id: device
     attributes:

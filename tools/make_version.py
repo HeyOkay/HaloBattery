@@ -31,7 +31,7 @@ VSVersionInfo(
         StringStruct('FileDescription', 'Halo Battery - battery levels of wireless devices in the tray'),
         StringStruct('FileVersion', '{v}'),
         StringStruct('InternalName', 'HaloBattery'),
-        StringStruct('LegalCopyright', 'MIT License, https://github.com/ahmedkhursheed23/HaloBattery'),
+        StringStruct('LegalCopyright', 'MIT License, https://github.com/HeyOkay/HaloBattery'),
         StringStruct('OriginalFilename', 'HaloBattery.exe'),
         StringStruct('ProductName', 'Halo Battery'),
         StringStruct('ProductVersion', '{v}')

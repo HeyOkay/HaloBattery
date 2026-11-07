@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
+
+### Fixed
+- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
+
 ### Added
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
 - **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.

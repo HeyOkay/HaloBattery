@@ -1,6 +1,6 @@
 # Instructions for AI agents and contributors
 
-Halo Battery: a Windows tray app (Python) that shows the battery level of wireless mice, keyboards, headsets and controllers. This is the community fork `ahmedkhursheed23/HaloBattery`. Human-facing rules are in [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md); this file is the short version for agents.
+Halo Battery: a Windows tray app (Python) that shows the battery level of wireless mice, keyboards, headsets and controllers. The canonical repository is `HeyOkay/HaloBattery`. Human-facing rules are in [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md); this file is the short version for agents.
 
 ## Repo map
 

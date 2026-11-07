@@ -45,7 +45,7 @@ from typing import Callable, List, Optional, Tuple
 
 log = logging.getLogger("halo_battery")
 
-REPO = "ahmedkhursheed23/HaloBattery"
+REPO = "HeyOkay/HaloBattery"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 TAG_URL = f"https://api.github.com/repos/{REPO}/releases/tags/v{{version}}"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
@@ -58,8 +58,8 @@ def invalidate_cache_for_repo(cfg: dict, repo: Optional[str] = None) -> bool:
     """Drop the remembered update offer when it came from another repository.
 
     The cache is tagged with the repository it was fetched from ("update_repo").
-    A settings file written by a build that checked a different repository (the
-    upstream project, before this fork) would otherwise show that repository's
+    A settings file written by a build that checked a different repository (a
+    community fork, before returning upstream) would otherwise show that repository's
     offer and link until the next check. Returns True when `cfg` was changed."""
     repo = repo or REPO
     if cfg.get("update_repo") == repo:

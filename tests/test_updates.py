@@ -570,15 +570,15 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(shown, [])
 
 
-class ForkRepositoryTests(unittest.TestCase):
-    def test_the_fork_is_the_update_source(self):
-        self.assertEqual(updates.REPO, "ahmedkhursheed23/HaloBattery")
+class UpstreamRepositoryTests(unittest.TestCase):
+    def test_upstream_is_the_update_source(self):
+        self.assertEqual(updates.REPO, "HeyOkay/HaloBattery")
         for url in (updates.API_URL, updates.TAG_URL, updates.RELEASES_URL):
-            self.assertIn("ahmedkhursheed23/HaloBattery", url)
-            self.assertNotIn("HeyOkay", url)
+            self.assertIn("HeyOkay/HaloBattery", url)
+            self.assertNotIn("ahmedkhursheed23", url)
 
-    def test_an_offer_cached_from_upstream_is_dropped(self):
-        cfg = {"update_latest": "99.0", "update_url": "https://github.com/HeyOkay/HaloBattery/releases/latest",
+    def test_an_offer_cached_from_the_fork_is_dropped(self):
+        cfg = {"update_repo": "ahmedkhursheed23/HaloBattery", "update_latest": "99.0", "update_url": "https://github.com/ahmedkhursheed23/HaloBattery/releases/latest",
                "update_notified": "99.0", "update_last": 123.0, "low": 30}
         self.assertTrue(updates.invalidate_cache_for_repo(cfg))
         for key in updates.CACHE_KEYS:
