@@ -1,0 +1,57 @@
+name: Tests
+
+# Required checks for pull requests into pre-release and main.
+# "tests" runs the unit tests (fake HID, no hardware) and the --probe smoke test.
+# "branch-policy" only allows pre-release or hotfix/* branches to target main.
+
+on:
+  pull_request:
+    branches: [main, pre-release]
+  push:
+    branches: [main, pre-release]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke test
+        # imports every module and runs one full poll on the runner (no devices there)
+        run: python halo_battery.pyw --probe
+
+  branch-policy:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only pre-release or hotfix/* may target main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            pre-release|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *)
+              echo "::error::PRs into main must come from pre-release (release PR) or hotfix/<name>. Branch '$HEAD_REF' must target pre-release instead."
+              exit 1
+              ;;
+          esac

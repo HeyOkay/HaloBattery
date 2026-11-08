@@ -10,11 +10,13 @@ Run from the repository root:
 import importlib.util
 import os
 import sys
-import tempfile
 import threading
 import types
 import unittest
 from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -22,7 +24,7 @@ sys.path.insert(0, ROOT)
 # The app writes its log and settings to %APPDATA%\HaloBattery when it loads. Point it
 # at a temporary folder, so the tests never touch the real log or settings.
 _real_appdata = os.environ.get("APPDATA")
-os.environ["APPDATA"] = tempfile.mkdtemp(prefix="halo_battery_test_")
+os.environ["APPDATA"] = _sandbox.mkdtemp(prefix="halo_battery_test_")
 try:
     spec = importlib.util.spec_from_file_location("halo_battery", os.path.join(ROOT, "halo_battery.pyw"))
     hb = importlib.util.module_from_spec(spec)
@@ -308,7 +310,7 @@ class HideDuringApplyTests(HideRenameTestCase):
 
 class RenameTests(HideRenameTestCase):
     def rename_to(self, app, ic, answer):
-        with mock.patch.object(hb, "ask_name", lambda current: answer):
+        with mock.patch.object(hb, "ask_name", lambda current, **kwargs: answer):
             app._rename(ic)
 
     def test_rename_changes_tooltip_and_alert(self):
@@ -384,7 +386,7 @@ class MenuTests(HideRenameTestCase):
         app.apply([dev()])
         ic = app.icons["logitech:C15E09CD"]
         items = {i.text: i for i in app.build_menu(ic).items if i.visible}
-        with mock.patch.object(hb, "ask_name", lambda current: "Work mouse"):
+        with mock.patch.object(hb, "ask_name", lambda current, **kwargs: "Work mouse"):
             items["Rename…"](FakeTrayIcon())
         self.assertEqual(app.cfg["names"], {"logitech:C15E09CD": "Work mouse"})
         items["Hide this device"](FakeTrayIcon())
@@ -397,7 +399,7 @@ class MenuLayoutTests(HideRenameTestCase):
         app.apply([dev()])
         texts = [i.text for i in app.build_menu(app.icons["logitech:C15E09CD"]).items
                  if i.visible and i is not hb.Menu.SEPARATOR]
-        self.assertEqual(texts, ["G502 LIGHTSPEED: 76%", "Rename…", "Icon", "Low battery alert at",
+        self.assertEqual(texts, ["G502 LIGHTSPEED: 76%", "Rename…", "Icon", "Low battery alert at (this device)",
                                  "Hide this device",
                                  "Refresh now", "Preferences", "Diagnostics…",
                                  f"Exit (v{hb.VERSION})"])
@@ -407,7 +409,7 @@ class MenuLayoutTests(HideRenameTestCase):
         app.apply([dev()])
         texts = [i.text for i in app.build_menu(app.icons["logitech:C15E09CD"]).items
                  if i.visible and i is not hb.Menu.SEPARATOR]
-        self.assertEqual(texts, ["G502 LIGHTSPEED: 76%", "Rename…", "Icon", "Low battery alert at",
+        self.assertEqual(texts, ["G502 LIGHTSPEED: 76%", "Rename…", "Icon", "Low battery alert at (this device)",
                                  "Hide this device",
                                  "Refresh now", "Preferences", "Hidden devices",
                                  "Diagnostics…", f"Exit (v{hb.VERSION})"])
@@ -417,7 +419,7 @@ class MenuLayoutTests(HideRenameTestCase):
         menu = app.build_menu(None)
         prefs = next(i for i in menu.items if i.text == "Preferences").submenu
         texts = [i.text for i in prefs.items if i is not hb.Menu.SEPARATOR]
-        self.assertEqual(texts, ["Poll interval", "Low battery alert", "Alert when fully charged",
+        self.assertEqual(texts, ["Language / Langue", "Poll interval", "Low battery alert", "Alert when fully charged",
                                  "Estimated time left", "Quiet while gaming",
                                  "Sound with the low battery alert",
                                  "Keep disconnected devices until restart",

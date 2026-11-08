@@ -11,13 +11,16 @@ import tempfile
 import unittest
 from unittest import mock
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 # The app writes its log and settings to %APPDATA%\HaloBattery when it loads. Point it
 # at a temporary folder, so the tests never touch the real log or settings.
 _real_appdata = os.environ.get("APPDATA")
-os.environ["APPDATA"] = tempfile.mkdtemp(prefix="halo_battery_test_")
+os.environ["APPDATA"] = _sandbox.mkdtemp(prefix="halo_battery_test_")
 try:
     spec = importlib.util.spec_from_file_location("halo_battery", os.path.join(ROOT, "halo_battery.pyw"))
     hb = importlib.util.module_from_spec(spec)

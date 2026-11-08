@@ -32,7 +32,13 @@ SAVE_EVERY = 300.0       # s between writes of history.json
 
 
 def format_left(seconds: float) -> str:
-    """12600 -> 'about 4 h of use left'."""
+    """12600 -> 'about 4 h of use left'.
+
+    Zero (or a negative from a bad reading) means the battery is empty: saying
+    "less than 1 h of use left" for 0% would be wrong.
+    """
+    if seconds <= 0:
+        return "no use left"
     hours = seconds / 3600.0
     if hours < 1:
         return "less than 1 h of use left"
@@ -60,12 +66,13 @@ class History:
         except (OSError, ValueError):
             return
         now = time.time()
-        for key, d in (data.get("devices") or {}).items() if isinstance(data, dict) else ():
+        devices = data.get("devices") if isinstance(data, dict) else None
+        for key, d in (devices.items() if isinstance(devices, dict) else ()):
             try:
                 samples = [[float(u), int(l)] for u, l in d.get("samples", [])][-MAX_SAMPLES:]
                 entry = {"use": float(d.get("use", 0.0)), "last": None,
                          "seen": float(d.get("seen", now)), "samples": samples}
-            except (AttributeError, TypeError, ValueError):
+            except (AttributeError, OverflowError, TypeError, ValueError):
                 continue                      # a damaged entry: start that device over
             if now - entry["seen"] < FORGET_AFTER:
                 self.devices[str(key)] = entry
@@ -109,6 +116,9 @@ class History:
             return
         if d["last"] is not None:
             d["use"] += min(max(now - d["last"], 0.0), MAX_GAP)
+            # the use time is part of the estimate (a level that sits still slows the
+            # rate down), so a restart must keep it too, not only the samples
+            self.dirty = True
         d["last"] = now
         samples = d["samples"]
         if samples and level >= samples[-1][1] + RESET_RISE:

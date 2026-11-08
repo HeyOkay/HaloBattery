@@ -10,11 +10,13 @@ import io
 import os
 import shutil
 import sys
-import tempfile
 import types
 import unittest
 import zipfile
 from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests"))
@@ -64,7 +66,7 @@ class FakeResponse(io.BytesIO):
 
 class TempDirTestCase(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.mkdtemp()
+        self.tmp = _sandbox.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def write(self, path, data=b""):
@@ -452,7 +454,7 @@ class AppUpdateTests(unittest.TestCase):
         app.update_lock = hb.threading.Lock()
         app.install_ok, app.install_why = install_ok, "" if install_ok else "running from source"
         app.notes = []
-        app.notify_any = lambda text, title, key="": app.notes.append(text)
+        app.notify_any = lambda text, title, key="", kind="", params=None: app.notes.append(text)
         app.refresh_menus = lambda: None
         app.opened = []
         app.open_update = lambda: app.opened.append(True)
@@ -566,6 +568,35 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(shown, [])
         _, shown = self.run_after_update({"last_version": "99.0.0"})
         self.assertEqual(shown, [])
+
+
+class UpstreamRepositoryTests(unittest.TestCase):
+    def test_upstream_is_the_update_source(self):
+        self.assertEqual(updates.REPO, "HeyOkay/HaloBattery")
+        for url in (updates.API_URL, updates.TAG_URL, updates.RELEASES_URL):
+            self.assertIn("HeyOkay/HaloBattery", url)
+            self.assertNotIn("ahmedkhursheed23", url)
+
+    def test_an_offer_cached_from_the_fork_is_dropped(self):
+        cfg = {"update_repo": "ahmedkhursheed23/HaloBattery", "update_latest": "99.0", "update_url": "https://github.com/ahmedkhursheed23/HaloBattery/releases/latest",
+               "update_notified": "99.0", "update_last": 123.0, "low": 30}
+        self.assertTrue(updates.invalidate_cache_for_repo(cfg))
+        for key in updates.CACHE_KEYS:
+            self.assertNotIn(key, cfg)
+        self.assertEqual(cfg["update_repo"], updates.REPO)
+        self.assertEqual(cfg["low"], 30)                 # unrelated settings stay
+
+    def test_an_offer_cached_from_this_repository_is_kept(self):
+        cfg = {"update_repo": updates.REPO, "update_latest": "99.0", "update_last": 5.0}
+        self.assertFalse(updates.invalidate_cache_for_repo(cfg))
+        self.assertEqual(cfg["update_latest"], "99.0")
+        self.assertEqual(cfg["update_last"], 5.0)
+
+    def test_the_cache_follows_a_repository_change(self):
+        cfg = {"update_repo": "a/b", "update_latest": "9.9"}
+        self.assertTrue(updates.invalidate_cache_for_repo(cfg, "c/d"))
+        self.assertNotIn("update_latest", cfg)
+        self.assertEqual(cfg["update_repo"], "c/d")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,498 @@
+"""Tests for the Turtle Beach Stealth Pro II provider. No hardware: the transmitter is a
+fake that answers with the frames of the Swarm II capture in issue #173, byte for byte.
+
+The conversation the provider has is the capture's: the "SInf" session opener first
+(packet 150; the device answers with its whole state dump within about 30 ms), then the
+GSI ask (packet 616) whose answer (packets 696-702) carries key 240 = 86. What a
+record ask without the opener gets is what both test builds on the reporter's unit saw:
+idle frames only (#173).
+
+Run from the repository root:
+
+    python -m unittest discover -s tests
+"""
+import os
+import sys
+import unittest
+from unittest import mock
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from providers import turtlebeach  # noqa: E402
+
+PATH = b"\\\\?\\hid#vid_10f5&pid_229b&mi_03&col02#x"
+
+# The transmitter's answer to the GSI request, as captured: four 62-byte input reports,
+# each framed 07 <len> 00 <len bytes>. The record's envelope (05 5b .. prefix, the
+# 61 19 62 32 6a 21 01 ff marker) wraps the JSON.
+GSI_REPLY = [
+    bytes.fromhex("073b00055bd000029968454414040000"
+                  "0000000000611962326a2101ff7b224f"
+                  "52223a22475349222c224b5650223a7b"
+                  "22323030223a2231222c22323130"),
+    bytes.fromhex("073b00223a2230222c22323230223a22"
+                  "4d792048656164736574222c22323330"
+                  "223a2232222c22323430223a22383622"
+                  "2c22323530223a2230222c223236"),
+    bytes.fromhex("073b0030223a22313030222c22323730"
+                  "223a2230222c22323830223a2231222c"
+                  "22323930223a2232222c22326130223a"
+                  "223430222c22326230223a223630"),
+    bytes.fromhex("072300222c22326330223a223530222c"
+                  "22326430223a223738222c2232653022"
+                  "3a2231227d7d00000000000000000000"
+                  "0000000000000000000000000000"),
+]
+
+# A key update the transmitter pushed by itself in the capture:
+# {"UP":"GSI","KVP":{"290":"2"}} - no 240/220 in it.
+PUSH_290 = bytes.fromhex("073b00000000000061186232ef2101ff"
+                         "7b225550223a22475349222c224b5650"
+                         "223a7b22323930223a2232227d7d055b"
+                         "34000299584500b0030000000000")
+
+EMPTY = bytes([0x07] + [0] * 61)
+
+
+def frame(payload: bytes) -> bytes:
+    """A reply as the transmitter frames one: 07 <len> 00 <payload>, padded to 62."""
+    return bytes([0x07, len(payload), 0x00]) + payload + bytes(62 - 3 - len(payload))
+
+
+# The session opener and the GSI ask, byte for byte from the capture (packets 150 and
+# 616): output report 6, 62 bytes. Byte 1 counts the 24 content bytes from byte 3 up to
+# and including the record name at bytes 21-26; the tokens are the capture's.
+CAPTURE_SINF = bytes.fromhex(
+    "061800055a140002994801c04a010000"
+    "0000000000610053496e660000000000"
+    "00000000000000000000000000000000"
+    "0000000000000000000000000000")
+CAPTURE_GSI = bytes.fromhex(
+    "061800055a1400029948014414040000"
+    "00000000006100534753490000000000"
+    "00000000000000000000000000000000"
+    "0000000000000000000000000000")
+
+# The reporter's on-cable run (#173, test 4 diagnostics): the same record as the
+# capture except 230 (2 -> 0), 250 (0 -> 1), 280 (1 -> 2) and 290 (2 -> 4); 250 is
+# the one strict 0/1 key, and that is the charging state.
+CABLE_JSON = (b'{"OR":"GSI","KVP":{"200":"1","210":"0","220":"My Headset","230":"0",'
+              b'"240":"78","250":"1","260":"100","270":"0","280":"2","290":"4",'
+              b'"2a0":"35","2b0":"60","2c0":"50","2d0":"78","2e0":"1"}}')
+CABLE_REPLY = [frame(CABLE_JSON[i:i + 59]) for i in range(0, len(CABLE_JSON), 59)]
+
+# The first frames of the state dump the SInf ask answers with (packets 151 and 154):
+# key updates, none of them carrying 240.
+SINF_DUMP = [frame(b"\x00\x00\x00\x00\x00\x61\x18\x62\x32\xef\x21\x01\xff"
+                   b'{"UP":"GSI","KVP":{"290":"2"}}'),
+             frame(b"\x00\x00\x00\x61\x15\x62\x32\xef\x21\x01\xff"
+                   b'{"UP":"Inf","KVP":{"140":"1"}}')]
+
+
+class FakeTransmitter:
+    """Answers per (open, write) conversation.
+
+    queues[(opens, write_n)] is what that conversation's reads return, in order; after
+    it runs out (or when there is no entry) the reads are idle frames. The queues are
+    indexed, never popped, so a test can point several conversations at the same list
+    without draining it. written keeps every request in order, across opens.
+    """
+
+    def __init__(self, queues=None):
+        self.queues = dict(queues or {})
+        self.pos = {}
+        self.written = []
+        self.opens = 0
+        self.write_n = 0
+        self.reads = 0
+
+    def open_path(self, path):
+        self.opens += 1
+        self.write_n = 0
+
+    def write(self, data):
+        self.write_n += 1
+        self.written.append(bytes(data))
+        return len(data)
+
+    def get_input_report(self, report_id, size):
+        self.reads += 1
+        key = (self.opens, self.write_n)
+        q = self.queues.get(key) or []
+        i = self.pos.get(key, 0)
+        self.pos[key] = i + 1
+        return q[i] if i < len(q) else EMPTY
+
+    def close(self):
+        pass
+
+
+def ifaces(pid=0x229B, serial="SN123", usage_page=0xFF13, usage=0x0001,
+           product="Stealth Pro II Xbox"):
+    return [{"product_id": pid, "serial_number": serial, "path": PATH,
+             "usage_page": usage_page, "usage": usage, "interface_number": 3,
+             "product_string": product}]
+
+
+class TurtleBeachTests(unittest.TestCase):
+    def setUp(self):
+        self.transmitter = FakeTransmitter()
+        self.infos = ifaces()
+        for p in (mock.patch.object(turtlebeach.hid, "device", lambda: self.transmitter),
+                  mock.patch.object(turtlebeach.hidlist, "enumerate", lambda vid: self.infos),
+                  mock.patch.object(turtlebeach.time, "sleep", lambda s: None)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.p = turtlebeach.TurtleBeachProvider()
+
+    def test_the_capture_answers_86_percent(self):
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.kind) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II",
+                           86, False, True, "headset")])
+
+    def test_the_asks_are_the_captures_requests_byte_for_byte(self):
+        self.assertEqual(turtlebeach.ASK_SINF, CAPTURE_SINF)
+        self.assertEqual(turtlebeach.ASK_GSI, CAPTURE_GSI)
+        self.assertEqual(CAPTURE_SINF[21:27], b"a\x00SInf")      # the record names
+        self.assertEqual(CAPTURE_GSI[21:27], b"a\x00SGSI")
+        self.assertEqual((CAPTURE_SINF[1], CAPTURE_GSI[1]), (24, 24))   # bytes 3..26
+        self.assertEqual(CAPTURE_GSI[12:14], bytes([0x14, 0x04]))       # the capture token
+        # the fresh-token variant differs in the token bytes alone
+        self.assertEqual(turtlebeach.ASK_GSI_FRESH[:12], CAPTURE_GSI[:12])
+        self.assertEqual(turtlebeach.ASK_GSI_FRESH[12:14], bytes([0x11, 0x01]))
+        self.assertEqual(turtlebeach.ASK_GSI_FRESH[14:], CAPTURE_GSI[14:])
+
+    def test_the_session_opener_is_sent_first_then_the_gsi_ask(self):
+        self.p.poll()
+        self.assertEqual(self.transmitter.written[:2], [CAPTURE_SINF, CAPTURE_GSI])
+
+    def test_the_atlas_air_is_read_through_the_swarm_asks_first(self):
+        # #310: the Atlas Air is on the family's ff13:0001 collection, but which of the
+        # two exchanges it speaks is unknown, so the asks go first - they send no
+        # enable frame - and the capture's own frames answer them here
+        self.infos = ifaces(pid=0x225E, product="Atlas Air")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:atlasair", "Turtle Beach Atlas Air", 86)])
+
+    def test_the_stealth_600x_gen_3_is_read_and_keeps_its_own_key(self):
+        # #239: same ff13:0001 collection as the rest of the family, exchange unknown,
+        # so the asks go first and the model gets its own icon key
+        self.infos = ifaces(pid=0x2232, product="Stealth 600X Gen 3")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealth600x", "Turtle Beach Stealth 600X Gen 3", 86)])
+
+    def test_the_coap_tunnel_is_tried_when_the_asks_stay_silent(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (60, "Atlas Air", False))[1]
+        self.assertEqual(self.p._read_status(b"x", 0x225E), (60, "Atlas Air", False))
+        self.assertEqual(calls, ["sinf", "coap"])
+        self.assertTrue(any("CoAP tunnel" in line for line in self.p.diagnostics()))
+
+    def test_the_tunnel_is_not_tried_when_the_asks_answer(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (86, "x", False))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (1, "y", False))[1]
+        self.assertEqual(self.p._read_status(b"x", 0x225E), (86, "x", False))
+        self.assertEqual(calls, ["sinf"])
+
+    def test_only_unknown_models_get_the_second_exchange(self):
+        calls = []
+        self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
+        self.p._read_coap = lambda path: (calls.append("coap"), (1, "y", False))[1]
+        # the Pro II id has one known exchange: no tunnel attempt
+        self.p._read_status(b"x", 0x229B)
+        self.assertEqual(calls, ["sinf"])
+        self.assertEqual(turtlebeach.KNOWN[0x225E], "Turtle Beach Atlas Air")
+        self.assertIn(0x225E, turtlebeach.DUAL_PIDS)
+        self.assertEqual(turtlebeach.KNOWN[0x2232], "Turtle Beach Stealth 600X Gen 3")
+        self.assertIn(0x2232, turtlebeach.DUAL_PIDS)
+
+    def test_the_fresh_token_is_tried_when_the_captured_one_gets_nothing(self):
+        # only the third write is answered: the captured token got idle frames
+        self.transmitter.queues = {(1, 3): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([s.level for s in res], [86])
+        self.assertEqual(self.transmitter.written[2], turtlebeach.ASK_GSI_FRESH)
+        self.assertTrue(any("GSI fresh token" in line for line in self.p.diagnostics()))
+
+    def test_the_fallback_goes_out_short_after_a_silent_opener(self):
+        # the opener and the record ask gave idle frames only: the fallback still goes
+        # out - it is the ask that answers on the reporter's unit - but short, so a
+        # dead channel's read cannot burn the full budgets (#194 review)
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
+        self.assertEqual(self.transmitter.written,
+                         [turtlebeach.ASK_SINF, turtlebeach.ASK_GSI,
+                          turtlebeach.ASK_GSI_FRESH])
+        self.assertEqual(self.transmitter.reads,
+                         turtlebeach.SINF_READS + turtlebeach.MAX_READS
+                         + turtlebeach.FRESH_SHORT_READS)
+        self.assertTrue(any("goes out short" in line for line in self.p.diagnostics()))
+
+    def test_the_total_read_budget_caps_a_level_less_channel(self):
+        # the opener answers with payload but the record ask does not: the fallback runs
+        # at its normal length, yet the read as a whole never passes the cap (#194 review)
+        self.transmitter.queues = {(1, 1): SINF_DUMP}
+        res = self.p.poll()
+        self.assertEqual([s.level for s in res], [None])
+        self.assertEqual(self.transmitter.reads, turtlebeach.TOTAL_READS)
+        self.assertTrue(any("read budget is spent" in line
+                            for line in self.p.diagnostics()))
+
+    def test_the_cable_record_reads_as_charging(self):
+        self.transmitter.queues = {(1, 2): CABLE_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.charging) for s in res], [(78, True)])
+
+    def test_the_dump_alone_can_carry_the_level(self):
+        self.transmitter.queues = {(1, 1): [frame(b'{"UP":"GSI","KVP":{"240":"72"}}')]}
+        res = self.p.poll()
+        self.assertEqual([s.level for s in res], [72])
+        self.assertEqual(len(self.transmitter.written), 1)       # no record ask needed
+
+    def test_the_frames_of_the_capture_strip_and_parse(self):
+        blob = turtlebeach.strip_frames(GSI_REPLY)
+        self.assertTrue(blob.endswith(
+            b'{"OR":"GSI","KVP":{"200":"1","210":"0","220":"My Headset","230":"2",'
+            b'"240":"86","250":"0","260":"100","270":"0","280":"1","290":"2",'
+            b'"2a0":"40","2b0":"60","2c0":"50","2d0":"78","2e0":"1"}}'))
+        self.assertEqual(turtlebeach.status_from_documents(turtlebeach.json_documents(blob)),
+                         (86, "My Headset"))
+
+    def test_empty_replies_between_the_record_are_tolerated(self):
+        self.transmitter.queues = {(1, 2): [EMPTY, GSI_REPLY[0], EMPTY, GSI_REPLY[1],
+                                            EMPTY, GSI_REPLY[2], GSI_REPLY[3]]}
+        self.assertEqual([s.level for s in self.p.poll()], [86])
+
+    def test_the_status_record_is_printed_for_the_diagnostics(self):
+        # round 4: the whole record on a successful read, so a run on the cable can
+        # be compared key by key with one on battery (#173)
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        self.p.poll()
+        lines = [l for l in self.p.diagnostics() if "status record" in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn('"240":"86"', lines[0])
+
+    def test_a_pushed_update_carries_the_level_too(self):
+        self.transmitter.queues = {(1, 2): [frame(b'{"UP":"GSI","KVP":{"240":"84"}}')]}
+        self.assertEqual([s.level for s in self.p.poll()], [84])
+
+    def test_a_push_without_the_level_is_not_a_reading(self):
+        self.transmitter.queues = {(1, 1): [PUSH_290] * 2, (1, 2): [PUSH_290] * 2,
+                                   (1, 3): [PUSH_290] * 2}
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.name) for s in res],
+                         [(None, "Turtle Beach Stealth Pro II")])
+        self.assertTrue(any("no GSI record" in line for line in self.p.diagnostics()))
+
+    def test_a_muted_transmitter_shows_the_headset_without_a_level(self):
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
+
+    def test_an_unknown_product_id_is_not_talked_to(self):
+        self.infos = ifaces(pid=0x229C)
+        self.assertEqual(self.p.poll(), [])
+        self.assertEqual(self.transmitter.written, [])
+        self.assertTrue(any("not a known model" in line for line in self.p.diagnostics()))
+
+    def test_a_device_without_a_vendor_collection_gets_no_write(self):
+        self.infos = ifaces(usage_page=0x000C)
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
+        self.assertEqual(self.transmitter.written, [])
+        self.assertTrue(any("no vendor collection" in line for line in self.p.diagnostics()))
+
+    def test_the_cable_and_the_transmitter_share_one_icon(self):
+        # both attached: the transmitter answers first (pid order) and there is one icon
+        self.transmitter.queues = {(1, 2): GSI_REPLY}
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II", 86)])
+
+    def test_the_cable_alone_is_enough(self):
+        self.transmitter.queues = {(1, 2): GSI_REPLY}
+        self.infos = ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level, s.kind) for s in res],
+                         [("turtlebeach:stealthpro2", 86, "headset")])
+
+    def test_a_silent_pair_shows_the_headset_without_a_level(self):
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level, s.online) for s in res],
+                         [("turtlebeach:stealthpro2", None, True)])
+
+    def test_a_silent_transmitter_keeps_the_last_level_greyed_out(self):
+        # the reporter's #173 run: with Swarm II open the transmitter answers 40+ idle
+        # frames and no record - the level and its charging state stay on a greyed icon
+        # instead of "no link" (the cable record: 78 %, charging - 250 = 1)
+        self.infos = ifaces(pid=0x229E, serial="SN456")
+        self.transmitter.queues = {(1, 2): CABLE_REPLY}
+        first = self.p.poll()
+        self.assertEqual((first[0].level, first[0].charging, first[0].online), (78, True, True))
+        self.transmitter.queues = {}                      # idle frames only from now on
+        out = self.p.poll()
+        self.assertEqual((out[0].key, out[0].level, out[0].charging, out[0].online),
+                         (turtlebeach.FAMILY_KEY, 78, True, False))
+        self.assertTrue(any("keeping 78%" in line for line in self.p.diagnostics()))
+
+    def test_the_kept_level_expires_with_the_sleep_window(self):
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        with mock.patch.object(turtlebeach.time, "time", lambda: 1000.0):
+            self.p.poll()
+        self.transmitter.queues = {}
+        late = 1000.0 + turtlebeach.ASLEEP_KEEP + 1
+        with mock.patch.object(turtlebeach.time, "time", lambda: late):
+            out = self.p.poll()
+        self.assertEqual((out[0].level, out[0].online), (None, True))
+
+    def test_a_silent_transmitter_still_shows_the_cables_reading(self):
+        # the transmitter is muted (the headset is off its link) but the cable answers
+        self.transmitter.queues = {(2, 2): GSI_REPLY}
+        self.infos = ifaces() + ifaces(pid=0x229E, serial="SN456")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.level) for s in res],
+                         [("turtlebeach:stealthpro2", 86)])
+
+
+# ---- the Stealth 700 Gen 3's CoAP tunnel (#211, @PaulRichez) -------------------
+COAP_PRODUCT = "Stealth 700X Gen 3"
+COAP_RECORD = (b'{"OR":"GSI","KVP":{"200":"1","220":"My Headset","230":"1","240":"100",'
+               b'"250":"0","2e0":"1"}}')
+
+
+class CoapTests(unittest.TestCase):
+    """The 700 Gen 3's read: his two RACE writes, then the same GSI document."""
+
+    def setUp(self):
+        self.transmitter = FakeTransmitter({(1, 2): [frame(COAP_RECORD[:40]),
+                                                     frame(COAP_RECORD[40:])]})
+        self.infos = ifaces(pid=0x2251, product=COAP_PRODUCT)
+        for p in (mock.patch.object(turtlebeach.hid, "device", lambda: self.transmitter),
+                  mock.patch.object(turtlebeach.hidlist, "enumerate", lambda vid: self.infos),
+                  mock.patch.object(turtlebeach.time, "sleep", lambda s: None)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.p = turtlebeach.TurtleBeachProvider()
+
+    def test_the_two_asks_are_his_frames_byte_for_byte(self):
+        self.p.poll()
+        enable, get = self.transmitter.written[0], self.transmitter.written[1]
+        self.assertEqual(enable[:9], bytes.fromhex("060600" "055a02004299"))
+        self.assertEqual(get[:17], bytes.fromhex("060e00" "055a0a00029940010001b3") + b"GSI")
+        self.assertEqual(len(enable), turtlebeach.MSG_SIZE)
+        self.assertEqual(len(get), turtlebeach.MSG_SIZE)
+        # the RACE length counts the id bytes plus the payload
+        self.assertEqual(turtlebeach.race_frame(0x9942), bytes.fromhex("055a02004299"))
+        self.assertEqual(turtlebeach.race_frame(0x9902, turtlebeach.coap_get("GSI")),
+                         bytes.fromhex("055a0a000299") + turtlebeach.coap_get("GSI"))
+
+    def test_the_gsi_record_reads_100_from_the_tunnel(self):
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.kind) for s in res],
+                         [("turtlebeach:stealth700", COAP_PRODUCT, 100, None, True, "headset")])
+
+    def test_the_name_is_the_product_string_not_the_nickname(self):
+        # key 220 in the record is "My Headset"; the model name comes from the product string
+        self.assertEqual(self.p.poll()[0].name, COAP_PRODUCT)
+
+    def test_charging_is_not_reported_for_the_700_even_when_250_moves(self):
+        # his cable run: 250 stays "0" with the cable in and nothing else changes, so 250
+        # is not this model's charging flag - a "1" must not make the icon claim charging
+        cable = COAP_RECORD.replace(b'"250":"0"', b'"250":"1"')
+        self.transmitter.queues = {(1, 2): [frame(cable[:40]), frame(cable[40:])]}
+        res = self.p.poll()
+        self.assertEqual((res[0].level, res[0].charging), (100, None))
+
+    def test_the_record_stops_the_read_loop(self):
+        # the record is complete in the first two replies: the rest of the window is not
+        # waited out (#211 review, @ahmedkhursheed23)
+        self.p.poll()
+        self.assertLessEqual(self.transmitter.reads, 12)      # 5 + 5 drains + 2 replies
+
+    def test_a_refused_enable_write_does_not_wait_for_replies(self):
+        self.transmitter.write = lambda data: -1
+        res = self.p.poll()
+        self.assertEqual([(s.level, s.online) for s in res], [(None, True)])
+        self.assertEqual(self.transmitter.reads, 5)           # the drain, then nothing
+
+    def test_the_two_models_keep_their_own_keys(self):
+        self.infos = ifaces(pid=0x229B) + ifaces(pid=0x2251, product=COAP_PRODUCT)
+        res = self.p.poll()
+        self.assertEqual(sorted(s.key for s in res),
+                         ["turtlebeach:stealth700", "turtlebeach:stealthpro2"])
+
+    def test_the_dongle_and_the_cable_are_one_icon(self):
+        # 2253 is the headset on its own USB cable, not a third transmitter (#211): with
+        # both plugged in it must not add a second entry for the same headset
+        self.infos = ifaces(pid=0x2251, product=COAP_PRODUCT) + ifaces(
+            pid=0x2253, product=COAP_PRODUCT + " headset")
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level) for s in res],
+                         [("turtlebeach:stealth700", COAP_PRODUCT, 100)])
+
+
+class ParserTests(unittest.TestCase):
+    def test_the_charging_key(self):
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}}]), True)
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "0"}}]), False)
+        self.assertIsNone(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"240": "77"}}]))
+        # a partial update without the key does not clear the state
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}},
+             {"UP": "GSI", "KVP": {"240": "77"}}]), True)
+        # the newest document carrying the key wins
+        self.assertIs(turtlebeach.charging_from_documents(
+            [{"OR": "GSI", "KVP": {"250": "1"}},
+             {"OR": "GSI", "KVP": {"250": "0"}}]), False)
+
+    def test_strip_frames_skips_short_and_unframed_replies(self):
+        self.assertEqual(turtlebeach.strip_frames([b"", b"\x07\x3b"]),
+                         b"")
+        # a length byte longer than the frame is clamped, not trusted
+        self.assertEqual(turtlebeach.strip_frames([bytes([0x07, 0xFF, 0x00, 0x41])]), b"A")
+
+    def test_json_documents_finds_nested_and_multiple_documents(self):
+        blob = (b"\x05\x5b\xd0\x00 junk \x61\x19"
+                b'{"OR":"GSI","KVP":{"240":"55"}}'
+                b"\x00\x62\x32 garbage \xff"
+                b'{"UP":"BT","KVP":{"320":"-40"}}')
+        self.assertEqual(turtlebeach.json_documents(blob),
+                         [{"OR": "GSI", "KVP": {"240": "55"}},
+                          {"UP": "BT", "KVP": {"320": "-40"}}])
+
+    def test_a_control_byte_abandons_a_candidate(self):
+        # the envelope byte inside what looks like a document -> not a document
+        blob = b'{"OR":"GSI",\x00"KVP":{}} {"OR":"GSI","KVP":{"240":"77"}}'
+        docs = turtlebeach.json_documents(blob)
+        self.assertEqual(docs, [{"OR": "GSI", "KVP": {"240": "77"}}])
+
+    def test_out_of_range_and_non_numeric_levels_are_refused(self):
+        self.assertEqual(turtlebeach.status_from_documents([{"OR": "GSI", "KVP": {"240": "101"}}]),
+                         (None, None))
+        self.assertEqual(turtlebeach.status_from_documents([{"OR": "GSI", "KVP": {"240": "x"}}]),
+                         (None, None))
+        self.assertEqual(turtlebeach.status_from_documents([{"OR": "GSI", "KVP": {"240": "0"}}]),
+                         (0, None))
+
+    def test_named_and_other_documents_are_ignored(self):
+        docs = [{"OR": "Inf", "KVP": {"100": "10F5"}},
+                {"OR": "TX1", "KVP": {"400": {"info": ["2", "17"]}}},
+                {"OR": "GSI", "KVP": {"220": "Desk", "240": "42"}}]
+        self.assertEqual(turtlebeach.status_from_documents(docs), (42, "Desk"))
+
+
+if __name__ == "__main__":
+    unittest.main()
