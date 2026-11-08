@@ -65,6 +65,7 @@ MESSAGES = {
     "provider.hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
+    "provider.urx": "URX Core75",
     "provider.lamzu": "LAMZU mice",
     "provider.lamzu_sw": "Lamzu Tachi (8K receiver)",
     "provider.lofree": "Lofree keyboards, AULA V9 mice",

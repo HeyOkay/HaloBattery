@@ -41,6 +41,7 @@ from .steam import SteamProvider  # noqa: F401
 from .inphic import InphicProvider  # noqa: F401
 from .irocks import IRocksProvider  # noqa: F401
 from .turtlebeach import TurtleBeachProvider  # noqa: F401
+from .urx import UrxProvider  # noqa: F401
 from .skullcandy import SkullcandyProvider  # noqa: F401
 from .rapoo import RapooProvider  # noqa: F401
 from .ajazz import AjazzProvider  # noqa: F401

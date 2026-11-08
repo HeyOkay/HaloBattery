@@ -6,13 +6,25 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
-
-### Fixed
-- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
-
 ### Added
+
+- **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
+- Corsair HS80 RGB Wireless (original): battery level over direct USB
+  (`1b1c:0a69`) or its wireless receiver (`1b1c:0a6b`), sharing one tray icon.
+  Charging is inferred from USB presence; the powered-off charging identity
+  (`1b1c:0a6a`) keeps an unknown-level icon when no battery reading is available.
+  Protocol from [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
+- **ASUS ROG Strix Morph 96 Wireless** on the ROG OMNI receiver (`0b05:1ace`, pair id
+  `1cea`) - the same keyboard read as the Azoth and Strix Scope II (battery byte 6), added
+  from the reporter's pair list. Confirmed accurate by @Pikldoornob in
+  [#340](https://github.com/HeyOkay/HaloBattery/issues/340); the separate Maono request remains open.
+- **URX Core75** (`36b0:3002`, 2.4 GHz dongle) - read through its VIA raw HID channel
+  (`ff60:0061`, report id 0, 32-byte packets): custom-channel value 7 answers the battery,
+  `08 00 07 <level>`. The framing comes from URX HUB's own device table and the reply was
+  **confirmed on hardware by @TheLastGamer18** ([#245](https://github.com/HeyOkay/HaloBattery/issues/245)):
+  the app detected the keyboard and the percentage matched URX HUB. A probe run with the
+  charging cable in returned the same bytes, so this board does not expose a charger state -
+  the app shows the level only.
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
 - **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
 - **Rapoo VT9 Pro V2** (`24ae:14a9`) - the receiver publishes the same `ff00:000e`
@@ -47,7 +59,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
   (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
 - **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
-- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. Unverified on hardware; a test build is out for [#328](https://github.com/HeyOkay/HaloBattery/issues/328).
+- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. **Confirmed on hardware by @DindonOz** (#328): the level matched Poly's app and the charging state was correct.
 - **HyperX Pulsefire Haste 2 Wireless** (`03f0:0d97`, `03f0:0f98`) - NGENUITY's
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
   and charge status (plus voltage and temperature in the diagnostics). Unverified on
@@ -64,9 +76,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
   report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
   ignored the writes and the keyboard sat at "no link". The charging capture also settles the
-  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. Unverified on
-  hardware until the second test build is run;
-  see [#287](https://github.com/HeyOkay/HaloBattery/issues/287).
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. **Confirmed on
+  hardware by @notisv** (#287): the level matched Bluetooth, Windows and Command Center
+  (`0e a1 5c 00` = 92 %) and the charging state followed the cable.
 - **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
   read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
   per transmitter. It needs WinUSB bound to that interface with
@@ -86,8 +98,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   keyed on its own id so the two models do not merge. Unverified on hardware; a test
   build is out for [#294](https://github.com/HeyOkay/HaloBattery/issues/294).
 - **AJAZZ AJ159 PRO** (`3151:402d`, the 8K receiver) - the same CompX read as the
-  AJ179 on a newer receiver whose vendor channel is `ffff:0002`. Unverified on
-  hardware; a test build is out for [#289](https://github.com/HeyOkay/HaloBattery/issues/289).
+  AJ179 on a newer receiver whose vendor channel is `ffff:0002`. The receiver publishes five
+  collections (four on interface 1, the vendor pair on interface 2) and only the first four
+  were tried, which is why the first test build showed the icon with "no link"; all five are
+  tried now. Unverified on hardware; a second test build is out for
+  [#289](https://github.com/HeyOkay/HaloBattery/issues/289).
 - **Kysona Uranus** (`3151:5031`) - the same `3151` receiver family layout as the AJ159
   (`ffff:0001`/`0002`, no `ff02:0002`), read with the same frames. Unverified on
   hardware; a test build is out for [#251](https://github.com/HeyOkay/HaloBattery/issues/251).
@@ -114,6 +129,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+
+### Changed
+
+- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
+- Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
+
+### Fixed
+
+- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
+- Keep Alienware and Barracuda protocol documentation in separate sections after integration; record the newer Morph 96, URX and Plantronics confirmations. A disconnected ASUS receiver no longer raises from the output-report read path.
 
 ## [1.16.0] - 2026-11-04
 

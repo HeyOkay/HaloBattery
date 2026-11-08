@@ -250,6 +250,17 @@ class OmniPollTest(ProviderTest):
         mouse = next(c for c in bus.values() if c.request[0] == 0x03)
         self.assertEqual(mouse.opened, 0)
 
+    def test_the_morph_96_is_read_from_its_pair_list_entry(self):
+        # #340: the reporter's receiver answered "01 a0 00 01 00 ea 1c 02 04" - one
+        # keyboard paired, id 1cea - and Gear Link showed 91 %
+        entries = omni_entries()
+        pairs = [0x01, 0xA0, 0x00, 0x01, 0x00, 0xEA, 0x1C, 0x02, 0x04] + [0] * 55
+        bus = omni_bus(entries, pairs=pairs, keyboard=omni_keyboard_reply(91))
+        res = self.poll(entries, bus)
+        self.assertEqual([(r.name, r.level, r.charging, r.kind, r.key) for r in res],
+                         [("ROG Strix Morph 96 Wireless", 91, False, "keyboard",
+                           "asus:rog-strix-morph-96-wireless")])
+
     def test_unknown_paired_pids_are_skipped(self):
         entries = omni_entries()
         pairs = [0x01, 0xA0, 0, 2, 0, 0x34, 0x12, 2, 4] + [0] * 55

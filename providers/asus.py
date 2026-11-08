@@ -39,8 +39,12 @@ The pair list names the devices; a pid that is not known is skipped, as G-Helper
 The collections of one receiver are matched by the device instance in their path, so two
 OMNI receivers do not mix. Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile.
 
+The Harpe II Ace / Extreme use the same mouse battery command on the SPEEDNOVA
+receiver's mi_02&col03 with report id 3, or report id 0 on their cable, in 64 bytes.
+See the source comment at HARPE_II_RECEIVER below (upstream #364).
+
 Not included (they use a different collection, report id or byte position in
-G-Helper, and none was on hand to test): the Harpe II Ace, Keris II Ace / Origin and
+G-Helper, and none was on hand to test): Keris II Ace / Origin and
 Harpe Ace Mini / Extreme on their own receiver or cable, Strix Carry, Gladius II Wireless
 and the MD200.
 
@@ -201,7 +205,16 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
     0x1AB0: ("ROG Strix Scope II 96 Wireless", 6),
     0x1B7A: ("ROG Strix Scope II 96 RX Wireless", 6),
     0x1B06: ("ROG Falchion RX Low Profile", 11),
+    # #340: the pair list's own id for the Morph 96 ("01 a0 00 01 00 ea 1c 02 04");
+    # G-Helper has no entry for it yet, so it takes the family default byte 6 -
+    # unverified until the reporter's test build is read
+    0x1CEA: ("ROG Strix Morph 96 Wireless", 6),
 }
+
+# G-Helper at f62d584, app/Peripherals/Mouse/Models/HarpeIIAce.cs and
+# AsusMouse.cs: report 3 on mi_02&col03 of the 1ad0 SPEEDNOVA receiver,
+# report 0 on interface 0 over the 1c69 cable, both 64 bytes (upstream #364).
+HARPE_II_RECEIVER, HARPE_II_CABLE = 0x1AD0, 0x1C69
 
 Reading = Tuple[int, bool, str]     # level %, charging, approximate text ("" = exact)
 
@@ -389,6 +402,9 @@ class AsusProvider(Provider):
                     return r
             self._diag.append(f"    no reply with the {request[1]:02x} {request[2]:02x} echo")
             return None
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"    read: {e}")
+            return None
         finally:
             try:
                 dev.close()
@@ -523,6 +539,27 @@ class AsusProvider(Provider):
                 continue
             self._diag.append(f"  -> {res[2] or str(res[0]) + '%'}{' charging' if res[1] else ''}")
             keep(name, "mouse", res)
+
+        for d in infos:
+            pid = d.get("product_id")
+            if pid == HARPE_II_RECEIVER:
+                path = d.get("path", b"")
+                path = path.decode("utf-8", "replace") if isinstance(path, bytes) else str(path)
+                if "mi_02&col03" not in path.lower():
+                    continue
+                request, wanted, parse = OMNI_MOUSE_REQUEST, is_omni_mouse_reply, parse_omni_mouse
+            elif pid == HARPE_II_CABLE:
+                if d.get("interface_number") != INTERFACE or d.get("usage_page", 0) < 0xFF00:
+                    continue
+                request, wanted = REQUEST, has_echo
+                parse = lambda r: parse_reply(r, PERCENT)
+            else:
+                continue
+            name = "ROG Harpe II Extreme" if "EXTREME" in (d.get("product_string") or "").upper() else "ROG Harpe II Ace"
+            self._diag.append(f"[ASUS] {name} pid={pid:04x}")
+            res = self._parsed(self._ask(d["path"], request, wanted, 64), parse)
+            if res is not None:
+                keep(name, "mouse", res)
 
         for name, kind, res in self._poll_omni(infos):
             self._diag.append(f"  -> {name}: {res[0]}%{' charging' if res[1] else ''}")

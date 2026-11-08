@@ -206,6 +206,41 @@ def _error_note(dev, n) -> str:
         return ""
     return f" ({err})" if err else ""
 
+# Direct USB mode of the original HS80 RGB Wireless (1b1c:0a69). This is
+# distinct from the 0a6b receiver exchange above: it answers command 02 0f on
+# target 08. Protocol/layout: ST1CKEL/HS80_Control docs/PROTOCOL.md and PR #2,
+# measured on real hardware: https://github.com/ST1CKEL/HS80_Control/pull/2
+HS80_USB_PID = 0x0A69
+HS80_CHARGING_CABLE_PID = 0x0A6A  # switched-off headset while connected to USB power
+HS80_USB_INTERFACE = 3
+HS80_USB_USAGE_PAGE = 0xFF42
+HS80_USB_TARGET = 0x08
+HS80_USB_COMMAND_BATTERY = (0x02, 0x0F)
+HS80_USB_REPORT_SIZE = 64
+HS80_USB_READ_ATTEMPTS = 3
+HS80_USB_READ_TIMEOUT_MS = 500
+
+
+def hs80_usb_request(target: int = HS80_USB_TARGET) -> bytes:
+    """Build a 64-byte battery-query report for the HS80 control interface."""
+    return bytes([0x02, target, *HS80_USB_COMMAND_BATTERY]
+                 + [0x00] * (HS80_USB_REPORT_SIZE - 4))
+
+
+def parse_hs80_usb_battery(report, target: int = HS80_USB_TARGET) -> Optional[int]:
+    """Decode a matched HS80 response for target 0x08 (USB) or 0x09 (receiver)."""
+    if not report or len(report) < 6:
+        return None
+    r = list(report)
+    # Report 0x01; response channel is target minus 0x08; command family 0x02, OK.
+    if r[0] != 0x01 or r[1] != target - 0x08 or r[2] != 0x02 or r[3] != 0x00:
+        return None
+    tenths = r[4] | (r[5] << 8)
+    if tenths > 1000:
+        return None
+    return tenths // 10
+
+
 PIDS = {
     0x2A08: "Corsair Void v2 Wireless",
     0x2A02: "Corsair Virtuoso Max Wireless",
@@ -416,6 +451,51 @@ class CorsairProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+
+    def _query_hs80_usb(self, infos: List[dict], target: int = HS80_USB_TARGET,
+                         transport_name: str = "USB") -> Optional[int]:
+        """Read battery from the direct USB connection or HS80 wireless receiver."""
+        collections = [d for d in infos
+                      if d.get("interface_number") == HS80_USB_INTERFACE
+                      and d.get("usage_page") == HS80_USB_USAGE_PAGE]
+        collections.sort(key=lambda d: (0 if d.get("usage") == 0x0001 else 1,
+                                        d.get("usage", 0)))
+        if not collections:
+            self._diag.append(f"  HS80 {transport_name}: no interface 3 ff42 collection")
+            return None
+        for d in collections:
+            dev = hid.device()
+            try:
+                dev.open_path(d["path"])
+                self._diag.append(f"  HS80 {transport_name} iface={d.get('interface_number')} "
+                                  f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                # Discard stale reports so they cannot be mistaken for this query.
+                for _ in range(4):
+                    if not dev.read(HS80_USB_REPORT_SIZE, FLUSH_TIMEOUT_MS):
+                        break
+                request = hs80_usb_request(target)
+                written = dev.write(request)
+                if not isinstance(written, int) or written != len(request):
+                    self._diag.append(f"  HS80 {transport_name}: short write ({written!r}/{len(request)})")
+                    continue
+                for attempt in range(HS80_USB_READ_ATTEMPTS):
+                    report = dev.read(HS80_USB_REPORT_SIZE, HS80_USB_READ_TIMEOUT_MS)
+                    if not report:
+                        continue
+                    self._diag.append(f"  HS80 {transport_name} reply {attempt + 1}: {hexdump(report, 12)}")
+                    level = parse_hs80_usb_battery(report, target)
+                    if level is not None:
+                        self._diag.append(f"  HS80 {transport_name} battery: {level}%")
+                        return level
+                self._diag.append(f"  HS80 {transport_name}: no valid battery reply")
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  HS80 {transport_name} query: {e}")
+            finally:
+                try:
+                    dev.close()
+                except Exception:
+                    pass
+        return None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for d in infos:
@@ -894,6 +974,34 @@ class CorsairProvider(Provider):
             return []
         out = []
         seen = set()
+        hs80_usb = [d for d in infos if d.get("product_id") == HS80_USB_PID]
+        hs80_cable_present = any(d.get("product_id") in
+                                 (HS80_USB_PID, HS80_CHARGING_CABLE_PID) for d in infos)
+        hs80_found = False
+        if hs80_usb:
+            self._diag.append("[Corsair HS80 USB] original HS80 RGB Wireless, direct USB")
+            level = self._query_hs80_usb(hs80_usb)
+            if level is not None:
+                # The 0a69 identity is the powered-on direct USB mode; the
+                # protocol exposes no charge flag, so cable presence signals charging.
+                out.append(DeviceStatus("corsair:hs80", "Corsair HS80 RGB Wireless",
+                                        level, True, True, "corsair", kind="headset"))
+                hs80_found = True
+        hs80_receiver = [d for d in infos if d.get("product_id") == 0x0A6B]
+        if hs80_receiver and not hs80_found:
+            self._diag.append("[Corsair HS80 receiver] original HS80 RGB Wireless, wireless")
+            level = self._query_hs80_usb(hs80_receiver, target=0x09,
+                                         transport_name="wireless")
+            if level is not None:
+                out.append(DeviceStatus("corsair:hs80", "Corsair HS80 RGB Wireless",
+                                        level, hs80_cable_present, True, "corsair", kind="headset"))
+                hs80_found = True
+        if hs80_cable_present and not hs80_found:
+            # With the headset switched off, USB enumerates as 0a6a and exposes
+            # no battery control collection. Keep the device visible and animate
+            # charging; the charge percentage is unavailable in this state.
+            out.append(DeviceStatus("corsair:hs80", "Corsair HS80 RGB Wireless",
+                                    None, True, True, "corsair", kind="headset"))
         for pid in PIDS:
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:

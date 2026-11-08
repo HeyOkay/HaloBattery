@@ -107,6 +107,31 @@ feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--
                                            +-------- merge back after release ---- hotfix/* branches from main
 ```
 
+### Weekly manual release review
+
+Once per week, a lead reviews `pre-release` for a possible stable release. This is a
+manual decision: there is no scheduled merge or automatic stable publication. If the
+candidate is not ready, keep testing on `pre-release` and review it the following week.
+
+Before opening the release PR:
+
+1. Read new issue replies, PR review comments and hardware-test results, including
+   follow-ups on the community fork. Record unresolved work in the original tracker.
+2. Check the latest `Tests` run and rolling pre-release build. Test the packaged app
+   and installer, and verify the updater points to `HeyOkay/HaloBattery`.
+3. Review known regressions and experimental device paths. A passing simulated test
+   is not hardware confirmation. Do not promote guessed protocol changes without a
+   named source and the required tester confirmation.
+4. Choose a version newer than every previous stable release, including the community
+   fork's 1.16.0, and prepare the version/changelog change through the release PR.
+5. Obtain another lead's approval, merge the release PR with a merge commit, tag the
+   reviewed commit on `main`, and wait for successful release packaging. Merge `main`
+   back into `pre-release` afterwards.
+
+The [current follow-up register](../docs/maintenance.md) lists the consolidation's
+remaining test evidence and release holds. Resolve or explicitly exclude each hold
+before promoting a candidate.
+
 ## 5. Maintainers
 
 - **Contributors**: anyone. Fork, and open pull requests against `pre-release`.
