@@ -23,6 +23,9 @@ The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, who
 **Connection:** 2.4 GHz receiver (1b1c:0a55)
 
 The older Void exchange, from HeadsetControl's Void device: the battery collection is the vendor page `ffc5:0001` (interface 3), and a single output report asks for it - `c9 64` - with the answer arriving as a five-byte input report `64 00 <level> b1 <status>`. Bit 7 of the level byte is the microphone-lifted flag and is masked off; the status byte is 0 when the receiver has no headset on it, 1 normal, 2 low, 4 or 5 charging. No session and no framing are involved, unlike the family above. **Unverified** - read from HeadsetControl, a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+### Corsair HS80 RGB Wireless (original), direct USB and wireless receiver
+
+The powered-on headset identifies as `1b1c:0a69` by direct USB; when switched off but charging it re-enumerates as `1b1c:0a6a`; its receiver is `1b1c:0a6b`. The powered-on device and receiver expose the control HID collection on interface 3, usage page `ff42`. Halo Battery sends the 64-byte battery query `02 <target> 02 0f`: target `08` in direct USB mode and `09` through the receiver. It accepts only a matching response report `01 <channel> 02 00`, where channel is target minus `08`, with a little-endian battery value in tenths of a percent at bytes 4-5 (0..1000). The `0a6a` charging identity has no battery-control collection, so when only it is present Halo Battery keeps an unknown-level headset icon and infers charging from that USB identity; if a receiver reading is available, it reuses the level and adds the charging animation. This is distinct from the HS80 Max protocol. Reference: [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
 
 ### Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless
 
@@ -169,7 +172,13 @@ The AJAZZ Control Center project's AJ-series exchange: a zero-payload `0xF7` sta
 
 **Connection:** 2.4 GHz receiver or USB cable (for example 0B05:1A72)
 
-The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. The OMNI receiver and models with other layouts are not included. **Unverified** - no ASUS mouse was on hand
+The battery command G-Helper uses: output report 0 `12 07` (65 bytes) on the vendor collection of interface 0, answered by a report echoing `12 07` with the battery in byte 5 (a percentage, or a level 0-4 on older models such as the Chakram and Keris Wireless) and charging in byte 10. 0 without charging is standby, not empty, so it shows nothing; `ff aa` (command not known) and an all-zero reply are not read as a level. Receiver and cable share one icon. Other layouts are described in their own sections below. **Unverified** - no ASUS mouse was on hand
+
+### ASUS ROG Harpe II Ace / Harpe II Extreme
+
+**Connection:** its own 2.4 GHz receiver (0B05:1AD0) or USB cable (0B05:1C69)
+
+The same `12 07` battery command as the other ROG mice, from G-Helper (`app/Peripherals/Mouse/Models/HarpeIIAce.cs`, `AsusMouse.cs`), but on the receiver it goes to the collection `mi_02&col03` with report id 3, in a 64-byte packet: `03 12 07`, answered by `03 12 07 ..` with the battery in byte 5 and charging in byte 10 (hidapi keeps report id 3 in front). On the cable it is report id 0 on the vendor collection of interface 0. The receiver is shared with the Harpe II Extreme; as in G-Helper, "EXTREME" in the product name tells them apart. 0 without charging, `ff aa` and an all-zero reply give no level. **Confirmed on hardware** for the Harpe II Ace on its receiver (product name 'ROG SPEEDNOVA 8K RECEIVER'): `03 12 07 00 00 35 02 14 fd 0e 00 00 ..` read as 53 %, not charging. Bytes 8-9 look like the cell voltage in mV (`fd 0e` = 3837) and are not used. The cable id and the Harpe II Extreme are still untried
 
 ### ASUS ROG OMNI receiver (mice and keyboards)
 
@@ -187,8 +196,8 @@ The receiver holds a mouse and a keyboard and names both in a pair list, which i
 
 The keyboards are named from the pair list: Azoth, Azoth Extreme (and its SE), Strix Scope II 96
 (and its RX), Falchion RX Low Profile, and the **Strix Morph 96 Wireless** (`1cea`, #340) -
-the last on the family's byte-6 layout, since G-Helper has no entry for that id yet and the
-reporter's pair list is the only evidence. Unverified until its test build is read.
+the last on the family's byte-6 layout. The reporter confirmed an accurate level on the
+test build in #340 on 2026-11-05; the separate Maono microphone request remains open.
 
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
 
@@ -477,22 +486,29 @@ The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices conne
 ## Others
 
 ### Alienware Pro Wireless Gaming Keyboard
-### Razer Barracuda X (2022) (2.4 GHz)
 
 **Connection:** 2.4 GHz receiver (413C:211D, "Alienware Pro KB Gaming Receiver"), vendor collection `ff00:0001` on interface 1.
-**Connection:** 2.4 GHz dongle (1532:0552, "Razer Barracuda X 2.4", Macronix bridge)
 
 Alienware Command Center v6.14.54.0 was captured with USBPcap for #287. It sends a 64-byte **feature** report (`SET_REPORT`, **wValue 0x0300 = report id 0**) starting `0e a1 00 ...`, and the receiver answers with an input report `0e a1 <level> <state> ...` - `0x25` = 37 %, exactly what Command Center displayed in both captures. The same stream carries unsolicited state reports (`0e 05`, `0e 17`, `0e 83`, `0e 88`, `0e 89`, `0e 97`), so a reader must filter on the `a1` command rather than take the next report.
+
+The report id is the detail that matters: hidapi treats the first byte of the buffer as the report id, so the frame must be handed over as `00 | 0e a1 ...` (65 bytes). The first build passed `0e` as the report id, the receiver ignored the writes and every poll ended in "no link (off or asleep)" - the test build's report in #287. The reply may come back with the same `0x00` in front or without it, so the mark is looked for at either position.
+
+Byte 3 is the charger state: `0x00` on battery and `0x04` with the cable in, the only two values in the captures (the charging one is `process3`). It is reported as charging while `0x04` and as not charging otherwise; a state never seen is written to the diagnostics rather than interpreted.
+
+**Confirmed on hardware by @notisv** on the second test build: the icon showed the level continuously (`reply: 0e a1 5c 00` = 92 %), agreed with Bluetooth, Windows and Command Center at the same time, and the charging state followed the cable in and out. They kept it running for over an hour before reporting.
+
+### Razer Barracuda X (2022) (2.4 GHz)
+
+**Connection:** 2.4 GHz dongle (1532:0552, "Razer Barracuda X 2.4", Macronix bridge)
+
 This dongle does not answer the Razer mouse request, and the headset ("PA") frames are refused
 with `WriteFile: 0x00000001 Incorrect function` - the dongle bridges USB HID to an **Airoha**
 chip and speaks Airoha's RACE protocol instead, framed for the Macronix bridge:
 
-The report id is the detail that matters: hidapi treats the first byte of the buffer as the report id, so the frame must be handed over as `00 | 0e a1 ...` (65 bytes). The first build passed `0e` as the report id, the receiver ignored the writes and every poll ended in "no link (off or asleep)" - the test build's report in #287. The reply may come back with the same `0x00` in front or without it, so the mark is looked for at either position.
     app mode   > 01 40                    < 01 40 01 01
     request    > 01 80 <len> 50 41 <group> <seq> <body...>
     reply      < 01 80 <len> 50 49 ....... payload: [group, 0x80|seq, status, data...]
 
-Byte 3 is the charger state: `0x00` on battery and `0x04` with the cable in, the only two values in the captures (the charging one is `process3`). It is reported as charging while `0x04` and as not charging otherwise; a state never seen is written to the diagnostics rather than interpreted.
     remote mode  group 0x0E, body 02 E1 01   (the dongle forwards to the headset only then;
                                               in local mode it answers GET_BATTERY itself
                                               with a meaningless value)
@@ -512,8 +528,6 @@ Only the Macronix bridge (`0552`) is read. The `0550` variant uses the YS-Tech b
 same RACE commands wrapped in `02 80 <len> <crcLo> <crcHi> payload` with a CRC-16/XMODEM
 over the whole report and an `'O'`/`'F'` input-report acknowledgement - documented in that
 project, not implemented here until a 0550 unit can test it.
-
-**Confirmed on hardware by @notisv** on the second test build: the icon showed the level continuously (`reply: 0e a1 5c 00` = 92 %), agreed with Bluetooth, Windows and Command Center at the same time, and the charging state followed the cable in and out. They kept it running for over an hour before reporting.
 
 ### URX Core75 (2.4 GHz)
 

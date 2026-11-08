@@ -6,21 +6,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
-
-### Fixed
-- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
-
 ### Added
 
+- **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
+- Corsair HS80 RGB Wireless (original): battery level over direct USB
+  (`1b1c:0a69`) or its wireless receiver (`1b1c:0a6b`), sharing one tray icon.
+  Charging is inferred from USB presence; the powered-off charging identity
+  (`1b1c:0a6a`) keeps an unknown-level icon when no battery reading is available.
+  Protocol from [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
 - **ASUS ROG Strix Morph 96 Wireless** on the ROG OMNI receiver (`0b05:1ace`, pair id
   `1cea`) - the same keyboard read as the Azoth and Strix Scope II (battery byte 6), added
-  from the reporter's pair list. Unverified on hardware; a test build is out for
-  [#340](https://github.com/HeyOkay/HaloBattery/issues/340).
-
-### Added
-
+  from the reporter's pair list. Confirmed accurate by @Pikldoornob in
+  [#340](https://github.com/HeyOkay/HaloBattery/issues/340); the separate Maono request remains open.
 - **URX Core75** (`36b0:3002`, 2.4 GHz dongle) - read through its VIA raw HID channel
   (`ff60:0061`, report id 0, 32-byte packets): custom-channel value 7 answers the battery,
   `08 00 07 <level>`. The framing comes from URX HUB's own device table and the reply was
@@ -28,8 +25,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the app detected the keyboard and the percentage matched URX HUB. A probe run with the
   charging cable in returned the same bytes, so this board does not expose a charger state -
   the app shows the level only.
-
-### Added
 - Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
 - **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
 - **Rapoo VT9 Pro V2** (`24ae:14a9`) - the receiver publishes the same `ff00:000e`
@@ -134,6 +129,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+
+### Changed
+
+- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
+- Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
+
+### Fixed
+
+- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
+- Keep Alienware and Barracuda protocol documentation in separate sections after integration; record the newer Morph 96, URX and Plantronics confirmations. A disconnected ASUS receiver no longer raises from the output-report read path.
 
 ## [1.16.0] - 2026-11-04
 
