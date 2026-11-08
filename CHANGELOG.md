@@ -9,11 +9,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - **ASUS ROG Harpe II Ace** (and Harpe II Extreme) on its own receiver (0B05:1AD0) or the
   cable (0B05:1C69): the same battery command as the other ROG mice, on the receiver's
-  `mi_02&col03` channel with report id 3, as G-Helper reads it. Not yet tried on hardware.
+  `mi_02&col03` channel with report id 3, as G-Helper reads it. Confirmed on a Harpe II
+  Ace on its receiver.
 - **ASUS keyboards on the OMNI receiver** (0B05:1ACE): ROG Strix Scope II 96 and
   Scope II 96 RX, Azoth, Azoth Extreme and Azoth Extreme SE. The receiver's pair list
   names the keyboard, then `12 01` on its keyboard channel gives the level and charging
-  state, as G-Helper reads them. Not yet tried on hardware.
+  state, as G-Helper reads them. Confirmed on a Strix Scope II 96.
 
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`

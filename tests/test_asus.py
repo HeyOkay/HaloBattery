@@ -282,6 +282,29 @@ def omni_entries(path=OMNI_PATH):
     return out
 
 
+def real(hexs):
+    b = [int(x, 16) for x in hexs.split()]
+    return b + [0] * (64 - len(b))
+
+
+class RealRepliesTest(unittest.TestCase):
+    """Replies from a diagnostics report: Harpe II Ace on its SPEEDNOVA 8K receiver
+    (1AD0) and a Strix Scope II 96 on the OMNI receiver (1ACE), both at 53 %, the
+    keyboard on its cable. Bytes 8-9 (mouse) and 12-13 (keyboard) look like the cell
+    voltage in mV (3837 and 3974): two different cells, so 53 % twice is a coincidence."""
+
+    def test_harpe_ii_ace(self):
+        r = real("03 12 07 00 00 35 02 14 fd 0e 00 00 01 00 00 00")
+        self.assertEqual(A.parse_reply(r, A.PERCENT, 0x03), (53, False, ""))
+
+    def test_omni_pair_list(self):
+        self.assertEqual(A.parse_pair_list(real("01 a0 00 01 00 b0 1a 02 04 00 00 00")), [0x1AB0])
+
+    def test_strix_scope_ii_96(self):
+        r = real("02 12 01 00 00 00 35 02 01 01 14 35 86 0f 00 00")
+        self.assertEqual(A.parse_keyboard_reply(r), (53, True, ""))
+
+
 class HarpeIITest(ProviderTest):
     def harpe(self, level=66, charging=0):
         r = [0x03, 0x12, 0x07, 0, 0, level, 0, 0, 0, 0, charging] + [0] * 53
