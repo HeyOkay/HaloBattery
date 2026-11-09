@@ -40,11 +40,15 @@ class StableDevicePolicyTests(unittest.TestCase):
 
     def test_h9_ii_does_not_open_its_serial_port(self):
         port = types.SimpleNamespace(vid=0x054C, pid=0x0FA8, device="COM9")
-        with mock.patch.object(sony_inzone.list_ports, "comports", return_value=[port]), \
-             mock.patch.object(sony_inzone.serial, "Serial") as serial:
+        # Replace the optional modules themselves: this policy must be exercised
+        # even when pyserial is not installed, rather than skipped at import time.
+        ports = types.SimpleNamespace(comports=mock.Mock(return_value=[port]))
+        serial = types.SimpleNamespace(Serial=mock.Mock())
+        with mock.patch.object(sony_inzone, "list_ports", ports), \
+             mock.patch.object(sony_inzone, "serial", serial):
             provider = sony_inzone.SonyInzoneProvider()
             self.assertEqual(provider.poll(), [])
-            serial.assert_not_called()
+            serial.Serial.assert_not_called()
             self.assertTrue(any("release hold" in line for line in provider.diagnostics()))
 
     def test_tachi_does_not_open_its_vendor_collection(self):
