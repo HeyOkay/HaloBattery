@@ -1104,7 +1104,7 @@ class App:
         def header_detail():
             if owner and owner.status:
                 if owner.status.polling_paused:
-                    return device_state(owner.status) + "; polling paused (last known; waiting for keyboard input)"
+                    return device_state(owner.status) + "; last known (refreshed while typing, at most every 5 min)"
                 return device_state(owner.status, self.time_left_text(owner.status))
             return ""
 

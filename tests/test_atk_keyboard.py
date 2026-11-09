@@ -104,6 +104,9 @@ class PollTests(unittest.TestCase):
         self.activity.active.return_value = True
         self.provider = A.AtkKeyboardProvider(activity=self.activity)
 
+    def later(self, seconds):
+        self.clock += seconds
+
     def test_poll_reports_keyboard_and_sends_only_one_battery_query(self):
         status, = self.provider.poll()
         self.assertEqual((status.name, status.level, status.charging, status.online,
@@ -118,6 +121,7 @@ class PollTests(unittest.TestCase):
         charging, = self.provider.poll()
         self.assertEqual((charging.level, charging.charging, charging.online), (60, True, True))
         self.device.level, self.device.state = 62, 0
+        self.later(A.REFRESH)
         unplugged, = self.provider.poll()
         self.assertEqual((unplugged.level, unplugged.charging, unplugged.online), (62, False, True))
         self.assertEqual(charging.key, unplugged.key)
@@ -144,6 +148,7 @@ class PollTests(unittest.TestCase):
     def test_each_poll_uses_a_fresh_request_id_and_wraps_to_nonzero(self):
         self.provider._sequence = 0xFFFF
         self.provider.poll()
+        self.later(A.REFRESH)
         self.provider.poll()
         self.assertEqual([w[1:3] for w in self.device.writes], [[1, 0], [2, 0]])
 
@@ -160,8 +165,35 @@ class PollTests(unittest.TestCase):
         self.device.silent = True
         self.assertFalse(self.provider.poll()[0].online)
         self.device.silent, self.device.level = False, 58
+        self.later(A.RETRY)
         status, = self.provider.poll()
         self.assertEqual((status.level, status.online, status.wake_on_input), (58, True, False))
+
+    def test_typing_reuses_a_fresh_reading_for_refresh_period(self):
+        first, = self.provider.poll()
+        self.activity.hold.assert_called_once_with(A.REFRESH)
+        self.device.level = 58
+        for _ in range(5):
+            self.later(A.REFRESH / 6)
+            status, = self.provider.poll()
+            self.assertEqual((status.level, status.online, status.polling_paused),
+                             (59, True, False))
+        self.assertEqual(len(self.device.writes), 1)
+        self.later(A.REFRESH / 6)
+        self.assertEqual(self.provider.poll()[0].level, 58)
+        self.assertEqual(len(self.device.writes), 2)
+
+    def test_failed_query_is_not_repeated_before_retry_gap(self):
+        self.device.silent = True
+        self.provider.poll()
+        self.device.silent = False
+        self.later(A.RETRY / 2)
+        self.assertFalse(self.provider.poll()[0].online)
+        self.assertEqual(len(self.device.writes), 1)
+        self.activity.hold.assert_not_called()
+        self.later(A.RETRY)
+        self.assertTrue(self.provider.poll()[0].online)
+        self.assertEqual(len(self.device.writes), 2)
 
     def test_malformed_battery_does_not_become_a_displayed_percentage(self):
         self.device.level = 255
@@ -171,6 +203,7 @@ class PollTests(unittest.TestCase):
         for operation in ("open", "write", "read"):
             with self.subTest(operation=operation):
                 self.device.error, self.device.closed = operation, False
+                self.later(A.RETRY)
                 status, = self.provider.poll()
                 self.assertIsNone(status.level)
                 self.assertFalse(status.online)
@@ -208,6 +241,53 @@ class PollTests(unittest.TestCase):
         self.entries = [entry()]
         self.activity.active.return_value = False
         self.assertIsNone(self.provider.poll()[0].level)
+
+    def wired(self, **changes):
+        fields = dict(product_id=A.WIRED_PID, product_string=A.WIRED_PRODUCT, path=b"v75x-cable")
+        fields.update(changes)
+        return entry(**fields)
+
+    def test_cable_reads_every_poll_without_waiting_for_typing(self):
+        self.entries = [self.wired()]
+        self.activity.active.return_value = False
+        self.device.level, self.device.state = 91, 1
+        for _ in range(3):
+            status, = self.provider.poll()
+            self.assertEqual((status.level, status.charging, status.online, status.polling_paused),
+                             (91, True, True, False))
+        self.assertEqual(self.device.opens, [b"v75x-cable"] * 3)
+        self.activity.start.assert_not_called()
+        self.activity.configure.assert_called_with([])
+        self.assertIn("USB cable", " ".join(self.provider.diagnostics()))
+
+    def test_cable_is_preferred_and_keeps_the_same_icon(self):
+        dongle, = self.provider.poll()
+        self.entries = [entry(), self.wired()]
+        cable, = self.provider.poll()
+        self.assertEqual(self.device.opens, [b"v75x-config", b"v75x-cable"])
+        self.assertEqual(dongle.key, cable.key)
+
+    def test_unplugging_keeps_level_but_not_charging(self):
+        self.entries = [self.wired()]
+        self.device.level, self.device.state = 91, 1
+        self.provider.poll()
+        self.entries = [entry()]
+        self.activity.active.return_value = False
+        status, = self.provider.poll()
+        self.assertEqual((status.level, status.charging, status.polling_paused), (91, False, True))
+        self.assertEqual(self.device.opens, [b"v75x-cable"])
+
+    def test_silent_cable_shows_last_known_offline(self):
+        self.entries = [self.wired()]
+        self.provider.poll()
+        self.device.silent = True
+        status, = self.provider.poll()
+        self.assertEqual((status.level, status.online, status.polling_paused), (59, False, False))
+
+    def test_other_keyboards_on_the_cable_id_are_not_opened(self):
+        self.entries = [self.wired(product_string="Rainy 75"), self.wired(usage_page=1, usage=6)]
+        self.assertEqual(self.provider.poll(), [])
+        self.assertEqual(self.device.opens, [])
 
     def test_missing_hid_library_is_harmless(self):
         with mock.patch.object(A, "hid", None):

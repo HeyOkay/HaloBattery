@@ -7,10 +7,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- **ATK V75X keyboard over its 2.4 GHz dongle** (`320F:5088`): battery percentage
+- **ATK V75X keyboard over its 2.4 GHz dongle and USB cable** (`320F:5088`, `320F:5055`): battery percentage
   through a dedicated ATK keyboard provider, using ATK HUB's battery-only
   request. Battery and charging status confirmed on a real receiver, including
-  charging-cable connection and disconnection.
+  charging-cable connection and disconnection. The cable answers the same request
+  (confirmed: 91%, charging), shares the dongle's icon and is preferred when both are connected.
 
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
@@ -20,7 +21,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **ATK paused icon**: retain its normal appearance and percentage; show the paused/last-known status only in the right-click menu.
-- **ATK V75X sleep-friendly polling**: pause battery queries while the keyboard is idle, keep a labelled last-known reading, and refresh when that keyboard is used again.
+- **ATK V75X sleep-friendly polling**: pause battery queries while the keyboard is idle, keep a labelled last-known reading, and refresh when that keyboard is used again. While typing, a reading is reused for five minutes and a failed request waits 30 seconds, so typing bursts never trigger repeated polls of every device. On the cable, polling is not paused.
 - **Start-up with portable mode no longer hangs in a folder it cannot write to**: the
   check whether the app folder is writable used `tempfile`, which on Windows retries
   forever when the folder's permissions deny creating files (Program Files). It is now one
