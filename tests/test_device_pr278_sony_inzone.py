@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -103,6 +104,8 @@ class PollTest(unittest.TestCase):
         self.assertEqual(self.port.writes, [S.INIT_1, S.INIT_2, S.QUERY])
         self.assertLess(self.clock.now, 1.5)
 
+    # Retain the serial decoder test separately from the stable target policy.
+    @mock.patch.object(S, "ENABLED_PIDS", frozenset(S.PIDS))
     def test_the_h9_ii_port_is_read_with_its_own_key(self):
         # #294: the H9 II's dongle opens the same kind of serial port under 054c:0fa8,
         # so the same exchange is tried and the model gets its own icon

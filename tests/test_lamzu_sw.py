@@ -14,6 +14,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -50,6 +51,10 @@ class PollTest(unittest.TestCase):
              "product_id": L.PID, "product_string": "LAMZU TACHI 8K Receiver"}]
 
     def setUp(self):
+        # Keep checking the hypothesis without enabling the stable target.
+        policy = mock.patch.object(L, "ENABLED_PIDS", frozenset((L.PID,)))
+        policy.start()
+        self.addCleanup(policy.stop)
         self._saved = (L.hid, L.hidlist, L.time, L.feature_length)
         self.now = [1000.0]
 

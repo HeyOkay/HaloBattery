@@ -179,6 +179,8 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level) for s in res],
                          [("turtlebeach:atlasair", "Turtle Beach Atlas Air", 86)])
 
+    # Preserve the experimental exchange test; stable policy is checked separately.
+    @mock.patch.object(turtlebeach, "ENABLED_PIDS", frozenset(turtlebeach.KNOWN))
     def test_the_stealth_600x_gen_3_is_read_and_keeps_its_own_key(self):
         # #239: same ff13:0001 collection as the rest of the family, exchange unknown,
         # so the asks go first and the model gets its own icon key

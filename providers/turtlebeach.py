@@ -97,6 +97,10 @@ KNOWN = {
     0x2232: "Turtle Beach Stealth 600X Gen 3",
 }
 
+# Atlas Air is confirmed in #310; Stealth 600X (#239) still lacks a verified
+# exchange. Retain its protocol fixtures without opening it in a stable build.
+ENABLED_PIDS = frozenset((0x229B, 0x229E, 0x2250, 0x2251, 0x2253, 0x225E))
+
 # The Stealth 700 Gen 3 reads through the CoAP tunnel (#211): 2250/2251 are its
 # transmitters, 2253 the headset on its own USB cable (its author's hardware run). The
 # Stealth Pro II ids read through the Swarm II SInf/GSI asks. Same record, same parsers.
@@ -515,6 +519,9 @@ class TurtleBeachProvider(Provider):
                         f"not talking to it")
                 if line not in self._diag:
                     self._diag.append(line)
+                continue
+            if pid not in ENABLED_PIDS:
+                self._diag.append(f"[TurtleBeach] pid={pid:04x}: release hold; not opening")
                 continue
             groups.setdefault((pid, d.get("serial_number") or ""), []).append(d)
 

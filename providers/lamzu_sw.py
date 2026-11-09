@@ -35,6 +35,9 @@ VID = 0x37B0
 PID = 0x000C
 NAME = "Lamzu Tachi"
 KEY = f"lamzu:{PID:04x}"
+# #262/fork #34: collection layout alone does not establish this query.
+# Confirmed Glorious and other Lamzu providers remain independent.
+ENABLED_PIDS = frozenset()
 
 RF_DELAY_S = 0.10
 READ_ATTEMPTS = 2
@@ -59,6 +62,9 @@ class LamzuSinowealthProvider(Provider):
             return []
         mine = [d for d in infos if d.get("product_id") == PID]
         if not mine:
+            return []
+        if PID not in ENABLED_PIDS:
+            self._diag.append(f"[Lamzu] pid={PID:04x}: release hold; not opening")
             return []
         self._diag.append(f"[Lamzu] pid={PID:04x} '{NAME}'")
         parsed = None

@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-10
+
+First combined upstream release after the community fork. Includes six interface
+languages and expanded device support from community 1.16.0, plus the additions
+and fixes in this section.
+Development and future updates use `HeyOkay/HaloBattery`. Existing community-fork
+installations need a manual install of the upstream build to change their update
+source; their settings and battery history remain compatible.
+
 ### Added
 
 - **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
@@ -51,14 +60,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
   8K are unverified, with a test build out for
   [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
-- **Logitech PRO X 3 LIGHTSPEED** (`046D:0B45`) - read over its receiver with the PRO X 2's Centurion path. Its diagnostic report shows the same collections on the same interface, but no PRO X 3 has been tested yet (**unverified**, [#343](https://github.com/HeyOkay/HaloBattery/issues/343)).
 - **Keychron Nape Pro** (`3434:d026`, the Link-KM receiver) - the same `b3 06` exchange as the
   Ultra-Link 8K / M5, with its vendor collection on interface 1 (`ffc1:0001`) instead of 4, so
   the provider now picks the vendor page wherever it is. Unverified on hardware; a test build
   is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
 - Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
   (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
-- **Endgame Gear XM2w 4K / OP1w 4K** behind the 4K dongle (`3367:1970`) - the family's 17-byte status frame, battery opcode `0x04`. Unverified on this dongle; a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
 - **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. **Confirmed on hardware by @DindonOz** (#328): the level matched Poly's app and the charging state was correct.
 - **HyperX Pulsefire Haste 2 Wireless** (`03f0:0d97`, `03f0:0f98`) - NGENUITY's
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
@@ -88,28 +95,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
   dependencies, and the release workflow bundles libusb.
 - **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
-- **Turtle Beach Atlas Air** (`10f5:225e`) and **Stealth 600X Gen 3** (`10f5:2232`) - the
-  family's `ff13:0001` collection, read with the Swarm II SInf/GSI asks first (they send
-  no enable frame) and the CoAP tunnel after them, since which of the two each model
-  speaks is not known yet. Unverified on hardware; test builds are out for
-  [#310](https://github.com/HeyOkay/HaloBattery/issues/310) and
-  [#239](https://github.com/HeyOkay/HaloBattery/issues/239).
-- **Sony INZONE H9 II** (`054c:0fa8`) - the same serial-port exchange the H9 uses,
-  keyed on its own id so the two models do not merge. Unverified on hardware; a test
-  build is out for [#294](https://github.com/HeyOkay/HaloBattery/issues/294).
-- **AJAZZ AJ159 PRO** (`3151:402d`, the 8K receiver) - the same CompX read as the
-  AJ179 on a newer receiver whose vendor channel is `ffff:0002`. The receiver publishes five
-  collections (four on interface 1, the vendor pair on interface 2) and only the first four
-  were tried, which is why the first test build showed the icon with "no link"; all five are
-  tried now. Unverified on hardware; a second test build is out for
-  [#289](https://github.com/HeyOkay/HaloBattery/issues/289).
-- **Kysona Uranus** (`3151:5031`) - the same `3151` receiver family layout as the AJ159
-  (`ffff:0001`/`0002`, no `ff02:0002`), read with the same frames. Unverified on
-  hardware; a test build is out for [#251](https://github.com/HeyOkay/HaloBattery/issues/251).
-- **Lamzu Tachi** (`37b0:000c`, the 8K receiver) - its collections match the Glorious
-  Model O's (`ffa0:0001`, `ffff:0001/0000`), so the same Sinowealth query is tried; that is
-  the only evidence so far. Unverified on hardware; a test build is out for
-  [#262](https://github.com/HeyOkay/HaloBattery/issues/262).
+- **Turtle Beach Atlas Air** (`10f5:225e`) - the receiver battery read is now
+  confirmed on hardware by @Vetrices in [#310](https://github.com/HeyOkay/HaloBattery/issues/310#issuecomment-6741190943):
+  the percentage matches Swarm II, charging follows the cable and updates keep working.
 - **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
   receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
   at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. **Level
@@ -129,6 +117,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+
+### Not enabled in this release
+
+- Endgame Gear 4K (`3367:1970`), AJAZZ AJ159 PRO (`3151:402d`), Kysona Uranus
+  (`3151:5031`), Turtle Beach Stealth 600X Gen 3 (`10f5:2232`), Sony INZONE H9 II
+  (`054c:0fa8`), Lamzu Tachi (`37b0:000c`) and Logitech PRO X 3 LIGHTSPEED
+  (`046d:0b45`) remain on hold. Their current exchanges
+  failed on hardware or still lack evidence of protocol compatibility. The candidate
+  does not open these targets; their protocol code and simulated tests are retained
+  for follow-up. Confirmed XM2we, AJ179 V2 MAX, Atlas Air and original INZONE H9
+  support remains enabled. See `docs/maintenance.md` for the evidence and next steps.
 
 ### Changed
 
@@ -1195,7 +1194,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.15.0...HEAD
+[Unreleased]: ../../compare/v1.17.0...HEAD
+[1.17.0]: ../../compare/v1.15.0...v1.17.0
 [1.15.0]: ../../compare/v1.14.0...v1.15.0
 [1.14.0]: ../../compare/v1.13.0...v1.14.0
 [1.13.0]: ../../compare/v1.12.0...v1.13.0
