@@ -107,6 +107,10 @@ ALT_TARGETS = (
     (0x3151, 0x5031, "Kysona Uranus"),
 )
 
+# Stable release hold: #289/#251 have no confirmed exchange on these receivers.
+# Keep the protocol fixtures, but never open an alternate target until reviewed.
+ENABLED_ALT_TARGETS = frozenset()
+
 REPORT_SIZE = 32                 # both directions; hidapi adds the report id on Windows
 OUTPUT_LEN = REPORT_SIZE + 1     # what OutputReportByteLength reports for the vendor
                                  # channel (33, the report id included - #74's dump)
@@ -324,6 +328,8 @@ class AjazzProvider(Provider):
         out: List[DeviceStatus] = []
         cache: Dict[int, List[dict]] = {}
         for vid, pid, name in ALT_TARGETS:
+            if (vid, pid) not in ENABLED_ALT_TARGETS:
+                continue
             if vid not in cache:
                 try:
                     cache[vid] = hidlist.enumerate(vid)

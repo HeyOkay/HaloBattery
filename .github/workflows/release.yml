@@ -99,7 +99,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: HaloBattery
-          path: dist/HaloBattery
+          path: |
+            dist/HaloBattery
+            ${{ steps.zip.outputs.zip }}
+            ${{ steps.setup.outputs.setup }}
 
       - name: Release notes from CHANGELOG.md
         if: github.ref_type == 'tag'

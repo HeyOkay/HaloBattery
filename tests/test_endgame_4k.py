@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -68,6 +69,10 @@ def entry(pid, path, iface, page, usage):
 
 class Endgame4kTest(unittest.TestCase):
     def setUp(self):
+        # Keep checking the experimental framing while stable builds block this PID.
+        policy = mock.patch.object(E, "ENABLED_PIDS", frozenset(E.PIDS))
+        policy.start()
+        self.addCleanup(policy.stop)
         self._saved = (E.hid, E.hidlist)
 
     def tearDown(self):

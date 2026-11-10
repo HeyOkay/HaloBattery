@@ -22,6 +22,7 @@ import sys
 import time
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -213,6 +214,9 @@ class PollTest(unittest.TestCase):
         A.output_length = lambda path: None
         return A.AjazzProvider().poll()
 
+    # Exercise the retained experimental protocol independently of release policy.
+    @mock.patch.object(A, "ENABLED_ALT_TARGETS",
+                       frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_aj159_pros_8k_receiver_is_read(self):
         # #289: 3151:402d 'AJAZZ 2.4G 8K' - the vendor channel sits on usage page
         # FFFF instead of the AJ179's unlabelled mi_02; the AJ179 notes say the
@@ -221,6 +225,9 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
                          [("ajazz:402d", "AJAZZ AJ159 PRO", 75, "mouse")])
 
+    # Exercise the retained experimental protocol independently of release policy.
+    @mock.patch.object(A, "ENABLED_ALT_TARGETS",
+                       frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_kysona_uranus_is_read_on_the_same_family(self):
         # #251: 3151:5031 '2.4G Wireless Mouse' publishes the same ffff:0001/0002
         # collections as the AJ159's receiver
@@ -228,6 +235,9 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
                          [("ajazz:5031", "Kysona Uranus", 75, "mouse")])
 
+    # Exercise the retained experimental protocol independently of release policy.
+    @mock.patch.object(A, "ENABLED_ALT_TARGETS",
+                       frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_fifth_collection_is_reached_on_the_8k_receiver(self):
         # #289: 3151:402d has five collections - four on interface 1, none of them with an
         # output report, plus ffff:0002 on interface 2, which is the one that answers.
