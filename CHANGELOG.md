@@ -6,18 +6,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- Show charging with an unknown battery level as a steady neutral ring and a
-  rotating green arc, keeping the device glyph stationary.
-
-### Fixed
-
-- Align the colored Xbox logo with its monochrome version across display scales.
-
-- Preserve each device's stable Windows tray identity, serialize native icon-handle
-  swaps during taskbar refreshes, and retry failed icon updates.
-
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
@@ -147,6 +135,9 @@ source; their settings and battery history remain compatible.
 
 ### Changed
 
+- Show charging with an unknown battery level as a steady neutral ring and a
+  smoothly rotating green arc, keeping the device glyph stationary.
+
 - Use local Lucide device pictograms inside a thin circular battery ring, with
   artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
 - Refresh the icon and charging previews with explicit controller brand variants.
@@ -157,6 +148,11 @@ source; their settings and battery history remain compatible.
 - Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
 
 ### Fixed
+
+- Correct colored Xbox logo alignment for light and dark taskbar themes.
+
+- Preserve each device's stable Windows tray identity, serialize native icon-handle
+  swaps during taskbar refreshes, and retry failed icon updates.
 
 - Keep packaged modules ahead of loose source folders beside the EXE, preventing
   startup import errors when running a new build from an older checkout.
