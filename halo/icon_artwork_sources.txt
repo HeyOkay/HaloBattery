@@ -12,7 +12,10 @@ https://unpkg.com/lucide-static@1.17.0/
 Historical 56 masks: extracted from the central glyph region of the cleaned handoff
 prototype/lab-assets.json at 16,20,24,32,40,48,64 px. Demonstration arcs and states
 are excluded. Color masters: artwork/optical-master-{xbox,playstation}-color.png.
-Xbox optical offset -0.375,+0.125 logical px applied once at generation.
+Xbox uses the canonical centered master (zero optical offset). The historical
+-0.375,+0.125 logical-pixel correction was removed by its exact inverse (+6,-2
+pixels on the 256px master), restoring the original master alpha and visible RGBA.
+Runtime applies no optical offsets in either theme.
 Lucide: ISC (Feather-derived headphones: MIT). Simple Icons: CC0-1.0.
 PlayStation classic artwork: Sony, Wikimedia Commons source above.
 

@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Align the colored Xbox logo with its monochrome version across display scales.
+
 - Preserve each device's stable Windows tray identity, serialize native icon-handle
   swaps during taskbar refreshes, and retry failed icon updates.
 

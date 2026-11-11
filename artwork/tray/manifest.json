@@ -3,7 +3,7 @@
   "atlas": "masks.png",
   "atlas_mode": "L",
   "logical_icon_size": 16,
-  "description": "Glyph-only sources for halo/icon_artwork.py. No ring, battery arc or device state. Monochrome masks retain the cleaned handoff placement; color-master optical offsets are already baked in.",
+  "description": "Glyph-only sources for halo/icon_artwork.py. No ring, battery arc or device state. Monochrome masks retain the cleaned handoff placement; color masters retain canonical centered placement without optical offsets.",
   "sources": {
     "lucide": {
       "name": "lucide-static 1.17.0",
@@ -731,8 +731,8 @@
       "file": "xbox-color.png",
       "source": "simple_icons",
       "optical_offset_logical_px": [
-        -0.375,
-        0.125
+        0,
+        0
       ],
       "optical_offset_already_applied": true
     },

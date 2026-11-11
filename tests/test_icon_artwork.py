@@ -88,8 +88,36 @@ class ArtworkTests(unittest.TestCase):
         colors={ps.getpixel((x,y))[:3] for y in range(256) for x in range(256) if ps.getpixel((x,y))[3]>200}
         for color in ((222,0,41),(243,194,2),(50,109,179),(0,170,158)):
             self.assertIn(color,colors)
-        self.assertEqual(icon_artwork._image("xbox-color",256).getchannel("A").getbbox(),(27,35,217,225))
+        self.assertEqual(icon_artwork._image("xbox-color",256).getchannel("A").getbbox(),(33,33,223,223))
         self.assertEqual(icon_artwork._image("playstation-color",256).getchannel("A").getbbox(),(34,54,222,202))
+
+    def test_xbox_color_uses_canonical_mono_placement_in_both_themes(self):
+        def alpha_centroid(image):
+            alpha = image.getchannel("A")
+            pixels = [(x + .5, y + .5, alpha.getpixel((x, y)))
+                      for y in range(image.height) for x in range(image.width)]
+            mass = sum(a for x, y, a in pixels)
+            return (sum(x * a for x, y, a in pixels) / mass,
+                    sum(y * a for x, y, a in pixels) / mass)
+
+        for size in (16, 20, 24, 32, 40, 48, 64):
+            with self.subTest(size=size):
+                color = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", True)
+                light = icon_artwork.glyph("gamepad", size, (0, 0, 0), 255, "xbox", True)
+                mono = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", False)
+                self.assertEqual(color.tobytes(), light.tobytes())
+                # Historical per-size masks differ slightly at antialiased edges.
+                # Compare ink placement rather than requiring identical alpha bytes.
+                for actual, expected in zip(alpha_centroid(color), alpha_centroid(mono)):
+                    self.assertAlmostEqual(actual, expected, delta=.025)
+                for theme in (False, True):
+                    plain = icons.render(75, False, True, light_taskbar=theme, size=size)
+                    branded = icons.render(75, False, True, light_taskbar=theme, size=size,
+                                           badge="gamepad", brand="xbox", brand_color=True)
+                    for y in range(size):
+                        for x in range(size):
+                            if math.hypot(x + .5 - size / 2, y + .5 - size / 2) > 6.8 * size / 16:
+                                self.assertEqual(branded.getpixel((x, y)), plain.getpixel((x, y)))
 
     def test_charging_pulse_changes_ring_without_modulating_brand(self):
         frames=icons.charging_frames(None,True,20,False,"gamepad","",size=20,brand="playstation",brand_color=True)
