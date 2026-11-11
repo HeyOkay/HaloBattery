@@ -49,7 +49,7 @@ class ArtworkTests(unittest.TestCase):
 
     def test_glyph_only_masks_exclude_track_and_demo_arcs(self):
         for size in (16,20,24,32,40,48,64):
-            for name in ("headset","mouse","keyboard","gamepad","bluetooth","xbox","playstation","nintendo"):
+            for name in ("headset","mouse","keyboard","microphone","gamepad","bluetooth","xbox","playstation","nintendo"):
                 mask=icon_artwork._image(name,size)
                 self.assertEqual(mask.mode,"L")
                 for y in range(size):

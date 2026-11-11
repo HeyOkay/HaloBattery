@@ -14,7 +14,8 @@
         "mouse": "mouse",
         "keyboard": "keyboard",
         "gamepad": "gamepad-2",
-        "bluetooth": "bluetooth"
+        "bluetooth": "bluetooth",
+        "microphone": "mic"
       }
     },
     "simple_icons": {
@@ -644,6 +645,83 @@
         512
       ],
       "source": "simple_icons"
+    },
+    {
+      "name": "microphone",
+      "size": 16,
+      "box": [
+        0,
+        512,
+        16,
+        528
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 20,
+      "box": [
+        16,
+        512,
+        36,
+        532
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 24,
+      "box": [
+        36,
+        512,
+        60,
+        536
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 32,
+      "box": [
+        60,
+        512,
+        92,
+        544
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 40,
+      "box": [
+        92,
+        512,
+        132,
+        552
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 48,
+      "box": [
+        132,
+        512,
+        180,
+        560
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 64,
+      "box": [
+        180,
+        512,
+        244,
+        576
+      ],
+      "source": "lucide"
     }
   ],
   "color_masters": [
@@ -669,5 +747,40 @@
       ],
       "optical_offset_already_applied": true
     }
-  ]
+  ],
+  "svg_generation": {
+    "microphone": {
+      "file": "lucide-mic.svg",
+      "sha256": "05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/mic.svg",
+      "tool": "tools/make_microphone_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        4,
+        2.5,
+        12,
+        13.5
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"
+    }
+  }
 }

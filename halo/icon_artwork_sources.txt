@@ -9,7 +9,7 @@ https://upload.wikimedia.org/wikipedia/commons/4/4e/Playstation_logo_colour.svg
 Lucide device glyphs: lucide-static 1.17.0
 https://unpkg.com/lucide-static@1.17.0/
 
-Embedded masks: extracted from the central glyph region of the cleaned handoff
+Historical 56 masks: extracted from the central glyph region of the cleaned handoff
 prototype/lab-assets.json at 16,20,24,32,40,48,64 px. Demonstration arcs and states
 are excluded. Color masters: artwork/optical-master-{xbox,playstation}-color.png.
 Xbox optical offset -0.375,+0.125 logical px applied once at generation.
@@ -48,3 +48,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Microphone: official lucide-static 1.17.0 mic.svg (ISC), stored locally as
+artwork/tray/lucide-mic.svg; source:
+https://unpkg.com/lucide-static@1.17.0/icons/mic.svg
+SHA256: 05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117
+Reproduce: tools/make_microphone_artwork.py, then tools/make_icon_artwork.py.
+Uniform 0.5 logical px per SVG unit; stroke 1 logical px; visible-ink bounds
+[4,2.5,12,13.5], centered at [8,8], no optical shift. Source conversion is a
+development-only headless Chromium step; runtime uses only embedded alpha masks.

@@ -2,3 +2,6 @@
 *.bat text eol=crlf
 *.png binary
 *.gif binary
+
+# Preserve the checksum of the pinned Lucide SVG on Windows.
+/artwork/tray/lucide-mic.svg text eol=lf

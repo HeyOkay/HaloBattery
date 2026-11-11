@@ -17,6 +17,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Use local Lucide device pictograms inside a thin circular battery ring, with
   artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
 - Refresh the icon and charging previews with explicit controller brand variants.
+- Replace the remaining microphone drawing with the Lucide mic glyph, fitted and
+  centered by its visible bounds with the same ring clearance as the other icons.
 
 ### Fixed
 

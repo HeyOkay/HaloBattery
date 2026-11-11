@@ -1,6 +1,7 @@
-"""Offline glyph-only masks from the cleaned icon integration handoff.
+"""Offline glyph-only masks from the cleaned handoff and pinned Lucide mic SVG.
 
-The per-size central masks exclude the prototype's demonstration track/arcs/state.
+The historical masks exclude the prototype's demonstration track/arcs/state.
+Microphone masks come from the local official SVG at uniform scale, no optical shift.
 Xbox and PlayStation color masters retain their aspect ratio and placement; the
 handoff optical offsets were applied ONCE when embedding (Xbox -0.375,+0.125
 logical pixels; PlayStation 0,0). Never translate these embedded masters again.
@@ -557,6 +558,65 @@ _PNG = {
         'j+sl5ob0E+zRNf3tQG74oe55TydLMTfRN/FX733gdnz6zumFlZA6MlGZwzG/fkUaT465gxKnDBF0rrUVWecrRZYptZyR87v2vfT4'
         'fWP9ttIqgOXf+2Xez1dPn62UeTSkwWjonzB9u1IoNMdHe9WG/SuUQesUmgjRbCwlja5f6gIwsX9cbCvVFNu1yBZwp+V+gMDrxmp4'
         'QhOYob3T0P6X5y7+D/gHuIwOHPC7nEUAAAAASUVORK5CYII='
+    ),
+    ('microphone', 16): (
+        'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAA6mKC9AAAApUlEQVR4nIWPMQ6CQBBF/+ySLGJiQ8UB6CCcwtJKCecw4R6W9ngE'
+        'e65BDwWhIxtQCmENA9T8Yoo/f97PAHsiHuZwx+NLZjOEeTv4XGjaUtKtLat25by1AJhRdCd0YuQ0ADtRIIJK7BXrVVGhVBFVHohP'
+        '+qE9nuG0Q88MI3UTX1+4xY2WC4YCnfp+qgOaiQwO87LMQ25YHWTZ0shQTNb0hBC/3UdZf1PlLZ+ht6w7AAAAAElFTkSuQmCC'
+    ),
+    ('microphone', 20): (
+        'iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAAAAACo4kLRAAAAuklEQVR4nJ2PMQ6CQBBF/8xuIKG2N55jKziCCQ1X4CbICfQiVvZW'
+        'VEpBS0JCTyCwcYwGYS31F5PMz0z++8CvomWsYiRVlYAdCwpG8lwMlGNq5CVQHqDn9SUi6jV6JnLMCWALhkxzAgj+ZdspItVtL/4L'
+        '4Z0XhBuxIlY2YbC8D6PX7Ai7xhuHFfJ+Qt22NU63BVVhLxGnKUeyX0kZmRyNOUrmdmLEhUgRf/dk4HyeWT7weHj2Ctaje/i3no/9'
+        'OA/wtV+FAAAAAElFTkSuQmCC'
+    ),
+    ('microphone', 24): (
+        'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAAAAADFHGIkAAAA70lEQVR4nKWRMW7CQBBF3+waWFJxAUtI1FTkCEicgSNQIW5BlTSu'
+        'uUZyBhcsEg33SISEV+uJLMdgW1TJL3ZW+jN/Zv7A3yH3pwuBxesTxkiaq+apmD7BZ1ivwwc9QnjRN3jXcSP2m2DE8m3tF0mjldQh'
+        'AjZiQWOnYj6JKChxMn8QwthvrpW4cN34uk1dMbAOCmsLcHbQ6hGiM+UsMiuNi6E97MWT6eGgGf7S2j5hq0uy2y1jqdtm0qrCuFOx'
+        'qn6r4uRMyy9D6vW43x/Vp11ThNHurHrejfr+Vml5/tj4HksZSggylLJ/EITp9NkF/48fA2VHOkRF34kAAAAASUVORK5CYII='
+    ),
+    ('microphone', 32): (
+        'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAABYUlEQVR4nMVTu4rCQBQ9d0ZN0FUQBLtUVu6CgmLhN1qIoH6ChYgf'
+        'YLFWbm9tuw8RFJ8YjDmL8ZG46pa7h1wmuffkPubMAH8MpY72MA7EYt7yKP7S/vxqPz9iKMlO6TicZuU+Q6PLlmW12IW+FxdEJ3Ya'
+        'SNuTKCTY1wWGsbWVsreG4fsQOr+IkBBxIQLiYD8I9Dz0HsC9LaG0X1igff8pf/i1r3liCHW/Hxa/UUCQ3Dnx2HKRBJKLZSzu7JKn'
+        'hOceuAYV6Jkori5NnmvtXTNs26bhuoZp22HT3V8RiPWHkdkNIlXLqkYGu4zxvr7kOFWqs4LcUYscKqz7G+BBo8B5DvnOeNzJIzdn'
+        '4aceGk2OikAkAhRHbN7oJdrscVMpp1LlyoY9Uwd3wYPAbJBcLkk2zICcFwhQqg3JYa3kfdxhKCAxmyUOZ8v3BoYhQ9RP0FqcwG9X'
+        '0zqyesPKl/oefrsV/4ZvezSFY8uMAaoAAAAASUVORK5CYII='
+    ),
+    ('microphone', 40): (
+        'iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAAAAACpleexAAAByUlEQVR4nM2Uy0ojQRSG/zpVaEjAy1YQo2/gbGbtIzRkEdA44n7E'
+        'V3DlzoVZzkJm50J8AR9AUNAHSMB4IdsoBNHYdX7pGOnrtMzOf9Fdl69P/X04dYDvL5NbESGM6pdf2tTr3xFFl3/9wNXfGymPKWg8'
+        'kuSgASnlzGpIf36uDFdNGWlxwmEABEOe5G0mDVdu9QjO4UhvK2n/mfjViukKIF1TqWbdp0TAKaBuPEwq73gMZCgALh5aML1vBL4I'
+        'jBcn0sKjBbun9aQTQf10N7k/OUZn9oJWMncWm8HejH7mKA7hnv14YuKHf46dxSDFMgIiXHzE0goLQFVMm9cQc+qcziF8NdPRWh4c'
+        'DlDnU1ebKy8vK03tPrGOwbCwHrRXNQHZPzjok4Gp9rSoMhw2yC1gPypHch/YIjeSef7Mj6nd+f4C0Di7vz9rAAt9f1cz+TsFiyZ5'
+        'vQhgfh7A4jXZLK5Jizb5sD0bjWe3H8h2kkuENuIPfwM3Fz0s/VwG2jtW81X0QWK98/EvZGcdUmBwIkGtddwZjTrHrVr5NYxMrZFr'
+        '+Rbg0lNvpkLxEOtGmfLMJpShf7N487nL4LKHq7n8g0vzdZPCf8iW9IhvrXcSVbRbh14UsAAAAABJRU5ErkJggg=='
+    ),
+    ('microphone', 48): (
+        'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAAAAAByaaZbAAACO0lEQVR4nOVVTUsbURQ9770hHyaDqAVDixuhCf0Aoe3ClaW/oFsX'
+        'Nmn/gCJCoF35A/wPXdnisiAustFu3LRUBEtAF4Fs3GQTpoFkMu+dMpq0M50ZM3brWczMu3PPO/fdd+97wB2EiLdKARqmnkWFXpMV'
+        'pCm+eix+Hv6SBmmgUG2RZKsar/EvFLY4wlYahsILurzY2bmgy+cpGAqfaQ5twD4y/DSZIJBp0VtCNoslj61MJCsyQinY6LaF64p2'
+        'F3Yh8jtKAEDB0QPpCLhyjd9oiVvCCrFlTP1IaUwSwZiYUjEmKSSJSr0SUWClXokPXIhsk80sZjvszEAIzHTYmcWVUfwVDnBZKHkl'
+        'OxyUgF3ySoWAblCMnuVFQ/LCxlB0YjT9yIEhY0yWjIGlMNTIW37NWXnoIZQVzlNQoeegOAenbQqrWmu9WjBtB3NFOL2AU4jbINcE'
+        'Njjor99/sN4fcANijWwk1IOFD+QBVP6ELh2HLk/yCgfk+/D2BhTKQ6OXoRa+X3fotwWFZW2GD5MqTmGP+mwKyG0eX14eb+aAqTPN'
+        'vcS2k2Kx57JR9CecnvYl7QaHvUWRWNIKVfZ5ujIer5yyzzc39bWFOjW5X3s6P//k7T6pWU9Y8R+NWtdfr+l2jf/u1iadGwrl3cH4'
+        'IBvsliP+kYZRGo9ev3x2D50fX780/eEkSD8n2+T2+DuMqMUYmZP+MSNz4W6+RlwKjGcyGhnjxZ32VowNwLnC+a2uLPEOH5n+yvof'
+        'WDfuL+4YfgMiLf9Qb7qmVAAAAABJRU5ErkJggg=='
+    ),
+    ('microphone', 64): (
+        'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAADAUlEQVR4nO1XTU8TURQ9777pjG2TColiWPsBiW6E1LW6hIVioov+'
+        'IkFdUlBj1L/BwpjAGhUwBKLuTCglJARI8+brmDeoSOl0OrBQo2fReW/u3PvO+7rnFviPfwBKncZbHPvryEkH1wAqFQD6RDQUUJ1+'
+        '32i8n64mnfz+Xj1mgrju5Y+gtDfHyASkbyLOeblnoTFDE5G7u2RkOAO7IDkgGGEYcenO4OCdJUYhR5BvLxzM0sQf+2y772NsOItk'
+        'S3uGkhX6HIenlIdx+lyRXIugUGmSewP2HCo1sEc2KykbISkhtAZMQNtkYA76uQJY/ByyG3vBKSF/YADVZcYdbHLsBZnKqpPNaR8j'
+        '9mBSOBzY2JWB8O7q6t3OHBLbRDo/C6XOfCW/egr92+R2vz0Bh+3vtqP85EgPLBXjuFhuo9nN5rR/RQE7+qfYpP2rhHQKOtkk7WM7'
+        '4rFGB0i7UwyIBqIQ8JxkPOV4QBgBjgbirCm09sHyWcjeJoJyla5SLqvlAJu7gkqJ2G91DUBlNhA6F1GIF0BO9RnS9E2RWGABl5wQ'
+        'G+0nSY7G01hmhFsAnkHz6rxNqvNXqfEUwE1EXM5Izw5q9LnuiEb917Reh1bOOn3WMpKrwvmdOOB9FOSHsASJsEgBDxjEO+eyNErj'
+        'BU38qSQaXv1A2ci6By2lz7Hhi0yBETUchAFfJXt2Y/pDo/Fh+gagHbxmEPrDKjMDaTyhH/IhUDiU9wIwydDn4x4UTuniEoOQLyuA'
+        '6wkgngtUXjEMuFTsRWMFV5o2wlrN/fHKra1Z/+bl3lKoxugmg4BcnRy7cn7g8tjkKm2/MdqrRGsMLdIuBBnu7CQPn1wc6l3iNUqP'
+        'DOm3fLuJycM8KuUpEQS49nwrKW+SMmfr+bW0m686R1AS4cLtm9dHNKLFd2/fNKCPXeQsEhpA2abTsp1U6vI7aYYYyqFnW55RNp3k'
+        'DQDQrr9NpWG7mPQYAFYn4qxqWbr677dEWvsnr7cF9758njhNCaDguiepkw9hbyN+4x+O//hb8A2EY4wXHkAHTgAAAABJRU5ErkJg'
+        'gg=='
     ),
     ('xbox-color', 256): (
         'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAnu0lEQVR4nO2dC7xt1bzHf2uf0+mtEZXSk/KMq0Kh7iW6XCqF6xFu'

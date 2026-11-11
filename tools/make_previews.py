@@ -22,6 +22,7 @@ LIGHT_BG = (243, 243, 243)
 ROWS = [("Headset", "headset", "default", False),
         ("Mouse", "mouse", "default", False),
         ("Keyboard", "keyboard", "default", False),
+        ("Microphone", "microphone", "default", False),
         ("Default controller", "gamepad", "default", False),
         ("Xbox (mono)", "gamepad", "xbox", False),
         ("Xbox (color)", "gamepad", "xbox", True),

@@ -317,13 +317,8 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if text:
         col = arc_color(level, False, low, fg) if active else fg
         _number(d, text, col + (alpha,))
-    elif kind == "microphone":
-        # The handoff has no microphone artwork; keep the established pictogram.
-        fn, dx, dy, s = PICTOS[kind]
-        fn(d, 32 + dx, 32 + dy, s, fg + (alpha,))
-
     img = img.resize((size, size), Image.Resampling.LANCZOS)
-    if kind and kind != "microphone" and not text:
+    if kind and not text:
         img = Image.alpha_composite(img, icon_artwork.glyph(
             kind, size, fg, alpha, brand, brand_color))
     return img
