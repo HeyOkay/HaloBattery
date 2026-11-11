@@ -666,43 +666,84 @@ def _make_tray_class(base: type) -> type:
           about ten files a second per charging device, which a disk and an
           antivirus notice (#61). The 30 frames of a cycle are now loaded once."""
 
+        def __init__(self, *args, **kwargs):
+            # Explorer's window thread can restore an icon during an app-thread
+            # DPI swap. Keep handle loading, notification and disposal atomic.
+            self._hb_handle_lock = threading.RLock()
+            self._hb_handles_closed = False
+            super().__init__(*args, **kwargs)
+
+        def _update_icon(self):
+            with self._hb_handle_lock:
+                if self._hb_handles_closed:
+                    return None
+                self._icon_valid = False
+                if sys.platform == "win32" and not getattr(self, "_visible", True):
+                    # pystray normally MODIFYs before its first ADD. There is no
+                    # shell entry yet; prepare the handle and let _show add it.
+                    self._release_icon()
+                    self._assert_icon_handle()
+                    return None
+                return super()._update_icon()
+
+        def _show(self):
+            with self._hb_handle_lock:
+                if self._hb_handles_closed:
+                    return None
+                self._icon_valid = False
+                result = super()._show()
+                self._icon_valid = True
+                return result
+
+        def _hide(self):
+            with self._hb_handle_lock:
+                # DELETE must follow any in-flight Explorer ADD, including stop.
+                return super()._hide()
+
         def _message(self, code, flags, **kwargs):
             uid = getattr(self, "_hb_uid", None)
             if uid is None or sys.platform != "win32":
                 return super()._message(code, flags, **kwargs)
             import ctypes
             from pystray._util import win32
-            win32.Shell_NotifyIcon(code, win32.NOTIFYICONDATAW(
+            succeeded = win32.Shell_NotifyIcon(code, win32.NOTIFYICONDATAW(
                 cbSize=ctypes.sizeof(win32.NOTIFYICONDATAW),
                 hWnd=self._hwnd,
-                hID=uid,
+                uID=uid,
                 uFlags=flags,
                 **kwargs))
+            if not succeeded and (code == win32.NIM_ADD or
+                                  (code == win32.NIM_MODIFY and flags & win32.NIF_ICON)):
+                # Keep pystray's best-effort tooltip/balloon updates. Only failed
+                # image swaps need retrying; GetLastError is not reliable here.
+                raise OSError(f"Shell_NotifyIcon failed (operation={code}, uid={uid})")
 
         def _assert_icon_handle(self):
-            cache = getattr(self, "_hb_handles", None)
-            if cache is None or self._icon_handle:
-                return super()._assert_icon_handle()
-            img = self.icon
-            hit = cache.get(id(img))
-            if hit is not None and hit[0] is img:     # the cache holds img, so its id is not reused
-                self._icon_handle = hit[1]
+            with self._hb_handle_lock:
+                cache = getattr(self, "_hb_handles", None)
+                if cache is None or self._icon_handle:
+                    return super()._assert_icon_handle()
+                img = self.icon
+                hit = cache.get(id(img))
+                if hit is not None and hit[0] is img:     # the cache holds img, so its id is not reused
+                    self._icon_handle = hit[1]
+                    return None
+                if sys.platform == "win32":
+                    self._icon_handle = tray_dpi.load_icon_handle(img)
+                else:
+                    super()._assert_icon_handle()
+                if self._icon_handle:
+                    if len(cache) >= ICON_HANDLE_CACHE:
+                        _destroy_handles(cache)           # the handle just loaded is not among them
+                    cache[id(img)] = (img, self._icon_handle)
                 return None
-            if sys.platform == "win32":
-                self._icon_handle = tray_dpi.load_icon_handle(img)
-            else:
-                super()._assert_icon_handle()
-            if self._icon_handle:
-                if len(cache) >= ICON_HANDLE_CACHE:
-                    _destroy_handles(cache)           # the handle just loaded is not among them
-                cache[id(img)] = (img, self._icon_handle)
-            return None
 
         def _release_icon(self):
-            if getattr(self, "_hb_handles", None) is None:
-                return super()._release_icon()
-            self._icon_handle = None                  # the handle stays in the cache
-            return None
+            with self._hb_handle_lock:
+                if getattr(self, "_hb_handles", None) is None:
+                    return super()._release_icon()
+                self._icon_handle = None                  # the handle stays in the cache
+                return None
 
         def _on_notify(self, wparam, lparam):
             # a right-click opens the Windows 11 style menu (flyout.py); the classic
@@ -718,19 +759,22 @@ def _make_tray_class(base: type) -> type:
 
         def discard_cached_handles(self) -> None:
             """After a successful DPI swap, retain only the currently loaded HICON."""
-            cache = getattr(self, "_hb_handles", None)
-            if cache:
-                stale = {k: v for k, v in cache.items() if v[1] != self._icon_handle}
-                for k in stale:
-                    del cache[k]
-                _destroy_handles(stale)
+            with self._hb_handle_lock:
+                cache = getattr(self, "_hb_handles", None)
+                if cache:
+                    stale = {k: v for k, v in cache.items() if v[1] != self._icon_handle}
+                    for k in stale:
+                        del cache[k]
+                    _destroy_handles(stale)
 
         def forget_handles(self) -> None:
-            """Free the cached handles once the icon is gone."""
-            cache = getattr(self, "_hb_handles", None)
-            if cache:
-                _destroy_handles(cache)
-            self._icon_handle = None
+            """Free cached handles and reject late Explorer restores during stop."""
+            with self._hb_handle_lock:
+                self._hb_handles_closed = True
+                cache = getattr(self, "_hb_handles", None)
+                if cache:
+                    _destroy_handles(cache)
+                self._icon_handle = None
 
     return TrayIcon
 
@@ -1122,7 +1166,6 @@ class DeviceIcon:
             else:
                 self.frames = None
                 self.icon.icon = art
-            self._state = state                 # retry unchanged readings if a native swap fails
         title = describe(st, self.app.display_name(st), self.app.time_left_text(st),
                          language=self.app.cfg.get("language", "en"))
         # the tray tooltip is limited to 127 characters
@@ -1138,10 +1181,8 @@ class DeviceIcon:
                 pass
         ready = getattr(self, "ready", None)
         if not self.icon.visible and (ready is None or ready.wait(ICON_READY_TIMEOUT)):
-            try:
-                self.icon.visible = True
-            except Exception:
-                pass
+            self.icon.visible = True
+        self._state = state                     # commit only after native update/show succeeds
 
     def _art(self, state: tuple):
         """The image (or the charging frames) for a state. Only the colour in use is

@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve each device's stable Windows tray identity, serialize native icon-handle
+  swaps during taskbar refreshes, and retry failed icon updates.
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
