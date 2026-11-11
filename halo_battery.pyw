@@ -136,7 +136,7 @@ import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
 from halo import flyout, history, icons, updates, whatsnew, winevents  # noqa: E402
-from halo import i18n  # noqa: E402
+from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
@@ -646,10 +646,9 @@ def _destroy_handles(cache: dict) -> None:
     handles = [h for _img, h in cache.values()]
     cache.clear()
     if sys.platform == "win32":
-        import ctypes
         for h in handles:
             try:
-                ctypes.windll.user32.DestroyIcon(h)
+                tray_dpi.destroy_icon_handle(h)
             except Exception:
                 pass
 
@@ -687,7 +686,10 @@ def _make_tray_class(base: type) -> type:
             if hit is not None and hit[0] is img:     # the cache holds img, so its id is not reused
                 self._icon_handle = hit[1]
                 return None
-            super()._assert_icon_handle()
+            if sys.platform == "win32":
+                self._icon_handle = tray_dpi.load_icon_handle(img)
+            else:
+                super()._assert_icon_handle()
             if self._icon_handle:
                 if len(cache) >= ICON_HANDLE_CACHE:
                     _destroy_handles(cache)           # the handle just loaded is not among them
@@ -711,6 +713,15 @@ def _make_tray_class(base: type) -> type:
                 except Exception as e:
                     log.warning("menu: %s", e)
             return super()._on_notify(wparam, lparam)
+
+        def discard_cached_handles(self) -> None:
+            """After a successful DPI swap, retain only the currently loaded HICON."""
+            cache = getattr(self, "_hb_handles", None)
+            if cache:
+                stale = {k: v for k, v in cache.items() if v[1] != self._icon_handle}
+                for k in stale:
+                    del cache[k]
+                _destroy_handles(stale)
 
         def forget_handles(self) -> None:
             """Free the cached handles once the icon is gone."""
@@ -780,6 +791,9 @@ def badge_for(st: DeviceStatus) -> str:
 PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboard"),
                      ("microphone", "Microphone"),
                      ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
+
+CONTROLLER_BRANDS = ("default", "xbox", "playstation", "nintendo")
+CONTROLLER_PICTOGRAMS = ("gamepad", "dualshock", "dualsense")
 
 GAMEPAD_WORDS = ("controller", "gamepad", "joystick", "joy-con")
 
@@ -1067,7 +1081,8 @@ class DeviceIcon:
         self._state = None                      # to avoid redrawing when nothing changed
         self._images: Dict[tuple, object] = {}  # state -> image or frames, per colour
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
-                              icons.render(None, False, False, light_taskbar=app.light_taskbar),
+                              icons.render(None, False, False, light_taskbar=app.light_taskbar,
+                                           size=getattr(app, "tray_size", icons.SIZE)),
                               APP_TITLE, app.build_menu(self))
         self.icon._hb_flyout = getattr(app, "flyout", None)
         # pystray calls the setup function once the icon's window exists. The app shows
@@ -1090,10 +1105,11 @@ class DeviceIcon:
         # (st.approx) keeps its pictogram rather than showing a made-up exact number
         text = (str(st.level) if self.app.cfg.get("percent_in_icon") and st.level is not None
                 and not st.approx else "")
+        brand, brand_color = self.app.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused, self.app.low_for(st),
-                 self.app.light_taskbar, badge, animate, text, st.polling_paused)
+                 self.app.light_taskbar, badge, animate, text, st.polling_paused,
+                 getattr(self.app, "tray_size", icons.SIZE), brand, brand_color)
         if state != self._state:
-            self._state = state
             art = self._art(state)
             if animate:
                 self.frames = art
@@ -1104,6 +1120,7 @@ class DeviceIcon:
             else:
                 self.frames = None
                 self.icon.icon = art
+            self._state = state                 # retry unchanged readings if a native swap fails
         title = describe(st, self.app.display_name(st), self.app.time_left_text(st),
                          language=self.app.cfg.get("language", "en"))
         # the tray tooltip is limited to 127 characters
@@ -1131,16 +1148,19 @@ class DeviceIcon:
         draw anything again. The cache holds one state, in at most both colours."""
         art = self._images.get(state)
         if art is None:
-            level, charging, online, low, light, badge, animate, text, paused = state
-            other = (level, charging, online, low, not light, badge, animate, text, paused)
+            level, charging, online, low, light, badge, animate, text, paused, size, brand, color = state
+            other = (level, charging, online, low, not light, badge, animate, text, paused,
+                     size, brand, color)
             kept = self._images.get(other)
             self._images.clear()
             if kept is not None:
                 self._images[other] = kept      # the same state in the other colour
             if animate:
-                art = icons.charging_frames(level, online, low, light, badge, text=text)
+                art = icons.charging_frames(level, online, low, light, badge, text=text,
+                                            size=size, brand=brand, brand_color=color)
             else:
-                art = icons.render(level, charging, online, low, light, badge, text=text, force_active=paused)
+                art = icons.render(level, charging, online, low, light, badge, text=text,
+                                   force_active=paused, size=size, brand=brand, brand_color=color)
             self._images[state] = art
         return art
 
@@ -1204,6 +1224,7 @@ class App:
         self.theme_evt = threading.Event()   # "re-check the icon colour now"
         self.win_events: Optional[winevents.WindowEventWatcher] = None
         self.light_taskbar = self.compute_light()
+        self.tray_size = tray_dpi.tray_pixels()
         self.providers = make_providers()
         self.key_provider: Dict[str, str] = {}   # device key -> provider name
         self.history = history.History(HISTORY_PATH)
@@ -1356,6 +1377,22 @@ class App:
             # pystray accepts only actions with 0-2 parameters
             return lambda icon, item: self.set_pictogram(owner, value)
 
+        def controller_visible(_item):
+            return bool(owner and owner.status and self.pictogram(owner.status) in CONTROLLER_PICTOGRAMS)
+
+        def brand_picked(value):
+            return lambda _item: bool(owner and owner.status) and self.controller_style(owner.status)[0] == value
+
+        def pick_brand(value):
+            return lambda icon, item: self.set_controller_brand(owner, value)
+
+        def color_picked(_item):
+            return bool(owner and owner.status and self.controller_color(owner.status.key))
+
+        def flip_controller_color(icon, item):
+            if owner and owner.status:
+                self.set_controller_color(owner, not self.controller_color(owner.status.key))
+
         def show_again(key):
             # pystray accepts only actions with 0-2 parameters, so no "k=key" default here
             return lambda icon, item: self.unhide(key)
@@ -1397,6 +1434,14 @@ class App:
             Item(tr("menu.icon"), Menu(*[Item(tr("icon." + value) if value else tr("choice.auto"),
                                               pick(value), checked=picked(value), radio=True)
                                        for value, _label in PICTOGRAM_CHOICES])),
+            Item(tr("menu.controller_logo"), Menu(
+                *[Item(tr("controller." + brand), pick_brand(brand),
+                       checked=brand_picked(brand), radio=True) for brand in CONTROLLER_BRANDS],
+                Menu.SEPARATOR,
+                Item(tr("controller.color"), flip_controller_color, checked=color_picked,
+                     visible=lambda it: bool(owner and owner.status and
+                                             self.controller_style(owner.status)[0] != "default"))),
+                 visible=controller_visible),
             Item(tr("menu.device_low"), Menu(
                 Item(default_low_text, pick_device_low(None), checked=device_low_picked(None), radio=True),
                 *[Item(t, pick_device_low(p), checked=device_low_picked(p), radio=True)
@@ -1469,9 +1514,9 @@ class App:
         )
 
     # ---------------- hide / rename
-    def _settings_map(self, key: str) -> Dict[str, str]:
+    def _settings_map(self, key: str) -> Dict[str, object]:
         """cfg["hidden"] or cfg["names"] (device key -> name), or cfg["icons"] (device
-        key -> pictogram). A value that is not a dict (a hand-edited or damaged settings
+        key -> pictogram), and controller brand/colour maps. A value that is not a dict (a hand-edited or damaged settings
         file) is replaced by an empty one."""
         value = self.cfg.get(key)
         if not isinstance(value, dict):
@@ -1566,6 +1611,45 @@ class App:
             save_config(self.cfg)
         log.info("icon of [%s]: %s", owner.status.key, value or "automatic")
         owner.update(owner.status)            # redraw at once
+        self.refresh_menus()
+
+    def controller_color(self, key: str) -> bool:
+        """Only a real boolean enables the per-device logo colour."""
+        return self._settings_map("controller_colors").get(key) is True
+
+    def controller_style(self, st: DeviceStatus) -> tuple:
+        """Presentation only: pictogram/status.json keep their existing device kind."""
+        if self.pictogram(st) not in CONTROLLER_PICTOGRAMS:
+            return "default", False
+        brand = self._settings_map("controller_brands").get(st.key, "default")
+        if not isinstance(brand, str) or brand not in CONTROLLER_BRANDS:
+            brand = "default"
+        return brand, brand != "default" and self.controller_color(st.key)
+
+    def set_controller_brand(self, owner: Optional[DeviceIcon], brand: str) -> None:
+        if owner is None or owner.status is None or brand not in CONTROLLER_BRANDS:
+            return
+        with self.lock:
+            chosen = self._settings_map("controller_brands")
+            if brand == "default":
+                chosen.pop(owner.status.key, None)
+            else:
+                chosen[owner.status.key] = brand
+            save_config(self.cfg)
+        owner.update(owner.status)
+        self.refresh_menus()
+
+    def set_controller_color(self, owner: Optional[DeviceIcon], enabled: bool) -> None:
+        if owner is None or owner.status is None or not isinstance(enabled, bool):
+            return
+        with self.lock:
+            chosen = self._settings_map("controller_colors")
+            if enabled:
+                chosen[owner.status.key] = True
+            else:
+                chosen.pop(owner.status.key, None)
+            save_config(self.cfg)
+        owner.update(owner.status)
         self.refresh_menus()
 
     # ---------------- low battery alert per device
@@ -1665,14 +1749,35 @@ class App:
 
     def refresh_theme(self) -> None:
         light = self.compute_light()
-        if light == self.light_taskbar:
-            return
-        self.light_taskbar = light
-        for ic in list(self.icons.values()):
-            if ic.status is not None:
-                ic.update(ic.status)            # the state key includes the colour -> redraw
-        if self.placeholder is not None:
-            self.placeholder.icon = icons.render(None, False, False, light_taskbar=light)
+        size = tray_dpi.tray_pixels()
+        with self.lock:
+            resized = size != getattr(self, "tray_size", icons.SIZE)
+            if light == self.light_taskbar and not resized:
+                return
+            previous = self.light_taskbar, getattr(self, "tray_size", icons.SIZE)
+            self.light_taskbar, self.tray_size = light, size
+            try:
+                for ic in list(self.icons.values()):
+                    if ic.status is not None:
+                        if resized:
+                            ic.frames = None
+                            ic._images.clear()
+                            ic._state = None
+                        ic.update(ic.status)
+                        if resized:
+                            discard = getattr(getattr(ic, "icon", None), "discard_cached_handles", None)
+                            if discard is not None:
+                                discard()
+                if self.placeholder is not None:
+                    self.placeholder.icon = icons.render(None, False, False, light_taskbar=light, size=size)
+                    if resized:
+                        discard = getattr(self.placeholder, "discard_cached_handles", None)
+                        if discard is not None:
+                            discard()
+            except Exception:
+                # theme_loop will retry the remaining swaps on its next tick.
+                self.light_taskbar, self.tray_size = previous
+                raise
         log.info("icon colour: %s (%s%s)", "black" if light else "white", self.cfg.get("icon_theme"),
                  ", MyDockFinder" if icons.mydockfinder_running() else "")
 
@@ -1963,7 +2068,8 @@ class App:
                 return
             ready = threading.Event()
             self.placeholder = tray_icon(IDLE_KEY, f"{APP_NAME}_idle",
-                                         icons.render(None, False, False, light_taskbar=self.light_taskbar),
+                                         icons.render(None, False, False, light_taskbar=self.light_taskbar,
+                                                      size=getattr(self, "tray_size", icons.SIZE)),
                                          i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE)),
                                          self.build_menu(None))
             self.placeholder._hb_flyout = getattr(self, "flyout", None)

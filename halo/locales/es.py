@@ -56,6 +56,12 @@ MESSAGES = {
     "icon.gamepad": "Mando",
     "icon.bluetooth": "Bluetooth",
     "icon.microphone": "Micrófono",
+    "menu.controller_logo": "Logotipo del mando",
+    "controller.default": "Predeterminado",
+    "controller.xbox": "Xbox",
+    "controller.playstation": "PlayStation",
+    "controller.nintendo": "Nintendo Switch",
+    "controller.color": "Logotipo en color",
     # Additional provider-family labels (not translated in #249).
     "provider.8bitdo": "Mandos 8BitDo",
     "provider.am_infinity": "AM Infinity 8K (Angry Miao)",

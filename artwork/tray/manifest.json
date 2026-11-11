@@ -1,0 +1,673 @@
+{
+  "format": 1,
+  "atlas": "masks.png",
+  "atlas_mode": "L",
+  "logical_icon_size": 16,
+  "description": "Glyph-only sources for halo/icon_artwork.py. No ring, battery arc or device state. Monochrome masks retain the cleaned handoff placement; color-master optical offsets are already baked in.",
+  "sources": {
+    "lucide": {
+      "name": "lucide-static 1.17.0",
+      "url": "https://unpkg.com/lucide-static@1.17.0/",
+      "license": "../../docs/licenses/lucide-1.17.0-LICENSE.txt",
+      "glyphs": {
+        "headset": "headphones",
+        "mouse": "mouse",
+        "keyboard": "keyboard",
+        "gamepad": "gamepad-2",
+        "bluetooth": "bluetooth"
+      }
+    },
+    "simple_icons": {
+      "name": "Simple Icons 9.0.0",
+      "url": "https://github.com/simple-icons/simple-icons/tree/9.0.0",
+      "license": "../../docs/licenses/simple-icons-9.0.0-LICENSE.md"
+    },
+    "playstation_classic": {
+      "name": "Sony / Manabu Sakamoto classic PlayStation logo",
+      "url": "https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg",
+      "notice": "Public-domain text-logo artwork; trademark rights remain with the owner. See ../../docs/credits.md."
+    }
+  },
+  "masks": [
+    {
+      "name": "headset",
+      "size": 16,
+      "box": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 20,
+      "box": [
+        16,
+        0,
+        36,
+        20
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 24,
+      "box": [
+        36,
+        0,
+        60,
+        24
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 32,
+      "box": [
+        60,
+        0,
+        92,
+        32
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 40,
+      "box": [
+        92,
+        0,
+        132,
+        40
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 48,
+      "box": [
+        132,
+        0,
+        180,
+        48
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 64,
+      "box": [
+        180,
+        0,
+        244,
+        64
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 16,
+      "box": [
+        0,
+        64,
+        16,
+        80
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 20,
+      "box": [
+        16,
+        64,
+        36,
+        84
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 24,
+      "box": [
+        36,
+        64,
+        60,
+        88
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 32,
+      "box": [
+        60,
+        64,
+        92,
+        96
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 40,
+      "box": [
+        92,
+        64,
+        132,
+        104
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 48,
+      "box": [
+        132,
+        64,
+        180,
+        112
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 64,
+      "box": [
+        180,
+        64,
+        244,
+        128
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 16,
+      "box": [
+        0,
+        128,
+        16,
+        144
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 20,
+      "box": [
+        16,
+        128,
+        36,
+        148
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 24,
+      "box": [
+        36,
+        128,
+        60,
+        152
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 32,
+      "box": [
+        60,
+        128,
+        92,
+        160
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 40,
+      "box": [
+        92,
+        128,
+        132,
+        168
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 48,
+      "box": [
+        132,
+        128,
+        180,
+        176
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 64,
+      "box": [
+        180,
+        128,
+        244,
+        192
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 16,
+      "box": [
+        0,
+        192,
+        16,
+        208
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 20,
+      "box": [
+        16,
+        192,
+        36,
+        212
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 24,
+      "box": [
+        36,
+        192,
+        60,
+        216
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 32,
+      "box": [
+        60,
+        192,
+        92,
+        224
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 40,
+      "box": [
+        92,
+        192,
+        132,
+        232
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 48,
+      "box": [
+        132,
+        192,
+        180,
+        240
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 64,
+      "box": [
+        180,
+        192,
+        244,
+        256
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 16,
+      "box": [
+        0,
+        256,
+        16,
+        272
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 20,
+      "box": [
+        16,
+        256,
+        36,
+        276
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 24,
+      "box": [
+        36,
+        256,
+        60,
+        280
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 32,
+      "box": [
+        60,
+        256,
+        92,
+        288
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 40,
+      "box": [
+        92,
+        256,
+        132,
+        296
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 48,
+      "box": [
+        132,
+        256,
+        180,
+        304
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 64,
+      "box": [
+        180,
+        256,
+        244,
+        320
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "xbox",
+      "size": 16,
+      "box": [
+        0,
+        320,
+        16,
+        336
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 20,
+      "box": [
+        16,
+        320,
+        36,
+        340
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 24,
+      "box": [
+        36,
+        320,
+        60,
+        344
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 32,
+      "box": [
+        60,
+        320,
+        92,
+        352
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 40,
+      "box": [
+        92,
+        320,
+        132,
+        360
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 48,
+      "box": [
+        132,
+        320,
+        180,
+        368
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 64,
+      "box": [
+        180,
+        320,
+        244,
+        384
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 16,
+      "box": [
+        0,
+        384,
+        16,
+        400
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 20,
+      "box": [
+        16,
+        384,
+        36,
+        404
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 24,
+      "box": [
+        36,
+        384,
+        60,
+        408
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 32,
+      "box": [
+        60,
+        384,
+        92,
+        416
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 40,
+      "box": [
+        92,
+        384,
+        132,
+        424
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 48,
+      "box": [
+        132,
+        384,
+        180,
+        432
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 64,
+      "box": [
+        180,
+        384,
+        244,
+        448
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 16,
+      "box": [
+        0,
+        448,
+        16,
+        464
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 20,
+      "box": [
+        16,
+        448,
+        36,
+        468
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 24,
+      "box": [
+        36,
+        448,
+        60,
+        472
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 32,
+      "box": [
+        60,
+        448,
+        92,
+        480
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 40,
+      "box": [
+        92,
+        448,
+        132,
+        488
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 48,
+      "box": [
+        132,
+        448,
+        180,
+        496
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 64,
+      "box": [
+        180,
+        448,
+        244,
+        512
+      ],
+      "source": "simple_icons"
+    }
+  ],
+  "color_masters": [
+    {
+      "name": "xbox-color",
+      "size": 256,
+      "file": "xbox-color.png",
+      "source": "simple_icons",
+      "optical_offset_logical_px": [
+        -0.375,
+        0.125
+      ],
+      "optical_offset_already_applied": true
+    },
+    {
+      "name": "playstation-color",
+      "size": 256,
+      "file": "playstation-color.png",
+      "source": "playstation_classic",
+      "optical_offset_logical_px": [
+        0,
+        0
+      ],
+      "optical_offset_already_applied": true
+    }
+  ]
+}

@@ -64,6 +64,12 @@ class FakeWinIcon:
 class TrayIconTests(unittest.TestCase):
     def setUp(self):
         FakeWinIcon.loads = 0
+        def load_physical_icon(_image):
+            FakeWinIcon.loads += 1
+            return 1000 + FakeWinIcon.loads
+        loader = mock.patch.object(hb.tray_dpi, "load_icon_handle", load_physical_icon)
+        loader.start()
+        self.addCleanup(loader.stop)
         p = mock.patch.object(hb.pystray, "Icon", FakeWinIcon)
         p.start()
         self.addCleanup(p.stop)
@@ -96,6 +102,20 @@ class TrayIconTests(unittest.TestCase):
         ic.forget_handles()
         self.assertEqual(ic._hb_handles, {})
         self.assertIsNone(ic._icon_handle)
+
+    def test_dpi_cleanup_keeps_the_displayed_handle_only(self):
+        ic = hb.tray_icon("x")
+        for _ in range(4):
+            ic.icon = object()
+            ic._update_icon()
+        current = ic._icon_handle
+        ic.discard_cached_handles()
+        self.assertEqual(len(ic._hb_handles), 1)
+        self.assertEqual(next(iter(ic._hb_handles.values()))[1], current)
+        ic._release_icon()
+        ic._assert_icon_handle()
+        self.assertEqual(ic._icon_handle, current)
+        self.assertEqual(FakeWinIcon.loads, 4)
 
     def test_icon_does_not_veto_the_end_of_the_session(self):
         # pystray answers an unhandled message with 0, which for WM_QUERYENDSESSION is "no" (#242)

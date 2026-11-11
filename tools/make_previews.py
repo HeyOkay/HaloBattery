@@ -18,16 +18,25 @@ from halo import icons  # noqa: E402
 DARK_BG = (32, 32, 32)
 LIGHT_BG = (243, 243, 243)
 
-ROWS = [("Headset", "headset"), ("Mouse", "mouse"), ("Keyboard", "keyboard"),
-        ("Xbox controller", "gamepad"), ("PS controller", "dualshock"),
-        ("Bluetooth", "bluetooth")]
+# Brand selection is explicit; legacy gamepad/dualshock IDs both use Default.
+ROWS = [("Headset", "headset", "default", False),
+        ("Mouse", "mouse", "default", False),
+        ("Keyboard", "keyboard", "default", False),
+        ("Default controller", "gamepad", "default", False),
+        ("Xbox (mono)", "gamepad", "xbox", False),
+        ("Xbox (color)", "gamepad", "xbox", True),
+        ("PlayStation (mono)", "gamepad", "playstation", False),
+        ("PlayStation (color)", "gamepad", "playstation", True),
+        ("Nintendo (mono)", "gamepad", "nintendo", False),
+        ("Nintendo (color)", "gamepad", "nintendo", True),
+        ("Bluetooth", "bluetooth", "default", False)]
 # (header, level, charging, online)
 COLUMNS = [("100%", 100, False, True), ("75%", 75, False, True), ("50%", 50, False, True),
            ("30%", 30, False, True), ("15%", 15, False, True), ("Charging", 60, True, True),
            ("Asleep", None, False, False)]
 
 BIG, SMALL = 64, 24            # a large icon, and the tray size at 150% scaling
-X0, PITCH = 134, 92            # left edge of the first large icon, column pitch
+X0, PITCH = 174, 92            # left edge of the first large icon, column pitch
 TOP, ROW_H = 64, 104           # first large icon, row pitch
 
 
@@ -46,9 +55,9 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def _icon(level, charging, online, light, badge, size):
+def _icon(level, charging, online, light, badge, size, brand="default", brand_color=False):
     return icons.render(level, charging, online, 20, light_taskbar=light,
-                        badge=badge).resize((size, size), Image.LANCZOS)
+                        badge=badge, size=size, brand=brand, brand_color=brand_color)
 
 
 def _section(title: str, light: bool) -> Image.Image:
@@ -64,13 +73,13 @@ def _section(title: str, light: bool) -> Image.Image:
     for c, (head, *_rest) in enumerate(COLUMNS):
         d.text((X0 + c * PITCH + BIG / 2, 47), head, font=small, fill=grey, anchor="mm")
     label = _font(15)
-    for r, (name, badge) in enumerate(ROWS):
+    for r, (name, badge, brand, brand_color) in enumerate(ROWS):
         y = TOP + r * ROW_H
         d.text((16, y + BIG / 2), name, font=label, fill=fg, anchor="lm")
         for c, (_h, level, charging, online) in enumerate(COLUMNS):
             x = X0 + c * PITCH
-            img.alpha_composite(_icon(level, charging, online, light, badge, BIG), (x, y))
-            img.alpha_composite(_icon(level, charging, online, light, badge, SMALL),
+            img.alpha_composite(_icon(level, charging, online, light, badge, BIG, brand, brand_color), (x, y))
+            img.alpha_composite(_icon(level, charging, online, light, badge, SMALL, brand, brand_color),
                                 (x + (BIG - SMALL) // 2, y + BIG + 6))
     return img
 
@@ -83,22 +92,30 @@ def icon_sheet() -> Image.Image:
     return out
 
 
-# (label, badge, level) of the charging animation
-ANIM = [("Headset", "headset", 40), ("Keyboard", "keyboard", 8), ("Controller", "gamepad", 75)]
+# (label, badge, level, brand, color) of the charging animation
+ANIM = [("Headset", "headset", 40, "default", False),
+        ("Keyboard", "keyboard", 8, "default", False),
+        ("Default", "gamepad", 75, "default", False),
+        ("Xbox", "gamepad", 75, "xbox", True),
+        ("PlayStation", "gamepad", 75, "playstation", True),
+        ("Nintendo", "gamepad", 75, "nintendo", True)]
 
 
 def charging_gif(path: str) -> None:
-    cell, w, h = 130, 400, 150
+    cell, h = 130, 150
+    w = cell * len(ANIM) + 10
     font = _font(13)
     frames = []
     for i in range(icons.BREATH_FRAMES):
         pulse = icons.breath_level(i / icons.BREATH_FRAMES)
         img = Image.new("RGBA", (w, h), DARK_BG + (255,))
         d = ImageDraw.Draw(img)
-        for k, (name, badge, level) in enumerate(ANIM):
+        for k, (name, badge, level, brand, brand_color) in enumerate(ANIM):
             cx = (w - cell * len(ANIM)) // 2 + k * cell + cell // 2
-            big = icons.render(level, True, True, 20, False, badge, pulse).resize((90, 90), Image.LANCZOS)
-            small = icons.render(level, True, True, 20, False, badge, pulse).resize((SMALL, SMALL), Image.LANCZOS)
+            big = icons.render(level, True, True, 20, False, badge, pulse,
+                               size=90, brand=brand, brand_color=brand_color)
+            small = icons.render(level, True, True, 20, False, badge, pulse,
+                                 size=SMALL, brand=brand, brand_color=brand_color)
             img.alpha_composite(big, (cx - 45, 5))
             img.alpha_composite(small, (cx - SMALL // 2, 100))
             d.text((cx, 138), f"{name} {level}%", font=font, fill=(230, 230, 230), anchor="mm")

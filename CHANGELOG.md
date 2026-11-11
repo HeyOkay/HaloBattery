@@ -6,6 +6,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Per-device **Controller logo** selection: Default, Xbox, PlayStation or Nintendo
+  Switch, with optional brand colors and the classic multicolor PlayStation logo.
+  Choices are saved per device; automatic device types and status-file kinds are preserved.
+
+### Changed
+
+- Use local Lucide device pictograms inside a thin circular battery ring, with
+  artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
+- Refresh the icon and charging previews with explicit controller brand variants.
+
 ## [1.17.0] - 2026-11-10
 
 First combined upstream release after the community fork. Includes six interface

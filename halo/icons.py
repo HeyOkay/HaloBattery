@@ -1,9 +1,8 @@
 """Tray icon rendering: a battery ring with a device pictogram in the middle.
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
-The centre shows the device silhouette: headset, mouse, the Bluetooth rune, or a
-gamepad drawn per family - an Xbox pad or a PlayStation DualShock 4 (touchpad and
-symmetric sticks).
+The centre uses offline Lucide glyphs. Controller logos are chosen explicitly;
+existing controller kind aliases keep the generic gamepad until a brand is chosen.
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
 amber, at or below the threshold it is red, and while charging the arc is
@@ -18,6 +17,8 @@ import sys
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageStat
+
+from . import icon_artwork
 
 SIZE = 64
 SS = 4                      # supersampling for smooth edges
@@ -267,11 +268,16 @@ def _number(d: ImageDraw.ImageDraw, text: str, col) -> None:
 # ---------------------------------------------------------------- icon
 def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            light_taskbar: Optional[bool] = None, badge: str = "",
-           pulse: float = 1.0, text: str = "", force_active: bool = False) -> Image.Image:
+           pulse: float = 1.0, text: str = "", force_active: bool = False, *,
+           size: int = SIZE, brand: str = "default", brand_color: bool = False) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - arc brightness 0..1 (a frame of the charging "breathing" animation).
     text - drawn in the centre instead of the pictogram (the battery percentage); red or
-    amber like the arc when the level is low, the taskbar colour otherwise."""
+    amber like the arc when the level is low, the taskbar colour otherwise.
+    size is the physical output width/height; the legacy default stays 64.
+    brand / brand_color affect controller glyphs only, never their semantic kind."""
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise ValueError("icon size must be a positive integer")
     if light_taskbar is None:
         light_taskbar = taskbar_is_light()
     fg = (0, 0, 0) if light_taskbar else (255, 255, 255)
@@ -281,7 +287,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    R, w = 31.5, 6.5
+    R, w = 31.5, 4.0   # one logical pixel at the 16 px tray size
     box = (_r(32 - R), _r(32 - R), _r(32 + R), _r(32 + R))
 
     # ring track
@@ -311,11 +317,16 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if text:
         col = arc_color(level, False, low, fg) if active else fg
         _number(d, text, col + (alpha,))
-    elif kind:
+    elif kind == "microphone":
+        # The handoff has no microphone artwork; keep the established pictogram.
         fn, dx, dy, s = PICTOS[kind]
         fn(d, 32 + dx, 32 + dy, s, fg + (alpha,))
 
-    return img.resize((SIZE, SIZE), Image.LANCZOS)
+    img = img.resize((size, size), Image.Resampling.LANCZOS)
+    if kind and kind != "microphone" and not text:
+        img = Image.alpha_composite(img, icon_artwork.glyph(
+            kind, size, fg, alpha, brand, brand_color))
+    return img
 
 
 # ---------------------------------------------------------------- charging animation
@@ -331,10 +342,11 @@ def breath_level(phase: float) -> float:
 
 
 def charging_frames(level: Optional[int], online: bool, low: int = 20,
-                    light_taskbar: Optional[bool] = None, badge: str = "", text: str = ""):
+                    light_taskbar: Optional[bool] = None, badge: str = "", text: str = "", *,
+                    size: int = SIZE, brand: str = "default", brand_color: bool = False):
     """All "breathing" frames for the current state (rendered once and cached)."""
     return [render(level, True, online, low, light_taskbar, badge, breath_level(i / BREATH_FRAMES),
-                   text=text)
+                   text=text, size=size, brand=brand, brand_color=brand_color)
             for i in range(BREATH_FRAMES)]
 
 
