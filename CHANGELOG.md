@@ -18,6 +18,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
 - Refresh the icon and charging previews with explicit controller brand variants.
 
+### Fixed
+
+- Keep packaged modules ahead of loose source folders beside the EXE, preventing
+  startup import errors when running a new build from an older checkout.
+
 ## [1.17.0] - 2026-11-10
 
 First combined upstream release after the community fork. Includes six interface

@@ -51,7 +51,9 @@ if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+    # Frozen builds use PyInstaller's module path. Loose sources beside the EXE
+    # must not override its bundled packages (for example an older halo/ folder).
+    sys.path.insert(0, BASE_DIR)
 
 APPDATA_DIR = os.environ.get("APPDATA", os.path.expanduser("~"))
 PORTABLE_MARKER = "portable.txt"   # next to the app: keep settings and the log in its folder
