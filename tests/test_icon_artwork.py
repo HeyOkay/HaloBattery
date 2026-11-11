@@ -1,4 +1,6 @@
 """Renderer states/DPI with offline handoff glyphs; no device or network access."""
+import base64
+import hashlib
 import math
 import os
 import sys
@@ -98,7 +100,14 @@ class ArtworkTests(unittest.TestCase):
         self.assertEqual(icon_artwork._image("xbox-color",256).getchannel("A").getbbox(),(33,33,223,223))
         self.assertEqual(icon_artwork._image("playstation-color",256).getchannel("A").getbbox(),(34,54,222,202))
 
-    def test_xbox_color_uses_canonical_mono_placement_in_both_themes(self):
+    def test_dark_xbox_master_preserves_historical_source_bytes(self):
+        encoded = icon_artwork._PNG["xbox-color-dark", 256]
+        self.assertEqual(hashlib.sha256(base64.b64decode(encoded)).hexdigest(),
+                         "b60a398bb2871a8baf2b70714eeff04028083c691f623263c4ecdc69da7617f6")
+        self.assertEqual(icon_artwork._image("xbox-color-dark", 256).getchannel("A").getbbox(),
+                         (27, 35, 217, 225))
+
+    def test_xbox_color_uses_accepted_optical_placement_for_each_theme(self):
         def alpha_centroid(image):
             alpha = image.getchannel("A")
             pixels = [(x + .5, y + .5, alpha.getpixel((x, y)))
@@ -109,14 +118,21 @@ class ArtworkTests(unittest.TestCase):
 
         for size in (16, 20, 24, 32, 40, 48, 64):
             with self.subTest(size=size):
-                color = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", True)
+                dark = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", True)
                 light = icon_artwork.glyph("gamepad", size, (0, 0, 0), 255, "xbox", True)
                 mono = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", False)
-                self.assertEqual(color.tobytes(), light.tobytes())
+                self.assertEqual(light.tobytes(), icon_artwork._image("xbox-color", size).tobytes())
+                self.assertEqual(dark.tobytes(), icon_artwork._image("xbox-color-dark", size).tobytes())
+                self.assertNotEqual(dark.tobytes(), light.tobytes())
                 # Historical per-size masks differ slightly at antialiased edges.
                 # Compare ink placement rather than requiring identical alpha bytes.
-                for actual, expected in zip(alpha_centroid(color), alpha_centroid(mono)):
+                for actual, expected in zip(alpha_centroid(light), alpha_centroid(mono)):
                     self.assertAlmostEqual(actual, expected, delta=.025)
+                # The historical dark placement is baked once into its master;
+                # per-size antialiasing changes its measured centroid by <.05 px.
+                for actual, centered, offset in zip(alpha_centroid(dark), alpha_centroid(mono),
+                                                   (-.375, .125)):
+                    self.assertAlmostEqual(actual - centered, offset * size / 16, delta=.05)
                 for theme in (False, True):
                     plain = icons.render(75, False, True, light_taskbar=theme, size=size)
                     branded = icons.render(75, False, True, light_taskbar=theme, size=size,

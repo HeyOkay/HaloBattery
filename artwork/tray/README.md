@@ -5,11 +5,13 @@ icon lab or handoff directory. The microphone is generated from the pinned local
 `lucide-mic.svg`, rather than extracted from the historical handoff. `masks.png` is a lossless L-mode alpha atlas:
 nine glyph rows (63 masks), seven physical sizes per row (16, 20, 24, 32, 40, 48, 64).
 `manifest.json` records every crop, semantic name, upstream source and license.
-The two RGBA color masters are 256 x 256, at canonical centered placement with
-zero optical offsets. Xbox restores the original master by removing the historical
-(-6,+2)-pixel correction with its exact inverse (+6,-2); this aligns its color and
-monochrome geometry in both themes. Do not apply theme-specific translations.
-The masters contain no ring or battery state.
+The three RGBA color masters are 256 x 256. Xbox has two accepted optical
+placements: `xbox-color.png` uses canonical centered placement for light taskbars;
+`xbox-color-dark.png` retains the historical (-6,+2)-pixel correction for dark
+taskbars. The dark PNG is byte-identical to `6795db2:artwork/tray/xbox-color.png`.
+The existing renderer foreground (black/light taskbar or white/dark taskbar)
+selects the prealigned master. No runtime translation or DPI correction is added.
+PlayStation remains centered. The masters contain no ring or battery state.
 
 Regenerate only the `_PNG` literal in `halo/icon_artwork.py`:
 
@@ -23,7 +25,7 @@ physical size and transparent padding. To add a glyph or size, allocate a new
 rectangle and add its name, size, box and source to the manifest; never overlap
 existing rectangles. Preserve proportions and optical placement. Update provenance
 and licensing when adding artwork. Update the color PNGs directly when needed,
-preserving canonical centered placement. The generator does not modify renderer code
+preserving each master's recorded optical placement. The generator does not modify renderer code
 or apply optical offsets. PNG encoding uses Pillow; keep the same Pillow version
 when byte-for-byte base64 stability matters. Verify any encoder changes with
 pixel comparisons, then run `tests/test_icon_artwork.py` and inspect a contact sheet.
