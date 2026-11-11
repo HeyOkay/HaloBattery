@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import flydigi, hidlist, wgi
+from . import beitong, flydigi, hidlist, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -63,6 +63,7 @@ NAMED_VIDS = frozenset(vid for vid, _word, _name in NAMED)
 # The FlyDigi dongle's vendor id - one place, evaluated at import: the tests
 # replace the flydigi module with a stub that only has read_connected().
 FLYDIGI_VID = flydigi.VENDOR_VID
+BEITONG_IDS = (beitong.VENDOR_VID, beitong.PRODUCT_PID)
 # The Vader 4 Pro enumerates under Microsoft's Xbox 360 id with FlyDigi's product
 # string, so its Windows.Gaming.Input report can only be recognised by that string.
 VADER4_IDS = (0x045E, 0x028E)
@@ -296,9 +297,10 @@ class XInputProvider(Provider):
         # Its report is not in the vendor list below, so only its status is kept here,
         # paired by the same count rule; its level (a constant remain=full=1000) is not.
         statuses = [r.status for r in all_reports] if len(all_reports) == len(slots) else []
-        # A FlyDigi pad's own report is kept for its vendor id, not for its level: it
-        # identifies the XInput slot (its level is the constant placeholder below).
-        reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID]
+        # Vendor reports also identify pads whose own HID status is read below;
+        # their Windows level is a placeholder, not a battery measurement.
+        reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
+                   or (r.vid, r.pid) == BEITONG_IDS]
         if len(reports) != len(slots):
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
@@ -318,14 +320,20 @@ class XInputProvider(Provider):
         # The slot's vendor comes from its Windows.Gaming.Input report, which a FlyDigi
         # pad sends under its own vendor id (the placeholder), so the paired report
         # identifies it. base_vid can only be 0x3537/0x045E, so it never allows the call.
-        flydigi_reading = None
+        vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
             if only_vid == FLYDIGI_VID:
                 try:
-                    flydigi_reading = flydigi.read_connected(self._diag)
+                    vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput
                     self._diag.append(f"[Flydigi] {e}")
+            elif (len(reports) == 1 and
+                  (reports[0].vid, reports[0].pid) == BEITONG_IDS):
+                try:
+                    vendor_reading = beitong.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[Beitong] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -359,6 +367,11 @@ class XInputProvider(Provider):
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
+            if (n < len(reports) and (reports[n].vid, reports[n].pid) == BEITONG_IDS):
+                if rep is not None and rep.placeholder:
+                    rep = None
+                if res is not None and res[1]:
+                    res = None  # The dongle's wired fallback would invent 100% as well.
             if (rep is not None and rep.placeholder and not rep.charging
                     and (rep.vid == FLYDIGI_VID
                          or (vader4 and (rep.vid, rep.pid) == VADER4_IDS))):
@@ -377,14 +390,14 @@ class XInputProvider(Provider):
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
             name = (rep.name if rep and rep.name else None) or base_name
-            if flydigi_reading is not None:
+            if vendor_reading is not None:
                 # the pad's own report: level, charging state and its name
-                name = flydigi_reading.name
+                name = vendor_reading.name
                 self._waiting.pop(slot, None)
-                if not flydigi_reading.charging:
-                    self._last[slot] = flydigi_reading.level
-                connected.append((slot, name, flydigi_reading.level, flydigi_reading.charging,
-                                  flydigi_reading.approx))
+                if not vendor_reading.charging:
+                    self._last[slot] = vendor_reading.level
+                connected.append((slot, name, vendor_reading.level, vendor_reading.charging,
+                                  vendor_reading.approx))
                 continue
             # the path test alone missed an Xbox One S (045e:02fd) whose path had no
             # Bluetooth service guid: its report (remain=100 of full=1000) then showed as

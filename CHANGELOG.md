@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder.
+
 ## [1.17.0] - 2026-11-10
 
 First combined upstream release after the community fork. Includes six interface
