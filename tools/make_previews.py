@@ -114,14 +114,19 @@ def charging_gif(path: str) -> None:
         for k, (name, badge, level, brand, brand_color) in enumerate(ANIM):
             cx = (w - cell * len(ANIM)) // 2 + k * cell + cell // 2
             big = icons.render(level, True, True, 20, False, badge, pulse,
-                               size=90, brand=brand, brand_color=brand_color)
+                               size=90, brand=brand, brand_color=brand_color,
+                               animation_phase=i / icons.BREATH_FRAMES)
             small = icons.render(level, True, True, 20, False, badge, pulse,
-                                 size=SMALL, brand=brand, brand_color=brand_color)
+                                 size=SMALL, brand=brand, brand_color=brand_color,
+                                 animation_phase=i / icons.BREATH_FRAMES)
             img.alpha_composite(big, (cx - 45, 5))
             img.alpha_composite(small, (cx - SMALL // 2, 100))
             d.text((cx, 138), f"{name} {level}%", font=font, fill=(230, 230, 230), anchor="mm")
         frames.append(img.convert("RGB").quantize(colors=128, method=Image.MEDIANCUT, dither=Image.NONE))
-    duration = int(icons.BREATH_PERIOD * 1000 / icons.BREATH_FRAMES)
+    # GIF delays have 10 ms precision; distribute rounding across the cycle.
+    ticks = icons.BREATH_PERIOD * 100 / icons.BREATH_FRAMES
+    duration = [10 * (round((i + 1) * ticks) - round(i * ticks))
+                for i in range(icons.BREATH_FRAMES)]
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=duration, loop=0,
                    optimize=True, disposal=1)
 

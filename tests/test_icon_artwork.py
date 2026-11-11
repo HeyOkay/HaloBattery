@@ -1,6 +1,13 @@
 """Renderer states/DPI with offline handoff glyphs; no device or network access."""
 import math
+import os
+import sys
 import unittest
+from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _sandbox
+_sandbox.install_guards()
 from halo import icons, icon_artwork
 
 
@@ -119,13 +126,109 @@ class ArtworkTests(unittest.TestCase):
                             if math.hypot(x + .5 - size / 2, y + .5 - size / 2) > 6.8 * size / 16:
                                 self.assertEqual(branded.getpixel((x, y)), plain.getpixel((x, y)))
 
-    def test_charging_pulse_changes_ring_without_modulating_brand(self):
+    def test_charging_animation_changes_ring_without_modulating_brand(self):
         frames=icons.charging_frames(None,True,20,False,"gamepad","",size=20,brand="playstation",brand_color=True)
         self.assertEqual(len(frames),icons.BREATH_FRAMES)
-        self.assertNotEqual(frames[0].tobytes(),frames[15].tobytes())
-        self.assertEqual(frames[0].crop((5,5,15,15)).tobytes(),frames[15].crop((5,5,15,15)).tobytes())
+        self.assertNotEqual(frames[0].tobytes(),frames[icons.BREATH_FRAMES // 2].tobytes())
+        self.assertEqual(frames[0].crop((5,5,15,15)).tobytes(),frames[icons.BREATH_FRAMES // 2].crop((5,5,15,15)).tobytes())
         offline=icons.charging_frames(60,False,20,False,"gamepad","",size=20,brand="xbox",brand_color=True)
-        self.assertEqual(offline[0].tobytes(),offline[15].tobytes())
+        self.assertEqual(offline[0].tobytes(),offline[icons.BREATH_FRAMES // 2].tobytes())
+
+    def test_unknown_charging_rotates_clockwise_without_pulsing(self):
+        self.assertEqual(icons.BREATH_PERIOD, 3.0)
+        self.assertEqual(icons.BREATH_FRAMES / icons.BREATH_PERIOD, 30)
+        for light in (False, True):
+            for size in (16, 20, 24):
+                frames = icons.charging_frames(None, True, light_taskbar=light, size=size)
+                self.assertEqual(len({frame.tobytes() for frame in frames}), icons.BREATH_FRAMES)
+                for i, frame in enumerate(frames):
+                    with self.subTest(light=light, size=size, frame=i):
+                        # Green-only mass locates the arc independently of the neutral track.
+                        weights = [(x + .5 - size / 2, y + .5 - size / 2,
+                                    max(0, g - max(r, b)) * a)
+                                   for y in range(size) for x in range(size)
+                                   for r, g, b, a in [frame.getpixel((x, y))]]
+                        dx = sum(x * weight for x, y, weight in weights)
+                        dy = sum(y * weight for x, y, weight in weights)
+                        angle = (math.degrees(math.atan2(dy, dx)) + 90) % 360
+                        expected = 360 * i / icons.BREATH_FRAMES + 45
+                        self.assertLess(abs((angle - expected + 180) % 360 - 180), 8)
+                        # Changing the old breathing input cannot dim this arc.
+                        dim = icons.render(None, True, True, light_taskbar=light, size=size,
+                                           pulse=0, animation_phase=i / icons.BREATH_FRAMES)
+                        self.assertEqual(frame.tobytes(), dim.tobytes())
+                self.assertEqual(frames[0].tobytes(), icons.render(
+                    None, True, True, light_taskbar=light, size=size, animation_phase=1).tobytes())
+
+    def test_unknown_charging_preserves_every_glyph_layer_and_central_pixels(self):
+        styles = [(kind, "default", False) for kind in
+                  ("mouse", "keyboard", "headset", "microphone", "bluetooth", "gamepad")]
+        styles += [("gamepad", brand, color) for brand in
+                   ("xbox", "playstation", "nintendo") for color in (False, True)]
+        real_glyph = icon_artwork.glyph
+        for light in (False, True):
+            for size in (16, 20, 24):
+                for badge, brand, color in styles:
+                    with self.subTest(light=light, size=size, badge=badge, brand=brand, color=color):
+                        layers = []
+                        def capture(*args, **kwargs):
+                            layer = real_glyph(*args, **kwargs)
+                            layers.append(layer.tobytes())
+                            return layer
+                        with mock.patch.object(icon_artwork, "glyph", side_effect=capture):
+                            frames = icons.charging_frames(None, True, light_taskbar=light,
+                                badge=badge, size=size, brand=brand, brand_color=color)
+                        self.assertEqual(len(layers), icons.BREATH_FRAMES)
+                        expected = real_glyph(icons.KINDS[badge], size,
+                            (0, 0, 0) if light else (255, 255, 255), 255, brand, color)
+                        self.assertEqual(set(layers), {expected.tobytes()})
+                        box = (math.ceil(size * .31),) * 2 + (math.floor(size * .69),) * 2
+                        self.assertEqual(len({frame.crop(box).tobytes() for frame in frames}), 1)
+
+    def test_unknown_track_stays_neutral_outside_the_rotating_arc(self):
+        for light in (False, True):
+            for size in (16, 20, 24):
+                # A quarter-turn moves the arc by exactly the same amount; the
+                # opposite half-ring remains the same neutral track throughout.
+                reference = icons.render(0, False, True, light_taskbar=light, size=size)
+                for phase in (0, .25, .5, .75):
+                    image = icons.render(None, True, True, light_taskbar=light,
+                                         size=size, animation_phase=phase)
+                    for y in range(size):
+                        for x in range(size):
+                            angle = (math.degrees(math.atan2(y + .5 - size / 2,
+                                                           x + .5 - size / 2)) + 90) % 360
+                            relative = (angle - phase * 360) % 360
+                            if 150 < relative < 300:
+                                self.assertEqual(image.getpixel((x, y)), reference.getpixel((x, y)))
+
+    def test_known_level_breathing_ignores_rotation_phase(self):
+        for level in (0, 1, 20, 50, 99, 100):
+            for light in (False, True):
+                frames = icons.charging_frames(level, True, light_taskbar=light, badge="mouse", size=20)
+                for i, frame in enumerate(frames):
+                    expected = icons.render(level, True, True, light_taskbar=light, badge="mouse",
+                        size=20, pulse=icons.breath_level(i / icons.BREATH_FRAMES), animation_phase=.37)
+                    self.assertEqual(frame.tobytes(), expected.tobytes())
+                # Every old 10 FPS phase is retained at the corresponding third frame.
+                for old_index in range(30):
+                    old_sample = icons.render(level, True, True, light_taskbar=light,
+                        badge="mouse", size=20, pulse=icons.breath_level(old_index / 30))
+                    self.assertEqual(frames[old_index * 3].tobytes(), old_sample.tobytes())
+                if level:
+                    self.assertNotEqual(frames[0].tobytes(), frames[icons.BREATH_FRAMES // 2].tobytes())
+
+    def test_unknown_offline_idle_and_paused_ignore_rotation_phase(self):
+        for charging, online, paused in ((True, False, False), (False, True, False),
+                                        (False, False, False), (False, True, True)):
+            baseline = icons.render(None, charging, online, light_taskbar=False,
+                                    badge="mouse", size=20, force_active=paused)
+            for phase in (.25, .5, .75, 1):
+                self.assertEqual(baseline.tobytes(), icons.render(None, charging, online,
+                    light_taskbar=False, badge="mouse", size=20, force_active=paused,
+                    animation_phase=phase).tobytes())
+        offline = icons.charging_frames(None, False, light_taskbar=False, size=20)
+        self.assertEqual(len({image.tobytes() for image in offline}), 1)
 
     def test_number_and_disabled_badges_override_artwork(self):
         for brand in ("default","xbox","playstation","nintendo"):

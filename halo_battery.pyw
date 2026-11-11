@@ -629,7 +629,7 @@ def fullscreen_app_running() -> bool:
 # ------------------------------------------------------------- tray icons
 WM_RBUTTONUP = 0x0205
 WM_QUERYENDSESSION = 0x0011
-ICON_HANDLE_CACHE = 64     # icon handles kept per tray icon (a charging cycle is 30 frames)
+ICON_HANDLE_CACHE = 128    # bounded handles per tray icon; fits a full 90-frame charging cycle
 IDLE_KEY = "HaloBattery:idle"   # the "no devices found" icon's id
 _tray_classes: Dict[type, type] = {}
 
@@ -663,8 +663,8 @@ def _make_tray_class(base: type) -> type:
         * the id Windows knows the icon by is icon_uid(key), not id(self);
         * the icon handle of every image is kept. pystray writes each new image to a
           temporary .ico file and loads it back, so the charging animation wrote
-          about ten files a second per charging device, which a disk and an
-          antivirus notice (#61). The 30 frames of a cycle are now loaded once."""
+          a file for every charging frame, which a disk and an antivirus notice
+          (#61). A full 90-frame cycle is loaded once and then reused."""
 
         def __init__(self, *args, **kwargs):
             # Explorer's window thread can restore an icon during an app-thread
@@ -2323,9 +2323,9 @@ class App:
                     prev_input = in_now
 
     def anim_loop(self):
-        """Advances the "breathing" frames of charging devices; other icons are left alone.
+        """Advances charging frames at 30 FPS; other icons are left alone.
         While nothing charges, the thread sleeps until an icon starts its frames instead of
-        waking ten times a second for nothing."""
+        waking for animation ticks with nothing to animate."""
         step = icons.BREATH_PERIOD / icons.BREATH_FRAMES
         while not self.stop_evt.is_set():
             self.anim_wake.clear()      # before the check: frames set after it wake the wait

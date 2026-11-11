@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Show charging with an unknown battery level as a steady neutral ring and a
+  rotating green arc, keeping the device glyph stationary.
+
 ### Fixed
 
 - Align the colored Xbox logo with its monochrome version across display scales.

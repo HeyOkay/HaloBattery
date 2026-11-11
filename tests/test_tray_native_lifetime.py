@@ -225,6 +225,53 @@ class NativeTrayLifetimeTests(unittest.TestCase):
         self.assertEqual(owner._state[0], 51)
         self.assertTrue(self.icon._icon_valid)
 
+    def test_unknown_charging_retries_every_frame_after_dpi_swap(self):
+        app, st, owner = self._device_owner()
+        app.cfg["animation"] = True
+        st.level, st.charging = None, True
+        self.icon._visible = True
+        owner.update(st)
+        self.assertEqual(len(owner.frames), hb.icons.BREATH_FRAMES)
+        self.notify.return_value = False
+        owner.tick(1)
+        self.assertFalse(self.icon._icon_valid)
+        self.notify.return_value = True
+        owner.tick(1)
+        self.assertTrue(self.icon._icon_valid)
+        old_handles = dict(self.icon._hb_handles)
+        self.notify.return_value = False
+        with mock.patch.object(hb.tray_dpi, "tray_pixels", return_value=24), \
+                mock.patch.object(hb.icons, "mydockfinder_running", return_value=False):
+            with self.assertRaisesRegex(OSError, "Shell_NotifyIcon failed"):
+                hb.App.refresh_theme(app)
+            self.assertEqual(app.tray_size, 20)
+            self.assertIsNone(owner._state)
+            self.assertTrue(all(k in self.icon._hb_handles for k in old_handles))
+            self.notify.return_value = True
+            hb.App.refresh_theme(app)
+        self.assertEqual(app.tray_size, 24)
+        for index in range(hb.icons.BREATH_FRAMES):
+            owner.tick(index)
+            self.assertTrue(self.icon._icon_valid)
+            self.assertEqual(self.icon.icon.size, (24, 24))
+            self.assertNotIn(self.icon._icon_handle, self.destroyed)
+            self.assertEqual(self.notify.call_args.args[1].hIcon, self.icon._icon_handle)
+        self.assertEqual(len(self.icon._hb_handles), hb.icons.BREATH_FRAMES)
+        warmed_handles = dict(self.icon._hb_handles)
+        warm_loads = self.load.call_count
+        with mock.patch.object(hb.tray_dpi, "destroy_icon_handle",
+                               wraps=hb.tray_dpi.destroy_icon_handle) as destroy:
+            for index in range(hb.icons.BREATH_FRAMES, 2 * hb.icons.BREATH_FRAMES):
+                owner.tick(index)
+                self.assertTrue(self.icon._icon_valid)
+                self.assertNotIn(self.icon._icon_handle, self.destroyed)
+            destroy.assert_not_called()
+        self.assertEqual(self.load.call_count, warm_loads)
+        self.assertEqual(self.icon._hb_handles, warmed_handles)
+        self.assertTrue(all(image.size == (24, 24)
+                            for image, _ in self.icon._hb_handles.values()))
+        self.assertTrue({handle for _, handle in old_handles.values()} <= self.destroyed)
+
     def _failed_swap_retries(self, visible):
         app, st, owner = self._device_owner()
         # Seed a visible 20px icon with a successful update.

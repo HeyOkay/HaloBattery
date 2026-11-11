@@ -92,15 +92,16 @@ class MicrophoneArtworkTests(unittest.TestCase):
                                  icons.render(60, False, True, **settings).tobytes())
                 frames = icons.charging_frames(None, True, 20, False, 'microphone', size=size)
                 self.assertEqual(len(frames), icons.BREATH_FRAMES)
-                self.assertNotEqual(frames[0].tobytes(), frames[15].tobytes())
+                self.assertNotEqual(frames[0].tobytes(), frames[icons.BREATH_FRAMES // 2].tobytes())
                 glyph = icon_artwork.glyph('microphone', size, (255, 255, 255), 255)
-                for index in (0, 15):
-                    track = icons.render(None, True, True, pulse=icons.breath_level(
-                        index / icons.BREATH_FRAMES), **settings)
+                for index in range(icons.BREATH_FRAMES):
+                    phase = index / icons.BREATH_FRAMES
+                    track = icons.render(None, True, True, pulse=icons.breath_level(phase),
+                                         animation_phase=phase, **settings)
                     self.assertEqual(frames[index].tobytes(),
                                      Image.alpha_composite(track, glyph).tobytes())
                 offline = icons.charging_frames(60, False, 20, False, 'microphone', size=size)
-                self.assertEqual(offline[0].tobytes(), offline[15].tobytes())
+                self.assertEqual(offline[0].tobytes(), offline[icons.BREATH_FRAMES // 2].tobytes())
 
 
 if __name__ == '__main__':
