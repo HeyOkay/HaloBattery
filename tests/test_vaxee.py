@@ -14,7 +14,6 @@ Run from the repository root:
 """
 import os
 import sys
-import time
 import types
 import unittest
 
@@ -83,7 +82,8 @@ def entries(pid=0x2001, page=V.USAGE_PAGE, product="VXD02 4K Dongle", prefix=b"d
 class PollTest(unittest.TestCase):
     def setUp(self):
         self._saved = (V.hid, V.hidlist, V.time)
-        V.time = types.SimpleNamespace(time=time.time, sleep=lambda s: None)
+        self.now = [1000.0]
+        V.time = types.SimpleNamespace(time=lambda: self.now[0], sleep=lambda s: None)
         self.provider = V.VaxeeProvider()
 
     def tearDown(self):
@@ -102,7 +102,7 @@ class PollTest(unittest.TestCase):
         res = self.poll(entries_, self.cols(entries_))
         self.assertEqual(
             [(r.key, r.name, r.level, r.charging, r.online, r.source, r.kind) for r in res],
-            [("vaxee", "VAXEE VXD02 4K Dongle", 85, False, True, "vaxee", "mouse")])
+            [("vaxee", "VAXEE mouse", 85, False, True, "vaxee", "mouse")])
 
     def test_charging_and_five_percent_steps(self):
         entries_ = entries()
@@ -134,7 +134,7 @@ class PollTest(unittest.TestCase):
                 **self.cols(cable, battery=15, charging=0)}
         res = self.poll(dongle + cable, cols)
         self.assertEqual([(r.level, r.charging, r.name) for r in res],
-                         [(70, True, "VAXEE VXD02 4K Dongle")])
+                         [(70, True, "VAXEE mouse")])
 
     def test_sleeping_mouse_keeps_its_last_reading_greyed(self):
         entries_ = entries()
@@ -142,8 +142,18 @@ class PollTest(unittest.TestCase):
         self.poll(entries_, cols)
         for c in cols.values():
             c.answer = False
+        self.now[0] += 30
         res = self.poll(entries_, cols)
         self.assertEqual([(r.level, r.online) for r in res], [(85, False)])
+
+    def test_greyed_reading_expires_after_asleep_keep(self):
+        entries_ = entries()
+        cols = self.cols(entries_)
+        self.poll(entries_, cols)
+        for c in cols.values():
+            c.answer = False
+        self.now[0] += V.ASLEEP_KEEP + 1
+        self.assertEqual(self.poll(entries_, cols), [])
 
     def test_removed_receiver_drops_the_last_reading(self):
         entries_ = entries()
@@ -167,6 +177,12 @@ class PollTest(unittest.TestCase):
     def test_name_is_not_prefixed_twice(self):
         self.assertEqual(V.display_name("VAXEE XE-S"), "VAXEE XE-S")
         self.assertEqual(V.display_name(""), "VAXEE mouse")
+
+    def test_a_dongle_part_number_is_not_shown_as_the_model(self):
+        self.assertEqual(V.display_name("VXD02 4K Dongle", is_dongle=True),
+                         "VAXEE mouse")
+        self.assertEqual(V.display_name("VAXEE XE-S", is_dongle=False),
+                         "VAXEE XE-S")
 
 
 if __name__ == "__main__":

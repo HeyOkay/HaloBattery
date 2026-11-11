@@ -23,8 +23,14 @@ Devices are found by vendor id and the HID usage page rather than by product
 id: the same mouse is 3057:2001 (or another receiver id) on its dongle and an
 id of its own on the cable.  The cable is asked first, they share one icon,
 and a reading that reports charging wins.  While any 0xFF05 collection is
-still in the USB tree, a silent mouse keeps its last level on a greyed icon -
-a sleeping mouse is not a removed one.  Only losing the receiver drops it.
+still in the USB tree, a silent mouse keeps its last level on a greyed icon
+for ASLEEP_KEEP, as in the other receiver providers - a sleeping mouse is not
+a removed one.  Losing the receiver, or the cap expiring, drops it.
+
+The cable and its dongle share one KEY ("vaxee") and one icon, which is what
+one mouse on a cable or a dongle needs.  It also means two different VAXEE
+mice plugged in at once are merged into a single icon; give the cable path a
+per-pid key if that ever matters.
 """
 from __future__ import annotations
 
@@ -53,6 +59,7 @@ REPLY_LENGTHS = (REPORT_LEN, REPORT_LEN + 1)
 SETTLE_S = 0.10                  # the web driver's read delay
 QUERY_TRIES = 2
 RETRY_SLEEP_S = 0.30             # the link ignores requests for a while after a wake
+ASLEEP_KEEP = 300                # s, as in the other receiver providers
 
 # Receiver product ids from the web driver's DefWireless table; anything else
 # on the vendor page is the mouse itself on a cable.
@@ -71,10 +78,16 @@ def parse_reply(resp, cmd: int) -> Optional[int]:
     return r[5]
 
 
-def display_name(product: str) -> str:
-    """'VXD02 4K Dongle' -> 'VAXEE VXD02 4K Dongle', without doubling a vendor name."""
+def display_name(product: str, is_dongle: bool = False) -> str:
+    """The mouse model, or a plain 'VAXEE mouse'.
+
+    A mouse on its cable reports its own model in the product string.  A
+    receiver reports its own part number (a VXD02 reads 'VXD02 4K Dongle'),
+    which says nothing about the mouse paired to it, so a dongle reading falls
+    back to a plain 'VAXEE mouse' rather than a part number.
+    """
     product = (product or "").strip()
-    if not product:
+    if is_dongle or not product:
         return "VAXEE mouse"
     if "vaxee" in product.lower():
         return product
@@ -86,7 +99,7 @@ class VaxeeProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[str, int, bool]] = None
+        self._last: Optional[Tuple[str, int, bool, float]] = None
 
     def _query(self, dev, cmd: int) -> Optional[int]:
         """Send one read command and return its value from the feature buffer."""
@@ -165,9 +178,10 @@ class VaxeeProvider(Provider):
 
         best: Optional[Tuple[str, int, bool]] = None
         for d in candidates:
+            pid = d.get("product_id", 0)
             product = str(d.get("product_string") or "").strip()
-            name = display_name(product)
-            self._diag.append(f"[VAXEE] pid={d.get('product_id', 0):04x} '{product}' "
+            name = display_name(product, is_dongle=pid in DONGLE_PIDS)
+            self._diag.append(f"[VAXEE] pid={pid:04x} '{product}' "
                               f"iface={d.get('interface_number')} "
                               f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
             got = self._read(d["path"])
@@ -180,19 +194,24 @@ class VaxeeProvider(Provider):
 
         if best is not None:
             name, level, charging = best
-            self._last = (name, level, charging)
+            self._last = (name, level, charging, time.time())
             return [DeviceStatus(KEY, name, level, charging, True, "vaxee",
                                  kind="mouse")]
 
         # A silent collection is a sleeping mouse, not a removed one: keep the
-        # last reading greyed for as long as its receiver is still enumerated.
+        # last reading greyed while it is fresh, then drop it so a mouse left
+        # off does not sit greyed forever.
         if self._last is not None:
-            name, level, charging = self._last
-            self._diag.append(f"  keeping {level}%"
-                              + (" (charging)" if charging else "")
-                              + " greyed: the receiver is still plugged in")
-            return [DeviceStatus(KEY, name, level, charging, False, "vaxee",
-                                 kind="mouse")]
+            name, level, charging, when = self._last
+            if time.time() - when < ASLEEP_KEEP:
+                self._diag.append(f"  keeping {level}%"
+                                  + (" (charging)" if charging else "")
+                                  + " greyed: the receiver is still plugged in")
+                return [DeviceStatus(KEY, name, level, charging, False, "vaxee",
+                                     kind="mouse")]
+            self._diag.append(f"  dropping {level}%: greyed for more than "
+                              f"{ASLEEP_KEEP} s")
+            self._last = None
         return []
 
     def diagnostics(self) -> List[str]:
