@@ -6,26 +6,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Per-device **Controller logo** selection: Default, Xbox, PlayStation or Nintendo
-  Switch, with optional brand colors and the classic multicolor PlayStation logo.
-  Choices are saved per device; automatic device types and status-file kinds are preserved.
-
-### Changed
-
-- Use local Lucide device pictograms inside a thin circular battery ring, with
-  artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
-- Refresh the icon and charging previews with explicit controller brand variants.
-- Replace the remaining microphone drawing with the Lucide mic glyph, fitted and
-  centered by its visible bounds with the same ring clearance as the other icons.
-
-### Fixed
-
-- Keep packaged modules ahead of loose source folders beside the EXE, preventing
-  startup import errors when running a new build from an older checkout.
-
-## [1.17.0] - 2026-11-10
+## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
 languages and expanded device support from community 1.16.0, plus the additions
@@ -35,6 +16,10 @@ installations need a manual install of the upstream build to change their update
 source; their settings and battery history remain compatible.
 
 ### Added
+
+- Per-device **Controller logo** selection: Default, Xbox, PlayStation or Nintendo
+  Switch, with optional brand colors and the classic multicolor PlayStation logo.
+  Choices are saved per device; automatic device types and status-file kinds are preserved.
 
 - **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
 - Corsair HS80 RGB Wireless (original): battery level over direct USB
@@ -150,10 +135,19 @@ source; their settings and battery history remain compatible.
 
 ### Changed
 
+- Use local Lucide device pictograms inside a thin circular battery ring, with
+  artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
+- Refresh the icon and charging previews with explicit controller brand variants.
+- Replace the remaining microphone drawing with the Lucide mic glyph, fitted and
+  centered by its visible bounds with the same ring clearance as the other icons.
+
 - Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
 - Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
 
 ### Fixed
+
+- Keep packaged modules ahead of loose source folders beside the EXE, preventing
+  startup import errors when running a new build from an older checkout.
 
 - Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
 - Keep Alienware and Barracuda protocol documentation in separate sections after integration; record the newer Morph 96, URX and Plantronics confirmations. A disconnected ASUS receiver no longer raises from the output-report read path.
