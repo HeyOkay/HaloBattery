@@ -10,10 +10,12 @@ Run from the repository root:
 import json
 import os
 import sys
-import tempfile
 import types
 import unittest
 from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -307,7 +309,7 @@ class UserReturnTests(HideRenameTestCase):
 class StatusFileTests(HideRenameTestCase):
     def setUp(self):
         super().setUp()
-        folder = tempfile.mkdtemp(prefix="halo_battery_test_")
+        folder = _sandbox.mkdtemp(prefix="halo_battery_test_")
         self.path = os.path.join(folder, "status.json")
         p = mock.patch.object(hb, "STATUS_PATH", self.path)
         p.start()

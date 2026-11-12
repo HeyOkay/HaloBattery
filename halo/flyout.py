@@ -65,6 +65,21 @@ SUBMENU_DELAY_MS = 200               # hover this long to open / switch a submen
 POLL_MS = 30                         # outside clicks and focus, while the menu is open
 
 TEXT_FONTS = ("Segoe UI Variable Text", "Segoe UI")
+def ui_fonts(english: Sequence[str], language: str = "en") -> Tuple[str, ...]:
+    """Choose fonts with the selected script's glyphs before measuring the menu.
+
+    Adapted from KosmoSakura's #345; selection is explicit and cache keys include
+    language so application threads never need to clear live Tk font objects.
+    """
+    if language == "zh-TW":
+        return ("Microsoft JhengHei UI", "Microsoft JhengHei") + tuple(english)
+    if language == "zh-CN":
+        return ("Microsoft YaHei UI", "Microsoft YaHei") + tuple(english)
+    if language == "ja":
+        return ("Yu Gothic UI", "Meiryo UI", "Meiryo") + tuple(english)
+    return tuple(english)
+
+
 TEXT_PX = 13
 ICON_FONTS = ("Segoe Fluent Icons", "Segoe MDL2 Assets")
 CHECK, CHEVRON, MINUS, PLUS, EDIT = "\uE73E", "\uE76C", "\uE738", "\uE710", "\uE70F"
@@ -510,10 +525,10 @@ class _Win32:
 class _Style:
     """Fonts and pixel sizes for one monitor scale and theme."""
 
-    def __init__(self, tk_font, root, families: set, scale: float, light: bool):
+    def __init__(self, tk_font, root, families: set, scale: float, light: bool, language: str = "en"):
         self.scale = scale
         self.px = lambda v: max(1, round(v * scale))
-        text = next((f for f in TEXT_FONTS if f in families), "TkDefaultFont")
+        text = next((f for f in ui_fonts(TEXT_FONTS, language) if f in families), "TkDefaultFont")
         self.icon_family = next((f for f in ICON_FONTS if f in families), None)
         if text == "TkDefaultFont":
             self.font = tk_font.nametofont("TkDefaultFont").copy()
@@ -794,9 +809,10 @@ class FlyoutHost:
 
     # ---------------- opening and closing (tkinter thread from here on)
     def style(self, scale: float, light: bool) -> _Style:
-        key = (round(scale, 3), light)
+        language = getattr(self, "language", "en")
+        key = (round(scale, 3), light, language)
         if key not in self._styles:
-            self._styles[key] = _Style(self._font, self._root, self._families, scale, light)
+            self._styles[key] = _Style(self._font, self._root, self._families, scale, light, language)
         return self._styles[key]
 
     def _show(self, menu, icon, point) -> None:

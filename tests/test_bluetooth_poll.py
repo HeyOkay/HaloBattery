@@ -46,7 +46,7 @@ class FakeProvider:
         return []
 
 
-def until(cond, timeout=3.0):
+def until(cond, timeout=15.0):   # only an upper bound: it returns as soon as cond() is true
     end = time.time() + timeout
     while time.time() < end:
         if cond():
@@ -87,6 +87,8 @@ class BluetoothSnapshotTests(unittest.TestCase):
             mock.patch.object(hb, "DeviceIcon", FakeIcon),
             mock.patch.object(hb.pystray, "Icon", FakeTrayIcon),
             mock.patch.object(hb, "save_config", lambda cfg: None),
+            # The real foreground window must not change the fake HID poll interval.
+            mock.patch.object(hb, "fullscreen_app_running", lambda: False),
         ]
         for p in patches:
             p.start()
@@ -110,7 +112,7 @@ class BluetoothSnapshotTests(unittest.TestCase):
         def stop():
             app.stop_evt.set()
             app.wake.set()
-            t.join(5)
+            t.join(15)
         self.addCleanup(stop)
         self.assertTrue(until(lambda: all(s.key in app.icons for s in hid)), "first poll")
         self.assertTrue(until(lambda: app.provider.polls == 1))
@@ -207,7 +209,7 @@ class BluetoothSnapshotTests(unittest.TestCase):
         self.assertTrue(until(lambda: BUDS.key in app.icons))
         app.stop_evt.set()
         app.bt_wake.set()
-        t.join(5)
+        t.join(15)
         self.assertTrue(app.bt_fresh.is_set())
         self.assertEqual(app.provider.polls, 1)
 

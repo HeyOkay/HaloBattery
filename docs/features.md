@@ -5,10 +5,11 @@
 
 ## The icon
 
-- **Centre**: a headset, a mouse, a keyboard (a keycap with a K), an Xbox or PlayStation controller, or the Bluetooth rune - the pictogram can be turned off in the menu.
+- **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. Controller logos are chosen manually; the default is a generic controller.
+- **Display scaling**: tray artwork is rendered at the taskbar's physical icon size and refreshed when its DPI changes, keeping the thin ring and pictograms sharp.
 - **Colour**: follows the taskbar (white on a dark bar, black on a light one). With [MyDockFinder](https://store.steampowered.com/app/1787090/MyDockFinder/) running it follows its top menu bar instead. With a transparent taskbar (e.g. TranslucentTB) pick **Icon colour → White** or **Black**.
 - **Amber**: close to the alert threshold. **Red**: at or below it.
-- **Green and breathing**: charging - the animation can be turned off in the menu, leaving a plain green arc.
+- **Green**: charging. A known battery level breathes in brightness; an unknown level uses a rotating green arc over a steady neutral ring. Turning animation off in the menu leaves the arc still.
 - **Translucent**: the mouse is asleep and keeps its last level for 5 minutes. A device that is switched off leaves the tray and comes back when it is switched on.
 
 The low battery notification fires once, and again only after the device has been charged.
@@ -18,7 +19,8 @@ The low battery notification fires once, and again only after the device has bee
 Right-click a device icon to open its menu. It looks like a Windows 11 menu (acrylic background, rounded corners, the light or dark app theme) and is sharp at any display scale. If it does not work on your PC, set `"fluent_menu": false` in `%APPDATA%\HaloBattery\config.json` to get the classic Windows menu back.
 
 - **Rename…**: give the device your own name (for example, two controllers with the same name). **Reset name** goes back to the device's own name.
-- **Icon**: pick the pictogram of this device (Automatic, Mouse, Keyboard, Headset, Controller or Bluetooth), for example a controller over Bluetooth that shows the Bluetooth pictogram.
+- **Icon**: pick the pictogram of this device (Automatic, Mouse, Keyboard, Microphone, Headset, Speaker, Webcam, Health device, Smart home, Smartwatch, Display / TV, Tag / Tracker, Controller or Bluetooth), for example a controller over Bluetooth that shows the Bluetooth pictogram.
+- **Controller logo** (when the device uses a controller pictogram): choose **Default**, **Xbox**, **PlayStation** or **Nintendo Switch**, then optionally enable **Color logo** for a brand. Xbox uses green, Nintendo uses red and PlayStation uses its classic multicolor logo. The choice is saved separately for each device and updates its icon immediately. **Default** means the generic controller; **Icon → Automatic** restores the automatically selected device type. Brand selection does not change the device type exported in the status file.
 - **Low battery alert at**: an alert level for this device only (off, 5–30%), or **Default** to follow Preferences. The red ring follows it too.
 - **Hide this device**: remove its icon, for example for a controller that always reports 100%.
 - **Refresh now**

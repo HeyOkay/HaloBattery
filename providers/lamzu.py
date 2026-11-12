@@ -13,9 +13,13 @@ Nothing else is ever written to the mouse. The request and the reply parser are
 the ones in wlmouse.py. The dongle cannot tell a sleeping mouse from one that is
 switched off, so a silent mouse keeps its last level, greyed out, for a while.
 
-Only the Maya X ids are listed: they are the ones the sources and a diagnostics
-report from a real Maya X 8K dongle agree on. Other Lamzu mice use other vendor ids
-(0x3554, 0x37B0) and, according to lamzu-ctl, other protocols.
+The Maya X uses a feature-report protocol on VID 0x373E. The Thorn / Atlantis
+generation is a separate LAMZU family on CompX VID 0x3554; it uses report-8
+interrupt frames, shared at the protocol level with some Pulsar/ATK/VXE devices.
+Both families are handled here under LAMZU device ownership. Source for the
+Atlantis family and its CompX protocol: OpenMouse-Project/mouse-protocol
+[PR #85](https://github.com/OpenMouse-Project/mouse-protocol/pull/85), cross-checked
+against the Thorn's HID diagnostics and live readings.
 """
 from __future__ import annotations
 
@@ -30,6 +34,10 @@ except ImportError:              # pragma: no cover
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 from .wlmouse import QUERY, parse_feature
+from .compx import (CONTROL_USAGE as COMPX_CONTROL_USAGE, PAYLOAD_LEN as COMPX_PAYLOAD_LEN,
+                    READ_ATTEMPTS as COMPX_READ_ATTEMPTS, READ_TIMEOUT_MS as COMPX_READ_TIMEOUT_MS,
+                    make_request as compx_make_request, output_length as compx_output_length,
+                    parse_power as compx_parse_power, voltage_mv as compx_voltage_mv)
 
 LAMZU_VID = 0x373E
 DONGLE = 0x001E
@@ -133,6 +141,112 @@ class LamzuProvider(Provider):
         if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
             return [DeviceStatus(key, NAME, self._last[0], self._last[1], False, "lamzu",
                                  kind="mouse")]
+        return []
+
+    def diagnostics(self) -> List[str]:
+        return list(self._diag)
+
+
+# The Thorn / Atlantis family uses CompX's report-8 protocol, not the Maya X's
+# feature-report command. Keep its product ownership and lifecycle in the Lamzu
+# provider while reusing the shared CompX frame builder/parser.
+COMPX_VID = 0x3554
+ATLANTIS_PIDS = {
+    0xF510: "LAMZU Thorn (4K receiver)",
+    0xF50F: "LAMZU Thorn (wired)",
+}
+THORN_KEY = "lamzu:3554f510"
+THORN_ASLEEP_KEEP = 300
+
+
+class LamzuAtlantisProvider(Provider):
+    name = "lamzu"
+
+    def __init__(self):
+        self._diag: List[str] = []
+        self._last: Optional[Tuple[str, int, bool, float]] = None
+
+    def _pick_compx(self, infos: List[dict]) -> Optional[dict]:
+        control = [d for d in infos if (d.get("usage_page"), d.get("usage")) == COMPX_CONTROL_USAGE]
+        for d in control + infos:
+            size = compx_output_length(d["path"])
+            if size in (None, COMPX_PAYLOAD_LEN):
+                return d
+            self._diag.append(f"  {d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
+                              f"output={size} cannot take a {COMPX_PAYLOAD_LEN}-byte frame; skipped")
+        return infos[0] if infos else None
+
+    def _query_compx(self, path: bytes):
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  open: {e}")
+            return None
+        try:
+            for _ in range(4):
+                if not dev.read(COMPX_PAYLOAD_LEN, 30):
+                    break
+            dev.write(compx_make_request())
+            for attempt in range(COMPX_READ_ATTEMPTS):
+                r = dev.read(COMPX_PAYLOAD_LEN, COMPX_READ_TIMEOUT_MS)
+                if not r:
+                    break
+                self._diag.append(f"  reply {attempt + 1}: {hexdump(r)}")
+                parsed = compx_parse_power(r)
+                if parsed is not None:
+                    return list(r), parsed
+                time.sleep(0.02)
+            self._diag.append("  no power reply (mouse idle or no response)")
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"  query error: {e}")
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+        return None
+
+    def poll(self) -> List[DeviceStatus]:
+        self._diag = []
+        try:
+            infos = [d for d in hidlist.enumerate(COMPX_VID)
+                     if d.get("product_id") in ATLANTIS_PIDS]
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(lamzu atlantis): %s", e)
+            return []
+        groups: Dict[int, List[dict]] = {}
+        for d in infos:
+            groups.setdefault(d["product_id"], []).append(d)
+        now = time.time()
+        present = bool(groups)
+        # Ask the cable first; its power flag is how the report signals charging.
+        for pid in sorted(groups, key=lambda p: p != 0xF50F):
+            group = groups[pid]
+            name = ATLANTIS_PIDS[pid]
+            self._diag.append(f"[Lamzu Thorn] pid=3554:{pid:04x} '{name}'")
+            d = self._pick_compx(group)
+            if d is None:
+                continue
+            self._diag.append(f"  iface={d.get('interface_number')} "
+                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
+                              f"output={compx_output_length(d['path'])}")
+            result = self._query_compx(d["path"])
+            if result is None:
+                continue
+            raw, (level, charging) = result
+            mv = compx_voltage_mv(raw)
+            if mv:
+                self._diag.append(f"  {mv} mV")
+            self._last = (name, level, charging, now)
+            return [DeviceStatus(THORN_KEY, name, level, charging, True, "lamzu", kind="mouse")]
+
+        if present and self._last and now - self._last[3] < THORN_ASLEEP_KEEP:
+            name, level, charging, _seen = self._last
+            return [DeviceStatus(THORN_KEY, name, level, charging, False, "lamzu",
+                                 kind="mouse", wake_on_input=True)]
+        if not present:
+            self._last = None
         return []
 
     def diagnostics(self) -> List[str]:

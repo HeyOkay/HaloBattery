@@ -37,6 +37,7 @@ class FakeReceiver:
         self.idle = threading.Event()  # read() found nothing queued: every report so far is handled
         self.fail = None               # an exception read() raises, e.g. the receiver unplugged
         self.open_error = None
+        self.open_gate = None          # optional event: hold open until the test releases it
         self.lock = threading.Lock()   # send() and read()'s "nothing queued" check do not interleave
 
     def send(self, *reports):
@@ -54,6 +55,8 @@ class FakeReceiver:
 
         class FakeDevice:
             def open_path(self, path):
+                if rx.open_gate is not None and not rx.open_gate.wait(WAIT):
+                    raise AssertionError("the test never released the open gate")
                 if rx.open_error:
                     raise rx.open_error
                 rx.opened += 1
@@ -162,8 +165,17 @@ class PollTest(unittest.TestCase):
 
     def test_open_failure_is_reported(self):
         self.rx.open_error = OSError("open failed")
-        self.provider.poll()
-        self.provider._readers[PATH].thread.join(WAIT)
+        self.rx.open_gate = threading.Event()
+        # The first poll must finish before the error is published. Otherwise it
+        # can already consume the error while the reader is still alive, leaving
+        # the second poll with no new diagnostics even after joining that thread.
+        try:
+            self.provider.poll()
+        finally:
+            self.rx.open_gate.set()
+        reader = self.provider._readers[PATH]
+        reader.thread.join(WAIT)
+        self.assertFalse(reader.alive())
         self.provider.poll()
         self.assertIn("  open: open failed", self.provider.diagnostics())
 

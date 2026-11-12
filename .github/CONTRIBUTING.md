@@ -4,7 +4,9 @@ Thank you for helping. This page tells you how to:
 
 1. [Report a device that is not detected or shows a wrong level](#1-report-a-device)
 2. [Record a USB capture when the protocol is not known](#2-record-a-usb-capture)
-3. [Open a pull request](#3-open-a-pull-request)
+3. [Open a pull request](#3-pull-requests)
+4. [Understand the branches and releases](#4-branches-and-releases)
+5. [See who the maintainers are](#5-maintainers)
 
 ## 1. Report a device
 
@@ -62,24 +64,85 @@ If the capture has no packets from the maker's app, change one setting in the ap
 
 Bluetooth devices: Halo Battery shows the level that Windows itself reports. If **Settings → Bluetooth & devices** shows no battery for your device, Halo Battery cannot show one either.
 
-## 3. Open a pull request
+## 3. Pull requests
 
-1. Fork the repository and make a branch from the latest `main`.
-2. Put a new device in the provider for its protocol family (`providers/*.py`). Make a new provider only for a new protocol. A new provider must be:
-   - imported in `providers/__init__.py`;
-   - added to the provider list in `halo_battery.pyw` (the app and `--probe` use it).
-3. Only send commands that come from a source you can name. Put the source (project, file and line, or your capture) in a comment at the top of the provider.
-4. Add unit tests in `tests/`. They use fake HID devices, so no hardware is necessary. Run all tests from the repository root:
+AI coding agents: read [AGENTS.md](../AGENTS.md) first.
 
-   ```
-   python -m unittest discover -s tests
-   ```
+- **Target `pre-release`**, never `main`. Fork, then branch from the latest `pre-release`.
+- Branch names: `feat/`, `fix/`, `device/`, `docs/` or `test/` plus a short name, for example `device/razer-viper-v3`.
+- One change per pull request. Keep the diff minimal; do not reformat unrelated code.
+- Put a new device in the provider for its protocol family (`providers/*.py`). Make a new provider only for a new protocol. A new provider must be:
+  - imported in `providers/__init__.py`;
+  - added to `make_providers()` and `PROVIDER_LABELS` in `halo_battery.pyw`, with a `provider.*` key in every catalog in `halo/locales/`.
+- **Only send commands that come from a source you can name.** Put the source (project, file and line, or your capture) in a comment at the top of the provider.
+- Add unit tests in `tests/` that include edge cases (short or garbage replies, level out of range, device gone). They use fake HID devices, so no hardware is necessary. Run all tests from the repository root:
 
-5. Add a line to `CHANGELOG.md` under `[Unreleased]`, a row to the table in `docs/devices.md`, and a section in `docs/protocols.md` that tells how the device is read and names the source.
-6. In the pull request description, write:
-   - which issue it closes;
-   - the source of the protocol;
-   - if you tested it on real hardware, and with which device;
-   - which other open pull requests change the same files.
+  ```
+  python -m unittest discover -s tests
+  ```
+
+- Add a line to `CHANGELOG.md` under `[Unreleased]`. For a device, also add a row to the table in `docs/devices.md` and a section in `docs/protocols.md` that tells how the device is read and names the source.
+- CI installs from `requirements-build.txt` (exact versions and hashes, Python 3.12, Windows, with PyInstaller). `requirements.txt` stays the loose list. After you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
+
+  ```
+  uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements-build.txt
+  ```
+- Do not change `VERSION`; only release pull requests do.
+- In the description (the template asks for it) write:
+  - which issue it closes;
+  - the source of the protocol;
+  - if you tested it on real hardware, and with which device;
+  - which other open pull requests change the same files.
+- The `Tests` check must pass; a maintainer then squash-merges it. No approval is required for `pre-release`, but maintainers should still read the diff.
 
 Look at the open issues and pull requests first, so that two people do not do the same work.
+
+## 4. Branches and releases
+
+- `main`: stable, released code only. Tags `vX.Y.Z` are cut from `main`; `.github/workflows/release.yml` builds and publishes on a tag. The app's updater uses `/releases/latest`, so only `main` releases reach users.
+- `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI (no approval required); any maintainer with write access merges them. Squash merge.
+- Release: a maintainer opens a "Release X.Y.Z" pull request from `pre-release` into `main`. It bumps `VERSION` in `halo_battery.pyw` and moves the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit (not squash), then tag on `main`.
+- Hotfix: branch `hotfix/<name>` from `main`, pull request into `main` (code-owner approval).
+- After **every** release or hotfix, merge `main` back into `pre-release` (fast-forward when possible), so the two never drift apart.
+- **Test builds**: every merge into `pre-release` publishes the [Pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) (`.github/workflows/prerelease.yml`). It is one rolling GitHub release, marked as a pre-release, so the app's updater never offers it. Testers download it there and report bugs with its commit id.
+
+```
+feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--> main --tag vX.Y.Z--> release
+                                           ^                                       |
+                                           +-------- merge back after release ---- hotfix/* branches from main
+```
+
+### Weekly manual release review
+
+Once per week, a lead reviews `pre-release` for a possible stable release. This is a
+manual decision: there is no scheduled merge or automatic stable publication. If the
+candidate is not ready, keep testing on `pre-release` and review it the following week.
+
+Before opening the release PR:
+
+1. Read new issue replies, PR review comments and hardware-test results, including
+   follow-ups on the community fork. Record unresolved work in the original tracker.
+2. Check the latest `Tests` run and rolling pre-release build. Test the packaged app
+   and installer, and verify the updater points to `HeyOkay/HaloBattery`.
+3. Review known regressions and experimental device paths. A passing simulated test
+   is not hardware confirmation. Do not promote guessed protocol changes without a
+   named source and the required tester confirmation.
+4. Choose a version newer than every previous stable release, including the community
+   fork's 1.16.0, and prepare the version/changelog change through the release PR.
+5. Obtain another lead's approval, merge the release PR with a merge commit, tag the
+   reviewed commit on `main`, and wait for successful release packaging. Merge `main`
+   back into `pre-release` afterwards.
+
+The [current follow-up register](../docs/maintenance.md) lists the consolidation's
+remaining test evidence and release holds. Resolve or explicitly exclude each hold
+before promoting a candidate.
+
+## 5. Maintainers
+
+- **Contributors**: anyone. Fork, and open pull requests against `pre-release`.
+- **Maintainers**: have write access. They review and merge pull requests into `pre-release`.
+- **Lead maintainers** (2 to 5 of the most active people): also review, approve and merge `pre-release` into `main` and hotfixes, and cut releases. They are listed in `.github/CODEOWNERS`.
+- Sustained good pull requests and reviews lead to an invitation from the owner.
+- Even leads use pull requests: no direct pushes to `main` or `pre-release`. Only the owner may bypass this in an emergency.
+
+Lead reviewers listed in CODEOWNERS: `HeyOkay`, `ahmedkhursheed23` and `casparas123`. Collaborators must accept their invitations and have write access for their code-owner approvals to count. A lead's pull request into `main` needs approval from another lead.

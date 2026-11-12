@@ -1,0 +1,4 @@
+# Code owners = the lead maintainers. Their approval is required for pull requests
+# into main (releases and hotfixes). An owner needs write access to count, so a
+# lead whose invitation is still pending is ignored until they accept.
+* @ahmedkhursheed23 @casparas123 @HeyOkay

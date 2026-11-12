@@ -16,9 +16,11 @@ Run from the repository root:
 import importlib.util
 import os
 import sys
-import tempfile
 import types
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -30,7 +32,7 @@ from providers import xinput as X  # noqa: E402
 def load_app():
     """halo_battery.pyw, with its log and settings in a temporary folder."""
     real = os.environ.get("APPDATA")
-    os.environ["APPDATA"] = tempfile.mkdtemp(prefix="halo_battery_test_")
+    os.environ["APPDATA"] = _sandbox.mkdtemp(prefix="halo_battery_test_")
     try:
         spec = importlib.util.spec_from_file_location("halo_battery_xinput_wired",
                                                       os.path.join(ROOT, "halo_battery.pyw"))

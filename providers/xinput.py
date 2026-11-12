@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import hidlist, wgi
+from . import beitong, flydigi, hidlist, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -60,6 +60,23 @@ NAMED = [
 # the vendors whose controllers this provider reads; Windows.Gaming.Input also reports
 # controllers of other vendors (a DualSense, a wheel) and they are not XInput pads
 NAMED_VIDS = frozenset(vid for vid, _word, _name in NAMED)
+# The FlyDigi dongle's vendor id - one place, evaluated at import: the tests
+# replace the flydigi module with a stub that only has read_connected().
+FLYDIGI_VID = flydigi.VENDOR_VID
+BEITONG_IDS = (beitong.VENDOR_VID, beitong.PRODUCT_PID)
+# The Vader 4 Pro enumerates under Microsoft's Xbox 360 id with FlyDigi's product
+# string, so its Windows.Gaming.Input report can only be recognised by that string.
+VADER4_IDS = (0x045E, 0x028E)
+
+
+def flydigi_hid_present(hid_devices: List[dict]) -> bool:
+    """True when the device list carries the Vader 4 Pro's Microsoft-id entry."""
+    for d in hid_devices or ():
+        if (d.get("vendor_id"), d.get("product_id")) == VADER4_IDS:
+            name = (d.get("product_string") or "").lower()
+            if "flydigi" in name or "vader" in name:
+                return True
+    return False
 
 
 class XINPUT_GAMEPAD(ctypes.Structure):
@@ -280,12 +297,47 @@ class XInputProvider(Provider):
         # Its report is not in the vendor list below, so only its status is kept here,
         # paired by the same count rule; its level (a constant remain=full=1000) is not.
         statuses = [r.status for r in all_reports] if len(all_reports) == len(slots) else []
-        reports = [r for r in all_reports if r.vid in NAMED_VIDS]
+        # WGI order is not XInput slot order; require a single pair for Beitong.
+        single_beitong = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
+        )
+        # Vendor reports also identify pads whose own HID status is read below;
+        # their Windows level is a placeholder, not a battery measurement.
+        reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
+                   or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         if len(reports) != len(slots):
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
                                   f"{len(slots)} slot(s): not paired, the XInput levels are used")
             reports = []
+
+        # FlyDigi pads answer neither API well: over its 2.4 GHz dongle the Vader 5 Pro's
+        # XInput battery type is "wired" (the dongle looks like a cable) and its
+        # Windows.Gaming.Input report is the constant remain=full=1000 placeholder, so
+        # both paths had nothing real (#191). The pad itself answers on its 0xFFA0
+        # vendor collection - the channel SDL's driver keeps - read that. Only when one
+        # pad and one slot are involved, where the pairing is exact.
+        # Its vendor collection answering is not enough: the one XInput slot must be
+        # that pad too. A Vader in DInput/Switch mode - or switched off - leaves its
+        # dongle enumerating while the slot belongs to another pad (an Xbox pad), which
+        # would then get the Vader's name and level (#216 review, @ahmedkhursheed23).
+        # The slot's vendor comes from its Windows.Gaming.Input report, which a FlyDigi
+        # pad sends under its own vendor id (the placeholder), so the paired report
+        # identifies it. base_vid can only be 0x3537/0x045E, so it never allows the call.
+        vendor_reading = None
+        if len(slots) == 1:
+            only_vid = reports[0].vid if len(reports) == 1 else base_vid
+            if only_vid == FLYDIGI_VID:
+                try:
+                    vendor_reading = flydigi.read_connected(self._diag)
+                except Exception as e:     # a broken pad path must not blind XInput
+                    self._diag.append(f"[Flydigi] {e}")
+            elif single_beitong:
+                try:
+                    vendor_reading = beitong.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[Beitong] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -315,8 +367,23 @@ class XInputProvider(Provider):
 
         connected = []
         vias = {}
+        presentation = {}  # slot -> translation key and parameters
+        vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
+            if single_beitong:
+                if rep is not None and rep.placeholder:
+                    rep = None
+                if res is not None and res[1]:
+                    res = None  # The dongle's wired fallback would invent 100% as well.
+            if (rep is not None and rep.placeholder and not rep.charging
+                    and (rep.vid == FLYDIGI_VID
+                         or (vader4 and (rep.vid, rep.pid) == VADER4_IDS))):
+                # remain=full=1000 is Windows' placeholder on a FlyDigi pad, not a
+                # measurement: it said 100% for a Vader 4 Pro whose battery light was
+                # flashing low (#191). Other vendors' 1000/1000 can be a genuinely full
+                # pack, so their report stays (#216 review, @ahmedkhursheed23).
+                rep = None
             if rep is None and base_vid is not None and base_vid in bt_only:
                 # Windows.Gaming.Input said nothing, but every HID interface this vendor
                 # has sits on a Bluetooth path: the controller is on Bluetooth, which
@@ -327,6 +394,15 @@ class XInputProvider(Provider):
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
             name = (rep.name if rep and rep.name else None) or base_name
+            if vendor_reading is not None:
+                # the pad's own report: level, charging state and its name
+                name = vendor_reading.name
+                self._waiting.pop(slot, None)
+                if not vendor_reading.charging:
+                    self._last[slot] = vendor_reading.level
+                connected.append((slot, name, vendor_reading.level, vendor_reading.charging,
+                                  vendor_reading.approx))
+                continue
             # the path test alone missed an Xbox One S (045e:02fd) whose path had no
             # Bluetooth service guid: its report (remain=100 of full=1000) then showed as
             # "10%" whenever "Windows Bluetooth devices" was off (#97, #108)
@@ -345,10 +421,14 @@ class XInputProvider(Provider):
                     level, _, approx = res
                     self._last[slot] = level
                     connected.append((slot, name, level, False, f"{approx}, over Bluetooth"))
+                    grade = next(word for pct, word in LEVELS.values() if pct == level)
+                    presentation[slot] = ("state.approx_grade", {"level": level, "grade": grade,
+                                                               "bluetooth": True})
                     continue
                 connected.append((slot, name, None, False,
                                   "connected over Bluetooth; turn on \"Windows Bluetooth devices\" "
                                   "to see its battery"))
+                presentation[slot] = ("state.bluetooth_hint", {})
                 continue
             if rep is not None:
                 self._waiting.pop(slot, None)
@@ -366,10 +446,16 @@ class XInputProvider(Provider):
                     self._diag.append(f"[XInput] slot {slot}: type wired, but Windows.Gaming.Input "
                                       "says discharging: not shown as on cable")
                     connected.append((slot, name, None, False, "connected, battery level not reported"))
+                    presentation[slot] = ("state.unreported", {})
                     continue
                 if not charging:
                     self._last[slot] = level
                 connected.append((slot, name, level, charging, approx))
+                if charging:
+                    presentation[slot] = ("state.cable", {})
+                else:
+                    grade = next(word for pct, word in LEVELS.values() if pct == level)
+                    presentation[slot] = ("state.approx_grade", {"level": level, "grade": grade})
                 continue
             # connected, but neither API reports the battery (yet): show the icon
             # without an arc and re-check often for a while
@@ -379,13 +465,16 @@ class XInputProvider(Provider):
             if now - since < PENDING_WINDOW:
                 self.pending = True
             connected.append((slot, name, None, False, "connected, battery level not reported yet"))
+            presentation[slot] = ("state.pending", {})
 
         out: List[DeviceStatus] = []
         for n, (slot, name, level, charging, approx) in enumerate(connected):
             if len(connected) > 1:
                 name = f"{name} {n + 1}"
+            ui_message, ui_params = presentation.get(slot, ("", {}))
             out.append(DeviceStatus(f"xinput:{slot}", name, level, charging, True, "xinput", approx,
-                                    kind="gamepad", via=vias.get(slot, "")))
+                                    kind="gamepad", via=vias.get(slot, ""),
+                                    ui_message=ui_message, ui_params=ui_params))
         return out
 
     def diagnostics(self) -> List[str]:

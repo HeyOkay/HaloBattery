@@ -16,6 +16,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -292,6 +293,15 @@ class CenturionTest(unittest.TestCase):
         rx.write = write
         self.assertEqual(self.poll(rx), [])
         self.assertIn("error", " ".join(self.provider.diagnostics()))
+
+    # Retain the hypothetical protocol fixture independently of stable policy.
+    @mock.patch.object(L, "ENABLED_PIDS", frozenset(L.PIDS))
+    def test_the_pro_x_3_is_read_the_same_way(self):
+        rx = Receiver(self.clock, level=64, state=2)
+        res = self.poll(rx, issue_103_entries(0x0B45))
+        self.assertEqual([(r.name, r.key, r.level, r.charging, r.online, r.kind) for r in res],
+                         [("Logitech PRO X 3 LIGHTSPEED", "logitech-centurion:0b45",
+                           64, True, True, "headset")])
 
     def test_only_the_ffa0_collection_of_0af7_is_opened(self):
         rx = Receiver(self.clock)
