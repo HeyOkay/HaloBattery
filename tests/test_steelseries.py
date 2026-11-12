@@ -224,6 +224,96 @@ class ClassicTests(SteelSeriesTestCase):
         self.assertEqual({path for path, _ in bus.writes}, {b"right"})
 
 
+class ProWirelessReportIDTests(SteelSeriesTestCase):
+    """1038:1290 captures: status 04 02 (on), 02 02 (off), battery 03 (3/4).
+    The existing unprefixed path was also confirmed in upstream issue #56.
+    """
+
+    @staticmethod
+    def prefixed_dongle(level=3, state=0x04):
+        def reply(req):
+            if req[:3] == [0x00, 0x41, 0xAA]:
+                return [[state, 0x02] + [0] * 30]
+            if req[:3] == [0x00, 0x40, 0xAA]:
+                return [[level] + [0] * 31]
+            return []
+        return reply
+
+    def test_report_id_zero_reads_each_battery_step(self):
+        for step in range(5):
+            with self.subTest(step=step):
+                [st], provider = self.poll([entry(0x1290, 0, 0xFF00, b"pw")],
+                                          {b"pw": self.prefixed_dongle(step)})
+                self.assertEqual((st.level, st.online, st.kind), (step * 25, True, "headset"))
+                self.assertEqual((st.approx, st.ui_message, st.ui_params),
+                                 (f"about {step * 25}%", "state.approx", {"level": step * 25}))
+                self.assertFalse(st.charging_known)
+                self.assertEqual([req[:3] for _, req in self.bus.writes],
+                                 [[0x41, 0xAA, 0], [0, 0x41, 0xAA], [0, 0x40, 0xAA]])
+                self.assertEqual([len(req) for _, req in self.bus.writes], [31, 32, 32])
+                self.assertTrue(any("00 41" in line for line in provider.diagnostics()))
+
+    def test_confirmed_unprefixed_path_is_kept(self):
+        def reply(req):
+            if req[:2] == [0x41, 0xAA]:
+                return [[0x04, 0] + [0] * 30]
+            if req[:2] == [0x40, 0xAA]:
+                return [[0x04, 0x02] + [0] * 30]
+            raise AssertionError("a working exchange must not retry with report ID zero")
+        [st], _ = self.poll([entry(0x1290, 0, 0xFF00, b"pw")], {b"pw": reply})
+        self.assertEqual(st.level, 100)
+        self.assertEqual(len(self.bus.writes), 2)
+
+    def test_prefixed_off_does_not_ask_for_battery(self):
+        out, _ = self.poll([entry(0x1290, 0, 0xFF00, b"pw")],
+                           {b"pw": self.prefixed_dongle(state=0x02)})
+        self.assertEqual(out, [])
+        self.assertEqual([req[:3] for _, req in self.bus.writes],
+                         [[0x41, 0xAA, 0], [0, 0x41, 0xAA]])
+
+    def test_refused_unprefixed_write_can_retry(self):
+        prefixed = self.prefixed_dongle()
+        def reply(req):
+            if req[0] != 0:
+                raise OSError("report ID not accepted")
+            return prefixed(req)
+        [st], _ = self.poll([entry(0x1290, 0, 0xFF00, b"pw")], {b"pw": reply})
+        self.assertEqual(st.level, 75)
+
+    def test_silent_or_garbage_status_is_not_a_level(self):
+        for reply in ([], [0x00], [0x01], [0xFF]):
+            with self.subTest(reply=reply):
+                out, _ = self.poll([entry(0x1290, 0, 0xFF00, b"pw")], {b"pw": answer(reply)})
+                self.assertEqual(out, [])
+                self.assertEqual(len(self.bus.writes), 2)
+
+    def test_missing_or_out_of_range_battery_is_refused(self):
+        for battery in ([], [5], [255]):
+            with self.subTest(battery=battery):
+                def reply(req):
+                    if req[:3] == [0, 0x41, 0xAA]:
+                        return [[0x04, 0x02]]
+                    return [battery] if req[:3] == [0, 0x40, 0xAA] else []
+                out, _ = self.poll([entry(0x1290, 0, 0xFF00, b"pw")], {b"pw": reply})
+                self.assertEqual(out, [])
+
+    def test_device_disappearing_during_battery_read_is_safe(self):
+        def reply(req):
+            if req[:3] == [0, 0x41, 0xAA]:
+                return [[0x04, 0x02]]
+            if req[:3] == [0, 0x40, 0xAA]:
+                raise OSError("device disconnected")
+            return []
+        out, provider = self.poll([entry(0x1290, 0, 0xFF00, b"pw")], {b"pw": reply})
+        self.assertEqual(out, [])
+        self.assertTrue(any("device disconnected" in line for line in provider.diagnostics()))
+
+    def test_other_classic_models_do_not_get_the_fallback(self):
+        out, _ = self.poll([entry(0x1260, 5, 0xFF00, b"a7")], {b"a7": lambda req: []})
+        self.assertEqual(out, [])
+        self.assertEqual([req for _, req in self.bus.writes], [[0x06, 0x18]])
+
+
 # ------------------------------------------------------------- Nova Pro Wireless
 def nova_pro_reply(code=5, state=0x08, length=16):
     """A base station's battery reply: nine-step level code in byte 6, state in byte 15."""
