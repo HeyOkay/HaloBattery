@@ -28,6 +28,12 @@ RED = (232, 17, 35)
 AMBER = (255, 185, 0)
 GREEN = (16, 196, 80)
 CLEAR = (0, 0, 0, 0)
+NEUTRAL_OPACITY = 230       # approximately 90%, like Windows' primary tray ink
+
+
+def neutral_alpha(alpha: int) -> int:
+    """Keep neutral ink softer than full black/white, including dim states."""
+    return round(alpha * NEUTRAL_OPACITY / 255)
 
 # device kind aliases (single letters are accepted too)
 KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "keyboard",
@@ -299,11 +305,13 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     box = (_r(32 - R), _r(32 - R), _r(32 + R), _r(32 + R))
 
     # ring track
-    d.ellipse(box, outline=fg + (70 if active else 45,), width=_r(w))
+    d.ellipse(box, outline=fg + (neutral_alpha(70 if active else 45),), width=_r(w))
 
     # charge arc
     if active:
-        c = arc_color(level, charging, low, fg) + (int(255 * max(0.0, min(1.0, pulse))),)
+        color = arc_color(level, charging, low, fg)
+        opacity = NEUTRAL_OPACITY if color == fg else 255
+        c = color + (int(opacity * max(0.0, min(1.0, pulse))),)
         lvl = max(0, min(100, level)) if level is not None else None
         if lvl is None:
             if charging:
@@ -337,11 +345,15 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     kind = KINDS.get(badge)
     if text:
         col = arc_color(level, False, low, fg) if active else fg
-        _number(d, text, col + (alpha,))
-    img = img.resize((size, size), Image.Resampling.LANCZOS)
+        _number(d, text, col + (neutral_alpha(alpha) if col == fg else alpha,))
+    # Area sampling retains the one-logical-pixel stroke's coverage. LANCZOS
+    # overshoot clips negative alpha to zero, making small rings visibly heavier.
+    sampling = Image.Resampling.BOX if size < S else Image.Resampling.LANCZOS
+    img = img.resize((size, size), sampling)
     if kind and not text:
         img = Image.alpha_composite(img, icon_artwork.glyph(
-            kind, size, fg, alpha, brand, brand_color))
+            kind, size, fg, alpha, brand, brand_color,
+            foreground_opacity=NEUTRAL_OPACITY))
     return img
 
 

@@ -121,10 +121,12 @@ class NewLucideArtworkTests(unittest.TestCase):
                             (60,False,True,False,255), (60,False,False,False,110),
                             (None,False,True,False,110), (None,False,True,True,255)):
                         track = icons.render(level,charging,online,force_active=forced,**settings)
-                        glyph = icon_artwork.glyph(kind,size,fg,alpha)
+                        glyph = icon_artwork.glyph(kind,size,fg,alpha,
+                                                  foreground_opacity=icons.NEUTRAL_OPACITY)
                         actual = icons.render(level,charging,online,badge=kind,force_active=forced,**settings)
                         self.assertEqual(actual.tobytes(), Image.alpha_composite(track,glyph).tobytes())
-                    glyph = icon_artwork.glyph(kind,size,fg,255)
+                    glyph = icon_artwork.glyph(kind,size,fg,255,
+                                              foreground_opacity=icons.NEUTRAL_OPACITY)
                     frames = icons.charging_frames(None,True,light_taskbar=light,badge=kind,size=size)
                     self.assertEqual(len(frames),90)
                     for i,frame in enumerate(frames):

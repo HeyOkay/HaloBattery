@@ -74,11 +74,12 @@ class MicrophoneArtworkTests(unittest.TestCase):
             with self.subTest(level=level, charging=charging, online=online, forced=forced):
                 settings = dict(light_taskbar=False, size=32, force_active=forced)
                 track = icons.render(level, charging, online, **settings)
-                glyph = icon_artwork.glyph('microphone', 32, (255, 255, 255), alpha)
+                glyph = icon_artwork.glyph('microphone', 32, (255, 255, 255), alpha,
+                                          foreground_opacity=icons.NEUTRAL_OPACITY)
                 expected = Image.alpha_composite(track, glyph)
                 actual = icons.render(level, charging, online, badge='microphone', **settings)
                 self.assertEqual(actual.tobytes(), expected.tobytes())
-                self.assertEqual(glyph.getchannel('A').getextrema()[1], alpha)
+                self.assertEqual(glyph.getchannel('A').getextrema()[1], icons.neutral_alpha(alpha))
 
     def test_number_badges_off_and_charging_preserve_existing_behavior(self):
         for size in (20, 32):
@@ -93,7 +94,8 @@ class MicrophoneArtworkTests(unittest.TestCase):
                 frames = icons.charging_frames(None, True, 20, False, 'microphone', size=size)
                 self.assertEqual(len(frames), icons.BREATH_FRAMES)
                 self.assertNotEqual(frames[0].tobytes(), frames[icons.BREATH_FRAMES // 2].tobytes())
-                glyph = icon_artwork.glyph('microphone', size, (255, 255, 255), 255)
+                glyph = icon_artwork.glyph('microphone', size, (255, 255, 255), 255,
+                                          foreground_opacity=icons.NEUTRAL_OPACITY)
                 for index in range(icons.BREATH_FRAMES):
                     phase = index / icons.BREATH_FRAMES
                     track = icons.render(None, True, True, pulse=icons.breath_level(phase),

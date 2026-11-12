@@ -13,6 +13,12 @@ The existing renderer foreground (black/light taskbar or white/dark taskbar)
 selects the prealigned master. No runtime translation or DPI correction is added.
 PlayStation remains centered. The masters contain no ring or battery state.
 
+Runtime neutral ink uses approximately 90% opacity to match the system tray's
+softer foreground; dim states keep their relative contrast. This does not alter
+the source masks, accepted placement or colored brand artwork. The ring renderer
+uses area sampling when shrinking its supersampled canvas, avoiding the extra
+alpha coverage produced by LANCZOS edge ringing. Source glyph masks remain exact.
+
 Regenerate only the `_PNG` literal in `halo/icon_artwork.py`:
 
 ```

@@ -164,6 +164,9 @@ source; their settings and battery history remain compatible.
 
 ### Fixed
 
+- Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
+  coverage at small DPI sizes while preserving glyph placement and brand colors.
+
 - Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
 
 - Keep unrelated devices updating and retry failed disconnected icons when one
