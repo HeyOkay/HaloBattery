@@ -21,6 +21,9 @@ class ActivityTests(unittest.TestCase):
         with mock.patch("providers.atk_activity.time.monotonic", return_value=20):
             self.assertFalse(a.active())
             a.observe(1,"atk-keys")
+            self.assertEqual(a.wake.call_count,1)  # active again, but inside the wake cooldown
+        with mock.patch("providers.atk_activity.time.monotonic", return_value=40):
+            a.observe(1,"atk-keys")
             self.assertEqual(a.wake.call_count,2)
 
     def test_device_change_and_clock_reversal_cancel_activity(self):

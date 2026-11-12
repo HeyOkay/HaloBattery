@@ -118,6 +118,7 @@ class PollTests(unittest.TestCase):
         charging, = self.provider.poll()
         self.assertEqual((charging.level, charging.charging, charging.online), (60, True, True))
         self.device.level, self.device.state = 62, 0
+        self.clock += A.REFRESH
         unplugged, = self.provider.poll()
         self.assertEqual((unplugged.level, unplugged.charging, unplugged.online), (62, False, True))
         self.assertEqual(charging.key, unplugged.key)
@@ -141,9 +142,10 @@ class PollTests(unittest.TestCase):
         self.device.noise = [list(CAPTURE), [1, 0, 0, 0], []]
         self.assertEqual(self.provider.poll()[0].level, 59)
 
-    def test_each_poll_uses_a_fresh_request_id_and_wraps_to_nonzero(self):
+    def test_each_due_poll_uses_a_fresh_request_id_and_wraps_to_nonzero(self):
         self.provider._sequence = 0xFFFF
         self.provider.poll()
+        self.clock += A.REFRESH
         self.provider.poll()
         self.assertEqual([w[1:3] for w in self.device.writes], [[1, 0], [2, 0]])
 
@@ -160,6 +162,7 @@ class PollTests(unittest.TestCase):
         self.device.silent = True
         self.assertFalse(self.provider.poll()[0].online)
         self.device.silent, self.device.level = False, 58
+        self.clock += A.RETRY
         status, = self.provider.poll()
         self.assertEqual((status.level, status.online, status.wake_on_input), (58, True, False))
 
@@ -171,6 +174,7 @@ class PollTests(unittest.TestCase):
         for operation in ("open", "write", "read"):
             with self.subTest(operation=operation):
                 self.device.error, self.device.closed = operation, False
+                self.clock += A.RETRY
                 status, = self.provider.poll()
                 self.assertIsNone(status.level)
                 self.assertFalse(status.online)

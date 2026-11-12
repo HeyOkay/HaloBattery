@@ -10,12 +10,17 @@ import time
 
 # How long recent ATK input permits an active battery request.
 ACTIVE_WINDOW = 10.0
+# A good reading is kept this long; typing in between sends no request.
+REFRESH = 300.0
+# Minimum gap between typing-triggered wakes (and between failed attempts).
+RETRY = 30.0
 
 
 class KeyboardActivity:
     def __init__(self):
         self.paths = frozenset()
         self.last = None
+        self.next_wake = None   # None: the next ATK keystroke wakes the poll loop
         self.wake = None
         self._lock = threading.Lock()
         self._thread = None
@@ -29,6 +34,7 @@ class KeyboardActivity:
             if paths != self.paths:
                 self.paths = paths
                 self.last = None
+                self.next_wake = None
 
     @staticmethod
     def normalize(path):
@@ -41,10 +47,19 @@ class KeyboardActivity:
             if kind != 1 or self.normalize(path) not in self.paths:
                 return
             now = time.monotonic()
-            resumed = self.last is None or now - self.last >= ACTIVE_WINDOW
             self.last = now
-        if resumed and self.wake is not None:
+            # wake() polls every device, so typing bursts may trigger it at most
+            # once per RETRY, and not at all while a reading is fresh (hold()).
+            due = self.next_wake is None or now >= self.next_wake
+            if due:
+                self.next_wake = now + RETRY
+        if due and self.wake is not None:
             self.wake()
+
+    def hold(self, seconds):
+        """No typing-triggered wake for this long (a fresh reading is in hand)."""
+        with self._lock:
+            self.next_wake = time.monotonic() + seconds
 
     def active(self):
         with self._lock:

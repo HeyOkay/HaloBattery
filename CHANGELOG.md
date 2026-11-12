@@ -17,6 +17,10 @@ source; their settings and battery history remain compatible.
 
 ### Added
 
+- **ATK V75X USB cable** (`320f:5055`): shares the receiver's icon and is preferred
+  when both transports are connected. The PR author confirmed battery and charging
+  on the cable; receiver support was already integrated.
+
 - **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
 
 - **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
@@ -163,6 +167,10 @@ source; their settings and battery history remain compatible.
 - Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
 
 ### Fixed
+
+- **ATK V75X receiver polling**: reuse successful readings for five minutes,
+  retry failed requests after 30 seconds, and rate-limit typing-triggered wakes
+  so bursts of input do not repeatedly poll every device.
 
 - Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
   coverage at small DPI sizes while preserving glyph placement and brand colors.
