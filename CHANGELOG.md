@@ -10,6 +10,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
 
+- **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
+  over the vendor feature-report protocol, on a VAXEE 4K dongle or on the cable.
+  Invalid battery values are refused instead of displayed as a full charge.
+  Ported from [ryanlewis/mousebatt](https://github.com/ryanlewis/mousebatt), with
+  the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
+  confirmed on hardware on an E1 Wireless over its receiver (other models and
+  the cabled path are untested).
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
@@ -157,6 +165,8 @@ source; their settings and battery history remain compatible.
 - Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
 
 ### Fixed
+
+- Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
 
 - Keep unrelated devices updating and retry failed disconnected icons when one
   native tray image update fails.

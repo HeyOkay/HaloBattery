@@ -167,6 +167,7 @@ MESSAGES = {
     "provider.nzxt": "Souris NZXT",
     "provider.steam": "Steam Controller (2025)",
     "provider.endgame_we": "Endgame Gear XM2we",
+    "provider.vaxee": "Souris VAXEE",
     "menu.install_update": "Mettre à jour vers la v{version}",
     "menu.downloading": "Téléchargement de la v{version}… {progress} %",
     "notification.update_install": "La version {version} est disponible. Faites un clic droit sur une icône de batterie et choisissez « Mettre à jour vers la v{version} ».",
