@@ -154,6 +154,8 @@ source; their settings and battery history remain compatible.
 
 ### Fixed
 
+- Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
+
 - Keep unrelated devices updating and retry failed disconnected icons when one
   native tray image update fails.
 
