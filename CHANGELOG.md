@@ -6,6 +6,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
+  over the vendor feature-report protocol, on a VAXEE 4K dongle or on the cable.
+  Invalid battery values are refused instead of displayed as a full charge.
+  Ported from [ryanlewis/mousebatt](https://github.com/ryanlewis/mousebatt), with
+  the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
+  confirmed on hardware on an E1 Wireless over its receiver (other models and
+  the cabled path are untested).
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface

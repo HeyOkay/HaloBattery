@@ -165,6 +165,7 @@ MESSAGES = {
     "provider.nzxt": "NZXT mice",
     "provider.steam": "Steam Controller (2025)",
     "provider.endgame_we": "Endgame Gear XM2we",
+    "provider.vaxee": "VAXEE mice",
     "menu.install_update": "Update to v{version}",
     "menu.downloading": "Downloading v{version}… {progress}%",
     "notification.update_install": "Version {version} is available. Right-click a battery icon and choose \"Update to v{version}\".",
