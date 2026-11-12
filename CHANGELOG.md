@@ -6,11 +6,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
-  coverage at small DPI sizes while preserving glyph placement and brand colors.
-
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
@@ -168,6 +163,9 @@ source; their settings and battery history remain compatible.
 - Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
 
 ### Fixed
+
+- Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
+  coverage at small DPI sizes while preserving glyph placement and brand colors.
 
 - Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
 
