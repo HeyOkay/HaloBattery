@@ -13,6 +13,7 @@ Code in `pre-release` is not necessarily in a stable release or confirmed on har
 
 | Thread | Evidence and disposition |
 | --- | --- |
+| [#368](https://github.com/HeyOkay/HaloBattery/pull/368) | The author confirmed ATK V75X battery/charging on its receiver and USB cable, including three 91% charging replies over USB. Receiver support was already integrated; the adapted PR adds cable preference and 300/30-second polling limits for 1.17.0. Fake-HID/activity regressions cover timing and transport changes. Physical keyboard sleep and power consumption remain unverified. |
 | [#310](https://github.com/HeyOkay/HaloBattery/issues/310#issuecomment-6741190943) | Vetrices confirmed Atlas Air level agrees with Swarm II, charging follows the cable, and percentage updates after unplugging. Enabled in 1.17.0; this does not confirm Stealth 600X. |
 | [#74](https://github.com/HeyOkay/HaloBattery/issues/74) | Reporter confirmed AJ179 V2 Max works after the fork update. |
 | [#231](https://github.com/HeyOkay/HaloBattery/issues/231) | Reporter confirmed OMNI Keris II Ace and Azoth. Recorded in protocol notes. |
