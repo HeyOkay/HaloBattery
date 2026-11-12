@@ -170,6 +170,7 @@ MESSAGES = {
     "provider.nzxt": "NZXT 鼠标",
     "provider.steam": "Steam Controller (2025)",
     "provider.endgame_we": "Endgame Gear XM2we",
+    "provider.vaxee": "VAXEE 鼠标",
     "menu.install_update": "更新至 v{version}",
     "menu.downloading": "正在下载 v{version}… {progress}%",
     "notification.update_install": "已有新版本 {version}。请右键点击电量图标，选择“更新至 v{version}”。",
