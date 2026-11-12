@@ -82,10 +82,10 @@ AI coding agents: read [AGENTS.md](../AGENTS.md) first.
   ```
 
 - Add a line to `CHANGELOG.md` under `[Unreleased]`. For a device, also add a row to the table in `docs/devices.md` and a section in `docs/protocols.md` that tells how the device is read and names the source.
-- CI installs from `requirements.lock` (exact versions and hashes, Python 3.12, Windows, with PyInstaller). `requirements.txt` stays the loose list. After you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
+- CI installs from `requirements-build.txt` (exact versions and hashes, Python 3.12, Windows, with PyInstaller). `requirements.txt` stays the loose list. After you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
 
   ```
-  uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements.lock
+  uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements-build.txt
   ```
 - Do not change `VERSION`; only release pull requests do.
 - In the description (the template asks for it) write:

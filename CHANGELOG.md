@@ -137,6 +137,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
+
 - Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
 - Keep Alienware and Barracuda protocol documentation in separate sections after integration; record the newer Morph 96, URX and Plantronics confirmations. A disconnected ASUS receiver no longer raises from the output-report read path.
 
