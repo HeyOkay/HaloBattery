@@ -1,7 +1,7 @@
 ; Inno Setup script for HaloBattery-<version>-setup.exe.
 ;
 ; Build (after PyInstaller has made dist\HaloBattery):
-;   iscc /DAppVersion=1.16.0 installer\HaloBattery.iss
+;   iscc /DAppVersion=1.17.0 installer\HaloBattery.iss
 ; The setup lands in dist\.
 ;
 ; Per-user install, no admin prompt: the app goes to %LOCALAPPDATA%\Programs\HaloBattery.

@@ -15,6 +15,21 @@ Development and future updates use `HeyOkay/HaloBattery`. Existing community-for
 installations need a manual install of the upstream build to change their update
 source; their settings and battery history remain compatible.
 
+### Included from community 1.16.0
+
+- Six interface languages and expanded device support from community 1.16.0 are
+  included for users upgrading directly from upstream 1.15.0.
+- Community fixes improve shutdown, idle charging animations, history saves and
+  remaining-time estimates.
+- Portable startup in unwritable folders and device discovery after Windows Fast
+  Startup include the community corrections.
+- Battery reporting includes Xbox One S Bluetooth coarse levels, Logitech charging
+  and shared cable/receiver icons, MCHOSE G7 smoothing and corrected VXE R1 naming.
+- PlayStation and Steam Controller polling, Corsair Void v2 writes, Barracuda X
+  protocol fallback and probe-file output include the community fixes.
+- The [retained 1.16.0 changelog](https://github.com/HeyOkay/HaloBattery/blob/db0516e6ab5f50706385d50ffc20b4b9e10071a8/CHANGELOG.md#1160---2026-11-04)
+  contains the detailed device list and contributor credits.
+
 ### Added
 
 - **ATK V75X USB cable** (`320f:5055`): shares the receiver's icon and is preferred
