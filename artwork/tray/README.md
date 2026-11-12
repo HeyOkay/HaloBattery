@@ -5,13 +5,11 @@ icon lab or handoff directory. The newer device glyphs are generated from pinned
 Lucide SVGs, rather than extracted from the historical handoff. `masks.png` is a lossless L-mode alpha atlas:
 sixteen glyph rows (112 masks), seven physical sizes per row (16, 20, 24, 32, 40, 48, 64).
 `manifest.json` records every crop, semantic name, upstream source and license.
-The three RGBA color masters are 256 x 256. Xbox has two accepted optical
-placements: `xbox-color.png` uses canonical centered placement for light taskbars;
-`xbox-color-dark.png` retains the historical (-6,+2)-pixel correction for dark
-taskbars. The dark PNG is byte-identical to `6795db2:artwork/tray/xbox-color.png`.
-The existing renderer foreground (black/light taskbar or white/dark taskbar)
-selects the prealigned master. No runtime translation or DPI correction is added.
-PlayStation remains centered. The masters contain no ring or battery state.
+The two RGBA color masters are 256 x 256. `xbox-color.png` uses the same centered
+placement for both taskbar themes; its outer circle is centered on (128,128).
+The former dark-only master shifted that circle left and down and is no longer
+used. No runtime translation or DPI correction is added. PlayStation remains
+centered. The masters contain no ring or battery state.
 
 Runtime neutral ink uses approximately 90% opacity to match the system tray's
 softer foreground; dim states keep their relative contrast. This does not alter
@@ -51,7 +49,7 @@ The source has viewBox 0 0 24 24 and stroke width 2: uniform scale 0.5 gives vis
 ink 8 by 11 logical pixels centered on (8,8), with a 1-pixel logical stroke.
 No optical offset or aspect-ratio change is applied. LANCZOS alpha masks are clipped
 at radius 6.6 logical pixels only to remove resampling halos near the ring.
-All non-microphone masks and all three color masters are preserved. The SVG hash, source URL,
+All non-microphone masks and both color masters are preserved. The SVG hash, source URL,
 geometry and generation method are recorded in the manifest. Neither Chromium nor
 an SVG library is required by the application. Keep browser/Pillow versions stable
 for byte-identical regeneration and verify the seven sizes on both backgrounds.
@@ -115,8 +113,8 @@ byte-exact with stroke 2. Each wrapper requests measured visible-ink centering;
 the resulting bounds and one-time geometric translation are in `svg_generation`.
 No runtime translation, theme-specific offset or aspect-ratio change is added.
 The radius 6.6 limit removes resampling fringe, rather than fitting the source by
-cutting opaque ink. Webcam, Smartwatch and Tag/Tracker retain scale 0.5. The 66
-pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged (80 payloads).
+cutting opaque ink. Webcam, Smartwatch and Tag/Tracker retain scale 0.5. The 65
+retained pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged (79 payloads).
 
 ## Reviewed optical placement
 
