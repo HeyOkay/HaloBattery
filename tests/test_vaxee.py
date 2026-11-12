@@ -109,6 +109,37 @@ class PollTest(unittest.TestCase):
         res = self.poll(entries_, self.cols(entries_, battery=20, charging=7))
         self.assertEqual([(r.level, r.charging) for r in res], [(100, True)])
 
+    def test_battery_boundaries(self):
+        entries_ = entries()
+        for raw, percent in ((0, 0), (20, 100)):
+            with self.subTest(raw=raw):
+                res = self.poll(entries_, self.cols(entries_, battery=raw))
+                self.assertEqual([(r.level, r.online) for r in res], [(percent, True)])
+
+    def test_invalid_battery_is_refused_without_a_cached_reading(self):
+        entries_ = entries()
+        for raw in (21, 255):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.poll(entries_, self.cols(entries_, battery=raw)), [])
+                self.assertTrue(any("invalid battery value" in line
+                                    for line in self.provider.diagnostics()))
+
+    def test_invalid_battery_keeps_only_the_valid_cache_then_recovers(self):
+        entries_ = entries()
+        cols = self.cols(entries_)
+        self.poll(entries_, cols)
+        for c in cols.values():
+            c.battery = 255
+        self.now[0] += 30
+        res = self.poll(entries_, cols)
+        self.assertEqual([(r.level, r.online) for r in res], [(85, False)])
+        self.now[0] += V.ASLEEP_KEEP
+        self.assertEqual(self.poll(entries_, cols), [])
+        for c in cols.values():
+            c.battery = 0
+        res = self.poll(entries_, cols)
+        self.assertEqual([(r.level, r.online) for r in res], [(0, True)])
+
     def test_request_frame(self):
         entries_ = entries()
         cols = self.cols(entries_)

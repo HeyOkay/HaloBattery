@@ -12,8 +12,8 @@ Battery on an E1 Wireless over its receiver:
              0e a5 <cmd> <rw> <len> <data...>
 
 The reply is valid only when it echoes the command we asked for; its value is
-byte 5.  Command 0x0b is the battery in 5 % steps (byte 5 * 5, clamped to
-100) and 0x10 is the charging flag (non-zero = the mouse is on its cable).
+byte 5.  Command 0x0b is the battery in 5 % steps (byte 5 * 5, refusing values above
+20) and 0x10 is the charging flag (non-zero = the mouse is on its cable).
 
 The receiver leaves the answer in the feature buffer about 100 ms after the
 request.  A sleeping mouse can ignore the first exchange, so the pair is tried
@@ -136,8 +136,11 @@ class VaxeeProvider(Provider):
             for attempt in range(QUERY_TRIES):
                 battery = self._query(dev, CMD_BATTERY)
                 charging = self._query(dev, CMD_CHARGING)
+                if battery is not None and not 0 <= battery <= 20:
+                    self._diag.append(f"    invalid battery value: {battery}")
+                    battery = None
                 if battery is not None and charging is not None:
-                    level = min(100, battery * 5)
+                    level = battery * 5
                     self._diag.append(f"    -> {level}%"
                                       + (" (charging)" if charging else ""))
                     return level, charging != 0
