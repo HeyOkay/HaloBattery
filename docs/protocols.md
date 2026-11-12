@@ -448,6 +448,12 @@ Listened to, never written: byte 14 of the controller's enhanced input report (r
 
 Windows.Gaming.Input battery report: exact percentage and charging state. XInput is the fallback (four levels only)
 
+### BEITONG KP40D
+
+**Connection:** 2.4 GHz receiver (`20bc:515c`); wired and Bluetooth modes are not covered. Requires exactly one controller in both XInput and Windows.Gaming.Input and one matching receiver. With multiple controllers, the existing XInput fallback is kept; Windows.Gaming.Input enumeration order cannot identify an XInput slot.
+
+The vendor collection on interface 1 (`00ff:0003`): a 64-byte output report `02 15` followed by zeros is answered by a report starting `02 15`, with the level in byte 2 and the charger state in byte 4 (`50` on battery, `51` charging). Source: the owner's USBPcap capture of BEITONG iControl 1.0.5 on 2026-11-10 (`beitong-battery-20261110.pcapng`). This is the controller's estimate, which rises during charging and settles after unplugging; levels above 100 and unknown charge states are refused. Only the status request is sent. The reading replaces Windows' `1000/1000` placeholder when one XInput controller and one matching receiver identify this pad. **Confirmed on hardware on Windows**, with iControl closed: receiver level, charging/unplugging transitions and wake after sleep.
+
 ### Nintendo Switch Pro Controller, Joy-Con (L) / (R)
 
 **Connection:** Bluetooth (057E:2009, 2006, 2007)
