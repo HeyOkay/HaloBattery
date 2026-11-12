@@ -143,11 +143,36 @@ class BeitongXInputTests(unittest.TestCase):
     def test_never_queries_another_pad_or_ambiguous_slots(self):
         for reports, count in (([report(0x045E, 0x02EA)], 1), ([], 1),
                                ([report(pid=0x515B)], 1),
+                               ([report(), report(0x054C, 0x0CE6)], 1),
                                ([report(), report(0x045E, 0x02EA)], 2),
                                ([report()], 0)):
             with self.subTest(reports=reports, count=count):
                 _, calls = self.poll(reports, count)
                 self.assertEqual(calls, 0)
+
+    def test_two_controllers_keep_their_xinput_levels_in_either_wgi_order(self):
+        xbox = wgi.WgiController({"vid": 0x045E, "pid": 0x02EA,
+                                  "status": "Discharging", "remain": 700, "full": 1000})
+        beitong = report()
+        for xbox_type, expected in ((X.TYPE_WIRED, None), (X.TYPE_NIMH, 55)):
+            def battery(dll, slot, kind, info):
+                info._obj.BatteryType = xbox_type if slot == 0 else X.TYPE_WIRED
+                info._obj.BatteryLevel = 2
+                return 0
+
+            with mock.patch.object(FakeXInput, "XInputGetBatteryInformation", battery):
+                for reports in ([xbox, beitong], [beitong, xbox]):
+                    with self.subTest(xbox_type=xbox_type, reports=reports):
+                        rows, calls = self.poll(reports, count=2)
+                        self.assertEqual([(r.key, r.level, r.charging) for r in rows],
+                                         [("xinput:0", expected, False),
+                                          ("xinput:1", None, False)])
+                        self.assertEqual(calls, 0)
+
+    def test_two_beitong_controllers_do_not_use_windows_placeholders(self):
+        rows, calls = self.poll([report(), report()], count=2)
+        self.assertEqual([r.level for r in rows], [None, None])
+        self.assertEqual(calls, 0)
 
     def test_broken_hid_does_not_break_xinput(self):
         with mock.patch.object(B, "read_connected", side_effect=OSError("removed")):
