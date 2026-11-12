@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
+
 - **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
   over the vendor feature-report protocol, on a VAXEE 4K dongle or on the cable.
   Invalid battery values are refused instead of displayed as a full charge.
@@ -15,8 +17,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
   confirmed on hardware on an E1 Wireless over its receiver (other models and
   the cabled path are untested).
-
-- **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
 
 ## [1.17.0] - 2026-11-12
 
