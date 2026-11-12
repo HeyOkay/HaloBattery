@@ -2065,10 +2065,16 @@ class App:
                                     coarse=bool(st.approx))
                 self.missing.pop(st.key, None)
                 ic = self.icons.get(st.key)
-                if ic is None:
-                    ic = DeviceIcon(self, st.key)
-                    self.icons[st.key] = ic
-                ic.update(st)
+                try:
+                    if ic is None:
+                        ic = DeviceIcon(self, st.key)
+                        self.icons[st.key] = ic
+                    ic.update(st)
+                except Exception as e:
+                    # A failed native swap must not discard the other readings
+                    # or prevent missing-device cleanup in this poll cycle.
+                    log.warning("tray: update %s: %s", st.key, e)
+                    continue
             self.check_alert(ic, st)
             self.check_full(ic, st)
 
@@ -2084,13 +2090,18 @@ class App:
             for key in list(self.icons):
                 if key not in seen and (may_go is None or may_go(key)):
                     st = self.icons[key].status
-                    if keep and st is not None and not st.online and not st.polling_paused:
+                    if (keep and st is not None and not st.online and not st.polling_paused
+                            and key not in self.missing):
                         continue      # already kept: greyed with its last level
                     self.missing[key] = self.missing.get(key, 0) + 1
                     limit = 1 if key.startswith(("xinput:", "bt:", "ps:")) else 2
                     if self.missing[key] >= limit and keep and st is not None:
                         # "keep disconnected devices": grey icon, last level, no alerts
-                        self.icons[key].update(replace(st, online=False, charging=False, polling_paused=False))
+                        try:
+                            self.icons[key].update(replace(st, online=False, charging=False, polling_paused=False))
+                        except Exception as e:
+                            log.warning("tray: disconnect %s: %s", key, e)
+                            continue    # retain the missing marker so this image is retried
                         self.missing.pop(key, None)
                     elif self.missing[key] >= limit:
                         gone.append(self.icons.pop(key))

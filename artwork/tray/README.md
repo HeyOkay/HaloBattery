@@ -50,6 +50,12 @@ geometry and generation method are recorded in the manifest. Neither Chromium no
 an SVG library is required by the application. Keep browser/Pillow versions stable
 for byte-identical regeneration and verify the seven sizes on both backgrounds.
 
+All SVG wrappers also accept `--check`, for example
+`python tools/make_microphone_artwork.py --check`. They render into the ignored
+build directory, compare the atlas and generation metadata, and exit nonzero on
+drift without rewriting either tracked source file. Chromium is still required
+for this development check; runtime and unit tests do not require it.
+
 ## Speaker and webcam
 
 Pinned `lucide-static` 1.17.0 Speaker and Webcam SVGs match the requested Iconify

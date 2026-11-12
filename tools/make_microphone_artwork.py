@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import math
 from pathlib import Path
@@ -44,11 +45,34 @@ def _place_masks(manifest, original, alpha, kind):
     return atlas, masks
 
 
+def _store_generated(atlas, manifest, manifest_path, check=False):
+    """Check both generated source files without writing them, or save both."""
+    atlas_path = manifest_path.parent / manifest["atlas"]
+    encoded = io.BytesIO()
+    atlas.save(encoded, format="PNG")
+    atlas_bytes = encoded.getvalue()
+    manifest_text = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    if check:
+        stale = []
+        if not atlas_path.exists() or atlas_path.read_bytes() != atlas_bytes:
+            stale.append(atlas_path.name)
+        if not manifest_path.exists() or manifest_path.read_text(encoding="utf-8") != manifest_text:
+            stale.append(manifest_path.name)
+        if stale:
+            print("Outdated artwork sources: " + ", ".join(stale))
+            return 1
+        return 0
+    atlas_path.write_bytes(atlas_bytes)
+    manifest_path.write_text(manifest_text, encoding="utf-8", newline="")
+    return 0
+
+
 def main(kind="microphone", svg_name="mic", pinned_sha256=PINNED_SHA256,
          ink_bounds=(4, 2.5, 12, 13.5), center_visible=False, logical_scale=.5,
          optical_offset=(0, 0)) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--browser", type=Path, help="local Chrome/Edge executable")
+    parser.add_argument("--check", action="store_true", help="verify generated masks and metadata without rewriting sources")
     args = parser.parse_args()
     browser = args.browser
     if browser is None:
@@ -134,7 +158,6 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
         if original.mode != "L":
             raise ValueError("expected L-mode source atlas")
         atlas, masks = _place_masks(manifest, original, alpha, kind)
-    atlas.save(ASSETS / manifest["atlas"])
     manifest["masks"] = masks
     manifest["sources"]["lucide"]["glyphs"][kind] = svg_name
     manifest.setdefault("svg_generation", {})[kind] = {
@@ -153,9 +176,11 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
             "source_stroke_width": 2, "render_stroke_width": 1/logical_scale,
             "logical_stroke_width": 1,
             "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"})
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n",
-                             encoding="utf-8", newline="")
-    print(f"Generated seven {kind} masks; other glyph boxes, masks and metadata preserved")
+    result = _store_generated(atlas, manifest, manifest_path, check=args.check)
+    if result:
+        return result
+    action = "Checked" if args.check else "Generated"
+    print(f"{action} seven {kind} masks; other glyph boxes, masks and metadata preserved")
     return 0
 
 

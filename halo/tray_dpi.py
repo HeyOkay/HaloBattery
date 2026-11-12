@@ -18,6 +18,8 @@ def _user32():
 def tray_pixels() -> int:
     """Return the taskbar's small icon width in physical pixels (16 elsewhere)."""
     if sys.platform != "win32":
+        # HaloBattery targets Windows; this is a safe test/import fallback,
+        # not a native menu-bar size recommendation for other platforms.
         return 16
     dpi = 96
     try:

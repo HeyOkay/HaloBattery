@@ -154,6 +154,9 @@ source; their settings and battery history remain compatible.
 
 ### Fixed
 
+- Keep unrelated devices updating and retry failed disconnected icons when one
+  native tray image update fails.
+
 - Correct colored Xbox logo alignment for light and dark taskbar themes.
 
 - Preserve each device's stable Windows tray identity, serialize native icon-handle
