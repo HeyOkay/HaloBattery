@@ -45,7 +45,8 @@ def _place_masks(manifest, original, alpha, kind):
 
 
 def main(kind="microphone", svg_name="mic", pinned_sha256=PINNED_SHA256,
-         ink_bounds=(4, 2.5, 12, 13.5), center_visible=False, logical_scale=.5) -> int:
+         ink_bounds=(4, 2.5, 12, 13.5), center_visible=False, logical_scale=.5,
+         optical_offset=(0, 0)) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--browser", type=Path, help="local Chrome/Edge executable")
     args = parser.parse_args()
@@ -72,8 +73,8 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
     viewport = 768
     inset = 128
     if logical_scale != .5:
-        # Fit unusually wide corner ink without changing path proportions or
-        # the shared one-logical-pixel stroke. The pinned SVG stays untouched.
+        # Fit device ink to the established ring clearance without changing
+        # proportions or the one-logical-pixel stroke. Pinned SVG stays untouched.
         viewport = 1536 * logical_scale
         inset = (1024 - viewport) / 2
         markup = html.read_text(encoding="utf-8")
@@ -117,6 +118,16 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
         ink_bounds = [v / 64 for v in alpha.getbbox()]
         centering = {"logical_uncentered_ink_bounds": [v / 64 for v in bounds],
                      "logical_geometric_centering_translation": [dx / 64, dy / 64]}
+    # User-reviewed optical placement is baked at master resolution, shared by
+    # every theme, DPI and battery state. Do not resample or translate at runtime.
+    optical_pixels = tuple(round(value * 64) for value in optical_offset)
+    if any(optical_pixels):
+        shifted = Image.new("L", alpha.size)
+        shifted.paste(alpha, optical_pixels)
+        if shifted.histogram() != alpha.histogram():
+            raise ValueError("optical placement would discard source ink")
+        alpha = shifted
+        ink_bounds = [v / 64 for v in alpha.getbbox()]
     manifest_path = ASSETS / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     with Image.open(ASSETS / manifest["atlas"]) as original:
@@ -132,7 +143,7 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
             "tool": f"tools/make_{kind}_artwork.py",
             "view_box": [0, 0, 24, 24], "stroke_width": 2,
             "logical_scale": logical_scale, "logical_visible_ink_bounds": list(ink_bounds),
-            "logical_optical_offset": [0, 0], "logical_alpha_limit_radius": 6.6, "master_size": 1024,
+            "logical_optical_offset": [v / 64 if v else 0 for v in optical_pixels], "logical_alpha_limit_radius": 6.6, "master_size": 1024,
             "svg_viewport": [inset, inset, 1024-inset, 1024-inset],
             "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"}
     if centering is not None:
@@ -141,7 +152,7 @@ svg{position:absolute;left:128px;top:128px;width:768px;height:768px}
         manifest["svg_generation"][kind].update({
             "source_stroke_width": 2, "render_stroke_width": 1/logical_scale,
             "logical_stroke_width": 1,
-            "fit_reason": "Fit full rounded TV corner ink inside the 6.6-logical-pixel glyph region"})
+            "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"})
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n",
                              encoding="utf-8", newline="")
     print(f"Generated seven {kind} masks; other glyph boxes, masks and metadata preserved")

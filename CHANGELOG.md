@@ -17,9 +17,10 @@ source; their settings and battery history remain compatible.
 
 ### Added
 
-- Per-device Lucide Speaker, Webcam, Heart (health device), House (smart home),
+- Per-device Lucide Speaker, Webcam, Heart Pulse (health device), House (smart home),
   Watch (smartwatch), TV Minimal (display/TV) and Radar (tag/tracker) pictograms,
-  available through the Icon menu in all six interface languages.
+  available through the Icon menu in all six interface languages. Speaker, House
+  and TV Minimal are fitted to match the existing glyph-to-ring spacing.
 
 - Per-device **Controller logo** selection: Default, Xbox, PlayStation or Nintendo
   Switch, with optional brand colors and the classic multicolor PlayStation logo.

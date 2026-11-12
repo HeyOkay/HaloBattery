@@ -29,7 +29,7 @@ The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #12
 ## Tray icon artwork
 
 - Generic device glyphs (headphones, mouse, keyboard, mic, gamepad-2, Bluetooth,
-  speaker, webcam, heart, house, watch, tv-minimal and radar):
+  speaker, webcam, heart-pulse, house, watch, tv-minimal and radar):
   [Lucide](https://lucide.dev/), sourced from `lucide-static` 1.17.0 and adapted
   as local masks for the tray renderer. The [versioned upstream license](https://github.com/lucide-icons/lucide/blob/1.17.0/LICENSE)
   is included in [licenses/lucide-1.17.0-LICENSE.txt](licenses/lucide-1.17.0-LICENSE.txt):

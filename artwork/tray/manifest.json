@@ -18,7 +18,7 @@
         "microphone": "mic",
         "speaker": "speaker",
         "webcam": "webcam",
-        "health": "heart",
+        "health": "heart-pulse",
         "smart_home": "house",
         "watch": "watch",
         "tracker": "radar",
@@ -1351,12 +1351,12 @@
         24
       ],
       "stroke_width": 2,
-      "logical_scale": 0.5,
+      "logical_scale": 0.455,
       "logical_visible_ink_bounds": [
-        3.5,
-        2.5,
-        12.5,
-        13.5
+        3.859375,
+        2.953125,
+        12.15625,
+        13.0625
       ],
       "logical_optical_offset": [
         0,
@@ -1365,12 +1365,26 @@
       "logical_alpha_limit_radius": 6.6,
       "master_size": 1024,
       "svg_viewport": [
-        128,
-        128,
-        896,
-        896
+        162.56,
+        162.56,
+        861.44,
+        861.44
       ],
-      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        3.859375,
+        2.953125,
+        12.15625,
+        13.0625
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ],
+      "source_stroke_width": 2,
+      "render_stroke_width": 2.1978021978021975,
+      "logical_stroke_width": 1,
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
     },
     "webcam": {
       "file": "lucide-webcam.svg",
@@ -1387,13 +1401,13 @@
       "logical_scale": 0.5,
       "logical_visible_ink_bounds": [
         3.5,
-        2.5,
+        2.75,
         12.5,
-        13.5
+        13.75
       ],
       "logical_optical_offset": [
         0,
-        0
+        0.25
       ],
       "logical_alpha_limit_radius": 6.6,
       "master_size": 1024,
@@ -1406,9 +1420,9 @@
       "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"
     },
     "health": {
-      "file": "lucide-heart.svg",
-      "sha256": "5822440c5dd334ead1855bc676cdccda748cf61a914083a94339cecd4c88a400",
-      "url": "https://unpkg.com/lucide-static@1.17.0/icons/heart.svg",
+      "file": "lucide-heart-pulse.svg",
+      "sha256": "b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg",
       "tool": "tools/make_health_artwork.py",
       "view_box": [
         0,
@@ -1420,13 +1434,13 @@
       "logical_scale": 0.5,
       "logical_visible_ink_bounds": [
         2.5,
-        3.234375,
+        3.484375,
         13.5,
-        12.75
+        13.0
       ],
       "logical_optical_offset": [
         0,
-        0
+        0.25
       ],
       "logical_alpha_limit_radius": 6.6,
       "master_size": 1024,
@@ -1460,36 +1474,40 @@
         24
       ],
       "stroke_width": 2,
-      "logical_scale": 0.5,
+      "logical_scale": 0.45,
       "logical_visible_ink_bounds": [
-        3.0,
-        2.75,
-        13.0,
-        13.25
+        3.4375,
+        2.96875,
+        12.546875,
+        12.53125
       ],
       "logical_optical_offset": [
         0,
-        0
+        -0.25
       ],
       "logical_alpha_limit_radius": 6.6,
       "master_size": 1024,
       "svg_viewport": [
-        128,
-        128,
-        896,
-        896
+        166.39999999999998,
+        166.39999999999998,
+        857.6,
+        857.6
       ],
       "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
       "logical_uncentered_ink_bounds": [
-        3.0,
-        2.5,
-        13.0,
-        13.0
+        3.4375,
+        2.984375,
+        12.546875,
+        12.546875
       ],
       "logical_geometric_centering_translation": [
         0.0,
-        0.25
-      ]
+        0.234375
+      ],
+      "source_stroke_width": 2,
+      "render_stroke_width": 2.2222222222222223,
+      "logical_stroke_width": 1,
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
     },
     "watch": {
       "file": "lucide-watch.svg",
@@ -1589,40 +1607,40 @@
         24
       ],
       "stroke_width": 2,
-      "logical_scale": 0.48,
+      "logical_scale": 0.43,
       "logical_visible_ink_bounds": [
-        2.6875,
-        3.171875,
-        13.296875,
-        12.8125
+        3.203125,
+        3.875,
+        12.8125,
+        12.625
       ],
       "logical_optical_offset": [
         0,
-        0
+        0.25
       ],
       "logical_alpha_limit_radius": 6.6,
       "master_size": 1024,
       "svg_viewport": [
-        143.36,
-        143.36,
-        880.64,
-        880.64
+        181.76,
+        181.76,
+        842.24,
+        842.24
       ],
       "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
       "logical_uncentered_ink_bounds": [
-        2.6875,
-        3.171875,
-        13.296875,
-        12.8125
+        3.203125,
+        3.625,
+        12.8125,
+        12.375
       ],
       "logical_geometric_centering_translation": [
         0.0,
         0.0
       ],
       "source_stroke_width": 2,
-      "render_stroke_width": 2.0833333333333335,
+      "render_stroke_width": 2.3255813953488373,
       "logical_stroke_width": 1,
-      "fit_reason": "Fit full rounded TV corner ink inside the 6.6-logical-pixel glyph region"
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
     }
   }
 }
