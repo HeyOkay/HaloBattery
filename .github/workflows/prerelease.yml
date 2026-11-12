@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   TAG: prerelease-build
@@ -24,17 +24,19 @@ env:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write # replace the rolling pre-release
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt pyinstaller
+        run: python -m pip install --require-hashes -r requirements-build.txt
 
       - name: Unit tests
         run: python -m unittest discover -s tests
@@ -63,6 +65,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "SETUP=dist/HaloBattery-$ver-pre-$sha-setup.exe" >> $env:GITHUB_ENV
           "SHORT=$sha" >> $env:GITHUB_ENV
+          $lines = foreach ($f in @($zip, "dist/HaloBattery-$ver-pre-$sha-setup.exe")) { "{0} *{1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
+          $lines | Out-File -Encoding ascii SHA256SUMS.txt
           @"
           **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. It is rebuilt on every merge.
 
@@ -78,5 +82,5 @@ jobs:
         run: |
           gh release delete "$TAG" --cleanup-tag --yes || true
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
-          gh release create "$TAG" "$ZIP" "$SETUP" --prerelease --target "$GITHUB_SHA" \
+          gh release create "$TAG" "$ZIP" "$SETUP" SHA256SUMS.txt --prerelease --target "$GITHUB_SHA" \
             --title "Pre-release build ($SHORT)" --notes-file notes.md
