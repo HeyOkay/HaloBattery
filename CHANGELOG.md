@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-12
+
+First combined upstream release after the community fork. Includes six interface
+languages and expanded device support from community 1.16.0, plus the additions
+and fixes in this section.
+Development and future updates use `HeyOkay/HaloBattery`. Existing community-fork
+installations need a manual install of the upstream build to change their update
+source; their settings and battery history remain compatible.
+
 ### Added
 
 - **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
@@ -17,17 +26,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
   confirmed on hardware on an E1 Wireless over its receiver (other models and
   the cabled path are untested).
-
-## [1.17.0] - 2026-11-12
-
-First combined upstream release after the community fork. Includes six interface
-languages and expanded device support from community 1.16.0, plus the additions
-and fixes in this section.
-Development and future updates use `HeyOkay/HaloBattery`. Existing community-fork
-installations need a manual install of the upstream build to change their update
-source; their settings and battery history remain compatible.
-
-### Added
 
 - Per-device Lucide Speaker, Webcam, Heart Pulse (health device), House (smart home),
   Watch (smartwatch), TV Minimal (display/TV) and Radar (tag/tracker) pictograms,
