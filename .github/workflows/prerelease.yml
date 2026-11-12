@@ -70,7 +70,7 @@ jobs:
           @"
           **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. It is rebuilt on every merge.
 
-          It has the changes merged since the last stable release that are not yet in ``main``; see the ``[Unreleased]`` section of [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md). It may have bugs. For everyday use, take the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
+          It has the changes merged since the last stable release that are not yet in ``main``; see [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md). It may have bugs. For everyday use, take the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
 
           It still calls itself v$ver, so please write **pre-release $sha** in any bug report.
           "@ | Out-File -Encoding utf8 notes.md
