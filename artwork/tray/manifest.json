@@ -1,0 +1,1646 @@
+{
+  "format": 1,
+  "atlas": "masks.png",
+  "atlas_mode": "L",
+  "logical_icon_size": 16,
+  "description": "Glyph-only sources for halo/icon_artwork.py. No ring, battery arc or device state. Monochrome masks retain the cleaned handoff placement; color masters preserve the accepted optical placement for their taskbar contrast.",
+  "sources": {
+    "lucide": {
+      "name": "lucide-static 1.17.0",
+      "url": "https://unpkg.com/lucide-static@1.17.0/",
+      "license": "../../docs/licenses/lucide-1.17.0-LICENSE.txt",
+      "glyphs": {
+        "headset": "headphones",
+        "mouse": "mouse",
+        "keyboard": "keyboard",
+        "gamepad": "gamepad-2",
+        "bluetooth": "bluetooth",
+        "microphone": "mic",
+        "speaker": "speaker",
+        "webcam": "webcam",
+        "health": "heart-pulse",
+        "smart_home": "house",
+        "watch": "watch",
+        "tracker": "radar",
+        "display": "tv-minimal"
+      }
+    },
+    "simple_icons": {
+      "name": "Simple Icons 9.0.0",
+      "url": "https://github.com/simple-icons/simple-icons/tree/9.0.0",
+      "license": "../../docs/licenses/simple-icons-9.0.0-LICENSE.md"
+    },
+    "playstation_classic": {
+      "name": "Sony / Manabu Sakamoto classic PlayStation logo",
+      "url": "https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg",
+      "notice": "Public-domain text-logo artwork; trademark rights remain with the owner. See ../../docs/credits.md."
+    }
+  },
+  "masks": [
+    {
+      "name": "headset",
+      "size": 16,
+      "box": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 20,
+      "box": [
+        16,
+        0,
+        36,
+        20
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 24,
+      "box": [
+        36,
+        0,
+        60,
+        24
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 32,
+      "box": [
+        60,
+        0,
+        92,
+        32
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 40,
+      "box": [
+        92,
+        0,
+        132,
+        40
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 48,
+      "box": [
+        132,
+        0,
+        180,
+        48
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "headset",
+      "size": 64,
+      "box": [
+        180,
+        0,
+        244,
+        64
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 16,
+      "box": [
+        0,
+        64,
+        16,
+        80
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 20,
+      "box": [
+        16,
+        64,
+        36,
+        84
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 24,
+      "box": [
+        36,
+        64,
+        60,
+        88
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 32,
+      "box": [
+        60,
+        64,
+        92,
+        96
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 40,
+      "box": [
+        92,
+        64,
+        132,
+        104
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 48,
+      "box": [
+        132,
+        64,
+        180,
+        112
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "mouse",
+      "size": 64,
+      "box": [
+        180,
+        64,
+        244,
+        128
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 16,
+      "box": [
+        0,
+        128,
+        16,
+        144
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 20,
+      "box": [
+        16,
+        128,
+        36,
+        148
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 24,
+      "box": [
+        36,
+        128,
+        60,
+        152
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 32,
+      "box": [
+        60,
+        128,
+        92,
+        160
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 40,
+      "box": [
+        92,
+        128,
+        132,
+        168
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 48,
+      "box": [
+        132,
+        128,
+        180,
+        176
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "size": 64,
+      "box": [
+        180,
+        128,
+        244,
+        192
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 16,
+      "box": [
+        0,
+        192,
+        16,
+        208
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 20,
+      "box": [
+        16,
+        192,
+        36,
+        212
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 24,
+      "box": [
+        36,
+        192,
+        60,
+        216
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 32,
+      "box": [
+        60,
+        192,
+        92,
+        224
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 40,
+      "box": [
+        92,
+        192,
+        132,
+        232
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 48,
+      "box": [
+        132,
+        192,
+        180,
+        240
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gamepad",
+      "size": 64,
+      "box": [
+        180,
+        192,
+        244,
+        256
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 16,
+      "box": [
+        0,
+        256,
+        16,
+        272
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 20,
+      "box": [
+        16,
+        256,
+        36,
+        276
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 24,
+      "box": [
+        36,
+        256,
+        60,
+        280
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 32,
+      "box": [
+        60,
+        256,
+        92,
+        288
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 40,
+      "box": [
+        92,
+        256,
+        132,
+        296
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 48,
+      "box": [
+        132,
+        256,
+        180,
+        304
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "bluetooth",
+      "size": 64,
+      "box": [
+        180,
+        256,
+        244,
+        320
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "xbox",
+      "size": 16,
+      "box": [
+        0,
+        320,
+        16,
+        336
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 20,
+      "box": [
+        16,
+        320,
+        36,
+        340
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 24,
+      "box": [
+        36,
+        320,
+        60,
+        344
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 32,
+      "box": [
+        60,
+        320,
+        92,
+        352
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 40,
+      "box": [
+        92,
+        320,
+        132,
+        360
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 48,
+      "box": [
+        132,
+        320,
+        180,
+        368
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "xbox",
+      "size": 64,
+      "box": [
+        180,
+        320,
+        244,
+        384
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 16,
+      "box": [
+        0,
+        384,
+        16,
+        400
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 20,
+      "box": [
+        16,
+        384,
+        36,
+        404
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 24,
+      "box": [
+        36,
+        384,
+        60,
+        408
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 32,
+      "box": [
+        60,
+        384,
+        92,
+        416
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 40,
+      "box": [
+        92,
+        384,
+        132,
+        424
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 48,
+      "box": [
+        132,
+        384,
+        180,
+        432
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "playstation",
+      "size": 64,
+      "box": [
+        180,
+        384,
+        244,
+        448
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 16,
+      "box": [
+        0,
+        448,
+        16,
+        464
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 20,
+      "box": [
+        16,
+        448,
+        36,
+        468
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 24,
+      "box": [
+        36,
+        448,
+        60,
+        472
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 32,
+      "box": [
+        60,
+        448,
+        92,
+        480
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 40,
+      "box": [
+        92,
+        448,
+        132,
+        488
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 48,
+      "box": [
+        132,
+        448,
+        180,
+        496
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "nintendo",
+      "size": 64,
+      "box": [
+        180,
+        448,
+        244,
+        512
+      ],
+      "source": "simple_icons"
+    },
+    {
+      "name": "microphone",
+      "size": 16,
+      "box": [
+        0,
+        512,
+        16,
+        528
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 20,
+      "box": [
+        16,
+        512,
+        36,
+        532
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 24,
+      "box": [
+        36,
+        512,
+        60,
+        536
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 32,
+      "box": [
+        60,
+        512,
+        92,
+        544
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 40,
+      "box": [
+        92,
+        512,
+        132,
+        552
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 48,
+      "box": [
+        132,
+        512,
+        180,
+        560
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "microphone",
+      "size": 64,
+      "box": [
+        180,
+        512,
+        244,
+        576
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 16,
+      "box": [
+        0,
+        576,
+        16,
+        592
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 20,
+      "box": [
+        16,
+        576,
+        36,
+        596
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 24,
+      "box": [
+        36,
+        576,
+        60,
+        600
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 32,
+      "box": [
+        60,
+        576,
+        92,
+        608
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 40,
+      "box": [
+        92,
+        576,
+        132,
+        616
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 48,
+      "box": [
+        132,
+        576,
+        180,
+        624
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "speaker",
+      "size": 64,
+      "box": [
+        180,
+        576,
+        244,
+        640
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 16,
+      "box": [
+        0,
+        640,
+        16,
+        656
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 20,
+      "box": [
+        16,
+        640,
+        36,
+        660
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 24,
+      "box": [
+        36,
+        640,
+        60,
+        664
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 32,
+      "box": [
+        60,
+        640,
+        92,
+        672
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 40,
+      "box": [
+        92,
+        640,
+        132,
+        680
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 48,
+      "box": [
+        132,
+        640,
+        180,
+        688
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "webcam",
+      "size": 64,
+      "box": [
+        180,
+        640,
+        244,
+        704
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 16,
+      "box": [
+        0,
+        704,
+        16,
+        720
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 20,
+      "box": [
+        16,
+        704,
+        36,
+        724
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 24,
+      "box": [
+        36,
+        704,
+        60,
+        728
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 32,
+      "box": [
+        60,
+        704,
+        92,
+        736
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 40,
+      "box": [
+        92,
+        704,
+        132,
+        744
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 48,
+      "box": [
+        132,
+        704,
+        180,
+        752
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "health",
+      "size": 64,
+      "box": [
+        180,
+        704,
+        244,
+        768
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 16,
+      "box": [
+        0,
+        768,
+        16,
+        784
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 20,
+      "box": [
+        16,
+        768,
+        36,
+        788
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 24,
+      "box": [
+        36,
+        768,
+        60,
+        792
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 32,
+      "box": [
+        60,
+        768,
+        92,
+        800
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 40,
+      "box": [
+        92,
+        768,
+        132,
+        808
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 48,
+      "box": [
+        132,
+        768,
+        180,
+        816
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "smart_home",
+      "size": 64,
+      "box": [
+        180,
+        768,
+        244,
+        832
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 16,
+      "box": [
+        0,
+        832,
+        16,
+        848
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 20,
+      "box": [
+        16,
+        832,
+        36,
+        852
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 24,
+      "box": [
+        36,
+        832,
+        60,
+        856
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 32,
+      "box": [
+        60,
+        832,
+        92,
+        864
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 40,
+      "box": [
+        92,
+        832,
+        132,
+        872
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 48,
+      "box": [
+        132,
+        832,
+        180,
+        880
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "watch",
+      "size": 64,
+      "box": [
+        180,
+        832,
+        244,
+        896
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 16,
+      "box": [
+        0,
+        896,
+        16,
+        912
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 20,
+      "box": [
+        16,
+        896,
+        36,
+        916
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 24,
+      "box": [
+        36,
+        896,
+        60,
+        920
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 32,
+      "box": [
+        60,
+        896,
+        92,
+        928
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 40,
+      "box": [
+        92,
+        896,
+        132,
+        936
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 48,
+      "box": [
+        132,
+        896,
+        180,
+        944
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "tracker",
+      "size": 64,
+      "box": [
+        180,
+        896,
+        244,
+        960
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 16,
+      "box": [
+        0,
+        960,
+        16,
+        976
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 20,
+      "box": [
+        16,
+        960,
+        36,
+        980
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 24,
+      "box": [
+        36,
+        960,
+        60,
+        984
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 32,
+      "box": [
+        60,
+        960,
+        92,
+        992
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 40,
+      "box": [
+        92,
+        960,
+        132,
+        1000
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 48,
+      "box": [
+        132,
+        960,
+        180,
+        1008
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "display",
+      "size": 64,
+      "box": [
+        180,
+        960,
+        244,
+        1024
+      ],
+      "source": "lucide"
+    }
+  ],
+  "color_masters": [
+    {
+      "name": "xbox-color",
+      "size": 256,
+      "file": "xbox-color.png",
+      "source": "simple_icons",
+      "optical_offset_logical_px": [
+        0,
+        0
+      ],
+      "optical_offset_already_applied": true
+    },
+    {
+      "name": "xbox-color-dark",
+      "size": 256,
+      "file": "xbox-color-dark.png",
+      "source": "simple_icons",
+      "optical_offset_logical_px": [
+        -0.375,
+        0.125
+      ],
+      "optical_offset_already_applied": true
+    },
+    {
+      "name": "playstation-color",
+      "size": 256,
+      "file": "playstation-color.png",
+      "source": "playstation_classic",
+      "optical_offset_logical_px": [
+        0,
+        0
+      ],
+      "optical_offset_already_applied": true
+    }
+  ],
+  "svg_generation": {
+    "microphone": {
+      "file": "lucide-mic.svg",
+      "sha256": "05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/mic.svg",
+      "tool": "tools/make_microphone_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        4,
+        2.5,
+        12,
+        13.5
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"
+    },
+    "speaker": {
+      "file": "lucide-speaker.svg",
+      "sha256": "a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg",
+      "tool": "tools/make_speaker_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.455,
+      "logical_visible_ink_bounds": [
+        3.859375,
+        2.953125,
+        12.15625,
+        13.0625
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        162.56,
+        162.56,
+        861.44,
+        861.44
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        3.859375,
+        2.953125,
+        12.15625,
+        13.0625
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ],
+      "source_stroke_width": 2,
+      "render_stroke_width": 2.1978021978021975,
+      "logical_stroke_width": 1,
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
+    },
+    "webcam": {
+      "file": "lucide-webcam.svg",
+      "sha256": "5301b9ff75048743f5436594c0c7ce1fada1653620b1c9f6f34fa3c667b09b60",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg",
+      "tool": "tools/make_webcam_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        3.5,
+        2.75,
+        12.5,
+        13.75
+      ],
+      "logical_optical_offset": [
+        0,
+        0.25
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks"
+    },
+    "health": {
+      "file": "lucide-heart-pulse.svg",
+      "sha256": "b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg",
+      "tool": "tools/make_health_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        2.5,
+        3.484375,
+        13.5,
+        13.0
+      ],
+      "logical_optical_offset": [
+        0,
+        0.25
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        2.5,
+        3.484375,
+        13.5,
+        13.0
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        -0.25
+      ]
+    },
+    "smart_home": {
+      "file": "lucide-house.svg",
+      "sha256": "b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/house.svg",
+      "tool": "tools/make_smart_home_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.45,
+      "logical_visible_ink_bounds": [
+        3.4375,
+        2.96875,
+        12.546875,
+        12.53125
+      ],
+      "logical_optical_offset": [
+        0,
+        -0.25
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        166.39999999999998,
+        166.39999999999998,
+        857.6,
+        857.6
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        3.4375,
+        2.984375,
+        12.546875,
+        12.546875
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.234375
+      ],
+      "source_stroke_width": 2,
+      "render_stroke_width": 2.2222222222222223,
+      "logical_stroke_width": 1,
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
+    },
+    "watch": {
+      "file": "lucide-watch.svg",
+      "sha256": "896fb08ab4056a89f174aec886d54fb9501aa157d998bc94069286a3717fe6ae",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/watch.svg",
+      "tool": "tools/make_watch_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        4.5,
+        2.5,
+        11.5,
+        13.484375
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        4.5,
+        2.5,
+        11.5,
+        13.484375
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ]
+    },
+    "tracker": {
+      "file": "lucide-radar.svg",
+      "sha256": "6092285ad2f49aecbd4521a31ac0ad3a17fa75a2406f5d98b8695df0205e0c13",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/radar.svg",
+      "tool": "tools/make_tracker_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        2.484375,
+        2.5,
+        13.515625,
+        13.515625
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        2.484375,
+        2.5,
+        13.515625,
+        13.515625
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ]
+    },
+    "display": {
+      "file": "lucide-tv-minimal.svg",
+      "sha256": "fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/tv-minimal.svg",
+      "tool": "tools/make_display_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.43,
+      "logical_visible_ink_bounds": [
+        3.203125,
+        3.875,
+        12.8125,
+        12.625
+      ],
+      "logical_optical_offset": [
+        0,
+        0.25
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        181.76,
+        181.76,
+        842.24,
+        842.24
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        3.203125,
+        3.625,
+        12.8125,
+        12.375
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ],
+      "source_stroke_width": 2,
+      "render_stroke_width": 2.3255813953488373,
+      "logical_stroke_width": 1,
+      "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
+    }
+  }
+}

@@ -1,13 +1,12 @@
 """Tray icon rendering: a battery ring with a device pictogram in the middle.
 
 The ring fills clockwise from the top; underneath it there is a dim "track".
-The centre shows the device silhouette: headset, mouse, the Bluetooth rune, or a
-gamepad drawn per family - an Xbox pad or a PlayStation DualShock 4 (touchpad and
-symmetric sticks).
+The centre uses offline Lucide glyphs. Controller logos are chosen explicitly;
+existing controller kind aliases keep the generic gamepad until a brand is chosen.
 Colours follow the system battery icon: normal charge uses the taskbar colour
 (white on a dark taskbar, black on a light one), close to the threshold it is
-amber, at or below the threshold it is red, and while charging the arc is
-green and slowly "breathes" in brightness.
+amber, at or below the threshold it is red. Known-level charging slowly
+"breathes" in green; unknown-level charging rotates a steady green arc.
 Asleep / no link: the icon is translucent and has no arc.
 """
 from __future__ import annotations
@@ -18,6 +17,8 @@ import sys
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageStat
+
+from . import icon_artwork
 
 SIZE = 64
 SS = 4                      # supersampling for smooth edges
@@ -33,8 +34,14 @@ KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "k
          "C": "microphone",
          "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
          "keyboard": "keyboard", "microphone": "microphone", "mic": "microphone",
+         "speaker": "speaker", "webcam": "webcam", "health": "health",
+         "smart_home": "smart_home",
+         "watch": "watch", "display": "display", "tracker": "tracker",
          "dualshock": "dualshock", "dualsense": "dualsense",
          "ps4": "dualshock", "ps5": "dualsense", "xbox": "gamepad"}
+
+# Canonical IDs for device choices; renderer aliases do not become saved choices.
+PICTOGRAM_KINDS = frozenset(KINDS.values())
 
 
 def taskbar_is_light() -> bool:
@@ -267,11 +274,18 @@ def _number(d: ImageDraw.ImageDraw, text: str, col) -> None:
 # ---------------------------------------------------------------- icon
 def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            light_taskbar: Optional[bool] = None, badge: str = "",
-           pulse: float = 1.0, text: str = "", force_active: bool = False) -> Image.Image:
+           pulse: float = 1.0, text: str = "", force_active: bool = False, *,
+           size: int = SIZE, brand: str = "default", brand_color: bool = False,
+           animation_phase: float = 0.0) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
-    pulse - arc brightness 0..1 (a frame of the charging "breathing" animation).
+    pulse - known-level arc brightness 0..1 (the charging "breathing" animation).
+    animation_phase - clockwise turn 0..1 for unknown charging; its brightness is steady.
     text - drawn in the centre instead of the pictogram (the battery percentage); red or
-    amber like the arc when the level is low, the taskbar colour otherwise."""
+    amber like the arc when the level is low, the taskbar colour otherwise.
+    size is the physical output width/height; the legacy default stays 64.
+    brand / brand_color affect controller glyphs only, never their semantic kind."""
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise ValueError("icon size must be a positive integer")
     if light_taskbar is None:
         light_taskbar = taskbar_is_light()
     fg = (0, 0, 0) if light_taskbar else (255, 255, 255)
@@ -281,7 +295,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    R, w = 31.5, 6.5
+    R, w = 31.5, 4.0   # one logical pixel at the 16 px tray size
     box = (_r(32 - R), _r(32 - R), _r(32 + R), _r(32 + R))
 
     # ring track
@@ -292,9 +306,22 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
         c = arc_color(level, charging, low, fg) + (int(255 * max(0.0, min(1.0, pulse))),)
         lvl = max(0, min(100, level)) if level is not None else None
         if lvl is None:
-            # Charging is known, but the level is not: no percentage-sized arc.
-            for start in range(-90, 270, 45):
-                d.arc(box, start, start + 30, fill=c, width=_r(w))
+            if charging:
+                # This indicates activity, never a made-up battery percentage.
+                # Keep the neutral track and glyph steady as one quarter-arc turns.
+                c = GREEN + (255,)
+                start = -90 + 360 * (animation_phase % 1.0)
+                end = start + 90
+                d.arc(box, start, end, fill=c, width=_r(w))
+                rr = R - w / 2
+                for ang in (start, end):
+                    t = math.radians(ang)
+                    x, y = 32 + rr * math.cos(t), 32 + rr * math.sin(t)
+                    d.ellipse((_r(x - w / 2), _r(y - w / 2), _r(x + w / 2), _r(y + w / 2)), fill=c)
+            else:
+                # Preserve the paused, unknown-level indicator.
+                for start in range(-90, 270, 45):
+                    d.arc(box, start, start + 30, fill=c, width=_r(w))
         elif lvl >= 100:
             d.ellipse(box, outline=c, width=_r(w))
         elif lvl > 0:
@@ -311,15 +338,15 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if text:
         col = arc_color(level, False, low, fg) if active else fg
         _number(d, text, col + (alpha,))
-    elif kind:
-        fn, dx, dy, s = PICTOS[kind]
-        fn(d, 32 + dx, 32 + dy, s, fg + (alpha,))
-
-    return img.resize((SIZE, SIZE), Image.LANCZOS)
+    img = img.resize((size, size), Image.Resampling.LANCZOS)
+    if kind and not text:
+        img = Image.alpha_composite(img, icon_artwork.glyph(
+            kind, size, fg, alpha, brand, brand_color))
+    return img
 
 
 # ---------------------------------------------------------------- charging animation
-BREATH_FRAMES = 30          # frames per cycle
+BREATH_FRAMES = 90          # 30 frames per second over the three-second cycle
 BREATH_PERIOD = 3.0         # seconds per cycle
 BREATH_DEPTH = 0.88         # at the bottom of the cycle the arc dims to 12%
 
@@ -331,10 +358,12 @@ def breath_level(phase: float) -> float:
 
 
 def charging_frames(level: Optional[int], online: bool, low: int = 20,
-                    light_taskbar: Optional[bool] = None, badge: str = "", text: str = ""):
-    """All "breathing" frames for the current state (rendered once and cached)."""
+                    light_taskbar: Optional[bool] = None, badge: str = "", text: str = "", *,
+                    size: int = SIZE, brand: str = "default", brand_color: bool = False):
+    """A breathing known-level arc or rotating unknown-level arc, cached as one cycle."""
     return [render(level, True, online, low, light_taskbar, badge, breath_level(i / BREATH_FRAMES),
-                   text=text)
+                   text=text, size=size, brand=brand, brand_color=brand_color,
+                   animation_phase=i / BREATH_FRAMES if level is None else 0.0)
             for i in range(BREATH_FRAMES)]
 
 

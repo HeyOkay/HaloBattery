@@ -16,6 +16,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -293,6 +294,8 @@ class CenturionTest(unittest.TestCase):
         self.assertEqual(self.poll(rx), [])
         self.assertIn("error", " ".join(self.provider.diagnostics()))
 
+    # Retain the hypothetical protocol fixture independently of stable policy.
+    @mock.patch.object(L, "ENABLED_PIDS", frozenset(L.PIDS))
     def test_the_pro_x_3_is_read_the_same_way(self):
         rx = Receiver(self.clock, level=64, state=2)
         res = self.poll(rx, issue_103_entries(0x0B45))

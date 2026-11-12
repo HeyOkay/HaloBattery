@@ -41,6 +41,13 @@ The routed exchange the Dark Core row describes, framed on report `0x02`: the re
 
 ### Endgame Gear XM2w 4K, OP1w 4K (4K dongle)
 
+**Disabled in 1.17.0:** the provider does not open the 4K dongle. Owner tests in
+[#321](https://github.com/HeyOkay/HaloBattery/issues/321) and
+[#324](https://github.com/HeyOkay/HaloBattery/issues/324) reject the historical
+XM2we-derived exchange below with `short send (-1)`. The separate correction has a
+later detection-loss report ([public status](https://github.com/nqble/HaloBattery/blob/main/docs/endgame/4k-status.md));
+it is not included here. Confirmed XM2we support uses its separate provider.
+
 **Connection:** the 4K dongle, "Endgame Gear HS Dongle" (`3367:1970`)
 
 One dongle id serves several mice - the XM2w 4K, the OP1w 4K and their v2 revisions - and the adapter itself stays neutral; the vendor software resolves which mouse is behind it. The exchange is the family's 17-byte frame, documented for the XM2we by okms/xm2we-linux and by Janlhin/Endgame_Gear_Web_Configurator: a feature report `0x08` carrying `<opcode> 00 ...` with a `0x55 - sum` checksum, answered by an input report `0x09` whose data starts at byte 6 and whose bytes sum to `0x55`. Battery is opcode `0x04` - `data[0]` the percentage, `data[1]` the charging flag - and it is read before the link state because plugging the cable drops the link for a moment while the level stays valid. The dongle's two collections are paired by the receiver part of their HID paths: the feature collection is `ff02:0002`, the replies arrive on an `ff01` collection. Only the two documented status reads are built; nothing is written to the mouse. **Unverified** on this dongle - the frame is the XM2we's, and a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
@@ -87,7 +94,11 @@ The receiver exposes one vendor collection, `ff13:0001` (interface 5 on a real u
 
 Not HID++ on ff43: Logitech's "Centurion" transport on the vendor collection `ffa0:0001`, report 0x51. The app lists the receiver's features, reaches the headset through the receiver's bridge feature (0x0003), lists the headset's features and reads its battery feature 0x0104 (percent, charging state), all with read-only functions. From Solaar (tested on this headset) and HeadsetControl; firmware without 0x0104 gets HeadsetControl's fixed request. Confirmed on hardware in #103 (75 %, level and charging equal to G HUB)
 
-The PRO X 3 LIGHTSPEED (`046D:0B45`) lists the same three collections on the same interface in a reporter's diagnostics, so it is read the same way. **Unverified** - no PRO X 3 was on hand; a test build for [#343](https://github.com/HeyOkay/HaloBattery/issues/343) is out.
+The PRO X 3 LIGHTSPEED (`046D:0B45`) was tried with the PRO X 2 exchange because
+its collections match. Hardware tests in [#343](https://github.com/HeyOkay/HaloBattery/issues/343)
+report no reply even to discovery, so collection layout does not establish compatibility.
+**Disabled in 1.17.0:** this PID is excluded before opening HID, pending a receiver
+protocol source/capture. Confirmed PRO X 2 (`046D:0AF7`) remains enabled.
 ### Plantronics Voyager 8200 UC (BT600 adapter)
 
 **Connection:** the headset's Bluetooth link through the BT600 USB adapter (`047f:02ee`, `047f:02f7`)
@@ -580,3 +591,29 @@ tool, charging became true with USB power connected and false after unplugging.
 While charging, link returned 0 but the valid charging flag kept the device online.
 Verification used the provider probe; the complete tray application has not yet
 been tested with this provider.
+
+## 1.17.0 release exclusions and confirmations
+
+The AJAZZ alternate targets `3151:402d` (AJ159 PRO) and `3151:5031` (Kysona Uranus)
+are disabled by the provider's release allowlist before opening a HID device. The
+AJ179-derived command `0x10` is retained only for protocol tests and further review:
+[#289](https://github.com/HeyOkay/HaloBattery/issues/289) still reports no link,
+and [#251](https://github.com/HeyOkay/HaloBattery/issues/251) has no confirmation.
+The captured, confirmed AJ179 V2 MAX exchange is unchanged.
+
+Turtle Beach Stealth 600X Gen 3 (`10f5:2232`, [#239](https://github.com/HeyOkay/HaloBattery/issues/239))
+is excluded from the enabled PID allowlist until its exchange is confirmed. The
+SInf/GSI and CoAP protocol tests remain; they do not establish that this model accepts
+either exchange. Stealth Pro II and Stealth 700 Gen 3 remain enabled. Atlas Air
+(`10f5:225e`) also remains enabled: [Vetrices confirmed](https://github.com/HeyOkay/HaloBattery/issues/310#issuecomment-6741190943)
+the test build's level matches Swarm II, charging follows the cable, and the level
+updates after unplugging. This confirmation applies to Atlas Air, not Stealth 600X.
+
+Sony INZONE H9 II (`054c:0fa8`, [#294](https://github.com/HeyOkay/HaloBattery/issues/294))
+is excluded before opening its serial port: compatibility with the H9 initialization
+frames has not been confirmed. The sourced H9 (`054c:0e53`) exchange remains enabled.
+Lamzu Tachi (`37b0:000c`, [#262](https://github.com/HeyOkay/HaloBattery/issues/262))
+is excluded before opening HID: collection layout alone was the evidence for trying
+the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
+providers are unchanged. These two exclusions resolve the historical fork #30 and
+Lamzu half of #34 release holds; their protocol tests remain for further development.
