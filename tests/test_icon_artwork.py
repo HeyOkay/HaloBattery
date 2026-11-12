@@ -196,7 +196,8 @@ class ArtworkTests(unittest.TestCase):
                                 badge=badge, size=size, brand=brand, brand_color=color)
                         self.assertEqual(len(layers), icons.BREATH_FRAMES)
                         expected = real_glyph(icons.KINDS[badge], size,
-                            (0, 0, 0) if light else (255, 255, 255), 255, brand, color)
+                            (0, 0, 0) if light else (255, 255, 255), 255, brand, color,
+                            foreground_opacity=icons.NEUTRAL_OPACITY)
                         self.assertEqual(set(layers), {expected.tobytes()})
                         box = (math.ceil(size * .31),) * 2 + (math.floor(size * .69),) * 2
                         self.assertEqual(len({frame.crop(box).tobytes() for frame in frames}), 1)

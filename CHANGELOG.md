@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
+  coverage at small DPI sizes while preserving glyph placement and brand colors.
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface

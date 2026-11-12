@@ -1476,7 +1476,8 @@ def _image(name, size):
     return result
 
 
-def glyph(kind, size, foreground, alpha, brand="default", colored=False):
+def glyph(kind, size, foreground, alpha, brand="default", colored=False, *,
+          foreground_opacity=255):
     """An independently colored glyph layer; every call returns an owned image."""
     controller = kind in ("gamepad", "dualshock", "dualsense")
     name = brand if controller and brand in ("xbox", "playstation", "nintendo") else kind
@@ -1495,6 +1496,9 @@ def glyph(kind, size, foreground, alpha, brand="default", colored=False):
     color = foreground
     if controller and colored and name == "nintendo":
         color = (230, 0, 18)
+    else:
+        # Preserve source coverage/placement and full-opacity brand colors.
+        alpha = round(alpha * foreground_opacity / 255)
     image = Image.new("RGBA", (size, size), color+(0,))
     image.putalpha(mask.point(lambda v: round(v*alpha/255)))
     return image
