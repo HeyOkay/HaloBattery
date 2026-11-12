@@ -5,3 +5,10 @@
 
 # Preserve the checksum of the pinned Lucide SVG on Windows.
 /artwork/tray/lucide-mic.svg text eol=lf
+/artwork/tray/lucide-speaker.svg text eol=lf
+/artwork/tray/lucide-webcam.svg text eol=lf
+/artwork/tray/lucide-heart.svg text eol=lf
+/artwork/tray/lucide-house.svg text eol=lf
+/artwork/tray/lucide-watch.svg text eol=lf
+/artwork/tray/lucide-tv-minimal.svg text eol=lf
+/artwork/tray/lucide-radar.svg text eol=lf

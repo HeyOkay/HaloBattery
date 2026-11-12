@@ -58,7 +58,7 @@ class ArtworkTests(unittest.TestCase):
 
     def test_glyph_only_masks_exclude_track_and_demo_arcs(self):
         for size in (16,20,24,32,40,48,64):
-            for name in ("headset","mouse","keyboard","microphone","gamepad","bluetooth","xbox","playstation","nintendo"):
+            for name in ("headset","mouse","keyboard","microphone","speaker","webcam","health","smart_home","watch","display","tracker","gamepad","bluetooth","xbox","playstation","nintendo"):
                 mask=icon_artwork._image(name,size)
                 self.assertEqual(mask.mode,"L")
                 for y in range(size):
@@ -178,7 +178,7 @@ class ArtworkTests(unittest.TestCase):
 
     def test_unknown_charging_preserves_every_glyph_layer_and_central_pixels(self):
         styles = [(kind, "default", False) for kind in
-                  ("mouse", "keyboard", "headset", "microphone", "bluetooth", "gamepad")]
+                  ("mouse", "keyboard", "headset", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "bluetooth", "gamepad")]
         styles += [("gamepad", brand, color) for brand in
                    ("xbox", "playstation", "nintendo") for color in (False, True)]
         real_glyph = icon_artwork.glyph

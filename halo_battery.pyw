@@ -817,7 +817,9 @@ MIC_WORDS = ("microphone", " mic", "mic ")
 
 
 def badge_for(st: DeviceStatus) -> str:
-    if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone"):   # from the device
+    if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone",
+                   "speaker", "webcam", "health", "smart_home",
+                   "watch", "display", "tracker"):   # from the device
         return st.kind
     n = st.name.lower()
     if any(w in n for w in MIC_WORDS):
@@ -835,7 +837,9 @@ def badge_for(st: DeviceStatus) -> str:
 
 # the pictograms a user can pick for one device ("Icon" in its menu); "" = automatic
 PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboard"),
-                     ("microphone", "Microphone"),
+                     ("microphone", "Microphone"), ("speaker", "Speaker"), ("webcam", "Webcam"),
+                     ("health", "Health device"), ("smart_home", "Smart home"),
+                     ("watch", "Smartwatch"), ("display", "Display / TV"), ("tracker", "Tag / Tracker"),
                      ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 CONTROLLER_BRANDS = ("default", "xbox", "playstation", "nintendo")
@@ -1637,13 +1641,15 @@ class App:
     def pictogram(self, st: DeviceStatus) -> str:
         """The pictogram the user picked for this device, or the automatic one."""
         choice = self._settings_map("icons").get(st.key)
-        if isinstance(choice, str) and choice in icons.PICTOS:
+        if isinstance(choice, str) and choice in icons.PICTOGRAM_KINDS:
             return choice
         return badge_for(st)
 
     def set_pictogram(self, owner: Optional[DeviceIcon], value: str) -> None:
         """"Icon" in the device menu: "" goes back to the automatic pictogram."""
         if owner is None or owner.status is None:
+            return
+        if not isinstance(value, str) or (value and value not in icons.PICTOGRAM_KINDS):
             return
         with self.lock:
             chosen = self._settings_map("icons")

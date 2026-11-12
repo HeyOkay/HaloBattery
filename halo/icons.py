@@ -34,8 +34,14 @@ KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "k
          "C": "microphone",
          "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
          "keyboard": "keyboard", "microphone": "microphone", "mic": "microphone",
+         "speaker": "speaker", "webcam": "webcam", "health": "health",
+         "smart_home": "smart_home",
+         "watch": "watch", "display": "display", "tracker": "tracker",
          "dualshock": "dualshock", "dualsense": "dualsense",
          "ps4": "dualshock", "ps5": "dualsense", "xbox": "gamepad"}
+
+# Canonical IDs for device choices; renderer aliases do not become saved choices.
+PICTOGRAM_KINDS = frozenset(KINDS.values())
 
 
 def taskbar_is_light() -> bool:

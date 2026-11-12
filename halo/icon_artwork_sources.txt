@@ -61,3 +61,57 @@ Reproduce: tools/make_microphone_artwork.py, then tools/make_icon_artwork.py.
 Uniform 0.5 logical px per SVG unit; stroke 1 logical px; visible-ink bounds
 [4,2.5,12,13.5], centered at [8,8], no optical shift. Source conversion is a
 development-only headless Chromium step; runtime uses only embedded alpha masks.
+
+Speaker and Webcam: official lucide-static 1.17.0 SVGs (ISC), pinned locally as
+artwork/tray/lucide-speaker.svg and artwork/tray/lucide-webcam.svg.
+https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg
+SHA256: a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3
+https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg
+SHA256: 5301b9ff75048743f5436594c0c7ce1fada1653620b1c9f6f34fa3c667b09b60
+Geometry matches the requested https://icon-sets.iconify.design/lucide/speaker/
+and https://icon-sets.iconify.design/lucide/webcam/ references. Both use uniform
+0.5 logical px per SVG unit, stroke 1 logical px, visible-ink bounds
+[3.5,2.5,12.5,13.5] centered [8,8], zero optical offset and radial limit 6.6.
+Reproduce with tools/make_speaker_artwork.py and tools/make_webcam_artwork.py,
+then tools/make_icon_artwork.py. Shared development-only Chromium conversion;
+no SVG library, network fetch or runtime data file is needed by the app.
+
+Health: official lucide-static 1.17.0 heart.svg (ISC), pinned as
+artwork/tray/lucide-heart.svg, matching https://icon-sets.iconify.design/lucide/heart/.
+https://unpkg.com/lucide-static@1.17.0/icons/heart.svg
+SHA256: 5822440c5dd334ead1855bc676cdccda748cf61a914083a94339cecd4c88a400
+Uniform 0.5 scale; one logical pixel round stroke. The SVG ink center is near
+source [12.00003,12.49177], so tools/make_health_artwork.py geometrically centers
+measured 1024px alpha bounds on [512,512] once before mask generation. Exact
+measured bounds and translation are in the manifest. No runtime/theme offset.
+
+Smart home: official lucide-static 1.17.0 house.svg (ISC), pinned as
+artwork/tray/lucide-house.svg, matching https://icon-sets.iconify.design/lucide/house/.
+https://unpkg.com/lucide-static@1.17.0/icons/house.svg
+SHA256: b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a
+Uniform scale 0.5, one logical pixel round stroke. Reproduce with
+tools/make_smart_home_artwork.py then tools/make_icon_artwork.py. Source ink is
+geometrically centered once during generation; manifest records measured bounds
+and translation. No runtime/theme offset or extra runtime dependency.
+
+Smartwatch / Display-TV / Tag-Tracker: pinned lucide-static 1.17.0 sources,
+matching requested Iconify Lucide watch, tv-minimal and radar references:
+https://unpkg.com/lucide-static@1.17.0/icons/watch.svg
+SHA256: 896fb08ab4056a89f174aec886d54fb9501aa157d998bc94069286a3717fe6ae
+https://unpkg.com/lucide-static@1.17.0/icons/tv-minimal.svg
+SHA256: fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141
+https://unpkg.com/lucide-static@1.17.0/icons/radar.svg
+SHA256: 6092285ad2f49aecbd4521a31ac0ad3a17fa75a2406f5d98b8695df0205e0c13
+All three are ISC, absent from the pinned LICENSE's Feather-derived MIT list.
+Sources remain byte-identical in artwork/tray/lucide-{watch,tv-minimal,radar}.svg.
+Source ink is geometrically centered once; exact bounds and scaling are recorded
+in the manifest. Watch/Radar use uniform 0.5 scale and one logical pixel stroke.
+Reproduce using tools/make_{watch,display,tracker}_artwork.py, then the embedding
+generator. No runtime SVG, network fetch or new dependency is introduced.
+
+Display path geometry requires a uniform 0.48 source fit: its rounded corner ink
+would reach radius 6.8151 logical px at 0.5, exceeding the shared glyph region.
+Its render-only stroke is normalized to 1/0.48 SVG units (one logical pixel),
+leaving original pinned source stroke2 untouched. Resulting radius is 6.5625;
+all seven size checks remove zero opaque (alpha>=128) pixels at the radial limit.
+This is source fitting, not a runtime translation or theme-specific adjustment.
