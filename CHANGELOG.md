@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the colored Xbox logo centered inside the battery ring on both taskbar
+  themes, and refresh the icon and charging previews with the current renderer.
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
