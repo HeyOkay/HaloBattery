@@ -36,6 +36,11 @@ which agree on everything below except where noted:
     headset is off, and the battery reply is 51 0b ... with byte 8 = 04: byte 10 percent,
     byte 12 = 02 charging.
 
+The PRO X 3 LIGHTSPEED (046D:0B45) lists the same three collections on the same
+interface in a reporter's diagnostics (0xFF13, 0xFFA0 and the consumer page, interface
+3), so it is read the same way. Unverified: no PRO X 3 was on hand. The read is read-only
+either way, and a device that does not answer simply shows nothing.
+
 Every request reads: discovery lists features and the battery request reads the level.
 No function that changes a setting is sent. A level above 100 is refused.
 """
@@ -53,7 +58,11 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 LOGITECH_VID = 0x046D
-PIDS = {0x0AF7: "Logitech G PRO X 2 LIGHTSPEED"}
+PIDS = {0x0AF7: "Logitech G PRO X 2 LIGHTSPEED",
+        0x0B45: "Logitech PRO X 3 LIGHTSPEED"}
+# #343/#298: PRO X 3 does not answer the PRO X 2 exchange; same collections
+# do not establish protocol compatibility. Preserve the PRO X 2 stable path.
+ENABLED_PIDS = frozenset((0x0AF7,))
 USAGE_PAGE, USAGE = 0xFFA0, 0x0001
 
 REPORT_ID = 0x51
@@ -255,6 +264,9 @@ class LogitechCenturionProvider(Provider):
         for d in infos:
             name = PIDS.get(d["product_id"])
             if name is None or (d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE):
+                continue
+            if d["product_id"] not in ENABLED_PIDS:
+                self._diag.append(f"[Logitech] pid={d['product_id']:04x}: release hold; not opening")
                 continue
             key = f"logitech-centurion:{d['product_id']:04x}"
             self._diag.append(f"[Logitech] pid={d['product_id']:04x} '{name}' "

@@ -6,12 +6,248 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-12
+
+First combined upstream release after the community fork. Includes six interface
+languages and expanded device support from community 1.16.0, plus the additions
+and fixes in this section.
+Development and future updates use `HeyOkay/HaloBattery`. Existing community-fork
+installations need a manual install of the upstream build to change their update
+source; their settings and battery history remain compatible.
+
 ### Added
-- **ATK V75X keyboard over its 2.4 GHz dongle and USB cable** (`320F:5088`, `320F:5055`): battery percentage
-  through a dedicated ATK keyboard provider, using ATK HUB's battery-only
-  request. Battery and charging status confirmed on a real receiver, including
-  charging-cable connection and disconnection. The cable answers the same request
-  (confirmed: 91%, charging), shares the dongle's icon and is preferred when both are connected.
+
+- **ATK V75X USB cable** (`320f:5055`): shares the receiver's icon and is preferred
+  when both transports are connected. The PR author confirmed battery and charging
+  on the cable; receiver support was already integrated.
+
+- **BEITONG KP40D** (`20bc:515c`, 2.4 GHz receiver): reads the controller's own battery estimate and charging status through its vendor HID collection, instead of the unusable XInput / Windows battery placeholder. Requires one controller in both XInput and Windows.Gaming.Input and one matching receiver; ambiguous configurations keep the existing XInput fallback.
+
+- **VAXEE wireless mice**: the battery level (in 5 % steps) and charging state
+  over the vendor feature-report protocol, on a VAXEE 4K dongle or on the cable.
+  Invalid battery values are refused instead of displayed as a full charge.
+  Ported from [ryanlewis/mousebatt](https://github.com/ryanlewis/mousebatt), with
+  the battery command from [stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor);
+  confirmed on hardware on an E1 Wireless over its receiver (other models and
+  the cabled path are untested).
+
+- Per-device Lucide Speaker, Webcam, Heart Pulse (health device), House (smart home),
+  Watch (smartwatch), TV Minimal (display/TV) and Radar (tag/tracker) pictograms,
+  available through the Icon menu in all six interface languages. Speaker, House
+  and TV Minimal are fitted to match the existing glyph-to-ring spacing.
+
+- Per-device **Controller logo** selection: Default, Xbox, PlayStation or Nintendo
+  Switch, with optional brand colors and the classic multicolor PlayStation logo.
+  Choices are saved per device; automatic device types and status-file kinds are preserved.
+
+- **ASUS ROG Harpe II Ace / Extreme** on its SPEEDNOVA receiver (`0b05:1ad0`) or cable (`0b05:1c69`): integrate the sourced battery exchange from upstream #364 without replacing existing OMNI/headset support. The PR author confirmed the Ace receiver; cable and Extreme remain unverified.
+- Corsair HS80 RGB Wireless (original): battery level over direct USB
+  (`1b1c:0a69`) or its wireless receiver (`1b1c:0a6b`), sharing one tray icon.
+  Charging is inferred from USB presence; the powered-off charging identity
+  (`1b1c:0a6a`) keeps an unknown-level icon when no battery reading is available.
+  Protocol from [ST1CKEL/HS80_Control PR #2](https://github.com/ST1CKEL/HS80_Control/pull/2).
+- **ASUS ROG Strix Morph 96 Wireless** on the ROG OMNI receiver (`0b05:1ace`, pair id
+  `1cea`) - the same keyboard read as the Azoth and Strix Scope II (battery byte 6), added
+  from the reporter's pair list. Confirmed accurate by @Pikldoornob in
+  [#340](https://github.com/HeyOkay/HaloBattery/issues/340); the separate Maono request remains open.
+- **URX Core75** (`36b0:3002`, 2.4 GHz dongle) - read through its VIA raw HID channel
+  (`ff60:0061`, report id 0, 32-byte packets): custom-channel value 7 answers the battery,
+  `08 00 07 <level>`. The framing comes from URX HUB's own device table and the reply was
+  **confirmed on hardware by @TheLastGamer18** ([#245](https://github.com/HeyOkay/HaloBattery/issues/245)):
+  the app detected the keyboard and the percentage matched URX HUB. A probe run with the
+  charging cable in returned the same bytes, so this board does not expose a charger state -
+  the app shows the level only.
+- Windows installer `HaloBattery-<version>-setup.exe` (Inno Setup, `installer/HaloBattery.iss`), built with every release and pre-release. It installs per user to `%LOCALAPPDATA%\Programs\HaloBattery` without an admin prompt, adds a Start menu entry, an optional desktop icon and an optional "Start with Windows" entry, and registers an uninstaller in Settings → Apps. Uninstalling closes the app, removes its autostart and notification registry entries, and asks before deleting the settings. Installing any version over another upgrades or repairs the one install in place (one folder, one uninstall entry, no leftover library files); an older setup asks before downgrading, and refuses when run silently unless `/ALLOWDOWNGRADE` is given. The in-app updater keeps working for installed copies and updates the version shown in Settings → Apps.
+- **Razer Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver) added to the Razer mouse table with transaction id `0x1F`, the id OpenRazer uses for it (openrazer/openrazer#2751). Confirmed on hardware by @amlidos in [#333](https://github.com/HeyOkay/HaloBattery/issues/333): the icon appears through the receiver, the level matches Synapse, and the charging state follows the cable.
+- **Rapoo VT9 Pro V2** (`24ae:14a9`) - the receiver publishes the same `ff00:000e`
+  vendor collection the VT7 is read on, so it joins that table entry. Unverified on
+  hardware; a test build is out for [#235](https://github.com/HeyOkay/HaloBattery/issues/235).
+- **Corsair M75 Wireless** (`1b1c:1bdc`, the Slipstream receiver) - it publishes the
+  bragi vendor collections (`ff42:0001`/`0002`), so it is read with the Dark Core's
+  framed get-property exchange. Confirmed on hardware by @SpaceJesusCosmic in
+  [#301](https://github.com/HeyOkay/HaloBattery/issues/301).
+- **VGN Dragonfly 4K** (`3554:f505` receiver, `3554:f506` on the cable) - the Compx exchange already used for the VXE/Pulsar receivers, battery command `0x04`. Confirmed on the receiver by @TweaknFreak (#323): the percentage agreed with the vendor tool. The cable id is claimed from the report; charging over the cable is not yet reported back.
+- **Logitech G535**: its dongle is long-only and has no HID++ 2.0 feature table, so the
+  provider's 2.0 ping never got an answer and the headset was shown as asleep. It is now
+  read through its 1.0 charge register (`11 FF 05 0D`) before the ping, with
+  HeadsetControl's G535 voltage curve ([#339](https://github.com/HeyOkay/HaloBattery/issues/339)).
+  The register is answered on the `ff43:0202` collection, not the consumer one, so both are
+  tried. Confirmed on hardware by @ti-henrq: `4069 mV -> 85 %` and the icon appears.
+- **Compx 2.4 GHz keyboards** (`3554:fa09`: AULA F75, LEOBOG Hi75C Pro; `3554:f523`:
+  Teevolution Terra Pro), **Corsair Sabre v2 Pro Ultralight** (`1b1c:2b2a`),
+  **ATK X1 Pro**
+  (`373b:101a`) and **ATK Fire X 8K** (`373b:101b`) - all three publish the
+  Compx `ff02:0002` control collection the Pulsar/VXE family is read on, so they use
+  the same 17-byte power query; the keyboard keeps a keyboard pictogram. The ATK X1 Pro is
+  confirmed on hardware in [#230](https://github.com/HeyOkay/HaloBattery/issues/230) (level
+  within ~5 % of ATK HUB, charging follows the cable); the keyboard receiver and the Fire X
+  8K are unverified, with a test build out for
+  [#247](https://github.com/HeyOkay/HaloBattery/issues/247).
+- **Keychron Nape Pro** (`3434:d026`, the Link-KM receiver) - the same `b3 06` exchange as the
+  Ultra-Link 8K / M5, with its vendor collection on interface 1 (`ffc1:0001`) instead of 4, so
+  the provider now picks the vendor page wherever it is. Unverified on hardware; a test build
+  is out for [#270](https://github.com/HeyOkay/HaloBattery/issues/270).
+- Endgame Gear XM2we battery and charging through its original 2.4 GHz receiver
+  (3367:1961), using documented status queries only. Battery and charging transitions verified on an XM2we receiver on Windows.
+- **Plantronics Voyager 8200 UC** behind the BT600 adapter (`047f:02ee`, `047f:02f7`) - Poly's tunnelled get/set protocol on `ffa2:0003`, battery `GET 0A 1A`, level as `level / (count - 1) * 100`. **Confirmed on hardware by @DindonOz** (#328): the level matched Poly's app and the charging state was correct.
+- **HyperX Pulsefire Haste 2 Wireless** (`03f0:0d97`, `03f0:0f98`) - NGENUITY's
+  universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
+  and charge status (plus voltage and temperature in the diagnostics). Unverified on
+  hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
+  different transport: the request is a feature report on `ff02:0002`, the reply an
+  input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because
+  it answers a power query from cache while the mouse sleeps. Confirmed on hardware by
+  @jimchen5209 in [#309](https://github.com/HeyOkay/HaloBattery/issues/309): level matches
+  the vendor app, charging follows the cable, the sleeping receiver greys out and returns,
+  and with receiver + cable the wired mouse shows while the wireless one is greyed.
+- **Alienware Pro Wireless Gaming Keyboard** (`413c:211d`, 2.4 GHz receiver) - the level Command Center
+  reads from the receiver's `ff00:0001` collection (feature report `0e a1`, answer
+  `0e a1 <level> <state>`), taken from the #287 USBPcap captures. The report must be sent with
+  report id 0 in front (`00 | 0e a1 ...`); the first test build omitted it, so the receiver
+  ignored the writes and the keyboard sat at "no link". The charging capture also settles the
+  charger state: byte 3 is `0x00` on battery and `0x04` with the cable in. **Confirmed on
+  hardware by @notisv** (#287): the level matched Bluetooth, Windows and Command Center
+  (`0e a1 5c 00` = 92 %) and the charging state followed the cable.
+- **DJI Mic Mini 2** (`2CA3:4011`): both transmitters over the receiver's vendor interface 6,
+  read passively - a seven-step gauge shown as an estimate, the charging state, and one icon
+  per transmitter. It needs WinUSB bound to that interface with
+  [Zadig](https://zadig.akeo.ie); without it the provider stays silent and says so in the
+  diagnostics, and no other device is affected. Protocol from
+  [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control)
+  (Unlicense), re-derived on a receiver here; `pyusb` and `libusb-package` are new
+  dependencies, and the release workflow bundles libusb.
+- **Corsair Void Elite Wireless** (`1b1c:0a55`) - the older Void exchange: output report `c9 64`, five-byte reply `64 00 <level> b1 <status>`. Unverified on hardware; a test build is out for [#330](https://github.com/HeyOkay/HaloBattery/issues/330).
+- **Turtle Beach Atlas Air** (`10f5:225e`) - the receiver battery read is now
+  confirmed on hardware by @Vetrices in [#310](https://github.com/HeyOkay/HaloBattery/issues/310#issuecomment-6741190943):
+  the percentage matches Swarm II, charging follows the cable and updates keep working.
+- **Glorious Model O Wireless** (`258a:2022`) - the Sinowealth framed battery query on the
+  receiver's vendor channel (feature report `00 00 02 02 00 83`, level at byte 8, charging
+  at byte 7), from the reverse-engineering work behind GloriousBatteryMonitor-Go. **Level
+  confirmed on hardware by @gumocska** (#281): the percentage matched Glorious Core. While
+  the mouse charges over USB it leaves the 2.4 GHz link, so the wired id (`258a:2011`) now
+  tells the app it is on the cable and the icon shows charging with the last level; a wall
+  adapter gives no signal, because the mouse is not talking to the receiver.
+- **Razer Barracuda X (2022)** (`1532:0552`, 2.4 GHz dongle) - the dongle bridges to an
+  Airoha chip and speaks RACE (`50 41`), not the Razer PA protocol the other Barracudas use;
+  the PA writes were refused with "Incorrect function". Level comes from the headset's
+  battery voltage through remote mode + `GET_BATTERY` (group 0x06), converted on a Li-ion
+  curve, with charging inferred from the voltage spread between samples. Mirrored from
+  mehdibouchami/razer-barracuda-x-battery. **Confirmed on hardware** in the test-build run:
+  `3822 mV -> 38 %`, samples within 9 mV, reported as not charging; the charging inference
+  still needs a run with the cable in.
+
+- **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
+  collection the PA headset path reads, and the id was simply not routed there. Unverified
+  on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+
+### Not enabled in this release
+
+- Endgame Gear 4K (`3367:1970`), AJAZZ AJ159 PRO (`3151:402d`), Kysona Uranus
+  (`3151:5031`), Turtle Beach Stealth 600X Gen 3 (`10f5:2232`), Sony INZONE H9 II
+  (`054c:0fa8`), Lamzu Tachi (`37b0:000c`) and Logitech PRO X 3 LIGHTSPEED
+  (`046d:0b45`) remain on hold. Their current exchanges
+  failed on hardware or still lack evidence of protocol compatibility. The candidate
+  does not open these targets; their protocol code and simulated tests are retained
+  for follow-up. Confirmed XM2we, AJ179 V2 MAX, Atlas Air and original INZONE H9
+  support remains enabled. See `docs/maintenance.md` for the evidence and next steps.
+
+### Changed
+
+- Show charging with an unknown battery level as a steady neutral ring and a
+  smoothly rotating green arc, keeping the device glyph stationary.
+
+- Use local Lucide device pictograms inside a thin circular battery ring, with
+  artwork rendered at the taskbar's physical icon size and refreshed on DPI changes.
+- Refresh the icon and charging previews with explicit controller brand variants.
+- Replace the remaining microphone drawing with the Lucide mic glyph, fitted and
+  centered by its visible bounds with the same ring clearance as the other icons.
+
+- Bring the community integration history back to `HeyOkay/HaloBattery`, retaining contributor credits. Updates, installer links and contribution links use the original repository again; cached offers from the fork are cleared without changing other settings.
+- Document a weekly manual pre-release review and the remaining hardware follow-ups in `docs/maintenance.md`. Stable publication still requires a reviewed release PR.
+
+### Fixed
+
+- **ATK V75X receiver polling**: reuse successful readings for five minutes,
+  retry failed requests after 30 seconds, and rate-limit typing-triggered wakes
+  so bursts of input do not repeatedly poll every device.
+
+- Softer neutral tray ink and area-sampled ring edges, avoiding excess dark/light
+  coverage at small DPI sizes while preserving glyph placement and brand colors.
+
+- Use a matching .in/.txt build requirements pair so Dependabot can update the hashed dependencies installed by CI and release builds.
+
+- Keep unrelated devices updating and retry failed disconnected icons when one
+  native tray image update fails.
+
+- Correct colored Xbox logo alignment for light and dark taskbar themes.
+
+- Preserve each device's stable Windows tray identity, serialize native icon-handle
+  swaps during taskbar refreshes, and retry failed icon updates.
+
+- Keep packaged modules ahead of loose source folders beside the EXE, preventing
+  startup import errors when running a new build from an older checkout.
+
+- Include the libusb backend and bundled library in pre-release builds, matching stable builds for USB devices.
+- Keep Alienware and Barracuda protocol documentation in separate sections after integration; record the newer Morph 96, URX and Plantronics confirmations. A disconnected ASUS receiver no longer raises from the output-report read path.
+
+## [1.16.0] - 2026-11-04
+
+First release of the community fork [ahmedkhursheed23/HaloBattery](https://github.com/ahmedkhursheed23/HaloBattery): every open upstream pull request is integrated (see [HeyOkay/HaloBattery#341](https://github.com/HeyOkay/HaloBattery/issues/341)), plus fixes for open upstream issues. Updates are now checked against this fork.
+
+### Added (integrated open upstream pull requests)
+New devices (each links to the upstream pull request and its author):
+- **Mice**: Hitscan Hyperlight 8K receiver ([#158](https://github.com/HeyOkay/HaloBattery/pull/158) @FisiFla); Scyrox 8K dongle and mice
+  ([#182](https://github.com/HeyOkay/HaloBattery/pull/182) @antuganov); ASUS ROG OMNI receiver mice, and ASUS TX Gaming Mini Miku
+  ([#185](https://github.com/HeyOkay/HaloBattery/pull/185) @metalgitter, [#205](https://github.com/HeyOkay/HaloBattery/pull/205) @miguotw); Redragon M991 ([#200](https://github.com/HeyOkay/HaloBattery/pull/200) @casparas123);
+  DAREU A950 ([#212](https://github.com/HeyOkay/HaloBattery/pull/212) @6UADA); Pulsar X2 V3 Mini 8K ([#213](https://github.com/HeyOkay/HaloBattery/pull/213) @NikolaJyun); Rapoo VT7 Gen 2 /
+  V700DIY-98 ([#215](https://github.com/HeyOkay/HaloBattery/pull/215) @casparas123); AJAZZ AJ179 V2 MAX ([#246](https://github.com/HeyOkay/HaloBattery/pull/246) @casparas123); ATK X1
+  Ultimate Nearlink ([#279](https://github.com/HeyOkay/HaloBattery/pull/279) @mspw11); Finalmouse UltralightX ([#284](https://github.com/HeyOkay/HaloBattery/pull/284) @ArnavD74); ATK A9
+  Ultimate, ATK A9 SE, NK NANO Nearlink ([#305](https://github.com/HeyOkay/HaloBattery/pull/305) @zichuanlin806-cyber,
+  [#347](https://github.com/HeyOkay/HaloBattery/pull/347) @Heartestrella, [#350](https://github.com/HeyOkay/HaloBattery/pull/350) @ChristmasPika); Inphic / Attack Shark ODM family
+  ([#181](https://github.com/HeyOkay/HaloBattery/pull/181) @casparas123); Razer Pro Type Ultra receiver, Viper V3 Pro SE
+  ([#203](https://github.com/HeyOkay/HaloBattery/pull/203) @casparas123, [#316](https://github.com/HeyOkay/HaloBattery/pull/316) @ahmedkhursheed23); G-Wolves 8K receiver
+  ([#317](https://github.com/HeyOkay/HaloBattery/pull/317) @ahmedkhursheed23); AULA V9 Max+ ([#327](https://github.com/HeyOkay/HaloBattery/pull/327) @Arborflux); LAMZU Thorn
+  ([#348](https://github.com/HeyOkay/HaloBattery/pull/348) @netjabellan); EWEADN S9 ([#352](https://github.com/HeyOkay/HaloBattery/pull/352) @Rum-right); Cougar Revenger Pro 4K
+  ([#354](https://github.com/HeyOkay/HaloBattery/pull/354) @Squl032).
+- **Keyboards**: Lofree Flow Lite84 ([#169](https://github.com/HeyOkay/HaloBattery/pull/169) @casparas123); ASUS ROG OMNI keyboards
+  ([#185](https://github.com/HeyOkay/HaloBattery/pull/185) @metalgitter); ATK V75X, with polling paused while idle ([#308](https://github.com/HeyOkay/HaloBattery/pull/308) @joeabouserhal);
+  AULA F87 Pro V2C ([#327](https://github.com/HeyOkay/HaloBattery/pull/327) @Arborflux); MCHOSE K87 and MonsGeek FUN60 Pro
+  ([#352](https://github.com/HeyOkay/HaloBattery/pull/352) @Rum-right); Corsair K65 PLUS Wireless ([#293](https://github.com/HeyOkay/HaloBattery/pull/293) @casparas123).
+- **Headsets**: Turtle Beach Stealth Pro II and Stealth 700 Gen 3 ([#194](https://github.com/HeyOkay/HaloBattery/pull/194) @casparas123,
+  [#211](https://github.com/HeyOkay/HaloBattery/pull/211) @PaulRichez); HyperX Cloud II Wireless, Kingston revision ([#198](https://github.com/HeyOkay/HaloBattery/pull/198) @casparas123);
+  Skullcandy PLYR ([#207](https://github.com/HeyOkay/HaloBattery/pull/207) @casparas123); MCHOSE V9 Pro ([#248](https://github.com/HeyOkay/HaloBattery/pull/248) @AdrianH23); Sony INZONE H9
+  ([#278](https://github.com/HeyOkay/HaloBattery/pull/278) @BoringMan314; needs the new `pyserial` dependency); ASUS ROG Strix Go 2.4
+  ([#296](https://github.com/HeyOkay/HaloBattery/pull/296) @casparas123); HyperX Cloud Alpha Wireless ([#318](https://github.com/HeyOkay/HaloBattery/pull/318) @ahmedkhursheed23); Jabra on a
+  Link 380 / 390 dongle ([#337](https://github.com/HeyOkay/HaloBattery/pull/337) @realCmdData); HyperX Cloud Flight Wireless
+  ([#346](https://github.com/HeyOkay/HaloBattery/pull/346) @hahuerta); Razer BlackShark V3 and Barracuda Pro receiver
+  ([#349](https://github.com/HeyOkay/HaloBattery/pull/349) @ChristmasPika, [#315](https://github.com/HeyOkay/HaloBattery/pull/315) @ahmedkhursheed23); Audeze Maxwell off-state
+  ([#254](https://github.com/HeyOkay/HaloBattery/pull/254) @casparas123); SteelSeries Nova 3P confirmed on hardware ([#175](https://github.com/HeyOkay/HaloBattery/pull/175) @casparas123).
+- **Controllers**: NVIDIA SHIELD Controller 2017 ([#250](https://github.com/HeyOkay/HaloBattery/pull/250) @pierreski; a charger state the
+  device does not report is shown as unknown and never triggers alerts); FlyDigi Vader 5 Pro
+  ([#216](https://github.com/HeyOkay/HaloBattery/pull/216) @casparas123).
+
+App and fixes:
+- **Six interface languages** (English, Spanish, French, Japanese, Simplified and Traditional
+  Chinese): picked from the Windows language at first start, switchable in Preferences,
+  technical output stays English. Catalogs live in `halo/i18n.py` and `halo/locales/`
+  (upstream #188 Teeti, #249 AdrianH23, #345 Kosmos, with miguotw's Asian translations;
+  per-device alert wording #187 casparas123).
+- Windows end-session consent ([#338](https://github.com/HeyOkay/HaloBattery/pull/338) @realCmdData); idle charging animation stops waking the
+  app ([#314](https://github.com/HeyOkay/HaloBattery/pull/314) @ahmedkhursheed23); history is saved when the level did not change
+  ([#311](https://github.com/HeyOkay/HaloBattery/pull/311) @ahmedkhursheed23); no "use left" estimate that is not positive
+  ([#223](https://github.com/HeyOkay/HaloBattery/pull/223) @kevin9327); MCHOSE G7 smoothing ([#306](https://github.com/HeyOkay/HaloBattery/pull/306) @joeabouserhal); PlayStation and Steam
+  Controller polling fixes ([#312](https://github.com/HeyOkay/HaloBattery/pull/312) @ahmedkhursheed23, [#313](https://github.com/HeyOkay/HaloBattery/pull/313) @ahmedkhursheed23);
+  Logitech devices are keyed by unit id alone so a cable shares the receiver's icon
+  ([#253](https://github.com/HeyOkay/HaloBattery/pull/253) @Willshaper); Corsair Void v2 frames written as Windows passes them, and `--probe`
+  output goes to `HaloBattery-probe.txt` when no console exists ([#176](https://github.com/HeyOkay/HaloBattery/pull/176) @casparas123).
+
+### Changed (fork)
+- **Updates come from this fork** (`ahmedkhursheed23/HaloBattery`). An update offer cached by a
+  build that checked another repository is dropped at start-up and the cache is tagged with the
+  repository (`update_repo`), so upstream versions are not offered again.
+- Build: `pyserial>=3.5` in `requirements.txt` and `--hidden-import serial` /
+  `serial.tools.list_ports` in the PyInstaller commands.
 
 ### Changed
 - **A tidier repository and a shorter README**: the app's modules moved into the `halo/`
@@ -20,8 +256,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   features and settings is in `docs/features.md` and the credits in `docs/credits.md`.
 
 ### Fixed
-- **ATK paused icon**: retain its normal appearance and percentage; show the paused/last-known status only in the right-click menu.
-- **ATK V75X sleep-friendly polling**: pause battery queries while the keyboard is idle, keep a labelled last-known reading, and refresh when that keyboard is used again. While typing, a reading is reused for five minutes and a failed request waits 30 seconds, so typing bursts never trigger repeated polls of every device. On the cable, polling is not paused.
 - **Start-up with portable mode no longer hangs in a folder it cannot write to**: the
   check whether the app folder is writable used `tempfile`, which on Windows retries
   forever when the folder's permissions deny creating files (Program Files). It is now one
@@ -34,6 +268,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
   (#236): Windows reports no Bluetooth battery for it, and the icon said only
   "connected". The controller's own coarse level (empty / low / medium / full) is shown
   instead; when Windows does report a Bluetooth level, that one is still used.
+- **A Logitech mouse or headset on the charger no longer shows a false 100%** (#271): mice
+  and headsets that report only the battery voltage read about 4.2 V while charging, which
+  the app turned into 100%. While charging, the app now shows the level seen before the
+  cable was connected ("charging, about 94% before it was plugged in"), or "level not
+  reported while charging" if it never saw one; a charge-complete report still shows 100%.
+- **VXE R1 Pro is no longer called "R1 Pro Max"** (#334): the R1 Pro and the R1 Pro Max
+  share one 2.4 GHz dongle (`3554:F58A`) and the app cannot tell them apart, so the
+  dongle's device is now named "VXE R1 Pro / R1 Pro Max (2.4 GHz)".
+- **Razer Barracuda X 2.4 (`1532:0550`) is read with the headset protocol** (#332, #264):
+  the receiver was found but its mouse-style battery request got no reply. Like the
+  BlackShark headsets, a Barracuda receiver now also gets the headset ("PA") battery
+  request when the first one fails. Not yet confirmed on a Barracuda X; a diagnostics
+  report from one would settle it.
 
 ## [1.15.0] - 2026-10-12
 
@@ -999,7 +1246,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.15.0...HEAD
+[Unreleased]: ../../compare/v1.17.0...HEAD
+[1.17.0]: ../../compare/v1.15.0...v1.17.0
 [1.15.0]: ../../compare/v1.14.0...v1.15.0
 [1.14.0]: ../../compare/v1.13.0...v1.14.0
 [1.13.0]: ../../compare/v1.12.0...v1.13.0

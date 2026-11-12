@@ -36,7 +36,7 @@ class PausedIconTests(unittest.TestCase):
     def test_pause_description_is_only_in_menu_header(self):
         app=make_app()
         owner=types.SimpleNamespace(status=self.status())
-        self.assertIn("refreshed while typing",app.build_menu(owner).items[0].detail())
+        self.assertIn("polling paused",app.build_menu(owner).items[0].detail())
         self.assertEqual(hb.device_state(owner.status),"82%")
 
     def test_pending_idle_icon_is_not_dimmed(self):

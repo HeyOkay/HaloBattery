@@ -50,6 +50,24 @@ API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 TAG_URL = f"https://api.github.com/repos/{REPO}/releases/tags/v{{version}}"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
 CHECK_EVERY = 24 * 3600          # seconds between checks
+# settings that remember what the last check found; they belong to one repository
+CACHE_KEYS = ("update_latest", "update_url", "update_notified", "update_last")
+
+
+def invalidate_cache_for_repo(cfg: dict, repo: Optional[str] = None) -> bool:
+    """Drop the remembered update offer when it came from another repository.
+
+    The cache is tagged with the repository it was fetched from ("update_repo").
+    A settings file written by a build that checked a different repository (a
+    community fork, before returning upstream) would otherwise show that repository's
+    offer and link until the next check. Returns True when `cfg` was changed."""
+    repo = repo or REPO
+    if cfg.get("update_repo") == repo:
+        return False
+    for key in CACHE_KEYS:
+        cfg.pop(key, None)
+    cfg["update_repo"] = repo
+    return True
 TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 30            # per read of the zip, not the whole download
 CHUNK = 64 * 1024
@@ -79,7 +97,9 @@ class Release:
 
 def parse_version(text: str) -> Optional[Tuple[int, ...]]:
     """'v1.11.0' / '1.11.0' -> (1, 11, 0); anything else -> None."""
-    m = re.match(r"^\s*v?(\d+(?:\.\d+)*)\s*$", text or "")
+    if not isinstance(text, str):          # a hand-edited settings file can hold any JSON
+        return None
+    m = re.match(r"^\s*v?(\d+(?:\.\d+)*)\s*$", text)
     if not m:
         return None
     return tuple(int(p) for p in m.group(1).split("."))
@@ -96,16 +116,19 @@ def is_newer(latest: str, current: str) -> bool:
 def parse_release(data: dict) -> Release:
     """A release from GitHub's REST API -> Release. Raises ValueError on a tag that is
     not a version."""
+    if not isinstance(data, dict):
+        raise ValueError(f"unexpected release data {type(data).__name__}")
     tag = str(data.get("tag_name") or "")
     if parse_version(tag) is None:
         raise ValueError(f"unexpected tag name {tag!r}")
-    version = tag.lstrip("vV").strip()
+    version = tag.strip().lstrip("vV")
     rel = Release(version=version, url=str(data.get("html_url") or RELEASES_URL),
                   notes=str(data.get("body") or ""),
                   published=str(data.get("published_at") or "")[:10])
     want = f"halobattery-{version}.zip"
-    for asset in data.get("assets") or []:
-        if str(asset.get("name") or "").lower() != want:
+    assets = data.get("assets")
+    for asset in assets if isinstance(assets, list) else []:
+        if not isinstance(asset, dict) or str(asset.get("name") or "").lower() != want:
             continue
         rel.zip_url = str(asset.get("browser_download_url") or "")
         try:

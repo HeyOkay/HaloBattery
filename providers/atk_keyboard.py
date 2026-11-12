@@ -5,6 +5,9 @@ ATK HUB's Evision keyboard driver uses output/input report 04 on FF1C:0092:
 and battery/charge state at 7..8. No setup or configuration writes are needed.
 The cable (5055) answers the same request on the same collection.
 These ids are shared with other keyboards, so also match the product name.
+Source: ATK HUB 3.2.29, Evision keyboard controller in
+https://bpcdn.atkgear.com/hub-v3/production/3.2.29/static/keyboard-info.util-D8BvmqVT.js
+Receiver and cable captures are recorded in docs/protocols.md (ATK V75X).
 """
 from __future__ import annotations
 

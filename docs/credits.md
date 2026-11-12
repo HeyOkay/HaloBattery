@@ -8,9 +8,44 @@ Halo Battery reads each device the way its maker's software does. These projects
 - MCHOSE protocol: the write-up by @alexfrih ([alexfrih/mchose-linux](https://github.com/alexfrih/mchose-linux), recovered from MCHOSE's own web driver); the G7 from @kek353's monitor and the dump in [#8](https://github.com/HeyOkay/HaloBattery/issues/8).
 - Hitscan Hyperlight protocol: @sopparus ([sopparus/hitscan-battery](https://github.com/sopparus/hitscan-battery)), who mapped it from the vendor application's USB traffic and confirmed it in the [libratbag discussion](https://github.com/libratbag/libratbag/issues/1893).
 - AM Infinity 8K protocol: the AJAZZ Control Center project ([Aiacos/ajazz-control-center](https://github.com/Aiacos/ajazz-control-center), GPL-3.0), which reads the same USB id on its own AJ159 APEX unit.
+- VAXEE protocol: @stuffz ([stuffz/mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor)) and the VAXEE Control Center web driver, ported with its tests from @ryanlewis ([ryanlewis/mousebatt](https://github.com/ryanlewis/mousebatt), MIT).
 - BlackShark V2 Pro 2023: the OpenRazer driver ([PR #2862](https://github.com/openrazer/openrazer/pull/2862)). Razer PIDs and transaction ids: OpenRazer and [RazerBatteryTaskbar](https://github.com/Tekk-Know/RazerBatteryTaskbar).
 - MCHOSE A5 Pro Max protocol: the community web driver [z750sasr/mchose-a5-pro-max-web-driver](https://github.com/z750sasr/mchose-a5-pro-max-web-driver) (MIT), whose transport the independent [Klegus/mchose-macos](https://github.com/Klegus/mchose-macos) table agrees with; confirmed on @Pekish992's mouse ([#149](https://github.com/HeyOkay/HaloBattery/issues/149)).
 - HyperX Cloud II Core Wireless protocol: @dantifrice ([#155](https://github.com/HeyOkay/HaloBattery/issues/155)), whose USBPcap capture of NGENUITY showed the same `66 89` battery / `66 8a` charging exchange as the Cloud III Wireless.
+- Integrated pull requests (upstream HeyOkay/HaloBattery): @FisiFla, @casparas123, @antuganov,
+  @metalgitter, @miguotw, @PaulRichez, @6UADA, @NikolaJyun, @AdrianH23, @pierreski, @Willshaper,
+  @BoringMan314, @mspw11, @ArnavD74, @zichuanlin806-cyber, @joeabouserhal, @ahmedkhursheed23,
+  @Arborflux, @realCmdData, @hahuerta, @Heartestrella, @netjabellan, @ChristmasPika, @Rum-right,
+  @Squl032, @kevin9327; interface translations by @TiagoFerreiraDomingues (Teeti), @AdrianH23,
+  @miguotw and @KosmoSakura. Further protocol sources are named in the provider modules
+  (voiddog30 for Finalmouse, jabridge for Jabra, OpenLinkHub for the Corsair K65 PLUS).
+- DJI Mic Mini / Mic Mini 2 receiver protocol: @ShadowBitBasher ([ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBasher/DJI-Mic-Control), PROTOCOL.md, Unlicense).
 - The reference implementations behind individual devices - HeadsetControl, rivalcfg, Solaar, G-Helper, HyperHeadset, mouse.xyz, [`@openmouse/protocol`](https://github.com/OpenMouse-Project/openmouse), keychron-battery-dkms, JBL_Baterry_Monitor and others - are credited next to the device they were used for in [docs/protocols.md](protocols.md).
 
 The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #1280](https://github.com/openrazer/openrazer/issues/1280) and [Modzeleczek/RazerNariBatteryLevel](https://github.com/Modzeleczek/RazerNariBatteryLevel).
+
+- XM2we receiver protocol: [okms/xm2we-linux](https://github.com/okms/xm2we-linux)
+  (MIT), its protocol documentation and battery/link status queries.
+
+## Tray icon artwork
+
+- Generic device glyphs (headphones, mouse, keyboard, mic, gamepad-2, Bluetooth,
+  speaker, webcam, heart-pulse, house, watch, tv-minimal and radar):
+  [Lucide](https://lucide.dev/), sourced from `lucide-static` 1.17.0 and adapted
+  as local masks for the tray renderer. The [versioned upstream license](https://github.com/lucide-icons/lucide/blob/1.17.0/LICENSE)
+  is included in [licenses/lucide-1.17.0-LICENSE.txt](licenses/lucide-1.17.0-LICENSE.txt):
+  ISC, Copyright (c) 2026 Lucide Icons and Contributors, with the included Feather
+  MIT notice, Copyright (c) 2013-present Cole Bemis. The headphones glyph is among
+  the Feather-derived icons listed in that notice.
+- Monochrome Xbox, PlayStation and Nintendo Switch silhouettes and Xbox/Nintendo
+  color values: [Simple Icons 9.0.0](https://github.com/simple-icons/simple-icons/tree/9.0.0).
+  Its [CC0 1.0 text](https://github.com/simple-icons/simple-icons/blob/9.0.0/LICENSE.md)
+  is included in [licenses/simple-icons-9.0.0-LICENSE.md](licenses/simple-icons-9.0.0-LICENSE.md).
+- Classic multicolor PlayStation artwork: Sony / Manabu Sakamoto, from the
+  [Wikimedia Commons source file](https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg),
+  adapted for a centered local mask and color regions. The source page identifies
+  it as a public-domain text logo and separately identifies trademark restrictions.
+
+Xbox, PlayStation and Nintendo Switch logos are marks of their respective owners.
+The artwork licenses above do not grant rights to those trademarks; CC0 expressly
+excludes trademark rights.

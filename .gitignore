@@ -27,7 +27,6 @@ release_notes.md
 
 # Generated version resource (tools/make_version.py)
 version_info.txt
-AGENTS.md
 /agents_memory
 
 # Portable mode (portable.txt): the app keeps its data next to itself

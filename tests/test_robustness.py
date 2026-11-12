@@ -14,13 +14,16 @@ import tempfile
 import unittest
 from unittest import mock
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+import _sandbox  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 # The app writes its log and settings to %APPDATA%\HaloBattery when it loads. Point it
 # at a temporary folder, so the tests never touch the real log or settings.
 _real_appdata = os.environ.get("APPDATA")
-os.environ["APPDATA"] = tempfile.mkdtemp(prefix="halo_battery_test_")
+os.environ["APPDATA"] = _sandbox.mkdtemp(prefix="halo_battery_test_")
 try:
     spec = importlib.util.spec_from_file_location("halo_battery_robust", os.path.join(ROOT, "halo_battery.pyw"))
     hb = importlib.util.module_from_spec(spec)
@@ -40,6 +43,7 @@ class FakeWinIcon:
         self._icon_handle = None
         self.icon = None
         self.released = []
+        self._message_handlers = {}            # pystray's window message -> handler table
 
     def _assert_icon_handle(self):
         if self._icon_handle:
@@ -60,6 +64,12 @@ class FakeWinIcon:
 class TrayIconTests(unittest.TestCase):
     def setUp(self):
         FakeWinIcon.loads = 0
+        def load_physical_icon(_image):
+            FakeWinIcon.loads += 1
+            return 1000 + FakeWinIcon.loads
+        loader = mock.patch.object(hb.tray_dpi, "load_icon_handle", load_physical_icon)
+        loader.start()
+        self.addCleanup(loader.stop)
         p = mock.patch.object(hb.pystray, "Icon", FakeWinIcon)
         p.start()
         self.addCleanup(p.stop)
@@ -93,6 +103,25 @@ class TrayIconTests(unittest.TestCase):
         self.assertEqual(ic._hb_handles, {})
         self.assertIsNone(ic._icon_handle)
 
+    def test_dpi_cleanup_keeps_the_displayed_handle_only(self):
+        ic = hb.tray_icon("x")
+        for _ in range(4):
+            ic.icon = object()
+            ic._update_icon()
+        current = ic._icon_handle
+        ic.discard_cached_handles()
+        self.assertEqual(len(ic._hb_handles), 1)
+        self.assertEqual(next(iter(ic._hb_handles.values()))[1], current)
+        ic._release_icon()
+        ic._assert_icon_handle()
+        self.assertEqual(ic._icon_handle, current)
+        self.assertEqual(FakeWinIcon.loads, 4)
+
+    def test_icon_does_not_veto_the_end_of_the_session(self):
+        # pystray answers an unhandled message with 0, which for WM_QUERYENDSESSION is "no" (#242)
+        ic = hb.tray_icon("x")
+        self.assertEqual(ic._message_handlers[hb.WM_QUERYENDSESSION](0, 0), 1)
+
     def test_the_class_follows_pystray_icon(self):
         self.assertIsInstance(hb.tray_icon("x"), FakeWinIcon)
 
@@ -105,7 +134,7 @@ class TrayIconTests(unittest.TestCase):
 
 class ConfigTests(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="halo_cfg_")
+        self.dir = _sandbox.mkdtemp(prefix="halo_cfg_")
         self.path = os.path.join(self.dir, "config.json")
         p = mock.patch.object(hb, "CONFIG_PATH", self.path)
         p.start()

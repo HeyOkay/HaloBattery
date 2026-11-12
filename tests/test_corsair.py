@@ -46,6 +46,13 @@ def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
+def hs80_usb_reply(tenths=970, channel=0, command=0x02, status=0):
+    report = bytearray(C.HS80_USB_REPORT_SIZE)
+    report[:4] = bytes((0x01, channel, command, status))
+    report[4:6] = int(tenths).to_bytes(2, "little")
+    return list(report)
+
+
 def bragi_se_reply(value=960, source=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET,
                    err=0x00, report_id=False, size=C.BRAGI_MSG_SIZE):
     """The Virtuoso receivers' answer shape (probe-measured, #204): the source
@@ -186,6 +193,24 @@ class BragiParseTest(unittest.TestCase):
         self.assertIsNone(C.parse_bragi(bragi_se_reply(960)[:5]))   # short
 
 
+class Hs80UsbTest(unittest.TestCase):
+    def test_usb_battery_request_frame(self):
+        request = C.hs80_usb_request()
+        self.assertEqual(len(request), 64)
+        self.assertEqual(request[:4], bytes((0x02, 0x08, 0x02, 0x0F)))
+        self.assertEqual(request[4:], bytes(60))
+
+    def test_usb_battery_response_parsing_and_validation(self):
+        self.assertEqual(C.parse_hs80_usb_battery(hs80_usb_reply(970)), 97)
+        self.assertEqual(C.parse_hs80_usb_battery(hs80_usb_reply(1000)), 100)
+        self.assertEqual(C.parse_hs80_usb_battery(hs80_usb_reply(970, channel=1),
+                                                   target=0x09), 97)
+        self.assertEqual(C.hs80_usb_request(0x09)[:4], bytes((0x02, 0x09, 0x02, 0x0F)))
+        for bad in (hs80_usb_reply(1001), hs80_usb_reply(channel=1),
+                    hs80_usb_reply(command=0x13), hs80_usb_reply(status=1), [1, 0]):
+            self.assertIsNone(C.parse_hs80_usb_battery(bad))
+
+
 class BragiPollTest(unittest.TestCase):
     def setUp(self):
         self._saved = (C.hid, C.hidlist)
@@ -198,6 +223,96 @@ class BragiPollTest(unittest.TestCase):
         C.hid = types.SimpleNamespace(device=bus.device_class())
         C.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(entries))
         return C.CorsairProvider().poll(), bus
+
+    def test_directly_connected_hs80_usb_is_detected(self):
+        out, bus = self.poll(
+            [entry(C.HS80_USB_PID, b"hs80-usb", 3, 0xFF42, 0x0001,
+                   "Corsair HS80 RGB Wireless")],
+            {b"hs80-usb": FakeDongle(hs80_usb_reply(970))})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].name, out[0].level, out[0].kind),
+                         ("corsair:hs80", "Corsair HS80 RGB Wireless", 97, "headset"))
+        self.assertTrue(out[0].charging)
+        self.assertEqual(bus.dongles[b"hs80-usb"].writes[0][:4],
+                         bytes((0x02, 0x08, 0x02, 0x0F)))
+
+    def test_switched_off_hs80_on_usb_stays_visible_with_charging_animation(self):
+        out, _ = self.poll(
+            [entry(C.HS80_CHARGING_CABLE_PID, b"hs80-off", 0, 0xFF58, 0x0001,
+                   "CORSAIR HS80 RGB Wireless Gaming Headset")], {})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level, out[0].charging, out[0].online),
+                         ("corsair:hs80", None, True, True))
+
+    def test_wireless_battery_uses_cable_charge_state_when_usb_is_connected(self):
+        out, _ = self.poll(
+            [entry(C.HS80_CHARGING_CABLE_PID, b"hs80-off", 0, 0xFF58, 0x0001),
+             entry(0x0A6B, b"hs80-receiver", 3, 0xFF42, 0x0001)],
+            {b"hs80-receiver": FakeDongle(hs80_usb_reply(640, channel=1))})
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].level, 64)
+        self.assertTrue(out[0].charging)
+
+    def test_wireless_hs80_receiver_queries_the_headset_endpoint(self):
+        out, bus = self.poll(
+            [entry(0x0A6B, b"hs80-receiver", 3, 0xFF42, 0x0001,
+                   "CORSAIR HS80 RGB Wireless Gaming Receiver")],
+            {b"hs80-receiver": FakeDongle(hs80_usb_reply(640, channel=1))})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level), ("corsair:hs80", 64))
+        self.assertFalse(out[0].charging)
+        self.assertEqual(bus.dongles[b"hs80-receiver"].writes[0][:4],
+                         bytes((0x02, 0x09, 0x02, 0x0F)))
+
+    def test_hs80_usb_takes_priority_over_receiver_without_duplicate_icon(self):
+        out, bus = self.poll(
+            [entry(C.HS80_USB_PID, b"hs80-usb", 3, 0xFF42, 0x0001),
+             entry(0x0A6B, b"hs80-receiver", 3, 0xFF42, 0x0001)],
+            {b"hs80-usb": FakeDongle(hs80_usb_reply(970)),
+             b"hs80-receiver": FakeDongle(hs80_usb_reply(640, channel=1))})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level, out[0].charging),
+                         ("corsair:hs80", 97, True))
+        self.assertEqual(bus.opened, [b"hs80-usb"])
+        self.assertEqual(bus.dongles[b"hs80-receiver"].writes, [])
+
+    def test_hs80_receiver_is_used_when_usb_does_not_answer(self):
+        out, bus = self.poll(
+            [entry(C.HS80_USB_PID, b"hs80-usb", 3, 0xFF42, 0x0001),
+             entry(0x0A6B, b"hs80-receiver", 3, 0xFF42, 0x0001)],
+            {b"hs80-usb": FakeDongle(silent=True),
+             b"hs80-receiver": FakeDongle(hs80_usb_reply(640, channel=1))})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level, out[0].charging),
+                         ("corsair:hs80", 64, True))
+        self.assertEqual(bus.opened, [b"hs80-usb", b"hs80-receiver"])
+
+    def test_hs80_ignores_invalid_reply_before_valid_battery(self):
+        for invalid in (hs80_usb_reply(channel=1), hs80_usb_reply(command=0x13),
+                        hs80_usb_reply(status=1), hs80_usb_reply(1001), [1, 0]):
+            with self.subTest(reply=invalid[:6]):
+                # Four reports are consumed by the pre-query flush. Only the
+                # following replies should be considered answers to the query.
+                replies = [hs80_usb_reply(200)] * 4 + [invalid, hs80_usb_reply(970)]
+                out, _ = self.poll(
+                    [entry(C.HS80_USB_PID, b"hs80-usb", 3, 0xFF42, 0x0001)],
+                    {b"hs80-usb": FakeDongle(replies)})
+                self.assertEqual(len(out), 1)
+                self.assertEqual(out[0].level, 97)
+
+    def test_unanswering_hs80_receiver_does_not_create_an_icon(self):
+        out, _ = self.poll(
+            [entry(0x0A6B, b"hs80-receiver", 3, 0xFF42, 0x0001)],
+            {b"hs80-receiver": FakeDongle(silent=True)})
+        self.assertEqual(out, [])
+
+    def test_unanswering_hs80_usb_keeps_unknown_charging_icon(self):
+        out, _ = self.poll(
+            [entry(C.HS80_USB_PID, b"hs80-usb", 3, 0xFF42, 0x0001)],
+            {b"hs80-usb": FakeDongle(silent=True)})
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level, out[0].charging),
+                         ("corsair:hs80", None, True))
 
     def test_the_dongle_shows_the_reporter_s_55_percent(self):
         out, bus = self.poll(
@@ -403,6 +518,17 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(out[0].level, 76)
         self.assertEqual(bus.opened, [b"d"])
 
+    def test_the_m75_slipstream_receiver_is_read(self):
+        # #301: 1b1c:1bdc 'CORSAIR SLIPSTREAM WIRELESS USB Receiver' publishes the same
+        # ff42:0001/0002 pair as the Dark Core dongle, so the same framed ask applies
+        out, bus = self.poll(
+            [entry(0x1BDC, b"m75", 1, 0xFF42, 0x0001)],
+            {b"m75": FakeDongle(bragi_reply(750))})
+        self.assertEqual(len(out), 1)
+        st = out[0]
+        self.assertEqual((st.key, st.level, st.kind), ("corsair:1bdc", 75, "mouse"))
+        self.assertFalse(st.charging)
+
     def test_the_headset_family_is_untouched(self):
         self.assertEqual(C.PIDS, {0x2A08: "Corsair Void v2 Wireless",
                                   0x2A02: "Corsair Virtuoso Max Wireless",
@@ -414,6 +540,8 @@ class BragiPollTest(unittest.TestCase):
             0x0A3D: "Corsair Virtuoso RGB Wireless SE",
             0x0A64: "Corsair Virtuoso RGB Wireless XT",
             0x0A62: "Corsair Virtuoso RGB Wireless XT",
+            0x2B07: "Corsair K65 PLUS Wireless",       # #293 (K65 PLUS receiver)
+            0x1BDC: "Corsair M75 Wireless",            # #301 (Slipstream receiver)
         })
         # a headset's receiver and cable ids share one icon; the session the
         # 0A40 was measured with stays scoped to it

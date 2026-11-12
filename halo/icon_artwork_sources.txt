@@ -1,0 +1,135 @@
+Monochrome brand silhouettes and brand hex values: Simple Icons 9.0.0
+https://unpkg.com/simple-icons@9.0.0/
+Xbox #107C10; Nintendo Switch #E60012.
+
+Classic PlayStation colour regions: Sony logo via Wikimedia Commons
+https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg
+https://upload.wikimedia.org/wikipedia/commons/4/4e/Playstation_logo_colour.svg
+
+Lucide device glyphs: lucide-static 1.17.0
+https://unpkg.com/lucide-static@1.17.0/
+
+Historical 56 masks: extracted from the central glyph region of the cleaned handoff
+prototype/lab-assets.json at 16,20,24,32,40,48,64 px. Demonstration arcs and states
+are excluded. Color masters: artwork/optical-master-{xbox,playstation}-color.png.
+Xbox uses the canonical centered master (zero optical offset) on light taskbars.
+Dark taskbars use xbox-color-dark.png, byte-identical to the historical master at
+6795db2:artwork/tray/xbox-color.png, with -0.375,+0.125 logical px already baked in.
+These two optical placements were retained after direct user feedback on both
+contrasts. Runtime selects the prealigned master and applies no further offset.
+Lucide: ISC (Feather-derived headphones: MIT). Simple Icons: CC0-1.0.
+PlayStation classic artwork: Sony, Wikimedia Commons source above.
+
+https://github.com/lucide-icons/lucide/blob/1.17.0/LICENSE
+
+Lucide ISC License
+Copyright (c) 2026 Lucide Icons and Contributors
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+The headphones icon derives from Feather (MIT License).
+Copyright (c) 2013-present Cole Bemis
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Microphone: official lucide-static 1.17.0 mic.svg (ISC), stored locally as
+artwork/tray/lucide-mic.svg; source:
+https://unpkg.com/lucide-static@1.17.0/icons/mic.svg
+SHA256: 05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117
+Reproduce: tools/make_microphone_artwork.py, then tools/make_icon_artwork.py.
+Uniform 0.5 logical px per SVG unit; stroke 1 logical px; visible-ink bounds
+[4,2.5,12,13.5], centered at [8,8], no optical shift. Source conversion is a
+development-only headless Chromium step; runtime uses only embedded alpha masks.
+
+Speaker and Webcam: official lucide-static 1.17.0 SVGs (ISC), pinned locally as
+artwork/tray/lucide-speaker.svg and artwork/tray/lucide-webcam.svg.
+https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg
+SHA256: a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3
+https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg
+SHA256: 5301b9ff75048743f5436594c0c7ce1fada1653620b1c9f6f34fa3c667b09b60
+Geometry matches the requested https://icon-sets.iconify.design/lucide/speaker/
+and https://icon-sets.iconify.design/lucide/webcam/ references. Webcam retains
+uniform scale 0.5 and stroke 1 logical px; after the reviewed downward nudge,
+its final visible-ink bounds are [3.5,2.75,12.5,13.75].
+Speaker uses uniform scale 0.455 with render-only stroke 1/0.455 SVG units,
+preserving one logical pixel line weight and more clearance from the ring.
+Its measured visible ink is centered once; manifest records exact bounds and
+translation. Speaker has zero optical offset; Webcam has the baked +0.25 logical
+Y offset described below. Both retain radial limit 6.6.
+Reproduce with tools/make_speaker_artwork.py and tools/make_webcam_artwork.py,
+then tools/make_icon_artwork.py. Shared development-only Chromium conversion;
+no SVG library, network fetch or runtime data file is needed by the app.
+
+Health: official lucide-static 1.17.0 heart-pulse.svg (ISC), pinned as
+artwork/tray/lucide-heart-pulse.svg, matching https://icon-sets.iconify.design/lucide/heart-pulse/.
+https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg
+SHA256: b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed
+Uniform 0.5 scale; one logical pixel round stroke. The SVG ink center is near
+source [12.00003,12.49177], so tools/make_health_artwork.py geometrically centers
+measured 1024px alpha bounds on [512,512] once before mask generation. Exact
+measured bounds and translation are in the manifest. No runtime/theme offset.
+
+Smart home: official lucide-static 1.17.0 house.svg (ISC), pinned as
+artwork/tray/lucide-house.svg, matching https://icon-sets.iconify.design/lucide/house/.
+https://unpkg.com/lucide-static@1.17.0/icons/house.svg
+SHA256: b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a
+Uniform scale 0.45 with render-only stroke 1/0.45 SVG units, preserving one
+logical pixel line weight. Reproduce with tools/make_smart_home_artwork.py then
+tools/make_icon_artwork.py. The pinned source keeps stroke 2. Source ink is
+geometrically centered once during generation; manifest records measured bounds
+and translation. No runtime/theme offset or extra runtime dependency.
+
+Smartwatch / Display-TV / Tag-Tracker: pinned lucide-static 1.17.0 sources,
+matching requested Iconify Lucide watch, tv-minimal and radar references:
+https://unpkg.com/lucide-static@1.17.0/icons/watch.svg
+SHA256: 896fb08ab4056a89f174aec886d54fb9501aa157d998bc94069286a3717fe6ae
+https://unpkg.com/lucide-static@1.17.0/icons/tv-minimal.svg
+SHA256: fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141
+https://unpkg.com/lucide-static@1.17.0/icons/radar.svg
+SHA256: 6092285ad2f49aecbd4521a31ac0ad3a17fa75a2406f5d98b8695df0205e0c13
+All three are ISC, absent from the pinned LICENSE's Feather-derived MIT list.
+Sources remain byte-identical in artwork/tray/lucide-{watch,tv-minimal,radar}.svg.
+Source ink is geometrically centered once; exact bounds and scaling are recorded
+in the manifest. Watch/Radar use uniform 0.5 scale and one logical pixel stroke.
+Reproduce using tools/make_{watch,display,tracker}_artwork.py, then the embedding
+generator. No runtime SVG, network fetch or new dependency is introduced.
+
+Display now uses a uniform 0.43 source fit for clearance comparable to the
+established device glyphs, rather than merely avoiding the radial clip. Its
+render-only stroke is 1/0.43 SVG units (one logical pixel); the pinned source
+remains byte-exact at stroke 2. Speaker (0.455), Smart home (0.45) and Display
+(0.43) all center measured visible ink once during generation. Exact generation
+parameters, bounds and translations are in manifest.json. This is source fitting,
+not a runtime translation or theme-specific adjustment. No stretching is applied.
+Watch, Tracker and all 66 pre-existing assets are unchanged (80 payloads).
+
+User-reviewed optical nudges, applied after geometric centering: Health,
+Display/TV and Webcam [0,+0.25] logical px; Smart home [0,-0.25] logical px.
+Positive Y is down. These shifts are baked once by integer 16px placement of the
+1024px master before seven-size downsampling; sizes and one-logical-pixel stroke
+weights are unchanged. All themes, battery states and animation frames share the
+same mask. manifest.json records logical_optical_offset separately from geometric
+centering, with final visible-ink bounds. Runtime adds no translation or DPI offset.
+Speaker, Watch and Tracker retain zero optical offset. Pinned SVG hashes and
+source geometry remain unchanged.
