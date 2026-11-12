@@ -20,6 +20,9 @@ PID = 0x0E53
 PIDS = {0x0E53: "Sony INZONE H9",
         0x0FA8: "Sony INZONE H9 II"}
 KEYS = {0x0E53: "sony_inzone_h9", 0x0FA8: "sony_inzone_h9ii"}
+# H9 II (#294, fork #30) has no confirmed source for the H9 init sequence.
+# Keep the protocol fixture without opening its serial port in stable builds.
+ENABLED_PIDS = frozenset((0x0E53,))
 NAME = "Sony INZONE H9"
 INIT_1 = bytes.fromhex("01 00 FC 08 96 C3 21 01 01 01 00 7D")
 INIT_2 = bytes.fromhex("01 00 FC 08 96 C3 41 02 01 01 00 9E")
@@ -50,6 +53,9 @@ class SonyInzoneProvider(Provider):
             return []
         for info in list_ports.comports():
             if info.vid != VID or info.pid not in PIDS:
+                continue
+            if info.pid not in ENABLED_PIDS:
+                self._diag.append(f"[Sony] pid={info.pid:04x}: release hold; not opening")
                 continue
             try:
                 with serial.Serial(info.device, 115200, timeout=0.2, write_timeout=1) as port:

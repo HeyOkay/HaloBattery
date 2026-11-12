@@ -41,6 +41,10 @@ from .base import DeviceStatus, Provider, hexdump, log
 VID = 0x3367
 PIDS = {0x1970: "Endgame Gear 4K mouse"}
 
+# #321/#324: the current 4K exchange fails on hardware; correction is pending.
+# The separate, confirmed EndgameWEProvider is unaffected.
+ENABLED_PIDS = frozenset()
+
 BATTERY = 0x04
 LINK = 0x03
 REPORT_OUT = 0x08
@@ -171,6 +175,9 @@ class Endgame4kProvider(Provider):
         for pid, name in PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid]
             if not mine:
+                continue
+            if pid not in ENABLED_PIDS:
+                self._diag.append(f"[Endgame] pid={pid:04x}: release hold; not opening")
                 continue
             features = [d for d in mine
                         if (d.get("usage_page"), d.get("usage")) == (0xFF02, 0x0002)]

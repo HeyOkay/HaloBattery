@@ -26,3 +26,26 @@ The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #12
 
 - XM2we receiver protocol: [okms/xm2we-linux](https://github.com/okms/xm2we-linux)
   (MIT), its protocol documentation and battery/link status queries.
+
+## Tray icon artwork
+
+- Generic device glyphs (headphones, mouse, keyboard, mic, gamepad-2, Bluetooth,
+  speaker, webcam, heart-pulse, house, watch, tv-minimal and radar):
+  [Lucide](https://lucide.dev/), sourced from `lucide-static` 1.17.0 and adapted
+  as local masks for the tray renderer. The [versioned upstream license](https://github.com/lucide-icons/lucide/blob/1.17.0/LICENSE)
+  is included in [licenses/lucide-1.17.0-LICENSE.txt](licenses/lucide-1.17.0-LICENSE.txt):
+  ISC, Copyright (c) 2026 Lucide Icons and Contributors, with the included Feather
+  MIT notice, Copyright (c) 2013-present Cole Bemis. The headphones glyph is among
+  the Feather-derived icons listed in that notice.
+- Monochrome Xbox, PlayStation and Nintendo Switch silhouettes and Xbox/Nintendo
+  color values: [Simple Icons 9.0.0](https://github.com/simple-icons/simple-icons/tree/9.0.0).
+  Its [CC0 1.0 text](https://github.com/simple-icons/simple-icons/blob/9.0.0/LICENSE.md)
+  is included in [licenses/simple-icons-9.0.0-LICENSE.md](licenses/simple-icons-9.0.0-LICENSE.md).
+- Classic multicolor PlayStation artwork: Sony / Manabu Sakamoto, from the
+  [Wikimedia Commons source file](https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg),
+  adapted for a centered local mask and color regions. The source page identifies
+  it as a public-domain text logo and separately identifies trademark restrictions.
+
+Xbox, PlayStation and Nintendo Switch logos are marks of their respective owners.
+The artwork licenses above do not grant rights to those trademarks; CC0 expressly
+excludes trademark rights.
