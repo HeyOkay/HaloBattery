@@ -9,6 +9,28 @@ contains the issue-by-issue baseline through upstream #357. Its statements about
 PRs and project location are historical; upstream #363 imports the community history.
 Code in `pre-release` is not necessarily in a stable release or confirmed on hardware.
 
+## 1.17.0 packaged-app acceptance (2026-11-13)
+
+The maintainer tested the public rolling installer for candidate `db0516e` in
+Windows Sandbox and reported successful completion of:
+
+- Clean installation, the packaged tray menu, preference changes and restart.
+- Reinstallation of the same candidate with preferences retained.
+- Uninstallation with settings retained, reinstallation restoring those settings,
+  and uninstallation with settings deleted.
+- Migration from the official community 1.16.0 ZIP to the upstream 1.17.0 installer,
+  with preferences preserved and no errors reported.
+
+The installer log records success. Before/after configuration snapshots preserve
+the saved preferences; `last_version` changes from `1.16.0` to `1.17.0` and
+`update_repo` changes from `ahmedkhursheed23/HaloBattery` to `HeyOkay/HaloBattery`.
+This verifies ZIP-to-installer migration, not an upgrade from an earlier installer.
+Sandbox had no physical devices, so this adds no hardware-compatibility claim;
+the contributor evidence and remaining limitations below still apply.
+
+Before promotion to `main` and a stable tag, [#370](https://github.com/HeyOkay/HaloBattery/pull/370)
+still requires another lead's formal approval of its final head.
+
 ## Confirmed follow-ups
 
 | Thread | Evidence and disposition |
