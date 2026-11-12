@@ -297,16 +297,15 @@ class XInputProvider(Provider):
         # Its report is not in the vendor list below, so only its status is kept here,
         # paired by the same count rule; its level (a constant remain=full=1000) is not.
         statuses = [r.status for r in all_reports] if len(all_reports) == len(slots) else []
-        # A WGI report's position does not identify its XInput slot. Only add the
-        # BEITONG report when there is exactly one controller in both APIs;
-        # otherwise keep the existing vendor filter and coarse XInput fallback.
-        beitong_report = (all_reports[0] if len(slots) == len(all_reports) == 1
-                          and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
-                          else None)
+        # WGI order is not XInput slot order; require a single pair for Beitong.
+        single_beitong = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
+        )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
-                   or r is beitong_report]
+                   or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         if len(reports) != len(slots):
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
@@ -334,7 +333,7 @@ class XInputProvider(Provider):
                     vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput
                     self._diag.append(f"[Flydigi] {e}")
-            elif beitong_report is not None:
+            elif single_beitong:
                 try:
                     vendor_reading = beitong.read_connected(self._diag)
                 except Exception as e:
@@ -372,7 +371,7 @@ class XInputProvider(Provider):
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
-            if beitong_report is not None:
+            if single_beitong:
                 if rep is not None and rep.placeholder:
                     rep = None
                 if res is not None and res[1]:
