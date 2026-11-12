@@ -47,6 +47,12 @@ same HeadsetControl source:
 
 Older Arctis headsets (Arctis 1, 7, 9, Pro Wireless) use other requests on other
 interfaces: see CLASSIC_MODELS further down.
+The Pro Wireless (1038:1290) keeps the exchange confirmed in HaloBattery #56, but
+retries with report ID 0 if it gets no accepted reply. HIDAPI requires that leading
+zero for unnumbered output reports (https://libusb.info/hidapi/group__API.html,
+hid_write). Confirmed on a Windows base: 00 41 aa -> 04 02 (on), 02 02 (off),
+00 40 aa -> 03 (3/4); the commands themselves are HeadsetControl's getBattery in
+lib/devices/steelseries_arctis_pro_wireless.hpp. No charging state is queried.
 
 Aerox 3 Wireless (and the CS2 Dragon Lore edition, which shares the protocol) from
 alloyctl's reverse engineering of 1038:1838 on real hardware, cross-checked against
@@ -334,7 +340,7 @@ NOVA_PRO_CHARGING = 0x02             # charging on the cable
 NOVA_PRO_ONLINE = 0x08               # on battery
 NOVA_PRO_STATES = (NOVA_PRO_OFF, NOVA_PRO_CHARGING, NOVA_PRO_ONLINE)
 NOVA_PRO_INTERFACES = (3, 4)
-COARSE_MODELS = frozenset({0x12E0, 0x12E5})   # nine-step level, so shown as "about NN%"
+COARSE_MODELS = frozenset({0x1290, 0x12E0, 0x12E5})   # five/nine steps, shown as "about NN%"
 
 
 def exchange_nova_pro(ask: Ask) -> Reading:
@@ -519,7 +525,8 @@ class SteelSeriesProvider(Provider):
         out += self._poll_classic(infos)
         return out
 
-    def _run_exchange(self, path: bytes, exchange: Callable[[Ask], Reading]):
+    def _run_exchange(self, path: bytes, exchange: Callable[[Ask], Reading],
+                      report_id_zero: bool = False):
         """Open one collection and run an exchange on it.
         -> (reading, answered): answered is True if any request got an accepted reply."""
         dev = hid.device()
@@ -531,6 +538,8 @@ class SteelSeriesProvider(Provider):
         answered = []
 
         def ask(request, accept):
+            if report_id_zero:
+                request = [0x00] + request
             dev.write(request)
             end = time.time() + TIMEOUT
             while time.time() < end:
@@ -568,12 +577,17 @@ class SteelSeriesProvider(Provider):
             known = self._classic_path.get(pid)
             for path in ([known] if known in paths else paths):
                 (level, chg, online), answered = self._run_exchange(path, exchange)
+                if pid == 0x1290 and not answered:
+                    self._diag.append("  retry with HIDAPI report ID 0")
+                    (level, chg, online), answered = self._run_exchange(
+                        path, exchange, report_id_zero=True)
                 if answered:
                     self._classic_path[pid] = path
                     if online and level is not None:
                         approx = f"about {level}%" if pid in COARSE_MODELS else ""
                         out.append(DeviceStatus(f"steelseries:{pid:04x}", name, level, chg, True,
                                                 "steelseries", approx=approx, kind="headset",
+                                                charging_known=pid != 0x1290,
                                                 ui_message="state.approx" if approx else "",
                                                 ui_params={"level": level} if approx else {}))
                     else:

@@ -8,6 +8,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **SteelSeries Arctis Pro Wireless** (`1038:1290`): retry a silent or refused
+  status query with HIDAPI report ID 0, keeping the existing working exchange.
+  The five-step battery estimate is shown as approximate, with charging unknown.
+
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
 

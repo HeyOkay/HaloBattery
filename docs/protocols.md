@@ -153,6 +153,26 @@ The frame sequence and the reply signature come from [janit88/InZoneH9Tray](http
 
 The same `b0` exchanges as the Nova 7 above, applied to the other Arctis Nova 7 and Nova 5 family models; and the older Arctis 1, 7, 9, Pro Wireless, the Arctis 7+ (nine-step level) and the GameBuds (lower earbud level) exactly as HeadsetControl documents their requests. The Nova Pro Wireless stations (`1038:12E0`, `1038:12E5`) are handled too. The models in the support table above are the confirmed ones. The Nova 3P Wireless joined them in [#149](https://github.com/HeyOkay/HaloBattery/issues/149): 58 % on @Pekish992's unit, read with this same exchange
 
+### SteelSeries Arctis Pro Wireless (`1038:1290`)
+
+**Connection:** wireless base station, vendor collection on interface 0
+
+HeadsetControl's [`SteelSeriesArctisProWireless::getBattery`](https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/steelseries_arctis_pro_wireless.hpp)
+asks `41 aa` for the link (`02` off, `04` on), then `40 aa` for the battery
+step 0–4. The existing exchange is kept: it was confirmed on Windows in
+[#56](https://github.com/HeyOkay/HaloBattery/issues/56#issuecomment-5855020067).
+Only if it produces no accepted reply is the exchange retried with a leading
+report ID `00`, which [HIDAPI's `hid_write`](https://libusb.info/hidapi/group__API.html)
+requires for unnumbered output reports. An accepted off reply does not trigger
+a retry or a battery query. Other SteelSeries models keep their existing framing.
+
+Confirmed on a Windows base requiring that prefix: `00 41 aa` answered `02 02`
+with the headset off and `04 02` with it on; `00 40 aa` answered `03`, step 3/4
+(about 75 %). The battery is shown as approximate and charging is unknown; the
+spare battery in the base is not queried. A silent unprefixed attempt can add
+one second to each poll. Battery swaps, cable charging and base reconnects have
+not been verified on this unit.
+
 ### SteelSeries Arctis Nova 7
 
 **Connection:** 2.4 GHz dongle (1038:22A1)
