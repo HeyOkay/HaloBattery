@@ -139,6 +139,19 @@ On battery and after charge completion, it displays the reported level unchanged
 
 The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging)
 
+### Razer BlackShark V2 HyperSpeed (MediaTek)
+
+**Connection:** 2.4 GHz receiver (1532:0565, "Razer BlackShark V2 HS 2.4", manufacturer "MediaTek Inc") or USB-C cable (1532:056E)
+
+A MediaTek command channel, not the PA protocol of the 2020/2023 models: report id 2 on usage page 0xFF14, 64-byte frames, addressed to domain `0x80` through the dongle and `0x00` on the cable. While the cable is plugged in the dongle stops answering, so the cable is read first.
+
+    request  [0]=02 [2]=60|seq [6]=04 [9]=80/00 [10]=21/2A [62]=XOR of bytes 0..61
+    reply    [0]=02 [2]&1F=seq [8]=80 [9]=domain [10]=cmd [11]=01 ack [12]=count [13]=value
+
+`0x21` reads the percentage, `0x2A` the charging flag; both are GETs and nothing else is sent. A bad checksum, a wrong sequence/domain/command, a missing acknowledgement or a zero payload count is refused, as openrazer's kernel driver does.
+
+Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.com/justik13/razer-blackshark-v2-hyperspeed-webhid) (MIT), with read-only implementations in [arkady-emelyanov/blackshark-battery](https://github.com/arkady-emelyanov/blackshark-battery) and [openrazer PR #2974](https://github.com/openrazer/openrazer/pull/2974). **Unverified on hardware here**: the reference implementations were checked on this headset, but this provider has not seen one yet - the reporters of #85 and #86 have the test build.
+
 ### Sony INZONE H9
 
 **Connection:** the headset's USB dongle (`054C:0E53`), which exposes a serial (COM) port

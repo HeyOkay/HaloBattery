@@ -7,6 +7,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Razer BlackShark V2 HyperSpeed** (`1532:0565` receiver, `1532:056E` cable): the
+  headset's MediaTek channel - report id 2 on `0xFF14`, a sequence, domain and XOR
+  checksum, with `0x21` for the level and `0x2A` for the charging state. The cable is
+  read first because the dongle goes quiet while it is plugged in. Protocol from
+  justik13/razer-blackshark-v2-hyperspeed-webhid, with read-only implementations in
+  blackshark-battery and openrazer PR #2974. **Confirmed on hardware** in #86: level
+  and charging, on both the receiver and the USB-C cable.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
