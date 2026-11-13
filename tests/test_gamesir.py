@@ -30,9 +30,9 @@ COLLECTION = {"vendor_id": 0x3537, "product_id": DONGLE, "interface_number": 1,
 class FakePad:
     """Silent until asked, like the real pad."""
 
-    def __init__(self, frames=(), fail=None):
+    def __init__(self, frames=(), fail=None, sent=64):
         self.frames = list(frames)
-        self.fail = fail
+        self.fail, self.sent = fail, sent
         self.writes = []
         self.closed = False
 
@@ -44,7 +44,7 @@ class FakePad:
         if self.fail == "write":
             raise OSError("removed")
         self.writes.append(bytes(data))
-        return 64
+        return self.sent
 
     def read(self, size, timeout):
         if self.fail == "read":
@@ -63,6 +63,12 @@ class GameSirTests(unittest.TestCase):
                 r = G.parse_state(state(level, charge), DONGLE)
                 self.assertEqual((r.level, r.charging, r.name),
                                  (level, charging, "GameSir G7 Pro 8K Aimlabs"))
+
+    def test_unknown_charge_state_keeps_the_level_without_charging(self):
+        for charge in (2, 0x50, 0xFF):
+            with self.subTest(charge=charge):
+                r = G.parse_state(state(77, charge), DONGLE)
+                self.assertEqual((r.level, r.charging), (77, False))
 
     def test_names(self):
         self.assertEqual(G.parse_state(state(), 0x10B9).name, "GameSir G7 Pro 8K")
@@ -97,7 +103,8 @@ class GameSirTests(unittest.TestCase):
         self.assertEqual((result.level, result.charging), (96, True))
 
     def test_disconnect_and_silence_are_safe(self):
-        for pad in (FakePad(fail="open"), FakePad(fail="write"), FakePad(fail="read"), FakePad()):
+        for pad in (FakePad(fail="open"), FakePad(fail="write"), FakePad(fail="read"),
+                    FakePad([state()], sent=-1), FakePad([state()], sent=1), FakePad()):
             result, diag = self.read(pad)
             self.assertIsNone(result)
             self.assertTrue(diag)

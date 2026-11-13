@@ -65,6 +65,8 @@ def parse_state(frame, pid: int = 0) -> Optional[Reading]:
         return None
     if frame[LEVEL_BYTE] > 100:
         return None
+    # GameSir Connect only tests the charge state against 1; any other value is
+    # "not charging" there, so the level is kept and no charging state is invented.
     edition = EDITIONS.get(pid, "")
     name = f"{MODEL} {edition}" if edition else MODEL
     return Reading(frame[LEVEL_BYTE], frame[CHARGE_BYTE] == 1, "", name)
@@ -83,7 +85,10 @@ def read_connected(diag: List[str]) -> Optional[Reading]:
     dev = hid.device()
     try:
         dev.open_path(cols[0]["path"])
-        dev.write(STATUS_REQUEST)
+        sent = dev.write(STATUS_REQUEST)
+        if sent is not None and sent < len(STATUS_REQUEST):
+            diag.append(f"[GameSir] request write failed ({sent})")
+            return None
         for _ in range(40):
             frame = bytes(dev.read(64, 25))
             if not frame:
