@@ -8,12 +8,39 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Preferences → Icon style → Outline / Filled**: switch all device pictograms
+- Use the matte glass application icon for executables and the settings header,
+  with less transparent padding in taskbar icons and theme-specific SVG artwork
+  placed close to, and vertically centered beside, HaloBattery in the header.
+- Native C# WinUI 3 settings companion, with the Mica backdrop, ThemeShadow,
+  cards and page transitions extracted from the Chrome Mica Patcher reference.
+  Python continues to own device polling, configuration and tray icons.
+  Release packaging now publishes the companion with both .NET and Windows App
+  SDK runtimes alongside the Python application; the resulting package is larger.
+  Clean-machine deployment and final package size still need verification.
+- A settings window with **General**, **Devices**, **Tray icons**,
+  **Notifications**, **Advanced** and **About** pages. Changes apply immediately;
+  the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
+  Double-clicking a device's tray icon opens settings for that exact device.
+  The compact right-click menu keeps device settings, refresh, app settings,
+  diagnostics, updates when available and exit within reach. All six existing
+  interface languages remain available.
+- Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
+  navigation and control glyphs for the settings window.
+- Overscroll navigation between settings pages, with a neutral progress ring
+  that grows with its fill, native Composition animations and quick elastic
+  content return on cancellation. Pages switch after the ring finishes filling,
+  and ignore wheel input until the page entry animation ends.
+  Update controls and a fixed Exit button are
+  on the General page.
+
+- **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
 
+- Keep settings pages aligned after interrupted elastic scrolling and tab
+  transitions, and position backward navigation before the page settles.
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
 

@@ -90,8 +90,14 @@ class SpanishTests(unittest.TestCase):
             self.assertEqual(app.placeholder.title, "Halo Battery: no se encontraron dispositivos")
             self.assertEqual(refreshed, ["device", "device", "idle"])
             self.assertFalse(app.wake.is_set())
-            prefs = find(app.icons["0"].icon.menu, "Preferencias").submenu
-            find(find(prefs, "Language / Idioma").submenu, "English")(None)
+            self.assertEqual(find(app.icons["0"].icon.menu,
+                                  "Configuración del dispositivo...").text,
+                             "Configuración del dispositivo...")
+            self.assertEqual(find(app.icons["1"].icon.menu, "Configuración...").text,
+                             "Configuración...")
+            self.assertEqual(find(app.placeholder.menu, "Configuración...").text,
+                             "Configuración...")
+            app.set_language("en")
         self.assertEqual(app.icons["1"].icon.title, "Ratón 🎧 1: 85%, about 2 h of use left")
 
     def test_deferred_notifications_use_spanish_at_delivery(self):
