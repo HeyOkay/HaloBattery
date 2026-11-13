@@ -51,3 +51,26 @@ The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #12
 Xbox, PlayStation and Nintendo Switch logos are marks of their respective owners.
 The artwork licenses above do not grant rights to those trademarks; CC0 expressly
 excludes trademark rights.
+
+## Settings interface artwork and fonts
+
+- Native WinUI shell, custom card rendering and page transitions: adapted from
+  the user-provided Chrome Mica Patcher C# WinUI reference source
+  (`App/MainWindow.cs`, `App/Controls/CardView.cs` and
+  `App/MainWindow.TransitionPreview.cs`). Windows App SDK provides Mica,
+  ThemeShadow and native controls; the Python device backend remains Halo
+  Battery's implementation.
+- Navigation and control glyphs: [Lucide](https://lucide.dev/), vendored from
+  `lucide-static` 1.17.0. Original SVGs, source URLs and SHA-256 hashes are in
+  `artwork/settings/`; the native settings companion renders their vector paths. These
+  glyphs use the same ISC license and included Feather MIT notice as the tray
+  glyphs above; see [the bundled license](licenses/lucide-1.17.0-LICENSE.txt).
+- Outfit Medium and SemiBold: Copyright 2021 The Outfit Project Authors
+  ([Outfit](https://github.com/Outfitio/Outfit-Fonts)).
+- Onest Bold: Copyright 2021 The Onest Project Authors
+  ([Onest](https://github.com/googlefonts/onest)).
+
+Both font families are distributed under the SIL Open Font License, Version 1.1.
+The full notices are bundled as `assets/fonts/OFL-Outfit.txt` and
+`assets/fonts/OFL-Onest.txt` in the source tree and alongside the fonts in frozen
+builds. The settings interface also uses Windows' Segoe UI Variable font.

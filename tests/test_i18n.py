@@ -388,7 +388,10 @@ class PresentationTests(unittest.TestCase):
             save.assert_called_once_with(app.cfg)
             app.set_language("en")
         self.assertIn("h of use left", app.icons["1"].icon.title)
-        self.assertEqual(find(app.icons["0"].icon.menu, "Preferences").text, "Preferences")
+        self.assertEqual(find(app.icons["0"].icon.menu, "Device settings...").text,
+                         "Device settings...")
+        self.assertEqual(find(app.icons["0"].icon.menu, "Settings...").text, "Settings...")
+        self.assertEqual(find(app.placeholder.menu, "Settings...").text, "Settings...")
 
     def test_language_menu_selects_and_marks_saved_language(self):
         prefs = find(self.app.build_menu(None), "Préférences").submenu

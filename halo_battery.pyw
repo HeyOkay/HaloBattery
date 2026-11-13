@@ -630,6 +630,8 @@ def fullscreen_app_running() -> bool:
 
 # ------------------------------------------------------------- tray icons
 WM_RBUTTONUP = 0x0205
+WM_LBUTTONUP = 0x0202
+WM_LBUTTONDBLCLK = 0x0203
 WM_QUERYENDSESSION = 0x0011
 ICON_HANDLE_CACHE = 128    # bounded handles per tray icon; fits a full 90-frame charging cycle
 IDLE_KEY = "HaloBattery:idle"   # the "no devices found" icon's id
@@ -810,6 +812,51 @@ def tray_icon(key: str, *args, **kwargs):
         # shutdown, log-off and restart until Windows gave up on it (#242)
         handlers.setdefault(WM_QUERYENDSESSION, lambda wparam, lparam: 1)
     return ic
+
+
+def connect_settings_click(icon, callback) -> None:
+    """Add double-click activation without replacing pystray's menu handling.
+
+    The shell may report either DBLCLK or two button releases (pystray's hidden
+    window has class style 0). Consume single releases so Refresh is explicit.
+    """
+    handlers = getattr(icon, "_message_handlers", None)
+    if handlers is None or sys.platform != "win32":
+        return
+    try:
+        from pystray._util import win32
+        notify_message = win32.WM_NOTIFY
+    except (ImportError, AttributeError):
+        # A future backend can retain the menu's Settings default action.
+        return
+    original = handlers.get(notify_message)
+    if original is None:
+        return
+    last_up = None
+    suppress_up = False
+
+    def clicked(wparam, lparam):
+        nonlocal last_up, suppress_up
+        if lparam == WM_LBUTTONDBLCLK:
+            last_up, suppress_up = None, True
+            callback()
+            return None
+        if lparam == WM_LBUTTONUP:
+            if suppress_up:
+                suppress_up = False
+                return None
+            now = time.monotonic()
+            import ctypes
+            interval = ctypes.windll.user32.GetDoubleClickTime() / 1000.0
+            if last_up is not None and now - last_up <= interval:
+                last_up = None
+                callback()
+            else:
+                last_up = now
+            return None
+        return original(wparam, lparam)
+
+    handlers[notify_message] = clicked
 
 
 # ------------------------------------------------------------ formatting
@@ -1135,8 +1182,9 @@ class DeviceIcon:
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
                               icons.render(None, False, False, light_taskbar=app.light_taskbar,
                                            size=getattr(app, "tray_size", icons.SIZE)),
-                              APP_TITLE, app.build_menu(self))
+                              APP_TITLE, app.build_tray_menu(self))
         self.icon._hb_flyout = getattr(app, "flyout", None)
+        connect_settings_click(self.icon, lambda: app.open_settings(self.key, page="devices"))
         # pystray calls the setup function once the icon's window exists. The app shows
         # the icon itself (in _update), after that, so a show is never lost.
         self.ready = threading.Event()
@@ -1151,17 +1199,8 @@ class DeviceIcon:
     def _update(self, st: DeviceStatus) -> None:
         paused_changed = bool(self.status and self.status.polling_paused) != st.polling_paused
         self.status = st
-        badge = self.app.pictogram(st) if self.app.cfg["badges"] else ""
-        animate = self.app.cfg["animation"] and st.charging and st.online
-        # the number replaces the pictogram; a device that only reports rough steps
-        # (st.approx) keeps its pictogram rather than showing a made-up exact number
-        text = (str(st.level) if self.app.cfg.get("percent_in_icon") and st.level is not None
-                and not st.approx else "")
-        brand, brand_color = self.app.controller_style(st)
-        state = (st.level, st.charging, st.online or st.polling_paused, self.app.low_for(st),
-                 self.app.light_taskbar, badge, animate, text, st.polling_paused,
-                 getattr(self.app, "tray_size", icons.SIZE), brand, brand_color,
-                 self.app.cfg.get("filled_icons", False))
+        state = App.icon_render_state(self.app, st)
+        animate = state[6]
         if state != self._state:
             art = self._art(state)
             if animate:
@@ -1313,10 +1352,67 @@ class App:
         # the tray menu (flyout.py); None = pystray's classic menu
         self.flyout: Optional[flyout.FlyoutHost] = (
             flyout.FlyoutHost() if sys.platform == "win32" and self.cfg.get("fluent_menu", True) else None)
+        # Settings and What's new must also work with the classic tray menu.
+        self.ui_host = self.flyout or flyout.FlyoutHost()
+        from halo.settings_model import SettingsController
+        self.settings = SettingsController(self)
 
     # ---------------- menu
     def tr(self, key: str, **params) -> str:
         return i18n.translate(key, language=self.cfg.get("language", "en"), **params)
+
+    def settings_context(self) -> dict:
+        """Dependencies for the UI controller, without importing this entry module."""
+        return dict(defaults=DEFAULTS, valid_setting=_valid_setting, save_config=save_config,
+                    autostart_enabled=autostart_enabled, set_autostart=set_autostart,
+                    remove_status_file=remove_status_file, provider_labels=PROVIDER_LABELS,
+                    controller_brands=CONTROLLER_BRANDS, controller_pictograms=CONTROLLER_PICTOGRAMS,
+                    device_state=device_state, version=VERSION, data_dir=DATA_DIR, status_path=STATUS_PATH,
+                    repo=updates.REPO, has_translation=lambda key: key in i18n.LANGUAGES["en"].catalog)
+
+    def icon_render_state(self, st: DeviceStatus, *, size: Optional[int] = None) -> tuple:
+        """The shared tray/Settings render contract; size is physical pixels."""
+        badge = self.pictogram(st) if self.cfg["badges"] else ""
+        animate = self.cfg["animation"] and st.charging and st.online
+        text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
+        brand, color = self.controller_style(st)
+        return (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+                self.light_taskbar, badge, animate, text, st.polling_paused,
+                size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
+                self.cfg.get("filled_icons", False))
+
+    def open_settings(self, device_key: Optional[str] = None, *, page: str = "general") -> None:
+        from halo.settings_host import SettingsHost
+        with self.lock:
+            if getattr(self, "_settings_host", None) is None:
+                self._settings_host = SettingsHost(self.settings)
+            settings_host = self._settings_host
+        settings_host.open(device_key, page=page)
+
+    def build_tray_menu(self, owner: Optional[DeviceIcon]) -> Menu:
+        """Quick actions only; all configuration lives in the Settings window."""
+        def selected():
+            self.open_settings(owner.key if owner is not None else None,
+                               page="devices" if owner is not None else "general")
+
+        def title():
+            return self.display_name(owner.status) if owner and owner.status else self.tr("settings.header_app")
+
+        def detail():
+            return device_state(owner.status, self.time_left_text(owner.status), language=self.cfg["language"]) if owner and owner.status else ""
+
+        return Menu(
+            flyout.HeaderItem(title, detail),
+            Item(self.tr("settings.open_device") if owner is not None else self.tr("settings.open_app"),
+                 lambda i, it: selected(), default=True),
+            Item(self.tr("menu.refresh"), lambda i, it: self.wake.set()),
+            Item(self.tr("settings.open_app"), lambda i, it: self.open_settings(), visible=owner is not None),
+            Item(lambda it: update_item_text(self.update.version, getattr(self, "install_ok", False),
+                                            getattr(self, "update_progress", None), language=self.cfg["language"])
+                 if self.update else self.tr("menu.download_update"),
+                 lambda i, it: self.start_update(), visible=lambda it: self.update is not None),
+            Item(self.tr("menu.diagnostics"), lambda i, it: self.request_diag()),
+            Item(self.tr("menu.exit", version=VERSION), lambda i, it: self.quit()))
 
     def set_language(self, language: str) -> None:
         """Refresh presentation under the same lock as polls, without polling hardware."""
@@ -1326,12 +1422,12 @@ class App:
             self.cfg["language"] = language
             save_config(self.cfg)
             for ic in list(self.icons.values()):
-                ic.icon.menu = self.build_menu(ic)
+                ic.icon.menu = self.build_tray_menu(ic)
                 if ic.status is not None:
                     ic.icon.title = i18n.tooltip(describe(ic.status, self.display_name(ic.status),
                                                          self.time_left_text(ic.status), language=language))
             if self.placeholder is not None:
-                self.placeholder.menu = self.build_menu(None)
+                self.placeholder.menu = self.build_tray_menu(None)
                 self.placeholder.title = i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE))
             self.refresh_menus()
 
@@ -2154,8 +2250,9 @@ class App:
                                          icons.render(None, False, False, light_taskbar=self.light_taskbar,
                                                       size=getattr(self, "tray_size", icons.SIZE)),
                                          i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE)),
-                                         self.build_menu(None))
+                                         self.build_tray_menu(None))
             self.placeholder._hb_flyout = getattr(self, "flyout", None)
+            connect_settings_click(self.placeholder, self.open_settings)
             self.placeholder_ready = ready
             threading.Thread(target=self.placeholder.run, args=(lambda icon: ready.set(),),
                              daemon=True).start()
@@ -2629,9 +2726,7 @@ class App:
                 log.info("what's new: release notes not available (%s)", e)
                 notes = {"version": VERSION, "notes": "", "url": updates.RELEASES_URL, "date": ""}
         save_config(self.cfg)
-        host = self.flyout
-        if host is None:
-            host = self.flyout_dialogs = flyout.FlyoutHost()
+        host = self.ui_host
         whatsnew.show(host, VERSION, notes.get("notes", ""), notes.get("url") or updates.RELEASES_URL,
                       from_version=from_version, date=notes.get("date", ""), open_url=self.open_url,
                       language=self.cfg.get("language", "en"))
@@ -2644,6 +2739,9 @@ class App:
             log.warning("open %s: %s", url, e)
 
     def quit(self):
+        settings_host = getattr(self, "_settings_host", None)
+        if settings_host is not None:
+            settings_host.close()
         self.stop_evt.set()
         for provider in self.providers:
             if isinstance(provider, AtkKeyboardProvider):
@@ -2670,6 +2768,9 @@ class App:
         host = getattr(self, "flyout", None)
         if host is not None:
             host.stop()
+        ui_host = getattr(self, "ui_host", None)
+        if ui_host is not None and ui_host is not host:
+            ui_host.stop()
 
     def run(self):
         log.info("start v%s", VERSION)
@@ -2679,8 +2780,7 @@ class App:
         threading.Thread(target=self.anim_loop, daemon=True).start()
         threading.Thread(target=self.bt_loop, daemon=True).start()
         threading.Thread(target=self.update_loop, daemon=True).start()
-        if self.flyout is not None:
-            self.flyout.start()                  # tkinter is ready by the first right-click
+        self.ui_host.start()                    # tkinter is ready by the first activation
         try:
             while not self.stop_evt.is_set():
                 self.stop_evt.wait(1)

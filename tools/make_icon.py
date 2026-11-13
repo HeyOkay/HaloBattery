@@ -1,34 +1,24 @@
-"""Generate halo.ico, the icon of HaloBattery.exe.
+"""Generate the EXE icon from the approved transparent application artwork.
 
-A green charge ring on a dark disc, so it reads well on both light and dark
-Explorer backgrounds. Rendered with the same code as the tray icons.
+The PNG is rendered from assets/app-icon.svg and checked in so regular builds
+need only Pillow. Device tray icons continue to use their own renderer.
 
 Usage: python tools/make_icon.py [output.ico]
-       python tools/make_icon.py docs/logo.png   (the README logo, 256 px)
+       python tools/make_icon.py docs/logo.png   (256 px)
 """
-import os
+from pathlib import Path
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
+from PIL import Image
 
-from PIL import Image, ImageDraw  # noqa: E402
-
-from halo import icons  # noqa: E402
-
+ARTWORK = Path(__file__).resolve().parents[1] / "assets" / "app-icon.png"
 SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 
 
 def app_icon(size: int = 256) -> Image.Image:
-    ss = 4
-    big = size * ss
-    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(img).ellipse((0, 0, big - 1, big - 1), fill=(32, 32, 32, 255))
-    ring = icons.render(75, True, True, 20, light_taskbar=False, badge="")
-    ring = ring.resize((int(big * 0.84),) * 2, Image.LANCZOS)
-    off = (big - ring.width) // 2
-    img.alpha_composite(ring, (off, off))
-    return img.resize((size, size), Image.LANCZOS)
+    with Image.open(ARTWORK) as source:
+        image = source.convert("RGBA")
+    return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def main() -> None:

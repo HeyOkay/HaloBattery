@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="96 96 832 832" fill="none">
+  <title>HaloBattery — matte glass</title>
+  <desc>A pale mint glass ring with a soft lime charge arc and a uniformly light lightning bolt on a transparent background.</desc>
+  <defs>
+    <linearGradient id="glass" x1="220" y1="180" x2="760" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ACCDBD" stop-opacity="1"/>
+      <stop offset=".5" stop-color="#B6D5C6" stop-opacity="1"/>
+      <stop offset="1" stop-color="#A6C7B7" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="charge" x1="190" y1="740" x2="805" y2="270" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D7FF86" stop-opacity=".97"/>
+      <stop offset=".38" stop-color="#B1FF65" stop-opacity=".96"/>
+      <stop offset=".74" stop-color="#83FB50" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#91FF66" stop-opacity=".95"/>
+    </linearGradient>
+    <linearGradient id="boltGlass" x1="407" y1="375" x2="606" y2="676" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#88AE98" stop-opacity="1"/>
+      <stop offset=".5" stop-color="#AACBB7" stop-opacity="1"/>
+      <stop offset="1" stop-color="#90B69E" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <!-- Transparent canvas; no cast shadows or dark diffuse overlays. -->
+  <circle cx="512" cy="512" r="350" stroke="url(#glass)" stroke-width="110"/>
+  <path d="M 512 162 A 350 350 0 1 1 162 512" stroke="url(#charge)" stroke-width="110" stroke-linecap="round"/>
+  <path d="M 578 300 C 588 286 610 291 606 310 L 566 455 L 637 453 C 650 453 655 465 647 476 L 439 745 C 428 760 414 752 419 737 L 462 567 L 383 570 C 370 571 365 558 375 547 Z" fill="url(#boltGlass)"/>
+</svg>

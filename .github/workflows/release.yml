@@ -37,6 +37,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.401"
+
       - name: Check that the tag matches VERSION
         if: github.ref_type == 'tag'
         shell: pwsh
@@ -71,7 +76,8 @@ jobs:
         run: |
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
-          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports --add-data "docs/licenses:licenses" --add-data "docs/credits.md:licenses" --hidden-import usb.backend.libusb1 --collect-data libusb_package halo_battery.pyw
+          ./scripts/build_settings.ps1
+          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports --add-data "docs/licenses:licenses" --add-data "docs/credits.md:licenses" --add-data ".build/settings-ui:settings-ui" --hidden-import usb.backend.libusb1 --collect-data libusb_package halo_battery.pyw
 
       - name: Zip the HaloBattery folder
         id: zip
