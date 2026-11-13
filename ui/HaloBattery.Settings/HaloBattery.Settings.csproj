@@ -11,13 +11,27 @@
   <WindowsAppSDKUndockedRegFreeWinRTInitialize Condition="'$(SelfContained)' == 'true'">true</WindowsAppSDKUndockedRegFreeWinRTInitialize>
   <PublishSingleFile>false</PublishSingleFile><PublishAot>false</PublishAot><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
   <ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>../../halo.ico</ApplicationIcon>
+  <!-- Trim framework dependencies while retaining the reflection metadata used
+       by the settings protocol and WinUI's native XAML activation. -->
+  <PublishTrimmed Condition="'$(SelfContained)' == 'true'">true</PublishTrimmed>
+  <TrimMode>partial</TrimMode>
+  <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  <TrimmerSingleWarn>false</TrimmerSingleWarn>
  </PropertyGroup>
  <ItemGroup>
-  <PackageReference Include="Microsoft.WindowsAppSDK" Version="[2.5.1]" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="[2.3.9]" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="[2.1.9]" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="[2.5.1]" />
   <Content Include="../../assets/fonts/*.ttf;../../assets/fonts/OFL-*.txt" Link="Assets/Fonts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../halo.ico" Link="Assets/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-dark.svg" Link="Assets/AppIconHeaderDark.svg" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-light.svg" Link="Assets/AppIconHeaderLight.svg" CopyToOutputDirectory="PreserveNewest" />
+ </ItemGroup>
+ <!-- Keep application DTO/anonymous JSON properties and WinUI reflection paths.
+      Rooting only the app can produce a successful build that fails at startup. -->
+ <ItemGroup Condition="'$(SelfContained)' == 'true'">
+  <TrimmerRootAssembly Include="$(AssemblyName)" />
+  <TrimmerRootAssembly Include="Microsoft.WinUI" />
  </ItemGroup>
  <!-- WinUI-generated resources are not Content items in an unpackaged SDK
       publish. Copy their existing output paths after publishing the app. -->

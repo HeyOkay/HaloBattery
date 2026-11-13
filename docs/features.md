@@ -36,8 +36,13 @@ on supported Windows 11 systems; Windows 10 uses an opaque theme background.
 
 Release builds publish the companion as an unpackaged x64 folder with both .NET
 and Windows App SDK runtimes bundled. Keep the entire HaloBattery folder
-together. This increases download and disk size; final size and clean-machine
-deployment verification are pending.
+together. The build references only the WinUI, input/composition and runtime
+components; unused AI, machine-learning, search and widget components are not
+included. Partial .NET trimming retains the full application and WinUI assemblies
+and enables the reflection-based JSON protocol. The separate native publish tree
+is added after Python dependency analysis to avoid collecting its DLLs twice.
+Wallpaper image formats, fonts and native language resources are retained.
+Clean-machine deployment still needs verification before a stable release.
 
 For source builds, install .NET SDK 10.0.401, generate the application icon with
 `python tools/make_icon.py halo.ico`, then run `./scripts/build_settings.ps1`

@@ -54,7 +54,7 @@ jobs:
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
           ./scripts/build_settings.ps1
-          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports --add-data "docs/licenses:licenses" --add-data "docs/credits.md:licenses" --add-data ".build/settings-ui:settings-ui" --hidden-import usb.backend.libusb1 --collect-data libusb_package halo_battery.pyw
+          python tools/build_exe.py
 
       - name: Zip, installer and notes
         shell: pwsh

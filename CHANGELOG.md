@@ -39,6 +39,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Reduce packaged settings dependencies with modular WinUI references, partial
+  .NET trimming that preserves application and WinUI reflection metadata, and
+  inclusion of the native publish tree without duplicate Python-side DLLs.
+  Both runtimes remain bundled; wallpaper formats, fonts and languages are retained.
+
 - Keep settings pages aligned after interrupted elastic scrolling and tab
   transitions, and position backward navigation before the page settles.
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
