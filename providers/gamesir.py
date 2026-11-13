@@ -11,9 +11,10 @@ byte 36 the level in percent.
 
 The pad does not send that report on its own: an idle pad stayed silent for
 minutes, stick moving or not. It answers as soon as it is asked anything on that
-collection, so the read-only request GameSir Connect sends on every connection,
-"read firmware version" (0F 0B), is sent and report 0x12 follows (0.00-0.01 s).
-Only this request is sent, never a configuration command.
+collection, so the read-only request GameSir Connect sends when it loads the
+pad's profile, "read current profile" (0F 0B, getReadCurrentProfileCommand), is
+sent and report 0x12 follows (0.00-0.01 s). Only this request is sent, never a
+configuration command. (0F 09, "read firmware version", was not tried.)
 
 Confirmed on hardware by the owner on the Aimlabs edition, 2026-11-13: the dongle
 (3537:10c6) and the cable (3537:10c5); 100 / 98 / 97 % matched GameSir Connect;
@@ -33,10 +34,11 @@ from .base import hexdump
 
 VENDOR_VID = 0x3537
 USAGE_PAGE = 0xFFF0
+USAGE = 0x40
 STATE_REPORT = 0x12
 CHARGE_BYTE = 35
 LEVEL_BYTE = 36
-STATUS_REQUEST = bytes([0x0F, 0x0B])     # "read firmware version": read-only
+STATUS_REQUEST = bytes([0x0F, 0x0B])     # "read current profile": read-only
 
 MODEL = "GameSir G7 Pro 8K"
 # GameSir Connect's G7ProCE modes: pid -> edition. Each pair is cable, dongle.
@@ -76,7 +78,7 @@ def read_connected(diag: List[str]) -> Optional[Reading]:
     """Read only the vendor collection; the caller identifies the XInput slot."""
     cols = [d for d in hidlist.enumerate(VENDOR_VID)
             if is_supported(d.get("product_id") or 0)
-            and d.get("usage_page") == USAGE_PAGE]
+            and d.get("usage_page") == USAGE_PAGE and d.get("usage") == USAGE]
     # More than one pad cannot be matched to the one XInput slot reliably.
     if len(cols) != 1:
         diag.append(f"[GameSir] {len(cols)} vendor collection(s): not read")

@@ -113,12 +113,20 @@ class GameSirTests(unittest.TestCase):
     def test_unrelated_and_ambiguous_collections_are_never_opened(self):
         # 0x0575: the idle dongle while the pad is on its cable
         for cols in ([], [dict(COLLECTION, product_id=0x0575)],
-                     [dict(COLLECTION, usage_page=1)], [COLLECTION, COLLECTION]):
+                     [dict(COLLECTION, usage_page=1)], [dict(COLLECTION, usage=1)],
+                     [COLLECTION, COLLECTION]):
             pad = FakePad([state()])
             result, _ = self.read(pad, cols)
             self.assertIsNone(result)
             self.assertEqual(pad.writes, [])
             self.assertFalse(pad.closed)
+
+    def test_another_collection_on_the_same_usage_page_is_ignored(self):
+        pad = FakePad([state(94)])
+        result, _ = self.read(pad, [dict(COLLECTION, usage=1, path=b"other"), COLLECTION])
+        self.assertEqual(result.level, 94)
+        self.assertEqual(pad.writes, [G.STATUS_REQUEST])
+
 
 
 class FakeXInput:
