@@ -257,6 +257,21 @@ Packets are paced at least 10 ms apart, as NGENUITY does. A full battery on the 
 
 Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collection list - `03F0:0D97` publishes exactly `ff00:0001` on interface 2 - and the reference project's dongle is `03F0:0F98`, while `0x0D97` appears in the device-information reply of that hardware. **Unverified on this app's side** until the reporter runs the test build.
 
+### Inphic and Attack Shark mice (1D57 receivers)
+
+**Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)
+
+The mouse announces its level and charging state by itself; nothing is ever written to it. The frames were decoded from INPHIC HUB, the vendor's own Windows app, which opens the status collection `000a:0000` with hidapi (and keeps `ff00:0001` for its writes). Windows hands the report id back first:
+
+    standard frame    03 <model> 40 <sub> <level>
+    X6/R1 generation  03 10 40 <stage> <level/10>
+
+`<sub>` is `0x01` for a level, `0x02` for full (shown as 100 %) and `0x03` for charging. A frame carrying only the charging state keeps the last level on screen, as in the vendor app; a level outside 1..100 is refused. On the X3 Max `0x02` is its cable state rather than a full battery — a 67 % unit sent it a minute after plugging in — so the last level stays and the icon shows charging. The `0x10` generation is the exception: the stage byte holds the DPI stage rather than the charging sub-command, the level arrives in steps of ten, and its frames carry no charging state at all — so an R1 on the cable keeps its normal icon by design. The dongle's config ACK (`03 10 50 ...`) and DPI-button report (`03 10 10 ...`) share the shape and are rejected by the `0x40` command check.
+
+Model codes: `0x95 / 0x90 / 0x93 / 0x99` on the Inphic In9 Pro, `0x55` (X11), `0x4E` (X3 Max) and `0x10` (X6/R1) on the `fa60` receivers. Each receiver is read only for the codes proven on it. Frames arrive every couple of seconds; a poll that misses one keeps the last level, greys it out after a while, then drops the icon — a value is never invented.
+
+Sources: INPHIC HUB's own parse (the vendor app the reporter linked in [#160](https://github.com/HeyOkay/HaloBattery/issues/160)); [blak0p/attack-shark-linux](https://github.com/blak0p/attack-shark-linux) (`docs/protocol-x6.md`, validated live on the dongle, MIT) for the X6/R1 shape. **Confirmed on hardware**: In9 Pro ([#160](https://github.com/HeyOkay/HaloBattery/issues/160), including the charging state), X11 ([#163](https://github.com/HeyOkay/HaloBattery/issues/163)) and R1 ([#69](https://github.com/HeyOkay/HaloBattery/issues/69), `03 10 40 01 09` = 90 %); the X3 Max's 30 % frame was caught in its reporter's diagnostics ([#228](https://github.com/HeyOkay/HaloBattery/issues/228)).
+
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)
