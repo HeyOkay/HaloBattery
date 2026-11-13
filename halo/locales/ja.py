@@ -1,6 +1,9 @@
 """Japanese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "preferences.icon_style": "アイコンのスタイル",
+    "icon_style.outline": "輪郭",
+    "icon_style.filled": "塗りつぶし",
     "device.description": "{name}: {state}",
     "menu.rename": "名前を変更…",
     "menu.reset_name": "名前をリセット",

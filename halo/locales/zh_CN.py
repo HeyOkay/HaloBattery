@@ -1,6 +1,9 @@
 """Simplified Chinese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "preferences.icon_style": "图标样式",
+    "icon_style.outline": "轮廓",
+    "icon_style.filled": "填充",
     "device.description": "{name}: {state}",
     "menu.rename": "重命名…",
     "menu.reset_name": "重置名称",

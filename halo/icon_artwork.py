@@ -44,6 +44,7 @@ import io
 import math
 from functools import lru_cache
 from PIL import Image
+from . import icon_artwork_filled
 
 _PNG = {
     ('headset', 16): (
@@ -1337,7 +1338,7 @@ def _image(name, size):
 
 
 def glyph(kind, size, foreground, alpha, brand="default", colored=False, *,
-          foreground_opacity=255):
+          foreground_opacity=255, filled=False):
     """An independently colored glyph layer; every call returns an owned image."""
     controller = kind in ("gamepad", "dualshock", "dualsense")
     name = brand if controller and brand in ("xbox", "playstation", "nintendo") else kind
@@ -1348,7 +1349,8 @@ def glyph(kind, size, foreground, alpha, brand="default", colored=False, *,
         image = _image(master, size).copy()
         image.putalpha(image.getchannel("A").point(lambda v: round(v*alpha/255)))
         return image
-    mask = _image(name, size)
+    mask = (icon_artwork_filled.image(name, size)
+            if filled and name in icon_artwork_filled.KINDS else _image(name, size))
     color = foreground
     if controller and colored and name == "nintendo":
         color = (230, 0, 18)
