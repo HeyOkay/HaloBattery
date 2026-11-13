@@ -23,7 +23,10 @@ class NativePayloadTests(unittest.TestCase):
                              {"settings-ui/" + name for name in names})
             for destination, source, kind in entries:
                 self.assertEqual(kind, "DATA")
-                self.assertEqual(Path(source), root / destination.removeprefix("settings-ui/"))
+                # A Windows TEMP directory may use a short profile name while
+                # resolve() expands it (RUNNER~1 -> runneradmin).
+                self.assertTrue(Path(source).samefile(
+                    root / destination.removeprefix("settings-ui/")))
             self.assertEqual(entries, native_payload_entries(root))
 
     def test_missing_companion_fails_before_packaging(self):
