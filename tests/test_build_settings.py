@@ -16,7 +16,7 @@ class SettingsPublishTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="halo publish [test] ")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.repo = self.root / "repository"
         (self.repo / "scripts").mkdir(parents=True)
         (self.repo / "ui" / "HaloBattery.Settings").mkdir(parents=True)
