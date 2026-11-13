@@ -56,6 +56,15 @@ jobs:
           ./scripts/build_settings.ps1
           python tools/build_exe.py
 
+      - name: Archive native settings symbols
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-Settings-symbols-${{ github.sha }}
+          path: .build/settings-ui-obj/**/linked/HaloBattery.Settings.pdb
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Zip, installer and notes
         shell: pwsh
         run: |

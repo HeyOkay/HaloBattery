@@ -17,6 +17,8 @@
   <TrimMode>partial</TrimMode>
   <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  <!-- Keep matching linked PDBs in build output for the CI symbol artifact. -->
+  <CopyOutputSymbolsToPublishDirectory Condition="'$(Configuration)' == 'Release'">false</CopyOutputSymbolsToPublishDirectory>
  </PropertyGroup>
  <ItemGroup>
   <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="[2.3.9]" />

@@ -42,6 +42,9 @@ included. Partial .NET trimming retains the full application and WinUI assemblie
 and enables the reflection-based JSON protocol. The separate native publish tree
 is added after Python dependency analysis to avoid collecting its DLLs twice.
 Wallpaper image formats, fonts and native language resources are retained.
+Each native publish uses a clean staging directory; a failed build leaves the
+previous output in place. Release PDBs remain in intermediate build output and
+are archived separately by CI for 90 days instead of being included in the app.
 Clean-machine deployment still needs verification before a stable release.
 
 For source builds, install .NET SDK 10.0.401, generate the application icon with

@@ -39,6 +39,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Publish native settings into a clean staging directory and replace the previous
+  output only after success, preventing obsolete DLLs from entering local rebuilds.
+  Release symbols are archived separately instead of shipping in the app folder.
+
 - Reduce packaged settings dependencies with modular WinUI references, partial
   .NET trimming that preserves application and WinUI reflection metadata, and
   inclusion of the native publish tree without duplicate Python-side DLLs.
