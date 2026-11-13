@@ -184,6 +184,7 @@ DEFAULTS = {
     "disabled_providers": [],     # provider names turned off in Preferences > Device types
     "time_left": True,      # "about N h of use left" in the tooltip (history.py)
     "percent_in_icon": False,  # the level as a number in the ring, instead of the pictogram
+    "filled_icons": False,  # global device pictogram style; outline remains the default
     "quiet_fullscreen": True,  # while a game is full screen: hold alerts, poll every 5 min
     "keep_disconnected": False,  # keep a gone device's icon, greyed with its last level, until restart (#151)
     "status_file": False,      # write status.json for Rainmeter, Stream Deck, scripts
@@ -1159,7 +1160,8 @@ class DeviceIcon:
         brand, brand_color = self.app.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused, self.app.low_for(st),
                  self.app.light_taskbar, badge, animate, text, st.polling_paused,
-                 getattr(self.app, "tray_size", icons.SIZE), brand, brand_color)
+                 getattr(self.app, "tray_size", icons.SIZE), brand, brand_color,
+                 self.app.cfg.get("filled_icons", False))
         if state != self._state:
             art = self._art(state)
             if animate:
@@ -1196,19 +1198,19 @@ class DeviceIcon:
         draw anything again. The cache holds one state, in at most both colours."""
         art = self._images.get(state)
         if art is None:
-            level, charging, online, low, light, badge, animate, text, paused, size, brand, color = state
+            level, charging, online, low, light, badge, animate, text, paused, size, brand, color, filled = state
             other = (level, charging, online, low, not light, badge, animate, text, paused,
-                     size, brand, color)
+                     size, brand, color, filled)
             kept = self._images.get(other)
             self._images.clear()
             if kept is not None:
                 self._images[other] = kept      # the same state in the other colour
             if animate:
                 art = icons.charging_frames(level, online, low, light, badge, text=text,
-                                            size=size, brand=brand, brand_color=color)
+                                            size=size, brand=brand, brand_color=color, filled=filled)
             else:
                 art = icons.render(level, charging, online, low, light, badge, text=text,
-                                   force_active=paused, size=size, brand=brand, brand_color=color)
+                                   force_active=paused, size=size, brand=brand, brand_color=color, filled=filled)
             self._images[state] = art
         return art
 
@@ -1530,6 +1532,11 @@ class App:
                  checked=lambda it: self.cfg["badges"]),
             Item(tr("preferences.percent"), toggle("percent_in_icon"),
                  checked=lambda it: self.cfg.get("percent_in_icon", False)),
+            Item(tr("preferences.icon_style"), Menu(
+                Item(tr("icon_style.outline"), lambda i, it: self.set_icon_style(False),
+                     checked=lambda it: not self.cfg.get("filled_icons", False), radio=True),
+                Item(tr("icon_style.filled"), lambda i, it: self.set_icon_style(True),
+                     checked=lambda it: self.cfg.get("filled_icons", False), radio=True))),
             Item(tr("preferences.animation"), toggle("animation"),
                  checked=lambda it: self.cfg["animation"]),
             Item(tr("preferences.theme"), Menu(*[
@@ -1661,6 +1668,21 @@ class App:
             save_config(self.cfg)
         log.info("icon of [%s]: %s", owner.status.key, value or "automatic")
         owner.update(owner.status)            # redraw at once
+        self.refresh_menus()
+
+    def set_icon_style(self, filled: bool) -> None:
+        """Persist the global pictogram style and redraw every current device."""
+        if not isinstance(filled, bool):
+            return
+        with self.lock:
+            self.cfg["filled_icons"] = filled
+            save_config(self.cfg)
+            for owner in list(self.icons.values()):
+                if owner.status is not None:
+                    try:
+                        owner.update(owner.status)
+                    except Exception:
+                        log.warning("icon style redraw failed for [%s]", owner.key, exc_info=True)
         self.refresh_menus()
 
     def controller_color(self, key: str) -> bool:

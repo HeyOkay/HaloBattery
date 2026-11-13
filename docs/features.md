@@ -36,6 +36,7 @@ Right-click a device icon to open its menu. It looks like a Windows 11 menu (acr
   - **Status file for other apps** (off by default): writes `%APPDATA%\HaloBattery\status.json` after every poll, for Rainmeter, a Stream Deck plugin or a script. Each device has `name`, `level`, `charging`, `online`, `kind`, `seconds_left` and the tooltip `text`; `running` turns false when the app exits, and `updated_unix` says how fresh it is. Turning it off deletes the file.
   - **Device types**: turn off a brand or device family; its devices are then not opened at all
   - **Icon colour**: Automatic (the Windows theme, or MyDockFinder's menu bar while it is running), White or Black
+  - **Icon style**: **Outline** (the default) or **Filled** for device pictograms. The choice applies immediately to all devices and is saved. The battery ring, percentage display and controller logos keep their existing appearance.
   - **Start with Windows** (per-user registry key, no admin rights needed)
   - **Check for updates**: once a day, on by default; a notification and an **Update to vX.Y.Z** item appear when a new release is out. **Check for updates now** asks at once and always answers with a notification
 - **Hidden devices** (only when a device is hidden): click a device to show it again

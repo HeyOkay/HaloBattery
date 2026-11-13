@@ -425,7 +425,7 @@ class MenuLayoutTests(HideRenameTestCase):
                                  "Keep disconnected devices until restart",
                                  "Windows Bluetooth devices", "PlayStation full mode (Bluetooth)",
                                  "Device types",
-                                 "Device pictogram", "Percentage in the icon", "Charging animation",
+                                 "Device pictogram", "Percentage in the icon", "Icon style", "Charging animation",
                                  "Icon colour", "Status file for other apps",
                                  "Start with Windows", "Check for updates",
                                  "Check for updates now"])

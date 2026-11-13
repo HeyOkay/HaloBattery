@@ -1,0 +1,7 @@
+<!-- Fill-only variation of the pinned Lucide source. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-watch" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <defs><mask id="fill-watch" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24" style="mask-type:luminance"><rect width="24" height="24" fill="black" stroke="none" /><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" data-source-index="1" stroke="white" fill="white" />
+  <path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" data-source-index="2" stroke="white" fill="white" />
+  <circle cx="12" cy="12" r="6" data-source-index="3" stroke="white" fill="white" />
+<path d="M12 10v2.2l1.6 1" data-source-index="0" stroke="black" />
+  </mask></defs><rect width="24" height="24" fill="currentColor" stroke="none" mask="url(#fill-watch)" /></svg>

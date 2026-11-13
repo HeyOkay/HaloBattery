@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Preferences → Icon style → Outline / Filled**: switch all device pictograms
+  immediately and keep the choice after restarting. Filled artwork uses lighter
+  body silhouettes and compensated small details while preserving the battery ring.
+
 ### Fixed
 
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar

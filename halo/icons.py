@@ -282,7 +282,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            light_taskbar: Optional[bool] = None, badge: str = "",
            pulse: float = 1.0, text: str = "", force_active: bool = False, *,
            size: int = SIZE, brand: str = "default", brand_color: bool = False,
-           animation_phase: float = 0.0) -> Image.Image:
+           animation_phase: float = 0.0, filled: bool = False) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - known-level arc brightness 0..1 (the charging "breathing" animation).
     animation_phase - clockwise turn 0..1 for unknown charging; its brightness is steady.
@@ -353,7 +353,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     if kind and not text:
         img = Image.alpha_composite(img, icon_artwork.glyph(
             kind, size, fg, alpha, brand, brand_color,
-            foreground_opacity=NEUTRAL_OPACITY))
+            foreground_opacity=NEUTRAL_OPACITY, filled=filled))
     return img
 
 
@@ -371,11 +371,12 @@ def breath_level(phase: float) -> float:
 
 def charging_frames(level: Optional[int], online: bool, low: int = 20,
                     light_taskbar: Optional[bool] = None, badge: str = "", text: str = "", *,
-                    size: int = SIZE, brand: str = "default", brand_color: bool = False):
+                    size: int = SIZE, brand: str = "default", brand_color: bool = False,
+                    filled: bool = False):
     """A breathing known-level arc or rotating unknown-level arc, cached as one cycle."""
     return [render(level, True, online, low, light_taskbar, badge, breath_level(i / BREATH_FRAMES),
                    text=text, size=size, brand=brand, brand_color=brand_color,
-                   animation_phase=i / BREATH_FRAMES if level is None else 0.0)
+                   animation_phase=i / BREATH_FRAMES if level is None else 0.0, filled=filled)
             for i in range(BREATH_FRAMES)]
 
 

@@ -8,6 +8,9 @@ AdrianH23 reviewed the port: https://github.com/TiagoFerreiraDomingues/HaloBatte
 """
 
 MESSAGES = {
+    "preferences.icon_style": "Estilo de iconos",
+    "icon_style.outline": "Contorno",
+    "icon_style.filled": "Relleno",
     "device.description": "{name}: {state}",
     # Menus, preferences and icon choices adapted from #249.
     "menu.rename": "Cambiar nombre…",
