@@ -77,6 +77,29 @@ and one read, so both are tried here, the AA frame first as in M HUB. The headse
 two devices over one product - the headset itself (3837:600A, C-Media strings) and its dongle
 (3837:6008, WCH strings) - so both sides of that pair share one icon.
 
+The newer 0x3837 wireless mice (the K7 V2 Ultra+ on 3837:1018 confirmed on hardware) do not
+answer the inverted 0x06 frame at all - every feature read comes back as a read error, awake
+or not - and their configuration collection (0xFF01:0x01) declares report ids 0x11, 0x13 and
+0x4D, but no 0x12. M HUB reads them with a third frame. Source: the M HUB web bundle on
+www.mchose.com.cn (``assets/main-*.js``, revision fetched 2026-11-12): ``newMouseWirelessPids``
+lists 4116, 4120, 4124, 4118 and 4125 (0x1014, 0x1018, 0x101C, 0x1016, 0x101D), and their
+``readDeviceInfo`` sends ``mcReadCommand({commandId: "0x0900"})``, which ``getCommandBuffer``
+builds as a 64-byte *output* report:
+
+    4D 01 <flags=1> <len=0> <cmd lo=00> <cmd hi=09> <biz=0> <seq=0> <xor of bytes 2..7> 00 ...
+
+``waitCommand`` takes the input report whose bytes 3-4 (after the report id) echo the command,
+and ``deviceInfoToObj`` decodes the payload that follows the 8-byte header: vid:u16, pid:u16,
+maxConfigNum, macroSaveType, shareMacroDataSize:u16, macroUnitSize:u16, connectStatus,
+chargeStatus (1 = charging, as M HUB's battery widget reads it), batteryLevel, gameMode. A
+level of 0 is what M HUB shows as "breakConnect" (the mouse is not linked or asleep), and a
+payload starting 0xFF means busy (``mcReadWithRetry`` asks again). With flags 1 the reply
+carries the same XOR checksum at byte 8 + len. **Confirmed on a K7 V2 Ultra+** in its MagDock
+receiver: ``4d 01 01 10 00 09 00 00 37 38 26 40 04 00 00 00 00 10 02 00 55 00 08 e4 de`` -
+vid 0x3837, charge 0, level 0x55 = 85 %, checksum 0xDE matching; set on the MagDock to charge
+it answers charge 1 and level 0x5E (94 %, charging). Only the 0x1018 receiver is verified; the
+other ids on M HUB's list get the same read and nothing else.
+
 Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
 in every reading so far). The V9 Turbo+ is confirmed on @IsonanDough's hardware (#193): the
@@ -157,6 +180,21 @@ STATUS_ASLEEP = 26
 HEADSET_ATTEMPTS = 2
 HEADSET_READ_MS = 400         # a tucked-in device answers in milliseconds
 
+# The newer 0x3837 wireless mice (K7 V2 Ultra+ and siblings): M HUB's 0x4D frame, see the
+# module docstring. The pid list is M HUB's own newMouseWirelessPids.
+MC_VID = 0x3837
+MC_PIDS = (0x1014, 0x1016, 0x1018, 0x101C, 0x101D)
+MC_REPORT = 0x4D
+MC_LEN = 64                   # the whole frame, report id included
+MC_CMD_DEVICE_INFO = 0x0900
+MC_HEADER = 8                 # report id, 01, flags, len, cmd lo, cmd hi, biz, seq
+MC_CHARGING = 1
+MC_LEVEL_AT = 12              # deviceInfoToObj: batteryLevel
+MC_CHARGE_AT = 11             # deviceInfoToObj: chargeStatus
+MC_ATTEMPTS = 3               # readDeviceInfo asks up to three more times on a 0 level
+MC_READS = 5                  # reads per request, skipping pushed reports (~1 s in all)
+MC_READ_MS = 200
+
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 SHORT_REPORT = 0x11
 LONG_REPORT = 0x12
@@ -213,6 +251,51 @@ def parse_status(resp) -> Optional[Tuple[int, int, int, int]]:
     if level > 100:
         return None
     return level, charge, model, flags
+
+
+def _xor(data) -> int:
+    acc = 0
+    for b in data:
+        acc ^= b
+    return acc
+
+
+def make_mc_request(cmd: int = MC_CMD_DEVICE_INFO) -> bytes:
+    """M HUB's getCommandBuffer for a read with no data: 4D 01 01 00 lo hi 00 00 <xor>."""
+    buf = bytearray(MC_LEN)
+    buf[0:8] = bytes([MC_REPORT, 0x01, 0x01, 0x00, cmd & 0xFF, (cmd >> 8) & 0xFF, 0x00, 0x00])
+    buf[8] = _xor(buf[2:8])       # calculateXorSum(buf, 2, 7 + data.length)
+    return bytes(buf)
+
+
+def parse_mc_info(resp) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from a 0x0900 reply, or None if it is not a reading.
+
+    Not a reading: a frame that is not the 0x0900 echo, a failed checksum, a busy payload
+    (0xFF first), another vendor id, a level above 100, or a level of 0 - M HUB's
+    "breakConnect", the mouse asleep or not linked.
+    """
+    if not resp or len(resp) < MC_HEADER:
+        return None
+    r = bytes(resp)
+    if r[0] != MC_REPORT or r[1] != 0x01:
+        return None
+    if r[4] != (MC_CMD_DEVICE_INFO & 0xFF) or r[5] != (MC_CMD_DEVICE_INFO >> 8):
+        return None
+    length = r[3]
+    if length <= MC_LEVEL_AT or len(r) < MC_HEADER + length + (1 if r[2] == 1 else 0):
+        return None
+    if r[2] == 1 and r[MC_HEADER + length] != _xor(r[2:MC_HEADER + length]):
+        return None
+    pay = r[MC_HEADER:MC_HEADER + length]
+    if pay[0] == 0xFF:
+        return None
+    if int.from_bytes(pay[0:2], "little") not in MCHOSE_VIDS:
+        return None
+    level = pay[MC_LEVEL_AT]
+    if not 0 < level <= 100:
+        return None
+    return level, pay[MC_CHARGE_AT] == MC_CHARGING
 
 
 def parse_g7(resp) -> Optional[Tuple[int, bool]]:
@@ -547,6 +630,39 @@ class MchoseProvider(Provider):
                 pass
 
 
+    def _read_mc(self, path: bytes) -> Optional[Tuple[int, bool]]:
+        """M HUB's readDeviceInfo: write the 0x0900 frame and read until its echo turns
+        up, skipping the reports the mouse pushes on its own, as waitCommand does. A
+        level of 0 is asked again, as readDeviceInfo does; a silent run reads as no level.
+        """
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None
+        try:
+            for attempt in range(MC_ATTEMPTS):
+                try:
+                    dev.write(make_mc_request())
+                    for _ in range(MC_READS):
+                        resp = dev.read(64, MC_READ_MS)
+                        got = parse_mc_info(resp) if resp else None
+                        if got:
+                            self._diag.append(f"    answer (attempt {attempt + 1}): "
+                                              f"{hexdump(resp, 24)}")
+                            return got
+                except (OSError, ValueError) as e:
+                    self._diag.append(f"    0x0900: {e}")
+                    return None
+            self._diag.append("    no 0x0900 answer (mouse asleep?)")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def _read_headset(self, path: bytes) -> Optional[Tuple[Optional[int], bool]]:
         """Ask the headset for its status the way M HUB does, on output report 0x55.
 
@@ -615,9 +731,11 @@ class MchoseProvider(Provider):
             key = device_key(vid, pid)
             self._kinds[key] = "headset" if pid in HEADSET_PIDS else "mouse"
             product = (ifaces[0].get("product_string") or "").strip()
-            if product and (key not in self._names or "+" in product):
+            if product and (key not in self._names or "+" in product
+                            or (vid == MC_VID and pid in MC_PIDS)):
                 # over one product the more informative string wins: the dongle
-                # says "V9 Turbo", the headset itself says "MCHOSE V9 Turbo+"
+                # says "V9 Turbo", the headset itself says "MCHOSE V9 Turbo+"; a mouse
+                # receiver names the icon over the MagDock (3837:1012) on the same key
                 self._names[key] = product
             if vid == G7_VID and pid != G7_PID:
                 # 0xA8A5 is a chip maker's vendor id ("YJX-CHIP"), not a model, so other
@@ -643,6 +761,10 @@ class MchoseProvider(Provider):
                 # never where the answer comes from, so it is not written to at all
                 # (the G7's rule; review by @ahmedkhursheed23).
                 cols = [d for d in cols if (d.get("usage_page") or 0) == A5_USAGE_PAGE]
+            elif vid == MC_VID and pid in MC_PIDS:
+                # M HUB writes its 0x4D frame to the collection that declares it, the
+                # configuration collection; 0xFF0B next to it is not written to
+                cols = [d for d in cols if (d.get("usage_page") or 0) == CONFIG_PAGE]
             elif pid in HEADSET_PIDS:
                 # the dongle's 0xFF00 page first; on the headset none of its pages is
                 # known to carry the report yet, so the dump order is kept otherwise
@@ -667,6 +789,10 @@ class MchoseProvider(Provider):
                     got_a5 = self._read_a5(d["path"])
                     if got_a5:
                         found.setdefault(key, []).append((got_a5[0], got_a5[1], pid, 0))
+                elif vid == MC_VID and pid in MC_PIDS:
+                    got_mc = self._read_mc(d["path"])
+                    if got_mc:
+                        found.setdefault(key, []).append((got_mc[0], got_mc[1], pid, 0))
                 elif pid in HEADSET_PIDS:
                     got = self._read_headset(d["path"])
                     if got is not None:

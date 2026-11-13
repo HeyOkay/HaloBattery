@@ -281,6 +281,12 @@ The same protocol as the M7 Ultra on MCHOSE's newer vendor id, which the referen
 
 A different chip from the M7 Ultra, and a different protocol: a 65-byte output report `00 55 30 A5 0B 2E 01 01 01`, answered by an input report starting `AA 30` whose byte 8 is the level and byte 9 the charging flag. Written from @kek353's own monitor and the device dump in [#8](https://github.com/HeyOkay/HaloBattery/issues/8); only its 0xFF01 vendor collection is written to. Confirmed on @kek353's G7, which answers `aa 30 a5 0b 0a 01 01 01 2e 00 00 00` — 46%, not charging, the same level their own tool shows — and again on its cable (`aa 30 a5 3c 0a 01 01 01 2e 01 00 00`, byte 9 = 1 while charging) with the PID unchanged, so a G7 keeps one icon on the dongle or on the cable. Only the `AA 30` header is relied on: byte 3 differs between the two (`0x0b` against `0x3c`). A level out of range is refused rather than shown
 
+### MCHOSE K7 V2 Ultra+
+
+**Connection:** 2.4 GHz receiver (3837:1018), including the receiver in the MCHOSE MagDock
+
+A newer MCHOSE exchange that does not answer the inverted 0x06 frame (every feature read comes back as a read error) and has no 0x12 report: its configuration collection (0xFF01:0x01, interface 2) declares report ids 0x11, 0x13 and 0x4D. Taken from MCHOSE's own M HUB web driver (www.mchose.com.cn, `assets/main-*.js`, fetched 2026-11-12): `readDeviceInfo` sends `mcReadCommand` 0x0900, which `getCommandBuffer` builds as the 64-byte output report `4D 01 01 00 00 09 00 00 08` + zeros (flags 1, data length 0, command 0x0900 little-endian, then the XOR of bytes 2-7). The reply is the input report that echoes the command; `deviceInfoToObj` reads the payload after the 8-byte header as vid, pid, …, connectStatus, chargeStatus (byte 11, 1 = charging) and batteryLevel (byte 12), with the same XOR checksum after the payload. A level of 0 is M HUB's "breakConnect" (asleep or not linked), so the icon keeps its last level greyed out. The same read is used for every PID on M HUB's `newMouseWirelessPids` list (0x1014, 0x1016, 0x1018, 0x101C, 0x101D); only the configuration collection is written to. **Confirmed on hardware** (K7 V2 Ultra+ on its MagDock): `4d 01 01 10 00 09 00 00 37 38 26 40 04 00 00 00 00 10 02 00 55 00 08 e4 de`, 85 %, not charging, checksum matching; set on the MagDock to charge, the same read answers chargeStatus 1 and level 0x5E (94 %, charging). The other PIDs on that list are untried
+
 ### MCHOSE M7 Ultra
 
 **Connection:** 2.4 GHz receiver (5253:1020)
