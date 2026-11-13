@@ -25,6 +25,7 @@
 | [G-Wolves HSK Pro ACE and the other models with a receiver of their own](protocols.md#g-wolves-hsk-pro-ace-and-the-other-models-with-a-receiver-of-their-own) | The model's own receiver or USB cable | no |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
+| [GameSir G7 Pro 8K (Aimlabs and other editions)](protocols.md#gamesir-g7-pro-8k) | 2.4 GHz dongle, USB cable or charging dock (shows up as an Xbox 360 controller); one controller in both XInput and Windows.Gaming.Input | yes (Aimlabs edition) |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
 | [HyperX Cloud Alpha 2](protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |

@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **GameSir G7 Pro 8K** (Aimlabs edition confirmed, `3537:10c6` on the dongle and
+  `3537:10c5` on the cable): reads the controller's own battery level and charging
+  state through its GameSir Connect HID collection, instead of the Windows
+  placeholder that showed a permanent 100 %. Requires one controller in both XInput
+  and Windows.Gaming.Input. The other editions use GameSir Connect's id table and
+  are unverified.
+
 ### Fixed
 
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
