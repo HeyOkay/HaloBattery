@@ -1,6 +1,9 @@
 """English is the reference catalog and fallback for every language."""
 
 MESSAGES = {
+    "preferences.icon_style": "Icon style",
+    "icon_style.outline": "Outline",
+    "icon_style.filled": "Filled",
     "device.description": "{name}: {state}",
     "menu.rename": "Rename…",
     "menu.reset_name": "Reset name",

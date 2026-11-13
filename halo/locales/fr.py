@@ -1,6 +1,9 @@
 """French application text; brands and device names are kept unchanged."""
 
 MESSAGES = {
+    "preferences.icon_style": "Style des icônes",
+    "icon_style.outline": "Contour",
+    "icon_style.filled": "Rempli",
     "device.description": "{name} : {state}",
     "menu.rename": "Renommer…",
     "menu.reset_name": "Rétablir le nom",

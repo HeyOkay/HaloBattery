@@ -116,6 +116,38 @@ The radius 6.6 limit removes resampling fringe, rather than fitting the source b
 cutting opaque ink. Webcam, Smartwatch and Tag/Tracker retain scale 0.5. The 65
 retained pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged (79 payloads).
 
+## Filled device pictograms
+
+`filled/` contains eleven editable, locally stored Lucide 1.17.0 fill variations.
+Its manifest pins each SVG hash and upstream provenance, the seven native sizes,
+and the reviewed scale, translation and stroke width. The existing outline atlas
+and controller-logo masters are independent of these sources.
+
+```
+python tools/make_filled_artwork.py
+python tools/make_filled_artwork.py --check
+```
+
+The generator accepts `--browser PATH` for a local Chrome/Edge installation. It
+uses an isolated, offline headless profile under the ignored `build/` directory
+and renders each physical size directly, without downsampling a large master.
+`--check` compares decoded alpha pixels, supported kinds and optical metadata
+without rewriting source files. Browser and Pillow are development tools; the
+application uses only the embedded `halo/icon_artwork_filled.py` masks.
+
+`tools/filled_optics.py` keeps large filled bodies at the original stroke's
+centreline while retaining open strokes at their source width. Small cutouts
+receive size-aware compensation; circular cutouts preserve their positive centre.
+Headphone cups retain their reviewed filled contour and the band keeps its
+original thickness. The house has a pointed roof and an inward-clipped floor
+under its doorway. Existing placement and the battery ring are preserved.
+
+Keep the SVGs and manifest together when editing artwork, update the affected
+hash deliberately, regenerate, and inspect both 20px and enlarged comparisons.
+Run the filled optics, rendering and style-setting tests as well as the full
+suite. The application defaults to Outline; Preferences → Icon style selects
+Filled for all devices and persists the choice.
+
 ## Reviewed optical placement
 
 After geometric centering, the user reviewed these vertical nudges: Health,
