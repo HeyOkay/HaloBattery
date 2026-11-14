@@ -151,7 +151,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
-                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaF108Provider,
+                       AulaProvider, DareuProvider,
                        EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
@@ -204,6 +205,7 @@ PROVIDER_LABELS = {
     "atk_nearlink": "ATK X1 Nearlink mice",
     "audeze": "Audeze Maxwell",
     "aula": "AULA F87 Pro V2C keyboards",
+    "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
@@ -263,7 +265,8 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
-            AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
+            AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(),
+            AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(),
