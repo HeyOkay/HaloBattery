@@ -6,6 +6,7 @@
 
 | Device | Connection | Verified on hardware |
 |---|---|---|
+| [EWEADN X23 Pro](protocols.md#eweadn-x23-pro) | 2.4 GHz receiver (`04f3:026f`) | yes (battery; charging/offline only simulated) |
 | [Endgame Gear XM2we](protocols.md#endgame-gear-xm2we) | Original 2.4 GHz receiver (3367:1961) | yes (battery and charging) |
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
 | [AM Infinity 8K (Angry Miao)](protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
