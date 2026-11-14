@@ -957,6 +957,36 @@ def device_family(name: str) -> str:
     return " ".join(w for w in words if w not in _TRANSPORT_WORDS)
 
 
+def level_in_range(level) -> bool:
+    """A battery level is a number from 0 to 100. True and False are not levels."""
+    return (isinstance(level, (int, float)) and not isinstance(level, bool)
+            and 0 <= level <= 100)
+
+
+_refused_levels: Dict[str, str] = {}   # device key -> the refused value, so it is logged once
+
+
+def refuse_bad_levels(results: List[DeviceStatus]) -> List[DeviceStatus]:
+    """The last check before a reading can reach an icon, the history or an alert.
+
+    Each provider validates its own replies, but a missed check there showed a wrong
+    percentage as if it were real. A level that is not a number from 0 to 100 is
+    refused here for every provider: the device keeps its icon with the level unknown,
+    which is what a provider reports when it has no reading. Logged once per device and
+    value, not on every poll."""
+    out: List[DeviceStatus] = []
+    for st in results:
+        if st.level is None or level_in_range(st.level):
+            _refused_levels.pop(st.key, None)
+            out.append(st)
+            continue
+        if _refused_levels.get(st.key) != repr(st.level):   # repr: NaN is not equal to itself
+            _refused_levels[st.key] = repr(st.level)
+            log.warning("%s (%s): level %r is not 0-100, refused", st.name, st.key, st.level)
+        out.append(replace(st, level=None, approx="", ui_message="", ui_params={}))
+    return out
+
+
 def drop_bluetooth_duplicates(results: List[DeviceStatus],
                               logged: Set[str]) -> List[DeviceStatus]:
     """One icon per device, not one per transport.
@@ -2125,6 +2155,7 @@ class App:
             except Exception:
                 log.exception("provider %s", p.name)
                 continue
+            found = refuse_bad_levels(found)
             for st in found:
                 self.key_provider[st.key] = p.name
             results += found
@@ -2157,7 +2188,7 @@ class App:
     def _bt_update(self, res: List[DeviceStatus]):
         """A snapshot from the Bluetooth watcher: show it right away."""
         if self.cfg["bluetooth"]:
-            self.bt_cache = res
+            self.bt_cache = refuse_bad_levels(res)
         self.bt_fresh.set()
         self.wake.bluetooth()
 
@@ -2189,7 +2220,7 @@ class App:
                     res = []
                 log.info("bluetooth: %d device(s) in %.1f s", len(res), time.time() - t0)
                 if self.cfg["bluetooth"]:
-                    self.bt_cache = res
+                    self.bt_cache = refuse_bad_levels(res)
                 self.bt_fresh.set()
                 self.wake.bluetooth()           # show the result right away
             else:

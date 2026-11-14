@@ -55,6 +55,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A battery level that is not a number from 0 to 100 is never shown, whichever
+  device type reports it. The device keeps its icon with the level unknown, and
+  the refused value is written to the log once. Until now each device type had
+  to check this itself, and a missed check showed a wrong percentage.
+
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 
 - Use single-language Language card headings in English, French and Spanish.
