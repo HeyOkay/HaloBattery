@@ -397,7 +397,7 @@ class SettingsController:
     def action(self, name):
         app = self.app
         actions = dict(refresh=app.wake.set, diagnostics=app.request_diag, check_update=app.check_update_now,
-                       start_update=app.start_update, quit=app.quit,
+                       start_update=app.start_update, quit=app.quit, show_whats_new=app.show_whats_new,
                        open_data=lambda: os.startfile(self.context["data_dir"]),
                        open_project=lambda: app.open_url("https://github.com/" + self.context["repo"]),
                        open_issue=lambda: app.open_url("https://github.com/" + self.context["repo"] + "/issues/new/choose"))

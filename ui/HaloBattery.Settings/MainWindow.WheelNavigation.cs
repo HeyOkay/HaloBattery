@@ -11,6 +11,7 @@ namespace HaloBattery.Settings;
 public sealed partial class MainWindow
 {
     private int navigationWheelRemainder;
+    private readonly WheelNavigationGuard wheelNavigationGuard = new();
     private bool PageEntryBlocksWheel => pendingEntryPage is not null || pageEntry is not null;
     private nint pageEntryWheelHook;
     private WheelMessageHook? pageEntryWheelCallback;
@@ -44,9 +45,9 @@ public sealed partial class MainWindow
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 
-    private bool DiscardWheelDuringPageEntry()
+    private bool DiscardNavigationWheel()
     {
-        if (!PageEntryBlocksWheel) return false;
+        if (!wheelNavigationGuard.Consume(Environment.TickCount64, PageEntryBlocksWheel || pendingOverscrollNavigation is not null)) return false;
         navigationWheelRemainder = 0;
         return true;
     }
@@ -55,11 +56,11 @@ public sealed partial class MainWindow
     {
         // WH_GETMESSAGE runs before native XAML controls consume the wheel.
         // Only inspect removed messages on this window's own UI thread.
-        if (code == 0 && flags == 1 && PageEntryBlocksWheel)
+        if (code == 0 && flags == 1 && (unchecked((uint)Marshal.ReadInt32(messagePointer, IntPtr.Size)) is 0x020A or 0x020E or 0x024E or 0x024F))
         {
             var message = Marshal.PtrToStructure<WheelQueueMessage>(messagePointer);
             if ((message.Message is 0x020A or 0x020E or 0x024E or 0x024F) &&
-                (message.Window == hwnd || IsChild(hwnd, message.Window) || GetAncestor(message.Window, 3) == hwnd))
+                (message.Window == hwnd || IsChild(hwnd, message.Window) || GetAncestor(message.Window, 3) == hwnd) && DiscardNavigationWheel())
             {
                 navigationWheelRemainder = 0;
                 discardedEntryWheelMessages++;
@@ -101,7 +102,7 @@ public sealed partial class MainWindow
 
     private void NavigationWheelChanged(object sender, PointerRoutedEventArgs args)
     {
-        if (DiscardWheelDuringPageEntry()) { args.Handled = true; return; }
+        if (DiscardNavigationWheel()) { args.Handled = true; return; }
         if (!WheelDelta(args, out var delta)) return;
         args.Handled = true;
         AdvanceWheelPage(delta, ref navigationWheelRemainder);
@@ -109,7 +110,7 @@ public sealed partial class MainWindow
 
     private void ContentWheelChanged(object sender, PointerRoutedEventArgs args)
     {
-        if (DiscardWheelDuringPageEntry()) { args.Handled = true; return; }
+        if (DiscardNavigationWheel()) { args.Handled = true; return; }
         if (!WheelDelta(args, out var delta)) return;
         // Native editors and pickers keep their own wheel behavior.
         for (var node = args.OriginalSource as DependencyObject; node is not null && node != frame;
@@ -125,7 +126,7 @@ public sealed partial class MainWindow
 
     private bool AdvanceWheelPage(int delta, ref int remainder)
     {
-        if (DiscardWheelDuringPageEntry()) { remainder = 0; return false; }
+        if (DiscardNavigationWheel()) { remainder = 0; return false; }
         if (delta == 0 || closing) return false;
         if (Math.Sign(delta) != Math.Sign(remainder)) remainder = 0;
         // Accumulate high-resolution wheel packets without queuing navigation.
@@ -138,7 +139,8 @@ public sealed partial class MainWindow
         var index = Math.Max(0, Array.IndexOf(pages, current));
         var next = Math.Clamp(index - steps, 0, pages.Length - 1);
         if (next == index) return false;
-        Navigate(pages[next], true);
+        wheelNavigationGuard.Arm(Environment.TickCount64);
+        Navigate(pages[next], true, preserveWheelBurst: true);
         return true;
     }
 }

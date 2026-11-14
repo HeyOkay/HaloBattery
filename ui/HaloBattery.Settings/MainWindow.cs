@@ -54,6 +54,8 @@ public sealed partial class MainWindow : Window
  private EventHandler<object>? railTick;
  private Page? pendingEntryPage;
  private RoutedEventHandler? pendingEntryLoaded;
+ private ScrollViewer? pendingEntryScroll;
+ private EventHandler<ScrollViewerViewChangedEventArgs>? pendingEntryViewChanged;
  private Storyboard? pageEntry;
  private TranslateTransform? pageEntryTransform;
  private nint hwnd;
@@ -219,8 +221,9 @@ public sealed partial class MainWindow : Window
  {
   RefreshNavigation();
  }
- internal void Navigate(string page,bool motion)
+ internal void Navigate(string page,bool motion,bool enterAtEnd=false,bool preserveWheelBurst=false)
  {
+  if(!preserveWheelBurst)wheelNavigationGuard.Reset();
   ResetOverscrollForNavigation();
   var next=State.Pages.Any(p=>p.Id==page)?page:State.Pages.FirstOrDefault()?.Id??"general";
   var switching=frame.Content is not null&&next!=current;
@@ -244,7 +247,7 @@ public sealed partial class MainWindow : Window
    var animate=motion&&switching&&settings.AnimationsEnabled;
    if(animate)PrepareEntryOpacity(built);
    frame.Content=built;
-   if(animate)FadePageEntry(built);
+   if(animate||enterAtEnd)FadePageEntry(built,animate,enterAtEnd);
   }
   BuildNavigation();BuildHeader();
   DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,UpdateMinimumWidth);
@@ -252,6 +255,9 @@ public sealed partial class MainWindow : Window
  private void ResetPageEntry()
  {
   if(pendingEntryPage is not null&&pendingEntryLoaded is not null)pendingEntryPage.Loaded-=pendingEntryLoaded;
+  if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
+  pendingEntryScroll=null;pendingEntryViewChanged=null;
+  if(pendingEntryPage is not null)pendingEntryPage.Opacity=1;
   pendingEntryPage=null;pendingEntryLoaded=null;
   var finished=pageEntry;pageEntry=null;
   foreach(var target in entryOpacityTargets)target.Opacity=1;entryOpacityTargets.Clear();
@@ -261,19 +267,29 @@ public sealed partial class MainWindow : Window
   // briefly reveal the original zero opacity / 40 DIP offset on landing.
   finished?.Stop();
  }
- private void FadePageEntry(Page entered)
+ private void FadePageEntry(Page entered,bool animate,bool enterAtEnd)
  {
   navigationWheelRemainder=0;
+  pendingEntryPage=entered;
   ElementCompositionPreview.GetElementVisual(entered).IsPixelSnappingEnabled=true;
-  var transform=new TranslateTransform{Y=40};entered.RenderTransform=transform;pageEntryTransform=transform;
+  var fromY=enterAtEnd?-40:40;
+  var transform=new TranslateTransform{Y=animate?fromY:0};entered.RenderTransform=transform;pageEntryTransform=transform;
+  // Bottom positioning is asynchronous even with ChangeView's animation disabled.
+  // Hide its initial top view and keep the wheel locked until the final view is ready.
+  if(enterAtEnd)entered.Opacity=0;
+  bool Active()=>!closing&&ReferenceEquals(frame.Content,entered)&&ReferenceEquals(pendingEntryPage,entered);
   void Begin()
   {
-   if(!ReferenceEquals(frame.Content,entered)||closing)return;
-   if(!settings.AnimationsEnabled){ResetPageEntry();return;}
+   if(!Active())return;
+   if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
+   pendingEntryScroll=null;pendingEntryViewChanged=null;
+   entered.Opacity=1;
+   if(!animate||!settings.AnimationsEnabled){ResetPageEntry();return;}
    PrepareEntryOpacity(entered);
    // Animate the XAML properties through one clock. Directly changing the
    // backing Visual.Opacity competes with XAML's initial opacity propagation.
    var transition=new Storyboard();pageEntry=transition;
+   pendingEntryPage=null;
    void Track(DependencyObject target,string property,double from,double to)
    {
     EasingFunctionBase easing=property=="Opacity"&&pageFadeMode=="content"?new QuadraticEase{EasingMode=EasingMode.EaseOut}:new CubicEase{EasingMode=EasingMode.EaseOut};
@@ -281,16 +297,34 @@ public sealed partial class MainWindow : Window
     Storyboard.SetTarget(animation,target);Storyboard.SetTargetProperty(animation,property);transition.Children.Add(animation);
    }
    foreach(var target in entryOpacityTargets)Track(target,"Opacity",0,1);
-   Track(transform,"Y",40,0);
+   Track(transform,"Y",fromY,0);
    transition.Completed+=(_,_)=>{if(ReferenceEquals(pageEntry,transition)&&ReferenceEquals(frame.Content,entered))ResetPageEntry();};
    transition.Begin();
   }
-  if(entered.IsLoaded){Begin();return;}
-  pendingEntryPage=entered;
+  void PositionAndBegin()
+  {
+   if(!Active())return;
+   root.UpdateLayout();
+   if(!enterAtEnd||entered.Content is not ScrollViewer scroll){Begin();return;}
+   void CheckLanding()
+   {
+    if(!Active())return;
+    if(Math.Abs(scroll.VerticalOffset-scroll.ScrollableHeight)<=1/Scale)Begin();
+    else scroll.ChangeView(null,scroll.ScrollableHeight,null,true); // Rebase if layout changed during positioning.
+   }
+   pendingEntryScroll=scroll;
+   pendingEntryViewChanged=(_,args)=>{if(!args.IsIntermediate)CheckLanding();};
+   scroll.ViewChanged+=pendingEntryViewChanged;
+   scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
+   // No ViewChanged event is raised if this page already fits its viewport.
+   // The identity guard also makes this callback harmless after interrupted navigation.
+   DispatcherQueue.TryEnqueue(CheckLanding);
+  }
+  if(entered.IsLoaded){PositionAndBegin();return;}
   pendingEntryLoaded=(_,_)=>
   {
    if(pendingEntryLoaded is not null)entered.Loaded-=pendingEntryLoaded;
-   pendingEntryPage=null;pendingEntryLoaded=null;Begin();
+   pendingEntryLoaded=null;PositionAndBegin();
   };
   entered.Loaded+=pendingEntryLoaded;
  }
@@ -396,7 +430,13 @@ public sealed partial class MainWindow : Window
  internal ScrollViewer Scroll(StackPanel content)
  {
   content.HorizontalAlignment=HorizontalAlignment.Left;content.MaxWidth=double.PositiveInfinity;
-  var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch};host.Children.Add(content);
+  // The content receives bubbling wheel input before its ScrollViewer parent
+  // starts native scrolling. A transparent fill also catches gaps between cards.
+  var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch,Background=Brush("#00000000")};host.Children.Add(content);
+  host.AddHandler(UIElement.PointerWheelChangedEvent,new Microsoft.UI.Xaml.Input.PointerEventHandler((_,args)=>
+  {
+   if(DiscardNavigationWheel())args.Handled=true;
+  }),true);
   var scroll=new ScrollViewer{Content=host,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
   pageHosts.Clear();pageHosts.Add((content,scroll));
   // Содержимое берётся из pageHosts: при перестройке на месте в этот же ScrollViewer подставляется новое содержимое.

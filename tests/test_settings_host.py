@@ -134,6 +134,32 @@ class SettingsHostTests(unittest.TestCase):
         self.controller.set_global.assert_not_called()
         self.controller.set_device.assert_not_called()
 
+    def test_whats_new_is_acknowledged_before_its_background_work(self):
+        self.hello()
+        with patch.object(self.manager, "_thread") as worker:
+            messages = self.command("showWhatsNew", {})
+        self.assertTrue(messages[0]["ok"])
+        self.assertEqual([m["type"] for m in messages], ["result", "state"])
+        self.controller.action.assert_not_called()
+        worker.assert_called_once_with(self.manager._show_whats_new, self.session, "settings-whats-new")
+        target, session, _ = worker.call_args.args
+        target(session)
+        self.controller.action.assert_called_once_with("show_whats_new")
+
+    def test_whats_new_rejects_unexpected_arguments(self):
+        self.hello()
+        with patch.object(self.manager, "_thread") as worker:
+            result, _ = self.command("showWhatsNew", {"url": "https://example.com"})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errorCode"], "invalidCommand")
+        worker.assert_not_called()
+        self.controller.action.assert_not_called()
+
+    def test_stale_whats_new_worker_does_not_open_a_window(self):
+        self.manager._session = host._Session("about", None)
+        self.manager._show_whats_new(self.session)
+        self.controller.action.assert_not_called()
+
     def test_icon_content_uses_one_semantic_controller_operation(self):
         self.hello()
         self.command("setIconContent", dict(mode="percent"))
@@ -255,6 +281,7 @@ class SettingsHostTests(unittest.TestCase):
                 state = self.manager._state(self.session)
                 self.assertIs(state["labels"], self.session.catalogs[language])
                 self.assertIn("settings.general", state["labels"])
+                self.assertTrue(state["labels"]["whatsnew.title"])
                 self.assertTrue(all(type(value) in (bool, int, str) for value in state["settings"].values()))
                 host.encode_message(state)
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using HaloBattery.Settings.Controls;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 namespace HaloBattery.Settings;
@@ -24,6 +25,7 @@ public partial class App : Application
  {
   try
   {
+   ScrollBarAppearance.Install(Resources);
    LogStartup("Launching native window");
    var bridge=new SettingsBridge();window=new MainWindow(bridge);bridge.Attach(window);window.Activate();
    LogStartup("Activated native window");

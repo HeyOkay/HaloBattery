@@ -327,7 +327,7 @@ class SettingsHost:
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
             setProvider={"name", "enabled"}, setIconContent={"mode"}, selectDevice={"deviceKey"})
         actions = dict(refresh="refresh", diagnostics="diagnostics", checkUpdate="check_update", startUpdate="start_update",
-            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit")
+            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit", showWhatsNew="show_whats_new")
         if not isinstance(name, str) or not isinstance(args, dict) or name not in fields and name not in actions:
             raise ValueError("unknown settings command")
         if set(args) != fields.get(name, set()):
@@ -354,12 +354,24 @@ class SettingsHost:
             self.controller.set_provider(args["name"], args["enabled"])
         elif name == "setIconContent":
             self.controller.set_icon_content(args["mode"])
+        elif name == "showWhatsNew":
+            # The existing window may fetch release notes. Acknowledge the click
+            # first, then keep that work off the command/state serialization lock.
+            return lambda: self._thread(self._show_whats_new, session, "settings-whats-new")
         elif name == "quit":
             # Ack and state enter the writer queue before App.quit enqueues
             # shutdown. App.quit may be called on this very reader thread.
             return lambda: self.controller.action("quit")
         else:
             self.controller.action(actions[name])
+
+    def _show_whats_new(self, session):
+        if not self._current(session):
+            return
+        try:
+            self.controller.action("show_whats_new")
+        except Exception:
+            log.exception("settings: unable to open the existing what's new window")
 
     def _cleanup(self, session, graceful=False):
         if not session.cleanup_lock.acquire(blocking=False):

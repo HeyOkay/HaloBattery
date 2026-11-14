@@ -10,7 +10,6 @@ public sealed partial class MainWindow
 {
     private async Task VerifyOverscrollNavigation(string destination, List<object> checks)
     {
-        fixtureScrollEntryTrace = new();
         void Check(string name, bool passed, object? actual = null)
         {
             checks.Add(new { name, passed, actual });
@@ -31,7 +30,8 @@ public sealed partial class MainWindow
             gesture.Feed(-120, 100, 100, true, true, 1300) == 0 &&
             gesture.Feed(-120, 100, 100, true, true, 1600) == 0 &&
             gesture.Feed(-120, 100, 100, true, true, 1900) == 0 &&
-            gesture.Feed(-120, 100, 100, true, true, 2200) == 1);
+            gesture.Feed(-120, 100, 100, true, true, 2200) == 0 &&
+            gesture.Feed(-120, 100, 100, true, true, 2500) == 1);
         gesture = new OverscrollGesture();
         Check("overscroll waits below threshold", gesture.Feed(-(OverscrollGesture.Threshold - 1), 100, 100, true, true, 1000) == 0 && gesture.IsCharged);
         Check("overscroll switches exactly at threshold", gesture.Feed(-1, 100, 100, true, true, 1010) == 1 && gesture.ConsumeLastInput);
@@ -49,7 +49,7 @@ public sealed partial class MainWindow
         await Task.Delay(25);
         Check("composition ring uses a compact base without glyphs", overscrollIndicator.Width == 16 && overscrollIndicator.Height == 16 &&
             overscrollIndicator.Children.Count == 0 && OverscrollRingVisual.Shapes.Count == 2);
-        Check("overscroll target accumulates partial raw progress", current == "general" && OverscrollProgressTarget == .15f && OverscrollIndicatorVisible);
+        Check("overscroll target accumulates partial raw progress", current == "general" && OverscrollProgressTarget == .125f && OverscrollIndicatorVisible);
         root.UpdateLayout();
         var indicatorTop = overscrollIndicator.TransformToVisual(overscrollHost).TransformPoint(new Windows.Foundation.Point()).Y;
         Check("General indicator stops 32 DIP inside the full host edge below the fixed footer", generalFooter?.ActualHeight > 0 &&
@@ -129,7 +129,17 @@ public sealed partial class MainWindow
         Check("page transition clears elastic translation and spring",
             translation == Vector3.Zero && overscrollLastPullSpring is null && OverscrollPullTarget == 0);
         await Task.Delay(240);
-        Check("completion releases indicator and elastic target", !OverscrollIndicatorVisible && OverscrollPresenceTarget == 0 && OverscrollPullTarget == 0);
+        var released = !OverscrollIndicatorVisible && OverscrollPresenceTarget == 0 && OverscrollPullTarget == 0;
+        object DeadlineSnapshot() => new { now = Environment.TickCount64, overscrollCompletionUntil, overscrollHideUntil, overscrollIdleUntil,
+            timerEnabled = overscrollTimer?.IsEnabled, visible = OverscrollIndicatorVisible, presence = OverscrollPresenceTarget,
+            pull = OverscrollPullTarget, settings.AnimationsEnabled, hostLoaded = overscrollHost.IsLoaded };
+        var releaseState = DeadlineSnapshot();
+        if (!released)
+        {
+            await Task.Delay(250);
+            checks.Add(new { name = "completion deadline scheduling diagnostics", diagnostic = true, before = releaseState, after = DeadlineSnapshot() });
+        }
+        Check("completion releases indicator and elastic target", released, releaseState);
         Check("completion does not restart page spring", overscrollLastPullSpring is null);
         if (AnimationsEnabled)
         {
@@ -150,12 +160,61 @@ public sealed partial class MainWindow
         await Task.Delay(150);
         HandleContentOverscroll(OverscrollGesture.Threshold, 0, 1000);
         for (var i = 0; current != "devices" && i < 50; i++) await Task.Delay(20);
-        await Task.Delay(50);
+        if (AnimationsEnabled)
+        {
+            Check("backward entry blocks wheel while positioning the previous page", PageEntryBlocksWheel);
+            for (var i = 0; pageEntry is null && i < 50; i++) await Task.Delay(10);
+            var reverseEntry = pageEntry;
+            Check("backward bottom landing starts its own upward entry animation", reverseEntry is not null &&
+                reverseEntry.Children.OfType<Microsoft.UI.Xaml.Media.Animation.DoubleAnimation>().Any(a => a.From == -40 && a.To == 0));
+            reverseEntry!.Pause();
+            var bottom = pageHosts.Single().scroll;
+            var dropped = discardedEntryWheelMessages;
+            navigationWheelRemainder = -60;
+            Check("backward entry consumes routed wheel in both directions", HandleContentOverscroll(120, bottom.VerticalOffset, bottom.ScrollableHeight) &&
+                HandleContentOverscroll(-120, bottom.VerticalOffset, bottom.ScrollableHeight) && OverscrollState.Raw == 0 && navigationWheelRemainder == 0);
+            Check("fixture posts opposite native wheel packets during reverse entry", PostFixtureWheel(hwnd, 0x020A, 120u << 16, 0) &&
+                PostFixtureWheel(hwnd, 0x020A, unchecked((nuint)(uint)(-120 << 16)), 0));
+            await Task.Delay(350);
+            Check("paused backward entry keeps its bottom and blocks native wheel beyond nominal duration", PageEntryBlocksWheel &&
+                ReferenceEquals(pageEntry, reverseEntry) && current == "devices" && discardedEntryWheelMessages >= dropped + 2 &&
+                navigationWheelRemainder == 0 && OverscrollState.Raw == 0 && Math.Abs(bottom.VerticalOffset - bottom.ScrollableHeight) <= 1 / Scale);
+            reverseEntry.SeekAlignedToLastTick(TimeSpan.FromMilliseconds(150));
+            await VerificationCapture(destination, "backward-bottom-entry");
+            if (Windows.Graphics.Capture.GraphicsCaptureSession.IsSupported())
+                await FixtureWindowCapture.CaptureAsync(hwnd, Path.Combine(destination, "backward-bottom-entry.composited.png"));
+            reverseEntry.Resume();
+        }
+        for (var i = 0; PageEntryBlocksWheel && i < 50; i++)
+        {
+            PostFixtureWheel(hwnd, 0x020A, 120u << 16, 0);
+            await Task.Delay(20);
+        }
+        Check("backward completion leaves no queued wheel input", !PageEntryBlocksWheel && current == "devices" && navigationWheelRemainder == 0 && OverscrollState.Raw == 0);
         root.UpdateLayout();
         var entered = frame.Content is Page { Content: ScrollViewer active } ? active : null;
         Check("overscroll backward enters previous page at end", current == "devices" && entered is not null &&
             Math.Abs(entered.VerticalOffset - entered.ScrollableHeight) <= 1 / Scale,
-            new { current, offset = entered?.VerticalOffset, height = entered?.ScrollableHeight, trace = fixtureScrollEntryTrace });
+            new { current, offset = entered?.VerticalOffset, height = entered?.ScrollableHeight });
+        await VerifyWheelBurstAfterEntry(checks, "backward");
+        Navigate("icons", false);
+        Navigate("devices", true, enterAtEnd: true);
+        Check("bottom positioning holds wheel before the page is loaded", PageEntryBlocksWheel);
+        Navigate("about", true);
+        for (var i = 0; PageEntryBlocksWheel && i < 50; i++) await Task.Delay(20);
+        await Task.Delay(50);
+        Check("interrupted bottom positioning cannot scroll or unlock a later entry", current == "about" && !PageEntryBlocksWheel &&
+            pendingEntryScroll is null && pendingEntryViewChanged is null && pageHosts.Single().scroll.VerticalOffset == 0);
+        Navigate("devices", false, enterAtEnd: true);
+        for (var i = 0; PageEntryBlocksWheel && i < 50; i++) await Task.Delay(20);
+        var noMotion = pageHosts.Single().scroll;
+        Check("motion-disabled bottom entry settles without an animation or stuck wheel lock", !PageEntryBlocksWheel && pageEntry is null &&
+            Math.Abs(noMotion.VerticalOffset - noMotion.ScrollableHeight) <= 1 / Scale);
+        Navigate("general", true, enterAtEnd: true);
+        for (var i = 0; PageEntryBlocksWheel && i < 50; i++) await Task.Delay(20);
+        var shortPage = pageHosts.Single().scroll;
+        Check("bottom entry on a short page releases without waiting for a missing view event", !PageEntryBlocksWheel &&
+            Math.Abs(shortPage.VerticalOffset - shortPage.ScrollableHeight) <= 1 / Scale);
         ResetOverscrollForNavigation();
         await Task.Delay(260);
     }
