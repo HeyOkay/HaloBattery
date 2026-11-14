@@ -8,6 +8,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Open the existing What's new window from About, directly below the version.
+- Turtle Beach Stealth Pro II Xbox (`10F5:2285`) on the same Swarm II
+  SInf/GSI path and icon as the existing Pro II ids. Confirmed on hardware by
+  the reporter of #401: the test build detected the transmitter and showed the
+  level; the charging transition was not reported.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth

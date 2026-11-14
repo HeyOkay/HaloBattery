@@ -90,6 +90,7 @@ TURTLEBEACH_VID = 0x10F5
 KNOWN = {
     0x229B: "Turtle Beach Stealth Pro II",
     0x229E: "Turtle Beach Stealth Pro II",
+    0x2285: "Turtle Beach Stealth Pro II Xbox",
     0x2250: "Turtle Beach Stealth 700 Gen 3",
     0x2251: "Turtle Beach Stealth 700 Gen 3",
     0x2253: "Turtle Beach Stealth 700 Gen 3 headset",
@@ -99,7 +100,7 @@ KNOWN = {
 
 # Atlas Air is confirmed in #310; Stealth 600X (#239) still lacks a verified
 # exchange. Retain its protocol fixtures without opening it in a stable build.
-ENABLED_PIDS = frozenset((0x229B, 0x229E, 0x2250, 0x2251, 0x2253, 0x225E))
+ENABLED_PIDS = frozenset((0x229B, 0x229E, 0x2285, 0x2250, 0x2251, 0x2253, 0x225E))
 
 # The Stealth 700 Gen 3 reads through the CoAP tunnel (#211): 2250/2251 are its
 # transmitters, 2253 the headset on its own USB cable (its author's hardware run). The

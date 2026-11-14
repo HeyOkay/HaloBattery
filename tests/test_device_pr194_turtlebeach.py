@@ -153,6 +153,16 @@ class TurtleBeachTests(unittest.TestCase):
                          [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II",
                            86, False, True, "headset")])
 
+    def test_the_xbox_transmitter_is_the_same_headset(self):
+        # #401: the Xbox variant enumerates as 10f5:2285 on the same ff13 collection
+        # and answers the same Swarm II asks; it shares the Pro II icon.
+        self.infos = ifaces(pid=0x2285, product="Stealth Pro II Xbox")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.charging) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II Xbox",
+                           86, False)])
+
     def test_the_asks_are_the_captures_requests_byte_for_byte(self):
         self.assertEqual(turtlebeach.ASK_SINF, CAPTURE_SINF)
         self.assertEqual(turtlebeach.ASK_GSI, CAPTURE_GSI)
