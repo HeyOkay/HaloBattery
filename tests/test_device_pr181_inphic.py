@@ -49,6 +49,9 @@ AS_31 = [0x03, 0x55, 0x40, 0x01, 0x1F] + [0x00] * 95
 # the R1's own push from its receiver's probe run (#69) - the X6/R1
 # generation's heartbeat, level in steps of ten (0x09 -> 90 %)
 AS_R1_90 = [0x03, 0x10, 0x40, 0x01, 0x09] + [0x00] * 95
+# the Delux (多彩) M900 Pro on the same 1d57:fa65 receiver, caught in its owner's
+# diagnostics: model 0x3F under the X11 shape, `03 3f 40 01 4a` = 74 %
+DELUX_74 = [0x03, 0x3F, 0x40, 0x01, 0x4A] + [0x00] * 95
 INPHIC = I.PIDS[0xFA65][1]
 ATTACK = I.PIDS[0xFA60][1]
 
@@ -166,6 +169,14 @@ class ParseTest(unittest.TestCase):
         # a zero level (0 x 10) is refused like any other out-of-range one
         zero = [0x03, 0x10, 0x40, 0x01, 0x00] + [0x00] * 95
         self.assertIsNone(I.parse_frame(zero, ATTACK))
+
+    def test_the_delux_model_code_reads(self):
+        # the M900 Pro announces the X11 shape under model code 0x3F, on the
+        # 0xFA65 receiver its owner's diagnostics showed
+        self.assertEqual(I.parse_frame(DELUX_74, INPHIC), (74, False))
+        self.assertEqual(I.parse_frame([0x03, 0x3F, 0x40, 0x03, 0x4A] + [0x00] * 95, INPHIC),
+                         (None, True))
+        self.assertIsNone(I.parse_frame(DELUX_74, ATTACK))     # gated to 0xFA65
 
     def test_each_receivers_model_codes_are_gated(self):
         # a model byte is only trusted on the receiver it was proven on
@@ -297,6 +308,21 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(s.level, s.charging, s.online) for s in out],
                          [(30, True, True)])
         self.assertEqual(self.provider._chosen.get(0xFA60), AS_STATUS_PATH)
+
+    def test_the_delux_mouse_is_named_after_its_model_code(self):
+        # one receiver id covers several brands; the icon carries the model the
+        # receiver actually announced, not the first brand's model
+        entries = receiver_entries()
+        cols = self.cols(entries, replies=(DELUX_74,))
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.name, s.level) for s in out],
+                         [("inphic:fa65", "Delux M900 Pro", 74)])
+
+    def test_an_unknown_model_code_still_shows_the_receivers_name(self):
+        entries = receiver_entries()
+        cols = self.cols(entries)                       # the Inphic 0x95 frame
+        out = self.poll(entries, cols)
+        self.assertEqual(out[0].name, "Inphic In9 Pro")
 
     def test_the_charging_frame_keeps_the_last_level(self):
         entries = receiver_entries()

@@ -52,6 +52,25 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
+- **Delux (多彩) M900 Pro** (`1D57:FA65`, the `2.4G 8K HS Receiver`) - the mouse
+  announces the Inphic/Attack Shark family shape under a model code of its own
+  (`03 3f 40 01 4a` = 74 %), read on the `000A:0000` collection the family already
+  listens to. The code joins the `0xFA65` model list, and `MODEL_NAMES` gives the
+  tray icon its own name instead of the receiver's first brand. **Confirmed on
+  hardware** by the reporter: the level tracked (81 -> 74 % over a session) and
+  the probe listed `Delux M900 Pro: 74%`; charging shapes untested.
+- **Inphic family: the listen window covers a 2 s announcer.** The Delux
+  announces every 2.00 s (measured), and the 1.25 s window (5 x 250 ms) missed
+  it on roughly every other poll, so a live mouse kept dropping to greyed. The
+  window is now 12 x 250 ms; the remembered collection is still read once.
+- **VGN N75 PRO** (`320F:5088`, product `VGN N75 PRO 2.4G Dongle`) - the same
+  Telink/Evision dongle as the ATK V75X, on the same `FF1C:0092` collection, so
+  the ATK keyboard provider reads it with the V75X's request unchanged. Only the
+  product string differs, and `PRODUCTS` accepts both names; the icon is named
+  from the product string. **Confirmed on hardware** by the reporter: the app
+  logged 59 % and 58 % from typing-woken queries. With the keyboard idle the
+  dongle answers `ff` instead of the command, so the typing pause is what makes
+  the reading arrive.
 
 ### Fixed
 
