@@ -7,6 +7,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- MCHOSE G98 Pro (`41E4:2004`) keyboard support through the same Sinowealth
+  `13 4A 01` command as the K87; level confirmed on hardware, charging flag
+  test build 2 pending (#378).
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.

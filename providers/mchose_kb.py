@@ -1,4 +1,8 @@
-"""MCHOSE K87 keyboards on the 2.4 GHz receiver (41E4:2001).
+"""MCHOSE K87 and G98 Pro keyboards on their 2.4 GHz receivers.
+
+K87 is 41E4:2001; the G98 Pro reports 41E4:2004 but exposes the same
+ff02:0002 command collection and the same 19-byte 13 4A 01 exchange, so it is
+read with the identical query. The G98 Pro path is unverified on hardware.
 
 Protocol taken from MCHOSE's own web driver (M HUB): the site www.mchose.com.cn ships the
 configurator as ``assets/purify.es-*.js``, whose command table has
@@ -35,7 +39,7 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 VENDOR = 0x41E4
-PRODUCTS = {0x2001: "MCHOSE K87"}
+PRODUCTS = {0x2001: "MCHOSE K87", 0x2004: "MCHOSE G98 Pro"}
 USAGE_PAGE = 0xFF02
 
 REPORT_ID = 0x13
@@ -149,13 +153,20 @@ class MchoseKbProvider(Provider):
                                     "mchose_kb", kind="keyboard", wake_on_input=True))
 
         if not seen:
-            last = self._last.get("mchose_kb:2001")
-            if last:
-                out.append(DeviceStatus("mchose_kb:2001", last[1], last[0], False, False,
-                                        "mchose_kb", kind="keyboard", wake_on_input=True))
-            elif any(d.get("vendor_id") == VENDOR and d.get("product_id") in PRODUCTS for d in infos):
-                out.append(DeviceStatus("mchose_kb:2001", self._name, None, False, False,
-                                        "mchose_kb", kind="keyboard", wake_on_input=True))
+            # only the models actually present; do not invent a K87 when a
+            # different MCHOSE keyboard is the one that went quiet
+            present = sorted({d.get("product_id") for d in infos
+                              if d.get("vendor_id") == VENDOR
+                              and d.get("product_id") in PRODUCTS})
+            for pid in present:
+                key = f"mchose_kb:{pid:04x}"
+                last = self._last.get(key)
+                if last:
+                    out.append(DeviceStatus(key, last[1], last[0], False, False,
+                                            "mchose_kb", kind="keyboard", wake_on_input=True))
+                else:
+                    out.append(DeviceStatus(key, PRODUCTS[pid], None, False, False,
+                                            "mchose_kb", kind="keyboard", wake_on_input=True))
         return out
 
     def diagnostics(self) -> List[str]:

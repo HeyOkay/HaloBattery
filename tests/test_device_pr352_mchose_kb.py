@@ -138,6 +138,13 @@ class PollTest(unittest.TestCase):
         self.assertIsNone(out[0].level)
         self.assertFalse(out[0].online)
 
+    def test_the_g98_pro_uses_the_same_command_collection(self):
+        fake = FakeKeyboard([reply(0x64, 0x01)])
+        out, _ = self.poll(fake, entries(pid=0x2004))
+        self.assertEqual([(s.key, s.name, s.level) for s in out],
+                         [("mchose_kb:2004", "MCHOSE G98 Pro", 100)])
+        self.assertEqual({p for p, _ in fake.sent}, {CMD_PATH.replace(b"2001", b"2004")})
+
     def test_another_mchose_vendor_id_is_left_alone(self):
         fake = FakeKeyboard([reply()])
         out, _ = self.poll(fake, entries(vid=0x5253))

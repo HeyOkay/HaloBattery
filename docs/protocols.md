@@ -263,6 +263,21 @@ Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collect
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
 
+### MCHOSE K87 / G98 Pro
+
+MCHOSE's own web driver (M HUB) sends a 19-byte output report
+
+    13 4A 01 00 02 <level> <flags> ... <checksum>
+
+on the `ff02:0002` vendor collection; the checksum is the low byte of the sum of
+bytes 0..18. The captured K87 answer (`41E4:2001`) had level `0x64` (100 %), and
+the byte after the level was `0x01` with the keyboard full and **not** on the
+cable, so the provider reads only the level and never claims charging.
+
+The **G98 Pro** (`41E4:2004`, product string `MCHOSE 2.4G Wireless`) publishes
+the same command collection and is queried with the identical frame; that path
+is **unverified** on hardware (#378).
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
