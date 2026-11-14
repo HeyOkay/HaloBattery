@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, hidlist, wgi
+from . import beitong, flydigi, gamesir, hidlist, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -302,6 +302,13 @@ class XInputProvider(Provider):
             len(slots) == 1 and len(all_reports) == 1
             and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
         )
+        # The GameSir G7 Pro 8K, likewise: its Windows level is the 1000/1000 placeholder
+        # and its XInput type "wired" on the dongle; the pad's own report has the level.
+        single_gamesir = (
+            len(slots) == 1 and len(all_reports) == 1
+            and all_reports[0].vid == gamesir.VENDOR_VID
+            and gamesir.is_supported(all_reports[0].pid)
+        )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
@@ -338,6 +345,11 @@ class XInputProvider(Provider):
                     vendor_reading = beitong.read_connected(self._diag)
                 except Exception as e:
                     self._diag.append(f"[Beitong] {e}")
+            elif single_gamesir:
+                try:
+                    vendor_reading = gamesir.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[GameSir] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -371,7 +383,7 @@ class XInputProvider(Provider):
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
-            if single_beitong:
+            if single_beitong or single_gamesir:
                 if rep is not None and rep.placeholder:
                     rep = None
                 if res is not None and res[1]:
