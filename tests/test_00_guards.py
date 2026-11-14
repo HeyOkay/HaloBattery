@@ -34,6 +34,25 @@ class GuardTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             hid.device()
 
+    def test_real_serial_ports_are_blocked(self):
+        import serial
+        from serial.tools import list_ports
+        with self.assertRaises(AssertionError):
+            list_ports.comports()
+        with self.assertRaises(AssertionError):
+            serial.Serial("COM1", 115200)
+
+    def test_real_usb_is_blocked(self):
+        import usb.core
+        with self.assertRaises(AssertionError):
+            usb.core.find(idVendor=0x2CA3, idProduct=0x4011)
+
+    def test_the_sony_provider_cannot_reach_a_port_through_the_guard(self):
+        # the provider calls these by attribute, so the guard covers the provider itself
+        from providers import sony_inzone
+        with self.assertRaises(AssertionError):
+            sony_inzone.SonyInzoneProvider().poll()
+
     def test_app_data_is_a_temporary_folder_not_the_real_one(self):
         real = os.environ.get("APPDATA")
         for name in ("DATA_DIR", "CONFIG_PATH", "HISTORY_PATH", "STATUS_PATH"):

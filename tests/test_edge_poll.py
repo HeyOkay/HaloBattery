@@ -2,7 +2,9 @@
 descriptors. One provider that raises costs the user every device of that provider for the
 cycle (the poll loop logs it and moves on), so each must degrade to "no devices".
 
-hid.enumerate and hid.device are replaced: no real HID device is touched.
+hid.enumerate and hid.device are replaced: no real HID device is touched. The list of
+serial ports is replaced by an empty one too: the Sony INZONE provider reads its dongle
+over a COM port, and with the real list a poll here wrote to the developer's own headset.
 
 Run from the repository root:
 
@@ -40,7 +42,8 @@ class PollWithoutDevicesTests(unittest.TestCase):
         self.assertGreater(len(providers), 40)
         with mock.patch("hid.enumerate", enumerate_function), \
                 mock.patch("providers.hidlist.enumerate", enumerate_function), \
-                mock.patch("hid.device", device_class):
+                mock.patch("hid.device", device_class), \
+                mock.patch("serial.tools.list_ports.comports", lambda *a, **k: []):
             for provider in providers:
                 with self.subTest(provider=provider.name):
                     result = provider.poll()
