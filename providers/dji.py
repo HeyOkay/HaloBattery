@@ -57,6 +57,7 @@ try:
 except ImportError:                    # pragma: no cover
     libusb_package = None
 
+from . import hidlist
 from .base import DeviceStatus, Provider
 
 VID, PID = 0x2CA3, 0x4011
@@ -64,6 +65,7 @@ IFACE = 6
 EP_IN = 0x86
 READ_TIMEOUT_MS = 1000
 RETRY_SECONDS = 5.0                    # after a failed open/read, before trying again
+FIRST_PUSH_WAIT_SECONDS = 1.5          # one time, in the poll that starts the reader
 STALE_SECONDS = 8.0                    # a transmitter not heard for this long is dropped
 GRACE_PUSHES = 3                       # ... but a slot missing for fewer consecutive pushes than
                                        # this is a dropout, not a switched-off transmitter
@@ -175,6 +177,23 @@ def decode_status(frame: bytes) -> Optional[dict]:
     return out
 
 
+def receiver_present() -> bool:
+    """Whether the receiver is plugged in, found without libusb and without opening it.
+
+    Besides the vendor interface its status is read from, the receiver has four HID
+    collections (see the top of this file), so it is in the list of HID interfaces
+    Windows keeps, with its ids in the device path as "vid_2ca3&pid_4011". Where that
+    list is not available (not Windows), hidapi's own listing is asked instead."""
+    try:
+        paths = hidlist.interface_paths()
+        if paths is not None:
+            want = "pid_%04x" % PID
+            return any(want in p for p in hidlist.paths_for(paths, VID))
+        return any(d.get("product_id") == PID for d in hidlist.enumerate(VID))
+    except Exception:
+        return False
+
+
 class _Receiver(threading.Thread):
     """Keeps the receiver open and caches the newest state of every transmitter.
 
@@ -193,6 +212,7 @@ class _Receiver(threading.Thread):
         self.counts: Dict[str, int] = {}
         self.dialect = "?"
         self.bitmask = 0                  # header offset 44 of the newest status push
+        self.settled = threading.Event()  # the first status push arrived, or the open failed
 
     # --- thread body -----------------------------------------------------------
     def run(self):
@@ -202,6 +222,7 @@ class _Receiver(threading.Thread):
             except Exception as exc:              # unplugged, or the driver was lost
                 self.error = "%s: %s" % (type(exc).__name__, exc)
                 self.opened = False
+                self.settled.set()
                 self._stop.wait(RETRY_SECONDS)
 
     def _session(self):
@@ -261,6 +282,8 @@ class _Receiver(threading.Thread):
                 kind = "other"
         self.counts[kind] = self.counts.get(kind, 0) + 1
         now = time.time()
+        if kind == "status":
+            self.settled.set()
         with self._lock:
             if kind == "status":
                 connected = frame[44] if len(frame) > 44 else 0
@@ -307,21 +330,42 @@ class DjiProvider(Provider):
     name = "dji"
 
     def __init__(self, start: bool = True):
-        # The receiver pushes on its own, so the reader is started with the provider:
-        # by the time the app asks for a level the newest state is already cached, and
-        # draining it in the background means a re-plug needs no retry from the poll.
+        # The receiver pushes on its own, so a background reader keeps the newest state
+        # cached and a re-plug needs no retry from the poll. It is started by the first
+        # poll() that finds the receiver plugged in, not here: the reader loads libusb
+        # and looks for the receiver every RETRY_SECONDS, and that must not happen on
+        # the PCs that have no DJI receiver, or while the provider is switched off
+        # (#397: Smart App Control blocks the unsigned libusb DLL). start=False never
+        # starts it (tests fill the cache themselves).
         self._receiver = _Receiver()
         self._diag: List[str] = []
-        if start:
-            self._receiver.start()
+        self._lazy = start
+        self._started = False
 
     def _reader(self) -> _Receiver:
         return self._receiver
+
+    def _start_if_present(self) -> bool:
+        """True once the reader runs. Starts it the first time the receiver is seen."""
+        if self._started:
+            return True
+        if not receiver_present():
+            return False
+        self._started = True
+        self._receiver.start()
+        # One time only: give the reader a moment to open the receiver and take its
+        # first status push (~2 Hz), so the icon does not wait for the next poll.
+        self._receiver.settled.wait(FIRST_PUSH_WAIT_SECONDS)
+        return True
 
     def poll(self) -> List[DeviceStatus]:
         if usb is None:
             self._diag = ["[DJI] pyusb is not installed - the microphone provider is off "
                           "(pip install pyusb libusb-package)"]
+            return []
+        if self._lazy and not self._start_if_present():
+            self._diag = ["[DJI] receiver %04x:%04x not plugged in - USB reader not started, "
+                          "libusb not loaded" % (VID, PID)]
             return []
         rx = self._reader()
         state, info, counts, dialect_name, error, opened, bitmask = rx.snapshot()

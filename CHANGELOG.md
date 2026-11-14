@@ -59,6 +59,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Use single-language Language card headings in English, French and Spanish.
 
+- The DJI microphone reader now starts only when a DJI receiver (`2ca3:4011`) is
+  plugged in. Until now every PC loaded the bundled `libusb-1.0.dll` at startup and
+  searched USB for the receiver every 5 seconds, even with the DJI device type switched
+  off. Windows Smart App Control blocks that unsigned file, which stopped the app
+  from starting ([#397](https://github.com/HeyOkay/HaloBattery/issues/397)).
+
 - Use the requested Lucide settings glyphs. The device summary shows the actual
   device type as a basic outline glyph, independently of custom tray artwork.
 
