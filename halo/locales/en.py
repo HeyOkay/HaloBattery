@@ -108,6 +108,7 @@ MESSAGES = {
     "provider.aula": "AULA F87 Pro V2C keyboards",
     "provider.dareu": "DAREU mice",
     "provider.eweadn": "EWEADN / 前行者 mice",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",

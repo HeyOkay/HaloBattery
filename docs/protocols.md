@@ -173,6 +173,32 @@ The same `b0` exchange as the other Nova headsets, asked for with report id `06`
 
 ## Mice
 
+### EWEADN X23 Pro
+
+**Connection:** 2.4 GHz receiver (`04f3:026f`, X23 Pro Receiver), interface 1.
+
+The [official device list](https://hub.eweadn.cn/deviceJson/other.json) maps this
+receiver to the [YDX web driver](https://hub.eweadn.cn/ydx/web/index.html#/).
+Its [main bundle](https://hub.eweadn.cn/ydx/web/assets/index-BvEqCbAL.js), `HG()`,
+queries `receiveFeatureReport(5)` and handles input report 4. Windows exposes
+these on two `000a:0000` top-level collections: input 4 and feature 5, each
+with 31 payload bytes. The provider groups collections by receiver instance,
+opens both, then calls `get_feature_report(5, 32)`. No output report or
+SET_FEATURE is used, and the normal mouse/keyboard collections are not opened.
+
+HIDAPI includes the report ID. In input report 4, byte 1 is the link state
+(0 offline, 1 online), byte 4 is percent (0..100), and byte 5 is charge state.
+The [device-view bundle](https://hub.eweadn.cn/ydx/web/assets/DeviceView-ss1Fdo4r.js)
+maps 1 to charging and 2 to fully charged (100%); other unknown charge states
+keep a valid level with charging unknown. Offline, missing or invalid reports
+show no level rather than stale or zero battery, and can be refreshed by input.
+
+**Confirmed on hardware:** the input report `04 01 00 01 46 00 00 00 01 11 ...`
+read as 70%, online and discharging, matching EWEADN HUB's 70% display on
+Windows. Charging, switching the mouse off, unplugging/replugging and suspend
+have not been tested on hardware. The wired PID `026e` and other EWEADN
+protocols are not claimed by this provider.
+
 ### AM Infinity 8K (Angry Miao)
 
 **Connection:** 2.4 GHz receiver (3151:5007)
