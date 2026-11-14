@@ -14,7 +14,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **MCHOSE K7 V2 Ultra+** battery and charging state on its 2.4 GHz receiver
   (3837:1018, also inside the MagDock), read with M HUB's own 0x0900 device-info
   request. The other newer MCHOSE receivers on M HUB's list (0x1014, 0x1016,
-  0x101C, 0x101D) get the same read, untested.
+  0x101C, 0x101D) get the same read, untested, and fall back to the 0x06 read.
 
 ### Fixed
 

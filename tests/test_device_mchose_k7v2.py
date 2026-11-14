@@ -63,9 +63,11 @@ FF0B = b"k7-2-ff0b-c4"
 class FakeDevice:
     """Answers each write with the queued input reports, in order."""
 
-    def __init__(self, answers=(), raise_on_read=False):
+    def __init__(self, answers=(), raise_on_read=False, wrote=None, old_answer=None):
         self.answers = [list(a) for a in answers]
         self.raise_on_read = raise_on_read
+        self.wrote = wrote                # what write() reports; None = the full length
+        self.old_answer = old_answer      # a 0x06 feature reply, or None for read errors
         self.writes = []
         self.paths = []
         self.feature_sends = []
@@ -78,7 +80,7 @@ class FakeDevice:
 
     def write(self, data):
         self.writes.append((self.paths[-1], bytes(data)))
-        return len(data)
+        return len(data) if self.wrote is None else self.wrote
 
     def read(self, n, timeout_ms=0):
         if self.raise_on_read:
@@ -90,7 +92,16 @@ class FakeDevice:
         return len(data)
 
     def get_feature_report(self, report_id, length):
-        raise OSError("read error")
+        if self.old_answer is None:
+            raise OSError("read error")
+        return self.old_answer
+
+
+def old_reply(level=61, charge=0):
+    """A 0x06 reply on report 0x11 in the M7 Ultra's layout: vid, model, firmware, flags,
+    level, charging, every payload byte inverted."""
+    pay = bytes([0x37, 0x38, 0x31, 0x00, 0x02, 0x05, 0x07, 0x00, 0x09, level, charge])
+    return [M.SHORT_REPORT, M.CMD_STATUS ^ 0xFF] + list(M._invert(pay.ljust(19, b"\x00")))
 
 
 class RequestTest(unittest.TestCase):
@@ -196,6 +207,44 @@ class PollTest(unittest.TestCase):
         provider, out = self.poll(dev)
         self.assertEqual(out, [])
         self.assertTrue(any("open: gone" in line for line in provider.diagnostics()))
+
+    def test_silence_is_not_asked_again(self):
+        dev = FakeDevice([])
+        self.poll(dev)
+        self.assertEqual(len(dev.writes), 1)
+
+    def test_level_0_is_asked_again(self):
+        dev = FakeDevice([reply(level=0), CAPTURED])
+        _, out = self.poll(dev)
+        self.assertEqual(len(dev.writes), 2)
+        self.assertEqual(out[0].level, 85)
+
+    def test_short_write_does_not_read(self):
+        dev = FakeDevice([CAPTURED], wrote=10)
+        provider, out = self.poll(dev)
+        self.assertEqual(out, [])
+        self.assertEqual(len(dev.answers), 1)       # the queued reply was never read
+        self.assertIn("    0x0900 write: 10 of 64 bytes", provider.diagnostics())
+
+    def test_untested_sibling_falls_back_to_the_06_read(self):
+        dev = FakeDevice([], old_answer=old_reply(level=61))
+        _, out = self.poll(dev, entries(pid=0x1014))
+        self.assertEqual([(s.level, s.online) for s in out], [(61, True)])
+        self.assertEqual({p for p, _ in dev.writes}, {CONFIG})
+        self.assertEqual({p for p, _ in dev.feature_sends}, {CONFIG})
+        self.assertNotIn(FF0B, dev.paths)
+
+    def test_untested_sibling_prefers_the_0900_read(self):
+        dev = FakeDevice([CAPTURED], old_answer=old_reply(level=61))
+        _, out = self.poll(dev, entries(pid=0x1014))
+        self.assertEqual(out[0].level, 85)
+        self.assertEqual(dev.feature_sends, [])
+
+    def test_confirmed_k7_does_not_fall_back(self):
+        dev = FakeDevice([], old_answer=old_reply(level=61))
+        _, out = self.poll(dev)
+        self.assertEqual(out, [])
+        self.assertEqual(dev.feature_sends, [])
 
     def test_other_3837_pids_keep_the_old_path(self):
         dev = FakeDevice()
