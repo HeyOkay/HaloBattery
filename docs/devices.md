@@ -22,6 +22,7 @@
 | [Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless](protocols.md#corsair-void-v2-wireless-virtuoso-max-wireless-hs80-max-wireless) | Wireless receiver | no |
 | [Endgame Gear XM2w 4K, OP1w 4K (4K dongle)](protocols.md#endgame-gear-xm2w-4k-op1w-4k-4k-dongle) | 4K dongle; disabled in 1.17.0 | no; correction pending |
 | [DJI Mic Mini 2](protocols.md#dji-mic-mini-2) | USB receiver, interface 6 with WinUSB | yes |
+| [Delux M900 Pro](protocols.md#delux-m900-pro) | 2.4 GHz receiver (1D57:FA65) | yes (level, on the owner's unit) |
 | [G-Wolves HSK Pro ACE and the other models with a receiver of their own](protocols.md#g-wolves-hsk-pro-ace-and-the-other-models-with-a-receiver-of-their-own) | The model's own receiver or USB cable | no |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
@@ -67,6 +68,7 @@
 | [SteelSeries Arctis Nova Pro Wireless (`1038:12E0`, `1038:12E5` X)](protocols.md#steelseries-arctis-nova-pro-wireless-103812e0-103812e5-x) | Wireless base station, interface 3 or 4 | no |
 | [SteelSeries Rival 3 Wireless](protocols.md#steelseries-rival-3-wireless) | 2.4 GHz dongle | no |
 | [VAXEE E1 Wireless (and other 3057 models)](protocols.md#vaxee-wireless-mice-3057) | 4K dongle or USB cable | yes (E1 Wireless; other models untested) |
+| [VGN N75 PRO](protocols.md#vgn-n75-pro) | 2.4 GHz receiver (320F:5088) | yes (receiver; level while awake) |
 | [VGN Dragonfly 4K (receiver and cable)](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 4K dongle or USB cable | confirmed (receiver) |
 | [WLmouse Beast X and Beast X Mini Pro](protocols.md#wlmouse-beast-x-and-beast-x-mini-pro) | 8K or 1K receiver, or USB cable | likely |
 | [WLmouse Beast X Max](protocols.md#wlmouse-beast-x-max) | 8K receiver and USB cable | yes |

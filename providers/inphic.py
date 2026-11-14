@@ -78,11 +78,17 @@ VID = 0x1D57
 # (90 %) on the R1's own receiver (#69), the shape blak0p's X6 protocol
 # documents validated live on the dongle. 0x4E is the X3 Max's code - its
 # reporter's diagnostics caught `03 4e 40 01 1e` (30 %) on the same receiver
-# (#228), the X11 shape under a model code of its own.
+# (#228), the X11 shape under a model code of its own. 0x3F is the Delux (多彩)
+# M900 Pro's code - its owner's diagnostics caught `03 3f 40 01 51` (81 %) and
+# then `03 3f 40 01 4f` / `03 3f 40 01 4d` on the same 0xFA65 receiver, the
+# X11 shape under a model code of its own.
 PIDS = {
-    0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99)),
+    0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99, 0x3F)),
     0xFA60: ("Attack Shark X11 / R1 / X3 Max", (0x55, 0x10, 0x4E)),
 }
+# A model code seen on a receiver renames the tray icon, so a mouse sold under
+# another brand on a shared receiver is not called by the first brand's model.
+MODEL_NAMES = {0x3F: "Delux M900 Pro"}
 
 REPORT_ID = 0x03                    # hidapi hands it back first on Windows
 CMD_BATTERY = 0x40
@@ -98,7 +104,9 @@ LEVEL_MIN, LEVEL_MAX = 1, 100
 
 READ_SIZE = 100                     # the vendor app's read buffer
 READ_TIMEOUT_MS = 250
-READ_ATTEMPTS = 5                   # ~1.2 s on the remembered collection
+READ_ATTEMPTS = 12                  # ~3 s: the Delux M900 Pro announces every 2.0 s
+                                    # (measured: 1.68 s to the first frame, then an exact
+                                    # 2.00 s cadence), so a 1.25 s window missed it
 SWEEP_ATTEMPTS = 2                  # ... and per collection while looking
 MAX_CANDIDATES = 4
 FRAME_HISTORY = 12                  # frames kept per receiver for the diagnostics
@@ -196,6 +204,7 @@ class InphicProvider(Provider):
         self._charging: Dict[int, bool] = {}
         self._chosen: Dict[int, bytes] = {}                        # pid -> collection path
         self._hist: Dict[int, List[str]] = {}                      # pid -> recent frames
+        self._model: Dict[int, int] = {}                           # pid -> model code seen
         self._swept: Dict[int, float] = {}                         # pid -> last sweep
 
     def _remember(self, pid: int, r, got) -> None:
@@ -204,6 +213,8 @@ class InphicProvider(Provider):
         A dump is taken after the fact, so the frame that arrived at plug-in time is
         gone from the live window by then - the history keeps it.
         """
+        if got is not None and len(r) > 1 and r[0] == REPORT_ID:
+            self._model[pid] = r[1]
         stamp = datetime.fromtimestamp(time.time()).strftime("%H:%M:%S")
         line = (f"{stamp} {hexdump(r, 20)}"
                 + (f"  -> level {got[0]}, "
@@ -317,6 +328,7 @@ class InphicProvider(Provider):
 
         if got is not None:
             level, charging = got
+            display = MODEL_NAMES.get(self._model.get(pid), name)
             ts = time.time()
             if level is not None:
                 self._last[pid] = (level, ts)
@@ -325,7 +337,7 @@ class InphicProvider(Provider):
             else:
                 self._last[pid] = (None, ts)          # charging before any level was seen
             self._charging[pid] = charging
-            return DeviceStatus(key, name, self._last[pid][0], charging, True,
+            return DeviceStatus(key, display, self._last[pid][0], charging, True,
                                 "inphic", kind="mouse")
 
         # No frame in the window. The pushes come every couple of seconds, so a
@@ -334,7 +346,8 @@ class InphicProvider(Provider):
         if last is not None:
             age = time.time() - last[1]
             if age < ASLEEP_KEEP:
-                return DeviceStatus(key, name, last[0], self._charging.get(pid, False),
+                display = MODEL_NAMES.get(self._model.get(pid), name)
+                return DeviceStatus(key, display, last[0], self._charging.get(pid, False),
                                     age < ONLINE_FRESH, "inphic", kind="mouse")
         return None
 

@@ -289,6 +289,19 @@ class PollTests(unittest.TestCase):
         self.assertEqual(self.provider.poll(), [])
         self.assertEqual(self.device.opens, [])
 
+    def test_the_vgn_n75_pro_receiver_is_accepted_by_name(self):
+        # the same Telink/Evision dongle is also sold as the VGN N75 PRO: same
+        # 320F:5088 receiver, same FF1C:0092 collection, different product string
+        self.entries = [entry(product_string="VGN N75 PRO 2.4G Dongle")]
+        status, = self.provider.poll()
+        self.assertEqual((status.name, status.level, status.key),
+                         ("VGN N75 PRO", 59, "atk_keyboard:320f:5088"))
+
+    def test_a_vgn_string_on_the_cable_id_is_not_accepted(self):
+        self.entries = [self.wired(product_string="VGN N75 PRO")]
+        self.assertEqual(self.provider.poll(), [])
+        self.assertEqual(self.device.opens, [])
+
     def test_missing_hid_library_is_harmless(self):
         with mock.patch.object(A, "hid", None):
             self.assertEqual(self.provider.poll(), [])

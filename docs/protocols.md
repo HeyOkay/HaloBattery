@@ -396,6 +396,23 @@ above its smoothed panel) and charging follows the cable. While NZXT CAM
 itself is open the dongle stops answering this request - the app keeps the
 last value on a greyed icon, so live readings want CAM closed.
 
+### Delux M900 Pro
+
+**Connection:** 2.4 GHz receiver (`1D57:FA65`, product `2.4G 8K HS Receiver`)
+
+The M900 Pro ships with a receiver from the same ODM family `providers/inphic.py` already reads (Inphic In9 Pro, Attack Shark X11 / R1 / X3 Max), so it needed a model code, not a protocol. The mouse announces its own frames on the collection the INPHIC HUB app reads (`000A:0000`); nothing is written to it:
+
+    03 3f 40 01 4a
+    |  |  |  |  +-- level 0x4a = 74 %
+    |  |  |  +----- 0x01 level, 0x02 full, 0x03 charging
+    |  |  +-------- the battery command (0x40)
+    |  +----------- model code 0x3F
+    +-------------- report id
+
+`0x3F` is not one of the Inphic codes, so the frame used to be refused as "not a battery frame". It now joins the `0xFA65` model list, and `MODEL_NAMES` renames the tray icon from the receiver's default model to `Delux M900 Pro`. The unit announces every **2.00 s** (measured: 1.68 s to the first frame, then an exact cadence), so `READ_ATTEMPTS` grew from 5 x 250 ms to 12 x 250 ms - a 1.25 s listen missed the announcement on roughly every other poll of this mouse.
+
+**Confirmed on hardware** on the owner's M900 Pro (2026-11-14): `03 3f 40 01 4a` -> 74 %, and the app's own `--probe` summary listed `Delux M900 Pro: 74%`. The charging shapes (sub-command `0x02` / `0x03`) are the family's, not yet seen on this model.
+
 ## Mice and keyboards
 
 ### ATK V75X
@@ -417,6 +434,19 @@ and does not claim a current charging state. Startup waits for typing rather
 than waking an idle keyboard; a failed listener also leaves queries paused.
 No protocol or sleep-setting writes are introduced. Physical sleep still needs
 an idle test on the keyboard; absence of battery requests alone is not a power measurement.
+
+### VGN N75 PRO
+
+**Connection:** 2.4 GHz receiver (`320F:5088`, product `VGN N75 PRO 2.4G Dongle`)
+
+The same Telink/Evision dongle the ATK V75X uses, sold under another brand: identical vendor id and product id, and the same vendor collection `FF1C:0092` on interface 1, so `providers/atk_keyboard.py` reads it with the V75X's request unchanged. Only the product string differs - the provider matched on it because several brands share `320F:5088` - so `PRODUCTS` now accepts both names, and the tray icon takes its name from the product string (`VGN N75 PRO`).
+
+**Confirmed on hardware** on the owner's N75 PRO (2026-11-14): the app logged `ATK battery refreshed: 59%` and then `58%`, so the receiver answers command `1A` with the V75X's layout.
+
+Two behaviours are worth recording:
+
+- With the keyboard idle the dongle answers `04 <id-lo> <id-hi> ff` - `0xff` where the V75X echoes the command - so a query sent to a sleeping keyboard reads as "no reply". The provider's typing-triggered polling is what makes the reading arrive: every value above came from a query woken by keyboard activity.
+- Charging was not observed on this model; only the level, always with state `0`.
 
 ### Keychron Ultra-Link 8K, Keychron M5
 
