@@ -124,6 +124,7 @@ MESSAGES = {
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.hyperx_ngenuity": "Ratones HyperX Pulsefire",
     "provider.inphic": "Ratones Inphic / Attack Shark",
+    "provider.attackshark_r5": "Attack Shark R5 Ultra",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Auriculares Jabra (adaptador Link 380 / 390)",
     "provider.mchose_kb": "Teclados MCHOSE",

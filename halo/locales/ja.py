@@ -115,6 +115,7 @@ MESSAGES = {
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.hyperx_ngenuity": "HyperX Pulsefire マウス",
     "provider.inphic": "Inphic / Attack Shark マウス",
+    "provider.attackshark_r5": "Attack Shark R5 Ultra",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Jabra ヘッドセット（Link 380 / 390 ドングル）",
     "provider.mchose_kb": "MCHOSE キーボード",

@@ -296,6 +296,19 @@ The vendor collection (usage page 0xFF01; the sibling 0xFF0B never answers): fea
 its receiver publishes ff02:0002 and no ff42 at all, so it is read here rather than by
 the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange behind the 'RapidSync' product string, with its keyboard collection on interface 2. The ATK X1 Pro is confirmed on hardware by @gnrlk3nobi in #230: it read immediately, the level stayed within about 5 % of ATK HUB in both states (the two apps sample at different moments, so the sign flips), and the charging state followed the cable. The keyboard receiver and the Fire X 8K are still waiting for their testers.
 
+### Attack Shark R5 Ultra
+
+**Connection:** 2.4 GHz receiver (373E:0047)
+
+The R5 Ultra uses the R6/R8/M5 Ultra feature-report protocol, recovered from the
+vendor WebHID driver by [mohammed-just/attack-shark-r6-cli](https://github.com/mohammed-just/attack-shark-r6-cli)
+(MIT). A 64-byte feature report with report id 0 carries `02 02 00 83` at bytes
+2-5; the reply starts with the `0xA1` marker and carries the battery percentage
+and charging flag. The provider sends only that read-only battery command, tries
+each vendor-page collection in turn, and sends no configuration, DPI, lighting or
+firmware command. **Unverified on hardware** - a test build is with the reporter
+of [#372](https://github.com/HeyOkay/HaloBattery/issues/372).
+
 ### iRocks M31R
 
 **Connection:** 2.4 GHz receiver (14A5:C009) and USB cable (14A5:C010)

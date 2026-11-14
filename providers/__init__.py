@@ -40,6 +40,7 @@ from .am_infinity import AmInfinityProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
 from .inphic import InphicProvider  # noqa: F401
+from .attackshark_r5 import AttackSharkR5Provider  # noqa: F401
 from .irocks import IRocksProvider  # noqa: F401
 from .turtlebeach import TurtleBeachProvider  # noqa: F401
 from .urx import UrxProvider  # noqa: F401
