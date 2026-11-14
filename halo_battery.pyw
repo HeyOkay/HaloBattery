@@ -184,6 +184,8 @@ DEFAULTS = {
     "disabled_providers": [],     # provider names turned off in Preferences > Device types
     "time_left": True,      # "about N h of use left" in the tooltip (history.py)
     "percent_in_icon": False,  # the level as a number in the ring, instead of the pictogram
+    "custom_icons": {},   # device key -> verified locally cached Iconify asset ID
+    "ring_style": "thin",  # thin=1 logical px; classic restores the former 1.625 px
     "filled_icons": False,  # global device pictogram style; outline remains the default
     "quiet_fullscreen": True,  # while a game is full screen: hold alerts, poll every 5 min
     "keep_disconnected": False,  # keep a gone device's icon, greyed with its last level, until restart (#151)
@@ -296,6 +298,13 @@ _config_lock = threading.Lock()
 def _valid_setting(key: str, value) -> bool:
     """A value from the settings file has the type of its default (and a sane range)."""
     default = DEFAULTS[key]
+    if key == "custom_icons":
+        return (isinstance(value, dict) and len(value) <= 1024 and
+                all(isinstance(k, str) and 0 < len(k) <= 512 and isinstance(v, str) and
+                    len(v) == 64 and all(c in "0123456789abcdef" for c in v)
+                    for k, v in value.items()))
+    if key == "ring_style":
+        return isinstance(value, str) and value in ("thin", "classic")
     if key == "language":
         return isinstance(value, str) and value in i18n.LANGUAGES
     if isinstance(default, bool):
@@ -1181,7 +1190,8 @@ class DeviceIcon:
         self._images: Dict[tuple, object] = {}  # state -> image or frames, per colour
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
                               icons.render(None, False, False, light_taskbar=app.light_taskbar,
-                                           size=getattr(app, "tray_size", icons.SIZE)),
+                                           size=getattr(app, "tray_size", icons.SIZE),
+                                           ring_style=app.cfg.get("ring_style", "thin")),
                               APP_TITLE, app.build_tray_menu(self))
         self.icon._hb_flyout = getattr(app, "flyout", None)
         connect_settings_click(self.icon, lambda: app.open_settings(self.key, page="devices"))
@@ -1237,19 +1247,24 @@ class DeviceIcon:
         draw anything again. The cache holds one state, in at most both colours."""
         art = self._images.get(state)
         if art is None:
-            level, charging, online, low, light, badge, animate, text, paused, size, brand, color, filled = state
+            level, charging, online, low, light, badge, animate, text, paused, size, brand, color, filled = state[:13]
+            custom_id = state[13] if len(state) > 13 else None
+            asset = getattr(self.app, "_custom_assets", {}).get(custom_id) if custom_id else None
+            custom = {"custom_glyph": asset.glyph} if asset is not None else {}
+            if len(state) > 14:
+                custom["ring_style"] = state[14]
             other = (level, charging, online, low, not light, badge, animate, text, paused,
-                     size, brand, color, filled)
+                     size, brand, color, filled) + state[13:]
             kept = self._images.get(other)
             self._images.clear()
             if kept is not None:
                 self._images[other] = kept      # the same state in the other colour
             if animate:
                 art = icons.charging_frames(level, online, low, light, badge, text=text,
-                                            size=size, brand=brand, brand_color=color, filled=filled)
+                                            size=size, brand=brand, brand_color=color, filled=filled, **custom)
             else:
                 art = icons.render(level, charging, online, low, light, badge, text=text,
-                                   force_active=paused, size=size, brand=brand, brand_color=color, filled=filled)
+                                   force_active=paused, size=size, brand=brand, brand_color=color, filled=filled, **custom)
             self._images[state] = art
         return art
 
@@ -1356,6 +1371,8 @@ class App:
         self.ui_host = self.flyout or flyout.FlyoutHost()
         from halo.settings_model import SettingsController
         self.settings = SettingsController(self)
+        self.settings.load_custom_icons()  # immediately display verified local PNGs
+        self.settings.schedule_custom_icon_upgrade()  # one background upgrade for old masks
 
     # ---------------- menu
     def tr(self, key: str, **params) -> str:
@@ -1367,7 +1384,7 @@ class App:
                     autostart_enabled=autostart_enabled, set_autostart=set_autostart,
                     remove_status_file=remove_status_file, provider_labels=PROVIDER_LABELS,
                     controller_brands=CONTROLLER_BRANDS, controller_pictograms=CONTROLLER_PICTOGRAMS,
-                    device_state=device_state, version=VERSION, data_dir=DATA_DIR, status_path=STATUS_PATH,
+                    device_state=device_state, device_kind=badge_for, version=VERSION, data_dir=DATA_DIR, status_path=STATUS_PATH,
                     repo=updates.REPO, has_translation=lambda key: key in i18n.LANGUAGES["en"].catalog)
 
     def icon_render_state(self, st: DeviceStatus, *, size: Optional[int] = None) -> tuple:
@@ -1376,10 +1393,21 @@ class App:
         animate = self.cfg["animation"] and st.charging and st.online
         text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
         brand, color = self.controller_style(st)
-        return (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+        state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,
                 size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
                 self.cfg.get("filled_icons", False))
+        saved = self.cfg.get("custom_icons", {})
+        custom_id = saved.get(st.key) if isinstance(saved, dict) else None
+        # Only an offline verified asset loaded before polling can enter the frame
+        # cache. Global percentage/ring-only modes retain their existing priority.
+        if not (self.cfg["badges"] and not text and isinstance(custom_id, str) and custom_id in getattr(self, "_custom_assets", {})):
+            custom_id = None
+        if self.cfg.get("ring_style", "thin") == "classic":
+            state += (custom_id, "classic")
+        elif custom_id is not None:
+            state += (custom_id,)
+        return state
 
     def open_settings(self, device_key: Optional[str] = None, *, page: str = "general") -> None:
         from halo.settings_host import SettingsHost
@@ -1672,6 +1700,8 @@ class App:
         value = self.cfg.get(key)
         if not isinstance(value, dict):
             value = self.cfg[key] = {}
+        elif value is DEFAULTS.get(key):
+            value = self.cfg[key] = dict(value)  # mutable defaults belong to one app
         return value
 
     def display_name(self, st: DeviceStatus) -> str:
@@ -1937,7 +1967,8 @@ class App:
                             if discard is not None:
                                 discard()
                 if self.placeholder is not None:
-                    self.placeholder.icon = icons.render(None, False, False, light_taskbar=light, size=size)
+                    self.placeholder.icon = icons.render(None, False, False, light_taskbar=light, size=size,
+                                                         ring_style=self.cfg.get("ring_style", "thin"))
                     if resized:
                         discard = getattr(self.placeholder, "discard_cached_handles", None)
                         if discard is not None:
@@ -2248,7 +2279,8 @@ class App:
             ready = threading.Event()
             self.placeholder = tray_icon(IDLE_KEY, f"{APP_NAME}_idle",
                                          icons.render(None, False, False, light_taskbar=self.light_taskbar,
-                                                      size=getattr(self, "tray_size", icons.SIZE)),
+                                                      size=getattr(self, "tray_size", icons.SIZE),
+                                                      ring_style=self.cfg.get("ring_style", "thin")),
                                          i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE)),
                                          self.build_tray_menu(None))
             self.placeholder._hb_flyout = getattr(self, "flyout", None)

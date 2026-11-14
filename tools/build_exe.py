@@ -35,7 +35,11 @@ def main() -> None:
     workpath = args.workpath.resolve()
     specpath = workpath / "spec" / "HaloBattery.spec"
     specpath.parent.mkdir(parents=True, exist_ok=True)
-    datas = [(str(ROOT / "docs/licenses"), "licenses"),
+    # Runtime legal metadata already contains the full grants/NOTICE texts.
+    # Developer audit inputs and duplicate plaintext exports stay in source.
+    datas = [(str(ROOT / "halo/iconify_data/registry.json.gz"), "halo/iconify_data"),
+             (str(ROOT / "halo/iconify_data/manifests"), "halo/iconify_data/manifests"),
+             (str(ROOT / "docs/licenses"), "licenses"),
              (str(ROOT / "docs/credits.md"), "licenses")]
     spec = f"""from PyInstaller.utils.hooks import collect_data_files
 

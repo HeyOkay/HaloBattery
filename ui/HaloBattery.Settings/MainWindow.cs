@@ -324,7 +324,18 @@ public sealed partial class MainWindow : Window
  internal TextBlock Text(string value,double size=14,bool subtle=false)=>new(){Text=value,FontSize=size,FontFamily=bodyFont,Foreground=subtle?SubtleBrush:TextBrush,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
  internal Button Button(string label,bool enabled=false,bool chrome=false,bool primary=false)
  {
-  var b=new Button{Content=label,FontFamily=bodyFont,FontSize=13,Height=30,MinHeight=30,Padding=new(14,0,14,0),CornerRadius=new(15),BorderThickness=new(0),Background=chrome?Brush("#00000000"):Brush(dark?"#303030":"#ECECEC"),Foreground=TextBrush,IsEnabled=enabled,VerticalAlignment=VerticalAlignment.Center};if(primary){b.Background=Brush($"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");b.Foreground=Brush(dark?"#000000":"#FFFFFF");b.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;}if(!enabled){ToolTipService.SetToolTip(b,Later);AutomationProperties.SetHelpText(b,Later);}return b;
+  var b=new Button{Content=label,FontFamily=bodyFont,FontSize=13,Height=30,MinHeight=30,Padding=new(14,0,14,0),CornerRadius=new(15),BorderThickness=new(0),Background=chrome?Brush("#00000000"):Brush(dark?"#303030":"#ECECEC"),Foreground=TextBrush,IsEnabled=enabled,VerticalAlignment=VerticalAlignment.Center};
+  if(!chrome&&!primary)
+  {
+   // Match PillComboBox's opaque states instead of compositing WinUI's
+   // translucent defaults over the card's changing hover background.
+   var hover=Brush(dark?"#3A3A3A":"#E0E0E0");
+   foreach(var key in new[]{"ButtonBackgroundPointerOver","ButtonBackgroundPressed"})b.Resources[key]=hover;
+   foreach(var key in new[]{"ButtonForegroundPointerOver","ButtonForegroundPressed"})b.Resources[key]=TextBrush;
+  }
+  if(primary){b.Background=Brush($"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");b.Foreground=Brush(dark?"#000000":"#FFFFFF");b.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;}
+  if(!enabled){ToolTipService.SetToolTip(b,Later);AutomationProperties.SetHelpText(b,Later);}
+  return b;
  }
  internal StackPanel PageContent(string title)
  {

@@ -44,7 +44,7 @@ class SpanishTests(unittest.TestCase):
                             self.assertEqual(cfg[key], value)
                     app = make_app(cfg)
                     prefs = find(app.build_menu(None), "Preferencias").submenu
-                    languages = find(prefs, "Language / Idioma").submenu
+                    languages = find(prefs, "Idioma").submenu
                     self.assertTrue(find(languages, "Español").checked)
                     find(languages, "English")(None)
                     detect.reset_mock()
@@ -83,7 +83,7 @@ class SpanishTests(unittest.TestCase):
         app.placeholder = types.SimpleNamespace(update_menu=lambda: refreshed.append("idle"))
         with mock.patch.object(hb, "save_config"):
             prefs = find(app.build_menu(None), "Preferences").submenu
-            languages = find(prefs, "Language / Langue").submenu
+            languages = find(prefs, "Language").submenu
             find(languages, "Español")(None)
             self.assertEqual(app.icons["0"].icon.title, "Ratón 🎧 0: 85%, unas 2 h de uso restantes")
             self.assertEqual(app.icons["1"].icon.title, "Ratón 🎧 1: 85%, unas 2 h de uso restantes")

@@ -154,6 +154,11 @@ internal sealed class CardView : UserControl
     }
 
     public void SetTitle(UIElement title) => titleHost.Content = title;
+    public void SetIcon(UIElement? icon)
+    {
+        iconHost.Content = icon;
+        iconHost.Margin = icon is null ? new Thickness(0) : new Thickness(0, 0, 16, 0);
+    }
     public void SetDescription(UIElement? description) => descriptionHost.Content = description;
     public void AddBody(UIElement element) => body.Children.Add(element);
 

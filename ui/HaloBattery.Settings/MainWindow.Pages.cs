@@ -88,6 +88,7 @@ public sealed partial class MainWindow
 
     private Page BuildPage(string page)
     {
+        StopIconCatalog();
         pageBindings.Clear();
         RefreshGeneralFooter(page);
         previewImage = null;
@@ -189,8 +190,8 @@ public sealed partial class MainWindow
     private void BuildGeneral(StackPanel p)
     {
         Section(p, T("settings.application"));
-        GlobalChoice(p, "language", "preferences.language", () => Picks(State.Options.Languages), () => State.Language, icon: "sliders-horizontal");
-        p.Children.Add(Card(T("preferences.autostart"), "", ToggleControl(T("preferences.autostart"), () => State.Autostart, v => SetGlobal("autostart", v)), "refresh-cw"));
+        GlobalChoice(p, "language", "preferences.language", () => Picks(State.Options.Languages), () => State.Language, icon: "languages");
+        p.Children.Add(Card(T("preferences.autostart"), "", ToggleControl(T("preferences.autostart"), () => State.Autostart, v => SetGlobal("autostart", v)), "circle-arrow-up"));
         Section(p, T("settings.polling"));
         GlobalChoice(p, "interval", "preferences.interval", () => Picks(State.Options.Intervals), () => IntCfg("interval", 60), "settings.polling_hint", "refresh-cw");
         BuildUpdates(p);
@@ -200,7 +201,7 @@ public sealed partial class MainWindow
     {
         var selector = ChoiceBox(T("settings.select_device"), () => State.Devices.Select(d => Pick(d.Key, d.Name + (d.Hidden ? " - " + T("settings.hidden") : ""))).ToList(), () => selectedDeviceKey,
             value => Bridge.SendCommand("selectDevice", new { deviceKey = value }));
-        p.Children.Add(Card(T("settings.select_device"), "", selector, "mouse"));
+        p.Children.Add(Card(T("settings.select_device"), "", selector, "smartphone-nfc"));
         if (SelectedDevice is { } device)
         {
             // Detached controls can lose focus after a backend selection change.
@@ -228,7 +229,19 @@ public sealed partial class MainWindow
             var reset = Button(T("settings.reset"), true);
             reset.Click += (_, _) => ChangeDevice("reset_name", null);
             p.Children.Add(Card(T("settings.reset_name"), "", reset, "refresh-cw"));
-            p.Children.Add(Card(T("settings.show_device"), "", ToggleControl(T("settings.show_device"), () => SelectedDevice?.Hidden != true, show => ChangeDevice("hidden", !show)), "eye"));
+            var visibilityGlyph = device.Hidden ? "eye-closed" : "eye";
+            CardView? visibilityCard = null;
+            void SetVisibilityGlyph(bool hidden)
+            {
+                var glyph = hidden ? "eye-closed" : "eye";
+                if (glyph == visibilityGlyph) return;
+                visibilityCard?.SetIcon(LucideIcon(glyph));
+                visibilityGlyph = glyph;
+            }
+            visibilityCard = Card(T("settings.show_device"), "", ToggleControl(T("settings.show_device"),
+                () => SelectedDevice?.Hidden != true, show => { SetVisibilityGlyph(!show); ChangeDevice("hidden", !show); }), visibilityGlyph);
+            p.Children.Add(visibilityCard);
+            pageBindings.Add(() => SetVisibilityGlyph(SelectedDevice?.Hidden == true));
             p.Children.Add(Card(T("settings.pictogram"), "", ChoiceBox(T("settings.pictogram"), () => Picks(State.Options.Pictograms), () => SelectedDevice?.Pictogram ?? "", v => ChangeDevice("pictogram", v)), "palette"));
             var brand = Card(T("menu.controller_logo"), "", ChoiceBox(T("menu.controller_logo"), () => Picks(State.Options.Brands), () => SelectedDevice?.Brand ?? "default", v => ChangeDevice("brand", v)), "palette");
             var color = Card(T("controller.color"), "", ToggleControl(T("controller.color"), () => SelectedDevice?.BrandColor == true, v => ChangeDevice("brand_color", v)), "palette");
@@ -240,10 +253,11 @@ public sealed partial class MainWindow
                 levels.Insert(0, Pick(null, IntCfg("low") == 0 ? T("menu.default_off") : F("menu.default_low", ("level", IntCfg("low")))));
                 return levels;
             }, () => SelectedDevice?.LowOverride, v => ChangeDevice("low_override", v)), "bell"));
+            BuildIconCatalog(p, deviceKey);
         }
         else p.Children.Add(Card(T("settings.no_devices"), "", icon: "mouse"));
         Section(p, T("settings.compatibility"));
-        GlobalToggle(p, "bluetooth", icon: "mouse");
+        GlobalToggle(p, "bluetooth", icon: "bluetooth");
         GlobalToggle(p, "keep_disconnected", icon: "eye");
     }
 
@@ -252,24 +266,25 @@ public sealed partial class MainWindow
         AddPreview(p, false);
         Section(p, T("settings.content"));
         p.Children.Add(Card(T("settings.content"), "", ChoiceBox(T("settings.content"), () => new() { Pick("pictogram", T("settings.pictogram")), Pick("percent", T("settings.percentage")), Pick("ring", T("settings.ring_only")) }, () => ContentMode,
-            mode => Bridge.SendCommand("setIconContent", new { mode })), "palette"));
+            mode => Bridge.SendCommand("setIconContent", new { mode })), "circle"));
         GlobalChoice(p, "filled_icons", "preferences.icon_style", () => new() { Pick(false, T("icon_style.outline")), Pick(true, T("icon_style.filled")) }, () => BoolCfg("filled_icons"));
         var fallback = GlobalToggle(p, "badges", "settings.fallback", icon: "mouse");
         pageBindings.Add(() => fallback.Visibility = ContentMode == "percent" ? Visibility.Visible : Visibility.Collapsed);
-        GlobalToggle(p, "animation", icon: "refresh-cw");
+        GlobalToggle(p, "animation", icon: "loader-circle");
         GlobalToggle(p, "time_left", hint: "settings.estimate_hint", icon: "info");
         Section(p, T("settings.appearance"));
-        GlobalChoice(p, "icon_theme", "preferences.theme", () => Picks(State.Options.IconThemes), () => StrCfg("icon_theme", "auto"));
+        GlobalChoice(p, "ring_style", "settings.ring_thickness", () => new() { Pick("thin", T("settings.ring_thin")), Pick("classic", T("settings.ring_classic")) }, () => StrCfg("ring_style", "thin"), icon: "circle");
+        GlobalChoice(p, "icon_theme", "preferences.theme", () => Picks(State.Options.IconThemes), () => StrCfg("icon_theme", "auto"), icon: "sun-moon");
     }
 
     private void BuildNotifications(StackPanel p)
     {
         Section(p, T("settings.battery_alerts"));
         GlobalChoice(p, "low", "preferences.low", () => Thresholds(IntCfg("low")), () => IntCfg("low"), "settings.low_hint", "bell");
-        GlobalToggle(p, "full_alert", "preferences.full", icon: "battery-medium");
+        GlobalToggle(p, "full_alert", "preferences.full", icon: "battery-full");
         GlobalToggle(p, "low_sound", hint: "settings.sound_hint", icon: "bell");
         Section(p, T("settings.fullscreen"));
-        GlobalToggle(p, "quiet_fullscreen", "preferences.quiet", "settings.quiet_hint", "bell");
+        GlobalToggle(p, "quiet_fullscreen", "preferences.quiet", "settings.quiet_hint", "bell-off");
     }
 
     private void BuildAdvanced(StackPanel p)
@@ -301,8 +316,8 @@ public sealed partial class MainWindow
     private void BuildUpdates(StackPanel p)
     {
         Section(p, T("settings.updates"));
-        GlobalToggle(p, "update_check", "preferences.updates", icon: "download");
-        ActionCard(p, "preferences.check_now", "settings.check", "checkUpdate", icon: "refresh-cw");
+        GlobalToggle(p, "update_check", "preferences.updates", icon: "refresh-cw");
+        ActionCard(p, "preferences.check_now", "settings.check", "checkUpdate", icon: "download");
         var install = Button("", true);
         install.Click += (_, _) => Bridge.SendCommand("startUpdate", new { });
         var progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 4, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -327,7 +342,7 @@ public sealed partial class MainWindow
 
     private void BuildAbout(StackPanel p)
     {
-        var version = Card("HaloBattery", F("settings.version", ("version", State.Version)), icon: "battery-medium");
+        var version = Card("HaloBattery", F("settings.version", ("version", State.Version)), icon: "loader-circle");
         p.Children.Add(version);
         pageBindings.Add(() => version.SetDescription(Text(F("settings.version", ("version", State.Version)), 12, true)));
         Section(p, T("settings.support"));
@@ -336,13 +351,17 @@ public sealed partial class MainWindow
         ActionCard(p, "settings.project", "settings.open", "openProject");
         ActionCard(p, "settings.issue", "settings.open", "openIssue");
         p.Children.Add(Card(T("settings.fonts"), "Lucide · ISC / MIT", icon: "info"));
+        var licenses = Button(T("settings.iconify_licenses"), true);
+        licenses.Click += (_, _) => RequestAllIconLicenses();
+        p.Children.Add(Card(T("settings.iconify_licenses"), "", licenses, "info"));
     }
 
     private void AddPreview(StackPanel p, bool devicePage)
     {
         previewImage = new Image { Stretch = Stretch.Fill, UseLayoutRounding = true, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(previewImage).IsPixelSnappingEnabled = true;
-        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewImage, devicePage ? "mouse" : "palette");
+        var previewGlyph = devicePage ? DeviceKindGlyph(SelectedDevice?.Kind) : "eye";
+        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewImage, previewGlyph);
         p.Children.Add(preview);
         pageBindings.Add(() =>
         {
@@ -350,6 +369,12 @@ public sealed partial class MainWindow
             previewDeviceKey = selectedDeviceKey;
             if (devicePage && SelectedDevice is { } d)
             {
+                var glyph = DeviceKindGlyph(d.Kind);
+                if (glyph != previewGlyph)
+                {
+                    preview.SetIcon(LucideIcon(glyph));
+                    previewGlyph = glyph;
+                }
                 preview.SetTitle(Text(d.Name));
                 preview.SetDescription(Text(d.Description, 12, true));
             }
