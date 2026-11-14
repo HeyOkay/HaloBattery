@@ -18,6 +18,8 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image, ImageColor
 
+from .icon_alignment import PLACEMENT_VERSION, place as align_glyph
+
 LEGACY_RENDERER_VERSION = 'direct2d-static-centre-v1'
 PREVIOUS_RENDERER_VERSION = 'direct2d-static-centre-v2'
 RENDERER_VERSION = 'direct2d-static-centre-v3'
@@ -573,7 +575,7 @@ class CustomGlyph:
             saved.paste(master,(0,0));saved.paste(light,(MASTER_SIZE,0))
         buffer=io.BytesIO();saved.save(buffer,format='PNG')
         mode=b'mixed' if light_raw is not None else (b'color' if colored else b'monochrome')
-        digest=hashlib.sha256(RENDERER_VERSION.encode('ascii')+b'\0'+mode+b'\0'+(rgba if colored else raw)+(light_raw or b'')).hexdigest()
+        digest=hashlib.sha256(RENDERER_VERSION.encode('ascii')+b'\0'+PLACEMENT_VERSION.encode('ascii')+b'\0'+mode+b'\0'+(rgba if colored else raw)+(light_raw or b'')).hexdigest()
         return cls(buffer.getvalue(),digest,raw,rgba,light_raw)
 
     def render(self,size:int,fg:tuple,alpha:int=255,foreground_opacity:float=230/255):
@@ -604,7 +606,7 @@ class CustomGlyph:
 
 
 def _sized_mask(raw,size):
-    source=Image.frombytes('L',(MASTER_SIZE,MASTER_SIZE),raw)
+    source=align_glyph(Image.frombytes('L',(MASTER_SIZE,MASTER_SIZE),raw))
     result=source.resize((size,size),Image.Resampling.BOX if size<MASTER_SIZE else Image.Resampling.LANCZOS)
     # Pixel centres beyond this boundary are reserved for the existing ring.
     pixels=result.load()
@@ -614,7 +616,7 @@ def _sized_mask(raw,size):
 
 
 def _sized_color(raw,size):
-    source=Image.frombytes('RGBA',(MASTER_SIZE,MASTER_SIZE),raw)
+    source=align_glyph(Image.frombytes('RGBA',(MASTER_SIZE,MASTER_SIZE),raw))
     image=source.resize((size,size),Image.Resampling.BOX if size<MASTER_SIZE else Image.Resampling.LANCZOS)
     coverage=image.getchannel('A')
     pixels=coverage.load()
