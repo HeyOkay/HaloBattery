@@ -7,6 +7,8 @@ from providers import ajazz, endgame_4k, turtlebeach, sony_inzone, lamzu_sw, log
 
 
 class StableDevicePolicyTests(unittest.TestCase):
+    @unittest.skipIf(bool(ajazz.ENABLED_ALT_TARGETS),
+                     "test build intentionally enables the AJ159/Kysona probe")
     def test_aj159_and_kysona_are_not_opened_even_with_valid_vendor_collections(self):
         entries = [{"product_id": pid, "usage_page": 0xFFFF, "usage": 2,
                     "path": b"held", "interface_number": 2}
