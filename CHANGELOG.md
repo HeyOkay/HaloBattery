@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **AULA F108 Pro** battery percentage over its 2.4 GHz receiver. The level
+  matched the keyboard's display on real hardware. Charging state is unknown.
 - Use the matte glass application icon for executables and the settings header,
   with less transparent padding in taskbar icons and theme-specific SVG artwork
   placed close to, and vertically centered beside, HaloBattery in the header.

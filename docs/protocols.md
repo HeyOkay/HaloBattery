@@ -418,6 +418,23 @@ than waking an idle keyboard; a failed listener also leaves queries paused.
 No protocol or sleep-setting writes are introduced. Physical sleep still needs
 an idle test on the keyboard; absence of battery requests alone is not a power measurement.
 
+### AULA F108 Pro
+
+**Connection** via the 2.4 GHz receiver (`05AC:024F`, product `F108Pro Dongle`).
+The product name, interface 3, and HID collection `FF60:0061` identify the receiver
+because Apple keyboards and the Lofree Flow Lite84 also use this USB ID.
+
+The 33-byte output report starts `00 20 01`, ends `21`, and has zero padding between them.
+The battery request and additive checksum come from meitar/aula-driver's
+[`sendBatteryQuery`](https://github.com/meitar/aula-driver/blob/985df39f8224d6f031aeafdacf1a6328f458600f/Sources/AulaKit/Hardware/WirelessAulaDevice.swift#L82-L95) and
+[`applyChecksum`](https://github.com/meitar/aula-driver/blob/985df39f8224d6f031aeafdacf1a6328f458600f/Sources/AulaKit/Hardware/WirelessAulaDevice.swift#L174-L185).
+
+The Windows reply starts `00 20 01 00 <level>` and ends with the sum of the preceding
+bytes modulo 256. The level is the fifth byte with the zero report ID present, or
+the fourth when HIDAPI strips it. **Confirmed on hardware** with three replies
+`00 20 01 00 21 ... 42` while the keyboard screen showed 33% after the charger was
+unplugged. The provider reports charging as unknown.
+
 ### Keychron Ultra-Link 8K, Keychron M5
 
 **Connection:** 2.4 GHz receiver (3434:D028) and USB cable (3434:D048)

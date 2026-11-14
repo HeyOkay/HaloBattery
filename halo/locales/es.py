@@ -116,6 +116,7 @@ MESSAGES = {
     "provider.atk_keyboard": "Teclado ATK V75X",
     "provider.atk_nearlink": "Ratones ATK X1 Nearlink",
     "provider.aula": "Teclados AULA F87 Pro V2C",
+    "provider.aula_f108": "Teclados AULA F108 Pro",
     "provider.dareu": "Ratones DAREU",
     "provider.eweadn": "Ratones EWEADN / 前行者",
     "provider.endgame_4k": "Ratones Endgame Gear 4K (XM2w / OP1w)",
