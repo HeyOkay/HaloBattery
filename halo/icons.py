@@ -278,18 +278,31 @@ def _number(d: ImageDraw.ImageDraw, text: str, col) -> None:
 
 
 # ---------------------------------------------------------------- icon
+RING_STYLES = frozenset(('thin', 'classic'))
+
+
+def _ring_width(ring_style):
+    if not isinstance(ring_style, str) or ring_style not in RING_STYLES:
+        raise ValueError("ring style must be 'thin' or 'classic'")
+    return 4.0 if ring_style == 'thin' else 6.5
+
+
 def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            light_taskbar: Optional[bool] = None, badge: str = "",
            pulse: float = 1.0, text: str = "", force_active: bool = False, *,
            size: int = SIZE, brand: str = "default", brand_color: bool = False,
-           animation_phase: float = 0.0, filled: bool = False) -> Image.Image:
+           animation_phase: float = 0.0, filled: bool = False, custom_glyph=None,
+           ring_style: str = 'thin') -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - known-level arc brightness 0..1 (the charging "breathing" animation).
     animation_phase - clockwise turn 0..1 for unknown charging; its brightness is steady.
     text - drawn in the centre instead of the pictogram (the battery percentage); red or
     amber like the arc when the level is low, the taskbar colour otherwise.
     size is the physical output width/height; the legacy default stays 64.
-    brand / brand_color affect controller glyphs only, never their semantic kind."""
+    brand / brand_color affect controller glyphs only, never their semantic kind.
+    ring_style selects the current 1px or classic 1.625px stroke at 16px;
+    both retain the same outer radius and centre artwork."""
+    ring_width = _ring_width(ring_style)
     if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
         raise ValueError("icon size must be a positive integer")
     if light_taskbar is None:
@@ -301,7 +314,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    R, w = 31.5, 4.0   # one logical pixel at the 16 px tray size
+    R, w = 31.5, ring_width   # shared outer radius; thickness grows inward
     box = (_r(32 - R), _r(32 - R), _r(32 + R), _r(32 + R))
 
     # ring track
@@ -350,7 +363,10 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     # overshoot clips negative alpha to zero, making small rings visibly heavier.
     sampling = Image.Resampling.BOX if size < S else Image.Resampling.LANCZOS
     img = img.resize((size, size), sampling)
-    if kind and not text:
+    if custom_glyph is not None and not text:
+        img = Image.alpha_composite(img, custom_glyph.render(
+            size, fg, alpha, foreground_opacity=NEUTRAL_OPACITY / 255))
+    elif kind and not text:
         img = Image.alpha_composite(img, icon_artwork.glyph(
             kind, size, fg, alpha, brand, brand_color,
             foreground_opacity=NEUTRAL_OPACITY, filled=filled))
@@ -372,11 +388,16 @@ def breath_level(phase: float) -> float:
 def charging_frames(level: Optional[int], online: bool, low: int = 20,
                     light_taskbar: Optional[bool] = None, badge: str = "", text: str = "", *,
                     size: int = SIZE, brand: str = "default", brand_color: bool = False,
-                    filled: bool = False):
+                    filled: bool = False, custom_glyph=None, ring_style: str = 'thin'):
     """A breathing known-level arc or rotating unknown-level arc, cached as one cycle."""
+    _ring_width(ring_style)
+    options = {"custom_glyph": custom_glyph} if custom_glyph is not None else {}
+    if ring_style != 'thin':
+        options["ring_style"] = ring_style
     return [render(level, True, online, low, light_taskbar, badge, breath_level(i / BREATH_FRAMES),
                    text=text, size=size, brand=brand, brand_color=brand_color,
-                   animation_phase=i / BREATH_FRAMES if level is None else 0.0, filled=filled)
+                   animation_phase=i / BREATH_FRAMES if level is None else 0.0, filled=filled,
+                   **options)
             for i in range(BREATH_FRAMES)]
 
 

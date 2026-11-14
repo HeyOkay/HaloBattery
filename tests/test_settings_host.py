@@ -18,7 +18,7 @@ def controller():
     status = SimpleNamespace(level=42, charging=None, online=True)
     model.snapshot.return_value = dict(cfg=dict(language="en", low=20, interval=60, icon_theme="auto",
         badges=True, percent_in_icon=False, animation=True, names={"a": "private"}),
-        devices=[dict(key="a", name="Mouse", status=status), dict(key="b", name="Keyboard", status=status)],
+        devices=[dict(key="a", name="Mouse", kind="mouse", status=status), dict(key="b", name="Keyboard", status=status)],
         providers=[dict(name="razer", label="Razer", enabled=True)], version="1.1.7",
         data_dir=Path("data"), status_path=Path("status.json"), autostart=False, icon_light_taskbar=False)
     model.preview.return_value = Image.new("RGBA", (80, 80), "red")
@@ -83,9 +83,10 @@ class SettingsHostTests(unittest.TestCase):
         self.assertNotIn("pages", state)
         self.assertNotIn("names", state["settings"])
         self.assertNotIn("status", state["devices"][0])
+        self.assertEqual(state["devices"][0]["kind"], "mouse")
         self.assertIsNone(state["devices"][0]["charging"])
         self.assertEqual(state["devices"][0]["level"], 42)
-        self.assertEqual(len(state["options"]["languages"]), 6)
+        self.assertEqual(len(state["options"]["languages"]), 7)
         self.manager._publish(self.session)
         self.assertEqual(self.drain(), [])
 

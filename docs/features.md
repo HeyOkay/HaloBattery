@@ -6,6 +6,8 @@
 ## The icon
 
 - **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. Controller logos are chosen manually; the default is a generic controller.
+- **Custom pictograms**: the Devices page can search a reviewed [Iconify catalogue](iconify.md), preview a symbol inside the real ring and save it for one device. Monochrome symbols follow the theme; colored artwork keeps its original colors, including fixed parts of mixed icons. Selections work offline. Search uses pages of 50 candidates with round arrow and number buttons; neighboring previews are prepared ahead of time. Temporary gallery caches are cleared when Settings closes. Complete attribution and licenses are available in Settings; the existing percentage and ring-only modes retain priority.
+- **Ring thickness**: choose the current thin ring or the classic thicker ring on the Tray icons page. The same style applies to previews, charging animations and the no-device indicator.
 - **Display scaling**: tray artwork is rendered at the taskbar's physical icon size and refreshed when its DPI changes, keeping the thin ring and pictograms sharp.
 - **Colour**: follows the taskbar (white on a dark bar, black on a light one). With [MyDockFinder](https://store.steampowered.com/app/1787090/MyDockFinder/) running it follows its top menu bar instead. With a transparent taskbar (e.g. TranslucentTB) pick **Icon colour → White** or **Black**.
 - **Amber**: close to the alert threshold. **Red**: at or below it.
@@ -60,8 +62,8 @@ before freezing Python. No SDK or shared runtime installer is run by the script.
 
 Open **Settings…** from the tray menu. Changes apply immediately and are saved;
 there is no separate Save button. Settings remain available when no devices are
-connected. The interface keeps the existing six languages: English, Spanish,
-French, Japanese, Simplified Chinese and Traditional Chinese.
+connected. The interface keeps seven languages: English, Spanish,
+French, Japanese, Russian, Simplified Chinese and Traditional Chinese.
 
 Scrolling beyond the top or bottom of a settings page fills a small neutral
 ring. Continuing past its resistance threshold opens the adjacent page; a pause
@@ -78,7 +80,8 @@ back, while the ring fades, slides and scales through native Composition animati
   here. Windows Bluetooth discovery and keeping disconnected devices until restart
   are also configured here. Controller logos include generic, Xbox, PlayStation and Nintendo Switch,
   with optional brand colors. These choices do not change the device type in
-  the status file.
+  the status file. The device summary always uses a basic outline glyph for the
+  detected device type, without a battery ring or tray artwork customizations.
 - **Tray icons**: choose **Outline** or **Filled** pictograms, automatic/white/black
   icon color, pictogram/percentage/ring-only content, a pictogram fallback when
   percentage is unavailable, charging animation and estimated time left.

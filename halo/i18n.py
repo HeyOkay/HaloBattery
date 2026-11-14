@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from halo.locales import en, es, fr, ja, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, ru, zh_CN, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -26,6 +26,19 @@ def other_only(count: int) -> str:
 
 def _french_plural(count: int) -> str:
     return "one" if count in (0, 1) else "other"
+
+
+def _russian_plural(count: int) -> str:
+    """CLDR Russian integer forms: 1 час, 2 часа, 5 часов, 21 час."""
+    if isinstance(count, bool) or not isinstance(count, int):
+        return "other"
+    count = abs(count)
+    last, pair = count % 10, count % 100
+    if last == 1 and pair != 11:
+        return "one"
+    if 2 <= last <= 4 and not 12 <= pair <= 14:
+        return "few"
+    return "many"
 
 
 @dataclass(frozen=True)
@@ -61,6 +74,8 @@ LANGUAGES = {
                       windows_language_ids=(0x0804, 0x1004, 0x0004, 0x7804)),
     "ja": Language("日本語", ja.MESSAGES, plural_rule=other_only,
                    windows_primary_ids=(0x11,), plural_forms=("other",)),
+    "ru": Language("Русский", ru.MESSAGES, plural_rule=_russian_plural,
+                   windows_primary_ids=(0x19,), plural_forms=("one", "few", "many", "other")),
 }
 
 

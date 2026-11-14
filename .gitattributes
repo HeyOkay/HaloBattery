@@ -14,3 +14,6 @@
 /artwork/tray/lucide-radar.svg text eol=lf
 /artwork/tray/filled/*.svg text eol=lf
 /artwork/settings/*.svg text eol=lf
+
+# Preserve verbatim upstream license notices, including their whitespace.
+/halo/iconify_data/*-LICENSE.txt -text -whitespace

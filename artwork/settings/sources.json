@@ -102,6 +102,90 @@
     "plus": {
       "source": "https://unpkg.com/lucide-static@1.17.0/icons/plus.svg",
       "sha256": "862d39f698c22b747c152ea7cbf249c4db9e3cb53ca335042bf787dfe0d744e6"
+    },
+    "languages": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/languages.svg",
+      "sha256": "f4d9eddace97b2f4ff752ac02d0b71e2f1d8003d4c06ab0271ad4fa951bd155d"
+    },
+    "circle-arrow-up": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/circle-arrow-up.svg",
+      "sha256": "2ffaaab1b9d83d851fd640b74f5acc247284e0686264cd4e29b1981c7039e5e3"
+    },
+    "smartphone-nfc": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/smartphone-nfc.svg",
+      "sha256": "831923042bb5c65f6999c13bc0573a32df97f471aa1649e16c68f1bc4ecf4c0f"
+    },
+    "bluetooth": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/bluetooth.svg",
+      "sha256": "662a4a1363b3d019c3ca6b242c84216f6822a3b5ce68ced8ca071cf4705f33ab"
+    },
+    "circle": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/circle.svg",
+      "sha256": "bf1479c5c55992b40eeb08c661b56de55bbb1a0712fa40f9b00e9319cf9eab9e"
+    },
+    "loader-circle": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/loader-circle.svg",
+      "sha256": "43cf878431be309bf59650aa0b326ff24c0596aa2a96cdf83211c7c336f05892"
+    },
+    "sun-moon": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/sun-moon.svg",
+      "sha256": "e43e3a839ee7bba2c0a2f364984e99d7e928297c29ab20941b5b44dc3d5d4300"
+    },
+    "battery-full": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/battery-full.svg",
+      "sha256": "04edb7cab81e3d5a0e495a92d99da26bf91ea4f4e62c44e7944f607b5399cde8"
+    },
+    "bell-off": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/bell-off.svg",
+      "sha256": "69f6304c54ae24bedb88f42875e6b5d3d94a6ed3b8cc943f874e70e530453047"
+    },
+    "keyboard": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/keyboard.svg",
+      "sha256": "27671a4fd0aeeadca298bf878ebbcd53ac6649ca61d4e8d024c761dd048eb3fb"
+    },
+    "headphones": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/headphones.svg",
+      "sha256": "5692c74d160ec6c54993be380cb14260e9fb9f02d4099b90fb9949cf01634543"
+    },
+    "mic": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/mic.svg",
+      "sha256": "05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117"
+    },
+    "speaker": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg",
+      "sha256": "a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3"
+    },
+    "webcam": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg",
+      "sha256": "5301b9ff75048743f5436594c0c7ce1fada1653620b1c9f6f34fa3c667b09b60"
+    },
+    "heart-pulse": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg",
+      "sha256": "b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed"
+    },
+    "house": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/house.svg",
+      "sha256": "b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a"
+    },
+    "watch": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/watch.svg",
+      "sha256": "896fb08ab4056a89f174aec886d54fb9501aa157d998bc94069286a3717fe6ae"
+    },
+    "tv-minimal": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/tv-minimal.svg",
+      "sha256": "fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141"
+    },
+    "radar": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/radar.svg",
+      "sha256": "6092285ad2f49aecbd4521a31ac0ad3a17fa75a2406f5d98b8695df0205e0c13"
+    },
+    "gamepad-2": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/gamepad-2.svg",
+      "sha256": "9f9f6f987d2101987665b4334786a2ae397e4a2ced2629977bcf5b19a2b9481a"
+    },
+    "eye-closed": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/eye-closed.svg",
+      "sha256": "fdcbfe31b24dddf4fd17bb51bcb88e39beafb2eb4372117ab86a208d04c08870"
     }
   }
 }

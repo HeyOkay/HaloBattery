@@ -290,14 +290,14 @@ class LanguageConfigTests(unittest.TestCase):
         with mock.patch.dict(i18n.LANGUAGES, {"test": extra_language()}):
             app = make_app()
             prefs = find(app.build_menu(None), "Preferences").submenu
-            menu = find(prefs, "Language / Langue").submenu
+            menu = find(prefs, "Language").submenu
             find(menu, "Test language")(None)
             self.assertEqual(app.cfg["language"], "test")
             with mock.patch.object(i18n, "detect_language") as detect:
                 self.assertEqual(hb.load_config(initialize_language=True)["language"], "test")
             detect.assert_not_called()
             prefs = find(app.build_menu(None), "Test preferences").submenu
-            menu = find(prefs, "Language / Langue").submenu
+            menu = find(prefs, "Language").submenu
             self.assertTrue(find(menu, "Test language").checked)
 
     def test_localized_low_sound_option_persists_without_changing_language(self):
@@ -395,7 +395,7 @@ class PresentationTests(unittest.TestCase):
 
     def test_language_menu_selects_and_marks_saved_language(self):
         prefs = find(self.app.build_menu(None), "Préférences").submenu
-        languages = find(prefs, "Language / Langue").submenu
+        languages = find(prefs, "Langue").submenu
         self.assertEqual([item.text for item in languages],
                          [language.name for language in i18n.LANGUAGES.values()])
         self.assertTrue(find(languages, "Français").checked)

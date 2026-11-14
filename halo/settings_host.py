@@ -17,9 +17,9 @@ import uuid
 from . import i18n
 
 log = logging.getLogger("halo_battery")
-MAX_MESSAGE = 1024 * 1024
+MAX_MESSAGE = 4 * 1024 * 1024
 PAGES = frozenset(("general", "devices", "icons", "notifications", "advanced", "about"))
-GLOBAL_KEYS = frozenset(("language", "interval", "low", "bluetooth", "keep_disconnected", "filled_icons",
+GLOBAL_KEYS = frozenset(("language", "interval", "low", "bluetooth", "keep_disconnected", "filled_icons", "ring_style",
     "badges", "animation", "time_left", "icon_theme", "full_alert", "low_sound", "quiet_fullscreen",
     "playstation_full_mode", "status_file", "update_check", "percent_in_icon"))
 
@@ -60,6 +60,7 @@ class _Session:
     last_state: str | None = None
     last_command: int = -1
     catalogs: dict = field(default_factory=dict)
+    icon_jobs: object = None
 
 
 class SettingsHost:
@@ -190,11 +191,13 @@ class SettingsHost:
             level = status.level
             if isinstance(level, bool) or not isinstance(level, int) or not 0 <= level <= 100:
                 level = None
-            devices.append(dict(key=item["key"], name=item["name"], description=item.get("state", ""),
+            devices.append(dict(key=item["key"], name=item["name"], kind=item.get("kind", "bluetooth"), description=item.get("state", ""),
+                customIconId=item.get("custom_icon_id", ""), customIconName=item.get("custom_icon_name", ""),
                 pictogram=item.get("pictogram", ""), controller=bool(item.get("controller")),
                 brand=item.get("brand", "default"), brandColor=bool(item.get("brand_color")),
                 lowOverride=item.get("low_override"), hidden=bool(item.get("hidden")), level=level,
-                charging=status.charging if type(status.charging) is bool else None, online=bool(status.online)))
+                charging=status.charging if type(status.charging) is bool else None, online=bool(status.online),
+                paused=bool(getattr(status, "polling_paused", False))))
         with self._lock:
             keys = [item["key"] for item in devices]
             if session.device_key not in keys:
@@ -241,6 +244,19 @@ class SettingsHost:
             self._send(session, dict(state, revision=session.revision))
 
     def _handle(self, session, message):
+        if message["type"] == "catalog":
+            from .iconify_host import IconCatalogJobs, validate_request
+            if not self._current(session):
+                return
+            if not session.ready.is_set():
+                raise ValueError("settings handshake required")
+            validate_request(message)
+            if message["action"] == "cancel" and session.icon_jobs is None:
+                return
+            jobs = self._ensure_icon_jobs(session)
+            if jobs is not None:
+                jobs.submit(message)
+            return
         with self._model_lock:
             if not self._current(session):
                 return
@@ -251,6 +267,10 @@ class SettingsHost:
                 self._send(session, dict(type="welcome", protocol=1, sessionId=session.id))
                 self._publish(session)
                 session.ready.set()
+                if callable(getattr(type(self.controller), "create_browse_catalog", None)):
+                    jobs = self._ensure_icon_jobs(session)
+                    if jobs is not None:
+                        jobs.prewarm()
                 return
             if not session.ready.is_set():
                 raise ValueError("settings handshake required")
@@ -286,6 +306,22 @@ class SettingsHost:
             self._publish(session, result)
             if deferred is not None:
                 deferred()
+
+    def _ensure_icon_jobs(self, session):
+        from .iconify_host import IconCatalogJobs
+        with session.cleanup_lock:
+            if not self._current(session):
+                return None
+            if session.icon_jobs is None:
+                session.icon_jobs = IconCatalogJobs(self.controller,
+                    lambda result: self._send(session, result),
+                    lambda: self._catalog_changed(session), lambda: self._current(session),
+                    catalog_factory=self.controller.create_browse_catalog)
+            return session.icon_jobs
+
+    def _catalog_changed(self, session):
+        with self._model_lock:
+            self._publish(session)
 
     def _command(self, session, name, args):
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
@@ -329,6 +365,8 @@ class SettingsHost:
         if not session.cleanup_lock.acquire(blocking=False):
             return
         try:
+            if session.icon_jobs is not None:
+                session.icon_jobs.close()
             if graceful:
                 self._send(session, {"type": "shutdown"})
             if not graceful:

@@ -71,6 +71,10 @@ public sealed partial class MainWindow
                     await VerificationCapture(destination, "maximized-expanded");
                 }
                 await VerifyFixtureInteractions(checks);
+                await VerifyIconCatalog(checks);
+                await VerifyToggleThumbShadow(destination, checks);
+                await VerifyRingThicknessChoice(checks);
+                await VerifyRequestedSettingGlyphs(destination, checks);
                 await VerifyFixturePopup(destination, checks);
                 await VerifyWheelNavigation(checks);
                 await VerifyNavigationAndHeader(checks);

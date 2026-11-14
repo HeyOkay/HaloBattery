@@ -7,6 +7,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Russian localization, including native settings, tray menus, notifications,
+  Windows language detection and Russian plural forms.
+- License-only Iconify eligibility without independent brand/logo/Bluetooth
+  name filters. Search all reviewed names with 50-candidate pages, round arrow
+  and number buttons, predecoded neighboring previews and bounded parallel
+  source downloads. Temporary gallery caches are cleared when Settings closes;
+  applied icons and attribution remain available offline.
+- A choice of thin or classic charge-ring thickness, shared by tray icons and
+  previews. Toggle thumbs have a subtle shadow, and neutral buttons use the
+  same opaque hover/pressed colors as dropdowns.
+- Per-device Iconify centre pictograms in the native settings window, with
+  paged search, actual-DPI ring previews, offline selections and accessible
+  author/license notices. Preserve fixed SVG colors and mixed `currentColor`
+  artwork; old selected mask caches upgrade in the background without dropping
+  offline selections. A mandatory reviewed commercial-use registry excludes
+  unverified sources; the existing battery ring and charging states are retained.
 
 - Use the matte glass application icon for executables and the settings header,
   with less transparent padding in taskbar icons and theme-specific SVG artwork
@@ -22,7 +38,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
   Double-clicking a device's tray icon opens settings for that exact device.
   The compact right-click menu keeps device settings, refresh, app settings,
-  diagnostics, updates when available and exit within reach. All six existing
+  diagnostics, updates when available and exit within reach. All seven
   interface languages remain available.
 - Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
   navigation and control glyphs for the settings window.
@@ -38,6 +54,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+
+- Show the closed-eye Lucide glyph when a device is hidden from the tray.
+
+- Use single-language Language card headings in English, French and Spanish.
+
+- Use the requested Lucide settings glyphs. The device summary shows the actual
+  device type as a basic outline glyph, independently of custom tray artwork.
 
 - Publish native settings into a clean staging directory and replace the previous
   output only after success, preventing obsolete DLLs from entering local rebuilds.

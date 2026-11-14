@@ -3,10 +3,15 @@ from __future__ import annotations
 
 import copy
 import os
+import logging
+import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 from . import icons
 from providers.base import DeviceStatus
+
+log = logging.getLogger("halo_battery")
 
 
 class SettingsController:
@@ -15,6 +20,10 @@ class SettingsController:
         self.context = app.settings_context()
         self._preview_state = None
         self._preview_art = None
+        self._catalog = None
+        self._catalog_lock = threading.Lock()
+        self._icon_selection_revisions = {}
+        self._icon_upgrade_started = False
 
     def _statuses(self):
         app = self.app
@@ -36,8 +45,11 @@ class SettingsController:
                 choice = app._settings_map("icons").get(key, "")
                 if not isinstance(choice, str) or choice not in icons.PICTOGRAM_KINDS:
                     choice = ""
-                devices.append(dict(key=key, name=app.display_name(st), status=copy.deepcopy(st),
+                devices.append(dict(key=key, name=app.display_name(st), kind=ctx["device_kind"](st), status=copy.deepcopy(st),
                     estimate=app.time_left_text(st), controller=app.pictogram(st) in ctx["controller_pictograms"],
+                    custom_icon_id=cfg.get("custom_icons", {}).get(key, "") if isinstance(cfg.get("custom_icons"), dict) else "",
+                    custom_icon_name=getattr(getattr(app, "_custom_assets", {}).get(
+                        app._settings_map("custom_icons").get(key)), "icon_id", ""),
                     pictogram=choice, brand=brand, brand_color=color, low_override=app.device_low(key),
                     hidden=key in app._settings_map("hidden"), provider=app.key_provider.get(key, st.source)))
             disabled = app.disabled_providers()
@@ -81,6 +93,10 @@ class SettingsController:
             for owner in list(app.icons.values()):
                 if owner.status is not None:
                     owner.update(owner.status)
+            if getattr(app, "placeholder", None) is not None:
+                app.placeholder.icon = icons.render(None, False, False,
+                    light_taskbar=app.light_taskbar, size=getattr(app, "tray_size", icons.SIZE),
+                    ring_style=app.cfg.get("ring_style", "thin"))
         app.refresh_menus()
 
     def set_global(self, key, value):
@@ -166,6 +182,10 @@ class SettingsController:
                 target.pop(key, None)
             else:
                 target[key] = value
+            if field == "pictogram":
+                app._settings_map("custom_icons").pop(key, None)
+                self._advance_icon_selection(key)
+                self._prune_custom_assets()
             if field in ("name", "reset_name") and key in app._settings_map("hidden"):
                 app._settings_map("hidden")[key] = app.display_name(st)
             if field == "low_override":
@@ -182,12 +202,17 @@ class SettingsController:
             statuses = self._statuses()
             st = statuses.get(key) if key is not None else next(iter(statuses.values()), None)
             if st is None:
-                return icons.render(None, False, False, light_taskbar=app.light_taskbar, size=size)
+                return icons.render(None, False, False, light_taskbar=app.light_taskbar, size=size,
+                                    ring_style=app.cfg.get("ring_style", "thin"))
             state = app.icon_render_state(st, size=size)
             tick = getattr(app, "anim_tick", 0) if frame is None else frame
+            asset = getattr(app, "_custom_assets", {}).get(state[13]) if len(state) > 13 else None
         if state != self._preview_state:
             self._preview_state,self._preview_art=state,{}
-        level,charging,online,low,light,badge,animate,text,paused,pixels,brand,color,filled=state
+        level,charging,online,low,light,badge,animate,text,paused,pixels,brand,color,filled=state[:13]
+        custom = {"custom_glyph": asset.glyph} if asset is not None else {}
+        if len(state) > 14:
+            custom["ring_style"] = state[14]
         index=tick % icons.BREATH_FRAMES if animate else 0
         if index not in self._preview_art:
             # Match charging_frames exactly, but generate only the visible frame.
@@ -199,8 +224,175 @@ class SettingsController:
                 pulse=icons.breath_level(phase) if animate else 1.,text=text,
                 force_active=paused if not animate else False,size=pixels,
                 brand=brand,brand_color=color,filled=filled,
-                animation_phase=phase if animate and level is None else 0.)
+                animation_phase=phase if animate and level is None else 0., **custom)
         return self._preview_art[index].copy()
+
+    def icon_catalog(self):
+        # Independent from app.lock: registry/file/network work is never on a poll.
+        with self._catalog_lock:
+            if self._catalog is None:
+                from .iconify_catalog import IconifyCatalog
+                self._catalog = IconifyCatalog(self.context["data_dir"])
+            return self._catalog
+
+    def create_browse_catalog(self):
+        # Each settings window owns independent disposable search/preview RAM.
+        # Only applied assets share the persistent, offline tray asset store.
+        from .iconify_catalog import IconifyCatalog
+        return IconifyCatalog(self.context["data_dir"], transient=True)
+
+    def custom_icon_in_use(self, icon_id):
+        with self.app.lock:
+            saved = self.app.cfg.get("custom_icons", {})
+            ids = set(saved.values()) if isinstance(saved, dict) else set()
+            return any(asset.id in ids and asset.icon_id == icon_id
+                       for asset in getattr(self.app, "_custom_assets", {}).values())
+
+    def custom_icon_ids(self):
+        with self.app.lock:
+            saved = self.app.cfg.get("custom_icons", {})
+            return list(set(saved.values())) if isinstance(saved, dict) else []
+
+    def load_custom_icons(self):
+        self.app._custom_assets = {}
+        ids = self.custom_icon_ids()
+        if not ids and not (Path(self.context["data_dir"]) / "iconify").exists():
+            return
+        try:
+            catalog = self.icon_catalog()
+        except (OSError, ValueError):
+            log.warning("settings: custom icon registry could not be loaded", exc_info=True)
+            return
+        for asset_id in ids:
+            asset = catalog.load(asset_id)
+            if asset is not None:
+                self.app._custom_assets[asset.id] = asset
+                try:
+                    catalog.pin(asset.id)
+                except (OSError, ValueError):
+                    # A read-only portable profile can still display valid PNGs.
+                    log.warning("settings: could not refresh custom icon retention", exc_info=True)
+
+        # Migrate caches left by earlier builds before any window or upgrade
+        # worker starts. Applied masters have already been loaded and retained.
+        try:
+            catalog.purge_unselected_assets(ids)
+            catalog.clear_browse_cache(ids)
+        except (OSError, ValueError):
+            log.warning("settings: old temporary icon cache could not be cleared", exc_info=True)
+
+    def _advance_icon_selection(self, key):
+        revision = self._icon_selection_revisions.get(key, 0) + 1
+        self._icon_selection_revisions[key] = revision
+        return revision
+
+    def begin_custom_selection(self, key):
+        with self.app.lock:
+            return self._advance_icon_selection(key)
+
+    def _prune_custom_assets(self):
+        saved = self.app.cfg.get("custom_icons", {})
+        used = set(saved.values()) if isinstance(saved, dict) else set()
+        assets = getattr(self.app, "_custom_assets", {})
+        self.app._custom_assets = {key: asset for key, asset in assets.items() if key in used}
+
+    def apply_custom_icon(self, key, asset, *, revision=None):
+        app = self.app
+        with app.lock:
+            if key not in self._statuses() or revision is not None and self._icon_selection_revisions.get(key) != revision:
+                return False
+        if asset is not None:
+            self.icon_catalog().pin(asset.id)
+        with app.lock:
+            # Pinning may perform disk IO; a newer selection wins during it.
+            if key not in self._statuses() or revision is not None and self._icon_selection_revisions.get(key) != revision:
+                return False
+            if revision is None:
+                self._advance_icon_selection(key)
+            target = app._settings_map("custom_icons")
+            if asset is None:
+                target.pop(key, None)
+            else:
+                if not hasattr(app, "_custom_assets"):
+                    app._custom_assets = {}
+                app._custom_assets[asset.id] = asset
+                target[key] = asset.id
+            self._prune_custom_assets()
+            self._save()
+        self._redraw()
+        return True
+
+    def adopt_custom_icon_upgrade(self, asset, *, expected=None):
+        """Improve the saved representation without changing a user's choice."""
+        catalog, app = self.icon_catalog(), self.app
+        if catalog.needs_upgrade(asset):
+            return False
+        with app.lock:
+            target = app._settings_map("custom_icons")
+            matches = {}
+            for key, old_id in target.items():
+                old = getattr(app, "_custom_assets", {}).get(old_id)
+                revision = self._icon_selection_revisions.get(key, 0)
+                if (old is not None and old_id != asset.id and old.icon_id == asset.icon_id
+                        and old.metadata.get("source_hash") == asset.metadata.get("source_hash")
+                        and (expected is None or expected.get(key) == (old_id, revision))):
+                    matches[key] = (old_id, revision)
+        if not matches:
+            return False
+        catalog.pin(asset.id)
+        with app.lock:
+            target = app._settings_map("custom_icons")
+            if getattr(app, "stop_evt", None) is not None and app.stop_evt.is_set():
+                return False
+            changed = False
+            for key, (old_id, revision) in matches.items():
+                if (target.get(key) == old_id and self._icon_selection_revisions.get(key, 0) == revision):
+                    app._custom_assets[asset.id] = asset
+                    target[key] = asset.id
+                    changed = True
+            if changed:
+                self._prune_custom_assets()
+                self._save()
+        if changed:
+            self._redraw()
+        return changed
+
+    def schedule_custom_icon_upgrade(self):
+        """One background migration for old masks; ordinary startup stays local."""
+        if self._icon_upgrade_started:
+            return
+        self._icon_upgrade_started = True
+        catalog = self._catalog
+        if catalog is None:
+            return
+        app = self.app
+        with app.lock:
+            pending = {}
+            for key, asset_id in app._settings_map("custom_icons").items():
+                asset = getattr(app, "_custom_assets", {}).get(asset_id)
+                if asset is not None and catalog.needs_upgrade(asset):
+                    pending.setdefault(asset_id, (asset, {}))[1][key] = (
+                        asset_id, self._icon_selection_revisions.get(key, 0))
+        if not pending:
+            return
+        cancel = getattr(app, "stop_evt", None)
+        def upgrade():
+            for asset, bindings in pending.values():
+                if cancel is not None and cancel.is_set():
+                    return
+                try:
+                    prepared = catalog.prepare(asset.icon_id, cancel=cancel)
+                    self.adopt_custom_icon_upgrade(prepared, expected=bindings)
+                except (OSError, ValueError):
+                    log.warning("settings: deferred custom icon upgrade unavailable", exc_info=True)
+        threading.Thread(target=upgrade, daemon=True, name="iconify-cache-upgrade").start()
+
+    def catalog_render_state(self, key):
+        with self.app.lock:
+            st = self._statuses().get(key)
+            if st is None:
+                raise ValueError("Device no longer available")
+            return self.app.icon_render_state(st), max(8, min(192, getattr(self.app, "tray_size", 16)))
 
     def action(self, name):
         app = self.app

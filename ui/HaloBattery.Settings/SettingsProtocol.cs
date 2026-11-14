@@ -37,7 +37,10 @@ public sealed class DeviceState
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
+    public string Kind { get; set; } = "bluetooth";
     public string Pictogram { get; set; } = "";
+    public string CustomIconId { get; set; } = "";
+    public string CustomIconName { get; set; } = "";
     public bool Controller { get; set; }
     public string Brand { get; set; } = "default";
     public bool BrandColor { get; set; }
@@ -46,6 +49,7 @@ public sealed class DeviceState
     public int? Level { get; set; }
     public bool? Charging { get; set; }
     public bool Online { get; set; }
+    public bool Paused { get; set; }
 }
 public sealed class ProviderState
 {
@@ -133,6 +137,15 @@ public sealed class SettingsBridge : IDisposable
         return id;
     }
 
+    public long RequestCatalog(string action, string? deviceKey, string query = "", int start = 0, int size = 40, string? iconId = null)
+    {
+        if (disposed) return 0;
+        var id = Interlocked.Increment(ref nextId);
+        var message = new { type = "catalog", protocol = 1, id, action, deviceKey, query, start, size, iconId };
+        if (fixture) { FixtureCommands.Add(JsonSerializer.Serialize(message, Json)); return id; }
+        return Enqueue(message) ? id : 0;
+    }
+
     public bool RequestPreview(string? deviceKey)
     {
         if(fixture || disposed || Interlocked.Read(ref pendingPreview)!=0) return false;
@@ -167,7 +180,7 @@ public sealed class SettingsBridge : IDisposable
             {
                 var line=await input!.ReadLineAsync(cancel.Token);
                 if(line is null) break;
-                if(Encoding.UTF8.GetByteCount(line)>1024*1024) throw new InvalidDataException("Oversized settings message");
+                if(Encoding.UTF8.GetByteCount(line)>4*1024*1024) throw new InvalidDataException("Oversized settings message");
                 using var document=JsonDocument.Parse(line,new JsonDocumentOptions { MaxDepth=32 });
                 var message=document.RootElement.Clone();
                 if(window is null || !window.DispatcherQueue.TryEnqueue(()=>Handle(message))) break;
@@ -208,6 +221,9 @@ public sealed class SettingsBridge : IDisposable
                     if(message.GetProperty("size").GetInt32()!=80) throw new InvalidDataException("Preview must be 80 physical pixels");
                     var deviceKey=message.TryGetProperty("deviceKey",out var dk) && dk.ValueKind==JsonValueKind.String?dk.GetString():null;
                     window.ApplyPreview(deviceKey,message.GetProperty("png").GetString() ?? "");
+                    break;
+                case "catalog":
+                    window.ApplyIconCatalogResponse(message);
                     break;
                 case "result":
                     if(!message.GetProperty("ok").GetBoolean())
