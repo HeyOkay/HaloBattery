@@ -7,6 +7,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **ASUS ROG Azoth X** (`1c25` in the OMNI receiver's pair list): the same
+  keyboard `02 12 01` read and byte-6 level as the other OMNI keyboards;
+  confirmed on the reporter's keyboard in #269.
+- **ASUS ROG Raikiri II** (`0b05:1c92`): the vendor query `B0 12 04` on
+  `ff03:0001`, level byte 5 and charging byte 10, paired to the controller's
+  one XInput slot so the generic Xbox icon is replaced rather than duplicated
+  (#269). Confirmed on the reporter's hardware: 70% wireless, 69% with the
+  charging ring on the cable; test build 2 uses output/input reports.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.

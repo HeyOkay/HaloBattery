@@ -205,9 +205,10 @@ The receiver holds a mouse and a keyboard and names both in a pair list, which i
                                            the Falchion family, where byte 6 is a 0..10
                                            gauge) and charging in byte 9
 
-The keyboards are named from the pair list: Azoth, Azoth Extreme (and its SE), Strix Scope II 96
-(and its RX), Falchion RX Low Profile, and the **Strix Morph 96 Wireless** (`1cea`, #340) -
-the last on the family's byte-6 layout. The reporter confirmed an accurate level on the
+The keyboards are named from the pair list: Azoth, Azoth Extreme (and its SE),
+**Azoth X** (`1c25`, #269), Strix Scope II 96 (and its RX), Falchion RX Low
+Profile, and the **Strix Morph 96 Wireless** (`1cea`, #340) - the last on the
+family's byte-6 layout. The reporter confirmed an accurate level on the
 test build in #340 on 2026-11-05; the separate Maono microphone request remains open.
 
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
@@ -461,6 +462,18 @@ The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfa
 **Connection:** Bluetooth (2DC8:6006 and the other ids in `providers/eightbitdo.py`) or USB
 
 Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. The Pro 3 (2DC8:6009) is the exception: its descriptor declares one input report, 0x04, on both transports, and it carries the level in byte 14 at all times, so the Pro 3 shows its level without Steam - **confirmed on a real Pro 3 over Bluetooth**, with Steam closed and the controller freshly turned on. In XInput mode these controllers are read as Xbox controllers. The other models are **unverified**, so a level of 0 or above 100 is refused rather than shown
+
+### ASUS ROG Raikiri II
+
+**Connection:** 2.4 GHz receiver (`0B05:1C92`), vendor collection `ff03:0001` on interface 4
+
+Read-only feature report `B0 12 04` (64 bytes, zero padded); the reply carries
+the same header, the level at zero-based byte 5 and the charging state at byte
+10 (the GearLink SDK's label; charging transitions still unverified). Read on
+the reporter's hardware at 65 %, matching Armoury Crate. The XInput provider
+pairs the reading to the controller's one slot and uses the ROG name, so the
+generic Windows Xbox entry is not duplicated. **Charging byte unverified**;
+test build 1 is with [#269](https://github.com/HeyOkay/HaloBattery/issues/269).
 
 ### GameSir G7 Pro; FlyDigi Vader Pro
 

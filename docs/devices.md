@@ -12,6 +12,8 @@
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz / 8K receiver or USB cable | yes on 8K; 1K/wired untried |
 | [ASUS ROG Harpe II Ace / Harpe II Extreme](protocols.md#asus-rog-harpe-ii-ace--harpe-ii-extreme) | 2.4 GHz receiver or USB cable | Harpe II Ace on its receiver |
+| [ASUS ROG Azoth X](protocols.md#asus-rog-omni-receiver-mice-and-keyboards) | OMNI receiver (0B05:1ACE) | test build; reporter's query confirmed |
+| [ASUS ROG Raikiri II](protocols.md#asus-rog-raikiri-ii) | 2.4 GHz receiver, vendor collection (0B05:1C92) | test build; level confirmed by reporter |
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
 | [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
