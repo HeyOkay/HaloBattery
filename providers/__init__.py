@@ -47,6 +47,7 @@ from .skullcandy import SkullcandyProvider  # noqa: F401
 from .rapoo import RapooProvider  # noqa: F401
 from .ajazz import AjazzProvider  # noqa: F401
 from .sony_inzone import SonyInzoneProvider  # noqa: F401
+from .sony_h9ii import SonyH9IIProvider  # noqa: F401
 from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
 from .finalmouse import FinalmouseProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401

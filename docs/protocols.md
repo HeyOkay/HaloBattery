@@ -641,11 +641,18 @@ either exchange. Stealth Pro II and Stealth 700 Gen 3 remain enabled. Atlas Air
 the test build's level matches Swarm II, charging follows the cable, and the level
 updates after unplugging. This confirmation applies to Atlas Air, not Stealth 600X.
 
-Sony INZONE H9 II (`054c:0fa8`, [#294](https://github.com/HeyOkay/HaloBattery/issues/294))
-is excluded before opening its serial port: compatibility with the H9 initialization
-frames has not been confirmed. The sourced H9 (`054c:0e53`) exchange remains enabled.
-Lamzu Tachi (`37b0:000c`, [#262](https://github.com/HeyOkay/HaloBattery/issues/262))
-is excluded before opening HID: collection layout alone was the evidence for trying
-the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
-providers are unchanged. These two exclusions resolve the historical fork #30 and
-Lamzu half of #34 release holds; their protocol tests remain for further development.
+### Sony INZONE H9 II
+
+The H9 II dongle (`054C:0FA8`) has no serial control port; its 64-byte in/out
+vendor collection at `FF04:0001` carries Sony's report-id-2 packet. The status
+request is
+
+    02 0C 01 00 FC 08 96 C3 41 06 01 01 00 9C ...
+
+answered by a 64-byte report with command `0x06` at byte 9, the charging flag at
+byte 14 and the level at byte 15. Only this read-only query is sent.
+
+From [marcinjakubowski/zoneout](https://github.com/marcinjakubowski/zoneout)
+(MIT), which supports the H9 II and INZONE Buds. **Unverified** in Halo Battery
+until the reporter of #387 runs the test build.
+

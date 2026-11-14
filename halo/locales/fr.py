@@ -123,6 +123,7 @@ MESSAGES = {
     "provider.shield": "Manettes NVIDIA SHIELD",
     "provider.skullcandy": "Casques Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Casques Turtle Beach",
     "state.not_reported": "pas encore communiqué",
     "state.charging_unknown": "{state}, état de charge inconnu",

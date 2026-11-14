@@ -124,6 +124,7 @@ MESSAGES = {
     "provider.shield": "NVIDIA SHIELD コントローラー",
     "provider.skullcandy": "Skullcandy ヘッドセット",
     "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Turtle Beach ヘッドセット",
     "state.not_reported": "まだ報告されていません",
     "state.charging_unknown": "{state}、充電状態は不明",

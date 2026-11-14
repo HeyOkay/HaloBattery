@@ -122,6 +122,7 @@ MESSAGES = {
     "provider.shield": "Контроллеры NVIDIA SHIELD",
     "provider.skullcandy": "Гарнитуры Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Гарнитуры Turtle Beach",
     "state.not_reported": "пока нет данных",
     "state.charging_unknown": "{state}, состояние зарядки неизвестно",
