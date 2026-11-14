@@ -37,7 +37,6 @@ RAZER_VID = 0x1532
 # copy of that OpenRazer list and checks this table against it.
 KNOWN = {
     0x0528: ("Razer BlackShark V2 Pro (2020)", 0x3F),
-    0x0536: ("Razer Barracuda X (2022)", 0x1F),
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
@@ -160,6 +159,13 @@ TRANSACTION_IDS = (0x1F, 0x3F, 0xFF, 0x9F, 0x08)
 # battery command too, with a meaningless value.
 WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
                   "blackshark", "barracuda", "nari")
+
+
+# 1532:0536 is the Barracuda X (2022) on its USB cable, not a receiver. Its ff00:0001
+# interface has no output endpoint, so Windows refuses every write with error 0x57
+# (the reporter's log in #256). Nothing is sent to it; the 2.4 GHz dongle 1532:0552 is
+# read by providers/barracuda_x.py.
+BARRACUDA_X_CABLE_PID = 0x0536
 
 
 def maybe_wireless(pid: int, name: str) -> bool:
@@ -386,6 +392,10 @@ class RazerProvider(Provider):
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
+                continue
+            if pid == BARRACUDA_X_CABLE_PID:
+                self._diag.append("  skipped: Barracuda X (2022) on its cable; "
+                                  "battery is read from receiver 0552")
                 continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
