@@ -20,21 +20,28 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import keychron as K  # noqa: E402
 
 
-def reply(level):
-    return [K.REPORT_ID_RESP, K.CMD_STATUS] + [0x00] * 18 + [level] + [0x00] * (K.REPORT_SIZE - 21)
+def reply(level, charging=False):
+    raw = level | (0x80 if charging else 0)
+    return [K.REPORT_ID_RESP, K.CMD_STATUS] + [0x00] * 18 + [raw] + [0x00] * (K.REPORT_SIZE - 21)
 
 
 class FakeDevice:
-    def __init__(self, replies):
+    def __init__(self, replies, feature_result=None):
         self.replies = list(replies)
         self.opened = []
         self.sent = []
+        self.written = []
+        self.feature_result = feature_result
 
     def open_path(self, path):
         self.opened.append(path)
 
     def send_feature_report(self, data):
         self.sent.append(bytes(data))
+        return len(data) if self.feature_result is None else self.feature_result
+
+    def write(self, data):
+        self.written.append(bytes(data))
         return len(data)
 
     def read(self, size, timeout):
@@ -48,6 +55,8 @@ class PollTest(unittest.TestCase):
     NAPE = [
         {"path": b"nape-mouse", "interface_number": 0,
          "usage_page": 0x0001, "usage": 0x0002, "product_id": 0xD026},
+        {"path": b"nape-keyboard4", "interface_number": 4,
+         "usage_page": 0x0001, "usage": 0x0006, "product_id": 0xD026},
         {"path": b"nape-vendor", "interface_number": 1,
          "usage_page": 0xFFC1, "usage": 0x0001, "product_id": 0xD026},
         {"path": b"nape-via", "interface_number": 3,
@@ -60,8 +69,8 @@ class PollTest(unittest.TestCase):
     def tearDown(self):
         K.hid, K.hidlist, K.time = self._saved
 
-    def poll(self, replies, infos):
-        dev = FakeDevice(replies)
+    def poll(self, replies, infos, feature_result=None):
+        dev = FakeDevice(replies, feature_result=feature_result)
         K.hid = types.SimpleNamespace(device=lambda: dev)
         K.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(infos))
         K.time = types.SimpleNamespace(sleep=lambda s: None)
@@ -73,6 +82,26 @@ class PollTest(unittest.TestCase):
                          [("keychron:d026", "Keychron Nape Pro", 75)])
         self.assertEqual([b"nape-vendor"], dev.opened)
         self.assertEqual([bytes(K.make_request())], dev.sent)
+
+    def test_the_charging_bit_reaches_the_icon(self):
+        out, _ = self.poll([reply(99, True)], self.NAPE)
+        self.assertEqual((out[0].level, out[0].charging), (99, True))
+
+    def test_ffc1_wins_over_the_via_page_when_enumerated_last(self):
+        # #270: the Link-KM receiver lists ff60 (VIA) and ffc1 (battery); the
+        # VIA page accepts writes but never answers, so ffc1 must be chosen
+        infos = [self.NAPE[3], self.NAPE[2]]
+        out, dev = self.poll([reply(100)], infos)
+        self.assertEqual(out[0].level, 100)
+        self.assertEqual([b"nape-vendor"], dev.opened)
+
+    def test_a_plain_interface_4_keyboard_page_does_not_win(self):
+        # #270: the Link-KM also exposes 0001:0006 on interface 4; the old
+        # number-only rule sent every b3 06 write to that silent keyboard page.
+        infos = [self.NAPE[1], self.NAPE[2], self.NAPE[3]]
+        out, dev = self.poll([reply(100)], infos)
+        self.assertEqual(out[0].level, 100)
+        self.assertEqual([b"nape-vendor"], dev.opened)
 
     def test_interface_4_still_wins_when_it_exists(self):
         infos = [
@@ -90,6 +119,15 @@ class PollTest(unittest.TestCase):
         self.assertIsNone(K.parse_level([0xB4, 0x06] + [0] * 10))     # too short
         self.assertIsNone(K.parse_level(reply(101)))
         self.assertIsNone(K.parse_level([]))
+
+    def test_the_charging_bit_is_masked_and_reported(self):
+        self.assertEqual(K.parse_level(reply(99, True)), (99, True))
+        self.assertEqual(K.parse_level(reply(99, False)), (99, False))
+
+    def test_a_refused_feature_report_falls_back_to_the_output_endpoint(self):
+        out, dev = self.poll([reply(100)], self.NAPE, feature_result=-1)
+        self.assertEqual(out[0].level, 100)
+        self.assertEqual(dev.written, [bytes(K.make_request())])
 
     def test_no_reply_reports_nothing(self):
         out, _dev = self.poll([], self.NAPE)
