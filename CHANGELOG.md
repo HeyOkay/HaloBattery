@@ -8,8 +8,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Open the existing What's new window from About, directly below the version.
-- Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; test build
-  only until the reporter of #408 runs it.
+- Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
