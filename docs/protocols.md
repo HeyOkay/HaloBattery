@@ -306,8 +306,12 @@ vendor WebHID driver by [mohammed-just/attack-shark-r6-cli](https://github.com/m
 2-5; the reply starts with the `0xA1` marker and carries the battery percentage
 and charging flag. The provider sends only that read-only battery command, tries
 each vendor-page collection in turn, and sends no configuration, DPI, lighting or
-firmware command. **Unverified on hardware** - a test build is with the reporter
-of [#372](https://github.com/HeyOkay/HaloBattery/issues/372).
+firmware command. **Confirmed on hardware** by the reporter of
+[#372](https://github.com/HeyOkay/HaloBattery/issues/372): the R5 read 91 % on its
+2.4 GHz receiver. The X820 Ultra on its own receiver (`3151:5006`, product
+`2.4G Wireless Keyboard`) reads through the ROYUAN/MonsGeek `0xF7` status query
+and showed 100 %; its wired id (`3151:5002`) does not carry a battery command and
+is not used.
 
 ### iRocks M31R
 

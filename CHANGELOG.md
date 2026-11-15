@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Open the existing What's new window from About, directly below the version.
+- **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
+- **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
