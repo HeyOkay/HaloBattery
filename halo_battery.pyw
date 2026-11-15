@@ -1420,7 +1420,10 @@ class App:
     def build_tray_menu(self, owner: Optional[DeviceIcon]) -> Menu:
         """Quick actions only; all configuration lives in the Settings window."""
         def clean(text):
-            return text.replace("…", "").replace("...", "").strip()
+            text = text.strip()
+            while text.endswith(("…", "...")):
+                text = text[:-1 if text.endswith("…") else -3].rstrip()
+            return text
 
         def label(key, **values):
             return clean(self.tr(key, **values))
@@ -1433,7 +1436,8 @@ class App:
 
         return Menu(
             flyout.HeaderItem(title, detail),
-            Item(label("settings.open_app"), lambda i, it: self.open_settings(), default=True),
+            Item(label("settings.open_app"), lambda i, it: self.open_settings(owner.key, page="devices")
+                 if owner is not None else self.open_settings(), default=True),
             Item(label("menu.refresh"), lambda i, it: self.wake.set()),
             Item(lambda it: clean(update_item_text(self.update.version, getattr(self, "install_ok", False),
                                             getattr(self, "update_progress", None), language=self.cfg["language"]))
@@ -2748,7 +2752,10 @@ class App:
             self.show_whats_new(from_version or prev or "")
 
     def show_whats_new(self, from_version: str = "") -> None:
-        notes = self.cfg.pop("whats_new_notes", None)
+        with self.lock:
+            notes = self.cfg.pop("whats_new_notes", None)
+            language = self.cfg.get("language", "en")
+            save_config(self.cfg)
         if not isinstance(notes, dict) or notes.get("version") != VERSION or not notes.get("notes"):
             try:
                 rel = updates.fetch_release(VERSION, VERSION)
@@ -2757,11 +2764,10 @@ class App:
             except Exception as e:
                 log.info("what's new: release notes not available (%s)", e)
                 notes = {"version": VERSION, "notes": "", "url": updates.RELEASES_URL, "date": ""}
-        save_config(self.cfg)
         host = self.ui_host
         whatsnew.show(host, VERSION, notes.get("notes", ""), notes.get("url") or updates.RELEASES_URL,
                       from_version=from_version, date=notes.get("date", ""), open_url=self.open_url,
-                      language=self.cfg.get("language", "en"))
+                      language=language)
 
     def open_url(self, url: str) -> None:
         try:

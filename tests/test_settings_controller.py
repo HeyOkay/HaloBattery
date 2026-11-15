@@ -155,12 +155,20 @@ class CompactTrayTests(HideRenameTestCase):
         self.assertEqual(len(visible), 5)
         self.assertFalse(any(i.submenu for i in visible))
         visible[1](None)
-        app.open_settings.assert_called_once_with()
+        app.open_settings.assert_called_once_with(owner.key, page="devices")
         app.wake.clear()
         visible[2](None)
         self.assertTrue(app.wake.is_set())
 
-    def test_compact_labels_have_no_ellipsis_in_every_language_and_update_state(self):
+    def test_compact_labels_strip_only_trailing_ellipses(self):
+        app = make_app()
+        for label, expected in (("Settings…", "Settings"), ("Settings...", "Settings"),
+                                ("Settings...… ", "Settings"),
+                                ("Choose... a device…", "Choose... a device")):
+            with self.subTest(label=label), mock.patch.object(app, "tr", return_value=label):
+                self.assertEqual(app.build_tray_menu(None).items[1].text, expected)
+
+    def test_compact_labels_have_no_trailing_ellipsis_in_every_language_and_update_state(self):
         for language in hb.i18n.LANGUAGES:
             app = make_app({"language": language})
             app.apply([dev(name="Work... mouse…")])
@@ -174,8 +182,10 @@ class CompactTrayTests(HideRenameTestCase):
                         visible = [item for item in app.build_tray_menu(owner).items if item.visible]
                         self.assertEqual(len(visible), 5 if state is None else 6)
                         for item in visible[1:]:
-                            self.assertNotIn("...", item.text)
-                            self.assertNotIn("…", item.text)
+                            self.assertFalse(item.text.endswith(("...", "…")))
+                        if state == "progress":
+                            self.assertEqual(visible[3].text, hb.update_item_text(
+                                "2.0.0", False, 42, language=language))
                         if owner is not None:
                             self.assertIn("Work... mouse…", visible[0].text)
 

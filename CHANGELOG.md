@@ -56,7 +56,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Simplify the tray menu to one Settings action and remove action-label ellipses.
+- Reuse the existing What's new window and consume cached release notes under
+  the configuration lock.
+
+- Simplify the tray menu to one Settings action, opening the selected device when
+  available. Remove trailing action-label ellipses while preserving progress text.
 
 - Use consistent scrollbars throughout settings, including lists, dropdowns and
   dialogs: immediate hover animations, inset ends and centered arrows matching
