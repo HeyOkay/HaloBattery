@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Open the existing What's new window from About, directly below the version.
+- GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
+  `AA 10 18` query (#379); level and charging measured by the reporter. Byte
+  26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth

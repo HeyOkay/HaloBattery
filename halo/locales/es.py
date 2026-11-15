@@ -84,6 +84,7 @@ MESSAGES = {
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Ratones G-Wolves",
     "provider.glorious": "Glorious Model O Wireless",
+    "provider.gs3075t": "Teclados GANSS GS3075T",
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",
     "provider.hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",

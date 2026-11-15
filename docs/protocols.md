@@ -263,6 +263,21 @@ Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collect
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
 
+### GANSS GS3075T
+
+The 2.4 GHz receiver (`0C45:FEFE`) exposes the Sonix vendor collection
+`FF60:0061` on interface 3. The 32-byte query `AA 10 18 00 ...` is answered by
+`55 10 18 ...` with the level at byte 25; byte 26 is `0x02` while charging,
+`0x01` when the cable is in and the battery is full, and `0x00` on battery.
+Both cable states are shown as charging, meaning on external power. On Windows, hidapi treats the first byte passed to `write()`
+as the report id, so the query is sent as `00 AA 10 18 ...` (33 bytes to hidapi,
+32 on the wire); without the leading zero the receiver answers only a short
+`55 18` acknowledgement and no level arrives. The first request after the link
+wakes up can be lost, and the receiver answers more readily while the 2.4 GHz
+link is active; up to four attempts are made. Measured on a GS3075T by the
+reporter of #379; other GANSS T-series boards use the same receiver but are not
+claimed.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
