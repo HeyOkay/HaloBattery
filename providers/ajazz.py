@@ -105,10 +105,10 @@ ALT_TARGETS = (
     (0x3151, 0x5031, "Kysona Uranus"),
 )
 
-# Test-build enablement: #289's latest diagnostics reached the fifth collection
-# and proved the feature transport; the F7/0x05 exchange still has to answer on
-# the reporter's unit. Do not enable these in a stable release before that run.
-ENABLED_ALT_TARGETS = frozenset({(0x3151, 0x402D), (0x3151, 0x5031)})
+# #289 is confirmed on hardware for the level, so the AJ159 PRO is enabled.
+# #251's Kysona Uranus shares the transport but has no confirmation, so it
+# stays held before opening.
+ENABLED_ALT_TARGETS = frozenset({(0x3151, 0x402D)})
 
 REPORT_SIZE = 32                 # both directions; hidapi adds the report id on Windows
 OUTPUT_LEN = REPORT_SIZE + 1     # what OutputReportByteLength reports for the vendor
