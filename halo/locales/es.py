@@ -87,6 +87,7 @@ MESSAGES = {
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",
     "provider.hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
+    "provider.hyperx_cloud_core": "HyperX Cloud Core Wireless",
     "provider.hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
