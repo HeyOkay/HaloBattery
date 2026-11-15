@@ -46,6 +46,18 @@ public sealed partial class MainWindow
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                if (Arg("--verify-scope") == "scrollbar-fallback")
+                {
+                    await VerifyScrollBarFallback(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "scrollbar-fallback", theme = dark ? "dark" : "light", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "entry-recovery")
+                {
+                    await VerifyPageEntryRecovery(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "entry-recovery", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "scrollbar")
                 {
                     await VerifyPageScrollBar(destination, checks);

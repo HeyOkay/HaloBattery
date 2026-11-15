@@ -15,11 +15,23 @@ public sealed class ScrollBarAppearance : DependencyObject
     public static bool GetEnabled(DependencyObject target) => (bool)target.GetValue(EnabledProperty);
     public static void SetEnabled(DependencyObject target, bool value) => target.SetValue(EnabledProperty, value);
 
-    internal static void Install(ResourceDictionary resources)
+    internal static bool Install(ResourceDictionary resources)
     {
-        var style = new Style(typeof(ScrollBar)) { BasedOn = (Style)resources["DefaultScrollBarStyle"] };
-        style.Setters.Add(new Setter(EnabledProperty, true));
-        resources[typeof(ScrollBar)] = style;
+        // This is cosmetic: an unavailable or incompatible theme resource must
+        // leave the native default usable rather than abort window startup.
+        try
+        {
+            if (resources["DefaultScrollBarStyle"] is not Style native || native.TargetType != typeof(ScrollBar)) return false;
+            var style = new Style(typeof(ScrollBar)) { BasedOn = native };
+            style.Setters.Add(new Setter(EnabledProperty, true));
+            resources[typeof(ScrollBar)] = style;
+            return true;
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine(error);
+            return false;
+        }
     }
 
     private static void EnabledChanged(DependencyObject target, DependencyPropertyChangedEventArgs args)

@@ -98,6 +98,7 @@ public sealed class SettingsBridge : IDisposable
     private string session="";
     private bool disposed;
     private bool fixture;
+    internal bool FixtureMode=>fixture;
     public List<string> FixtureCommands { get; } = new();
 
     public void Attach(MainWindow owner)

@@ -60,12 +60,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Use consistent scrollbars throughout settings, including lists, dropdowns and
   dialogs: immediate hover animations, inset ends and centered arrows matching
-  the expanded thumb width, including fractional-DPI alignment.
+  the expanded thumb width, including fractional-DPI alignment. Fall back to
+  native scrollbars if the optional shared style is unavailable.
 
 - Animate backward overscroll at the end of the previous settings page and keep
   wheel input blocked until landing finishes. Slightly increase scroll resistance.
   Intercept native page wheel input during entry and a fixed 450 ms cooldown,
   without extending it when wheel input continues or blocking button clicks.
+  Recover page entry if the native scrolling completion event is missing.
 
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.

@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
  private RoutedEventHandler? pendingEntryLoaded;
  private ScrollViewer? pendingEntryScroll;
  private EventHandler<ScrollViewerViewChangedEventArgs>? pendingEntryViewChanged;
+ private Microsoft.UI.Dispatching.DispatcherQueueTimer? pendingEntryTimer;
  private Storyboard? pageEntry;
  private TranslateTransform? pageEntryTransform;
  private nint hwnd;
@@ -254,6 +255,7 @@ public sealed partial class MainWindow : Window
  }
  private void ResetPageEntry()
  {
+  pendingEntryTimer?.Stop();pendingEntryTimer=null;
   if(pendingEntryPage is not null&&pendingEntryLoaded is not null)pendingEntryPage.Loaded-=pendingEntryLoaded;
   if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
   pendingEntryScroll=null;pendingEntryViewChanged=null;
@@ -266,6 +268,13 @@ public sealed partial class MainWindow : Window
   // Stop exposes the base values. Commit the endpoint first so it cannot
   // briefly reveal the original zero opacity / 40 DIP offset on landing.
   finished?.Stop();
+ }
+ // Fixture fault injection is never consulted for a live host connection.
+ private Action<ScrollViewer>? fixtureEntryChangeView;
+ private void ChangeEntryView(ScrollViewer scroll)
+ {
+  if(Bridge.FixtureMode&&fixtureEntryChangeView is {} changeView)changeView(scroll);
+  else scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
  }
  private void FadePageEntry(Page entered,bool animate,bool enterAtEnd)
  {
@@ -281,6 +290,7 @@ public sealed partial class MainWindow : Window
   void Begin()
   {
    if(!Active())return;
+   pendingEntryTimer?.Stop();pendingEntryTimer=null;
    if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
    pendingEntryScroll=null;pendingEntryViewChanged=null;
    entered.Opacity=1;
@@ -310,12 +320,24 @@ public sealed partial class MainWindow : Window
    {
     if(!Active())return;
     if(Math.Abs(scroll.VerticalOffset-scroll.ScrollableHeight)<=1/Scale)Begin();
-    else scroll.ChangeView(null,scroll.ScrollableHeight,null,true); // Rebase if layout changed during positioning.
+    else ChangeEntryView(scroll); // Rebase if layout changed during positioning.
    }
    pendingEntryScroll=scroll;
    pendingEntryViewChanged=(_,args)=>{if(!args.IsIntermediate)CheckLanding();};
    scroll.ViewChanged+=pendingEntryViewChanged;
-   scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
+   var landingTimer=DispatcherQueue.CreateTimer();pendingEntryTimer=landingTimer;
+   landingTimer.Interval=TimeSpan.FromMilliseconds(450);landingTimer.IsRepeating=false;
+   landingTimer.Tick+=(_,_)=>
+   {
+    if(!ReferenceEquals(pendingEntryTimer,landingTimer)||!Active())return;
+    // ChangeView may be ignored or finish without a final notification. Make
+    // one best-effort bottom request, then release the hidden page and wheel.
+    root.UpdateLayout();
+    if(Math.Abs(scroll.VerticalOffset-scroll.ScrollableHeight)>1/Scale)ChangeEntryView(scroll);
+    Begin();
+   };
+   landingTimer.Start();
+   ChangeEntryView(scroll);
    // No ViewChanged event is raised if this page already fits its viewport.
    // The identity guard also makes this callback harmless after interrupted navigation.
    DispatcherQueue.TryEnqueue(CheckLanding);
