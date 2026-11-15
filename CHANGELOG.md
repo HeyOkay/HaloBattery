@@ -9,6 +9,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - EWEADN X23 Pro battery on its 2.4 GHz receiver (04F3:026F), using the
   official YDX status read without output reports or SET_FEATURE commands.
+- Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -56,6 +57,50 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+
+- Use the current application logo in Windows tray preferences, notifications
+  and What's new. Repeated What's new requests reuse the existing window,
+  and consume cached release notes under the configuration lock.
+
+- Restore the Settings window position, size, monitor and navigation panel
+  before its first display. Reopen the retained window with its current page
+  and scroll position, without an empty layout or repeated startup.
+
+- Keep the overscroll indicator centered between the page edge and nearby
+  content throughout elastic motion, with a slightly stronger ring stroke. On
+  General, use the full page edge and last card rather than the fixed Exit footer.
+
+- Share one Windows tray visibility preference across device icons and safely
+  migrate old records for the current executable, with a recoverable backup.
+
+- Simplify the tray menu to one Settings action, opening the selected device when
+  available. Remove trailing action-label ellipses while preserving progress text.
+
+- Avoid redundant page layout while moving the Settings window or animating
+  its navigation panel, preserving DPI updates and card-edge highlights.
+
+- Keep card-edge reveal responsive by combining pointer updates once per frame,
+  updating only nearby visible cards, and suspending it during scrollbar dragging.
+  Keep XAML's frame clock active only while dragging a native scrollbar thumb
+  to prevent intermittent stalls, and release it immediately when dragging ends.
+  Keep native Windows mouse-wheel scrolling, including its system step and inertia,
+  while consuming only boundary gestures for overscroll navigation. Install the
+  native wheel filter only during page entry and its fixed cooldown, leaving
+  ordinary input outside the hook.
+
+- Use consistent scrollbars throughout settings, including lists, dropdowns and
+  dialogs: immediate hover animations, inset ends and centered arrows matching
+  the expanded thumb width, including fractional-DPI alignment. Fall back to
+  native scrollbars if the optional shared style is unavailable.
+
+- Animate backward overscroll at the end of the previous settings page and keep
+  wheel input blocked until landing finishes. Slightly increase scroll resistance.
+  Intercept native page wheel input during entry and a fixed 450 ms cooldown,
+  without extending it when wheel input continues or blocking button clicks.
+  Recover page entry if the native scrolling completion event is missing.
+
+- Optically center asymmetric Iconify pictograms without changing their size
+  or source colors.
 
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 

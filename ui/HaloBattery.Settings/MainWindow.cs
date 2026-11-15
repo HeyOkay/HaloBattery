@@ -54,6 +54,9 @@ public sealed partial class MainWindow : Window
  private EventHandler<object>? railTick;
  private Page? pendingEntryPage;
  private RoutedEventHandler? pendingEntryLoaded;
+ private ScrollViewer? pendingEntryScroll;
+ private EventHandler<ScrollViewerViewChangedEventArgs>? pendingEntryViewChanged;
+ private Microsoft.UI.Dispatching.DispatcherQueueTimer? pendingEntryTimer;
  private Storyboard? pageEntry;
  private TranslateTransform? pageEntryTransform;
  private nint hwnd;
@@ -73,14 +76,14 @@ public sealed partial class MainWindow : Window
  }
  internal SolidColorBrush LineBrush=>Brush(dark?"#333333":"#E3E3E3");
  private static string Arg(string name,string fallback="") {var args=Environment.GetCommandLineArgs();var i=Array.IndexOf(args,name);return i>=0&&i+1<args.Length?args[i+1]:fallback;}
- public MainWindow(SettingsBridge bridge)
+ internal MainWindow(SettingsBridge bridge,UiState initialState,string windowStateDirectory,SettingsWindowState preferences)
  {
-  Bridge=bridge;
+  Bridge=bridge;State=initialState;
   themeOverride=Arg("--theme");diagnostics=Arg("--diagnostics");Title="HaloBattery";
   hwnd=WinRT.Interop.WindowNative.GetWindowHandle(this);
   try{AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));}catch(Exception error){Debug.WriteLine(error);}
   if(AppWindow.Presenter is OverlappedPresenter p)p.SetBorderAndTitleBar(true,false);
-  AppWindow.Resize(new SizeInt32((int)(1280*GetDpiForWindow(hwnd)/96.0),(int)(900*GetDpiForWindow(hwnd)/96.0)));
+  InitializeWindowState(windowStateDirectory,preferences);
   root.RowDefinitions.Add(new(){Height=new(56)});root.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});
   body.ColumnDefinitions.Add(rail);body.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
   root.Children.Add(header);Grid.SetRow(body,1);root.Children.Add(body);Grid.SetColumn(card,1);frame.HorizontalAlignment=HorizontalAlignment.Stretch;frame.VerticalAlignment=VerticalAlignment.Stretch;frame.HorizontalContentAlignment=HorizontalAlignment.Stretch;frame.VerticalContentAlignment=VerticalAlignment.Stretch;card.HorizontalAlignment=HorizontalAlignment.Stretch;card.Child=BuildOverscrollHost(frame);body.Children.Add(card);
@@ -89,13 +92,13 @@ public sealed partial class MainWindow : Window
   header.SizeChanged+=(_,_)=>{PositionPill();UpdateDragRegion();};
   windowButtons.SizeChanged+=(_,_)=>UpdateDragRegion();
   root.SizeChanged+=(_,_)=>UpdateDragRegion();
-  root.AddHandler(UIElement.PointerMovedEvent,new Microsoft.UI.Xaml.Input.PointerEventHandler((_,e)=>{foreach(var c in cards)c.SetSpotlight(e.GetCurrentPoint(c).Position);}),true);
-  root.PointerExited+=(_,_)=>{foreach(var c in cards)c.SetSpotlight(null);};
+  InitializeCardSpotlights();
   settings.ColorValuesChanged+=OnColorsChanged;
   AppWindow.Changed+=OnWindowChanged;
-  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;StopRail();ResetPageEntry();};
+  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
   ApplyTheme();
-  root.Loaded+=(_,_)=>{UpdateDragRegion();UpdateMinimumWidth();};
+  root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
+  ApplyState(initialState);
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
  private double Scale=>root.XamlRoot?.RasterizationScale??GetDpiForWindow(hwnd)/96.0;
@@ -116,7 +119,7 @@ public sealed partial class MainWindow : Window
   if(closing||changingTheme)return;changingTheme=true;
   try {
    ResetPageEntry();
-   if(!settings.AnimationsEnabled){ApplyTheme();Rebuild();return;}
+   if(IsSettingsWindowHidden||!settings.AnimationsEnabled){ApplyTheme();Rebuild();return;}
    var previous=new RenderTargetBitmap();await previous.RenderAsync(root);ApplyTheme();Rebuild();
    var overlay=new Image{Source=previous,Stretch=Stretch.Fill,IsHitTestVisible=false};Grid.SetRowSpan(overlay,2);root.Children.Add(overlay);
    var visual=ElementCompositionPreview.GetElementVisual(overlay);var fade=visual.Compositor.CreateScalarKeyFrameAnimation();fade.InsertKeyFrame(1,0);fade.Duration=TimeSpan.FromMilliseconds(300);visual.StartAnimation("Opacity",fade);await Task.Delay(300);root.Children.Remove(overlay);
@@ -137,7 +140,11 @@ public sealed partial class MainWindow : Window
  private void OnWindowChanged(AppWindow sender,AppWindowChangedEventArgs args)
  {
   if(closing)return;
-  DispatcherQueue.TryEnqueue(()=>{if(!closing){UpdateMaximizeButton();PositionPill();UpdateDragRegion();}});
+  if(args.DidPositionChange&&windowInteractionMetrics is {} metrics)metrics.NativePositionEvents++;
+  if(args.DidPositionChange||args.DidSizeChange||args.DidPresenterChange)CaptureWindowState();
+  // Moving on the same display changes screen coordinates, not client layout.
+  // DPI changes are handled separately after XamlRoot has its new scale.
+  if(args.DidSizeChange||args.DidPresenterChange||args.DidVisibilityChange&&windowMinimumPending)QueueWindowChromeRefresh();
  }
  private void UpdateMaximizeButton()
  {
@@ -194,8 +201,15 @@ public sealed partial class MainWindow : Window
  private double PageInset(double width)=>44*width/contentWidth;
  private void LayoutPage(StackPanel content,double viewport)
  {
+  if(windowInteractionMetrics is {} metrics)metrics.LayoutCalls++;
   var width=PageWidth(viewport);var inset=PageInset(width);
-  content.Width=width;content.Padding=new(inset,36,inset,36);content.Margin=new(PageLeft(viewport),0,0,0);
+  var padding=new Thickness(inset,36,inset,36);var margin=new Thickness(PageLeft(viewport),0,0,0);
+  var geometryChanged=content.Width!=width||!content.Padding.Equals(padding);
+  if(!geometryChanged&&content.Margin.Equals(margin)){RequestSpotlightFrame();return;}
+  if(windowInteractionMetrics is {} changed)changed.PageLayouts++;
+  content.Width=width;content.Padding=padding;content.Margin=margin;
+  // Moving the content does not change card bounds relative to that content.
+  if(geometryChanged)InvalidateCardSpotlightGeometry();else RequestSpotlightFrame();
  }
  private void LayoutPages(){foreach(var (content,scroll) in pageHosts)LayoutPage(content,scroll.ViewportWidth>0?scroll.ViewportWidth:scroll.ActualWidth);PositionOverscrollIndicator();PositionGeneralFooter();}
  private void PositionPill()
@@ -207,11 +221,13 @@ public sealed partial class MainWindow : Window
  // Сворачивание панели: только ширина колонки, подписи гаснут; страница не пересоздаётся.
  private void ToggleRail()
  {
-  expanded=!expanded;var target=expanded?228.0:64.0;StopRail();
+  expanded=!expanded;var target=expanded?228.0:64.0;StopRail();CaptureWindowState();
   if(hamburger is not null){ToolTipService.SetToolTip(hamburger,MenuName);AutomationProperties.SetName(hamburger,MenuName);}
   if(!settings.AnimationsEnabled){rail.Width=new(target);FinishRail();return;}
   var start=rail.Width.Value;var began=Stopwatch.StartNew();var fromOpacity=navLabels.FirstOrDefault()?.Opacity??(expanded?0.0:1.0);var toOpacity=expanded?1.0:0.0;
-  railTick=(_,_)=>{var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);PositionPill();var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
+  // The ScrollViewer's SizeChanged callback lays out the committed viewport.
+  // Repeating it here would use the previous frame's viewport and force reflow.
+  railTick=(_,_)=>{if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
   CompositionTarget.Rendering+=railTick;
  }
  private void FinishRail(){BuildNavigation();PositionPill();UpdateDragRegion();UpdateMinimumWidth();}
@@ -219,9 +235,12 @@ public sealed partial class MainWindow : Window
  {
   RefreshNavigation();
  }
- internal void Navigate(string page,bool motion)
+ internal void Navigate(string page,bool motion,bool enterAtEnd=false,bool preserveWheelBurst=false)
  {
+  if(!preserveWheelBurst)wheelNavigationGuard.Reset();
+  ResetContentWheelObservation();
   ResetOverscrollForNavigation();
+  ResetCardSpotlights();
   var next=State.Pages.Any(p=>p.Id==page)?page:State.Pages.FirstOrDefault()?.Id??"general";
   var switching=frame.Content is not null&&next!=current;
   // Перестройка той же страницы (после действия, смены переключателя) сохраняет раскрытые карточки.
@@ -244,14 +263,19 @@ public sealed partial class MainWindow : Window
    var animate=motion&&switching&&settings.AnimationsEnabled;
    if(animate)PrepareEntryOpacity(built);
    frame.Content=built;
-   if(animate)FadePageEntry(built);
+   if(animate||enterAtEnd)FadePageEntry(built,animate,enterAtEnd);
   }
+  AttachSpotlightScroll();
   BuildNavigation();BuildHeader();
   DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,UpdateMinimumWidth);
  }
  private void ResetPageEntry()
  {
+  pendingEntryTimer?.Stop();pendingEntryTimer=null;
   if(pendingEntryPage is not null&&pendingEntryLoaded is not null)pendingEntryPage.Loaded-=pendingEntryLoaded;
+  if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
+  pendingEntryScroll=null;pendingEntryViewChanged=null;
+  if(pendingEntryPage is not null)pendingEntryPage.Opacity=1;
   pendingEntryPage=null;pendingEntryLoaded=null;
   var finished=pageEntry;pageEntry=null;
   foreach(var target in entryOpacityTargets)target.Opacity=1;entryOpacityTargets.Clear();
@@ -261,19 +285,38 @@ public sealed partial class MainWindow : Window
   // briefly reveal the original zero opacity / 40 DIP offset on landing.
   finished?.Stop();
  }
- private void FadePageEntry(Page entered)
+ // Fixture fault injection is never consulted for a live host connection.
+ private Action<ScrollViewer>? fixtureEntryChangeView;
+ private void ChangeEntryView(ScrollViewer scroll)
+ {
+  if(Bridge.FixtureMode&&fixtureEntryChangeView is {} changeView)changeView(scroll);
+  else scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
+ }
+ private void FadePageEntry(Page entered,bool animate,bool enterAtEnd)
  {
   navigationWheelRemainder=0;
+  pendingEntryPage=entered;
+  EnsurePageEntryWheelFilter();
   ElementCompositionPreview.GetElementVisual(entered).IsPixelSnappingEnabled=true;
-  var transform=new TranslateTransform{Y=40};entered.RenderTransform=transform;pageEntryTransform=transform;
+  var fromY=enterAtEnd?-40:40;
+  var transform=new TranslateTransform{Y=animate?fromY:0};entered.RenderTransform=transform;pageEntryTransform=transform;
+  // Bottom positioning is asynchronous even with ChangeView's animation disabled.
+  // Hide its initial top view and keep the wheel locked until the final view is ready.
+  if(enterAtEnd)entered.Opacity=0;
+  bool Active()=>!closing&&ReferenceEquals(frame.Content,entered)&&ReferenceEquals(pendingEntryPage,entered);
   void Begin()
   {
-   if(!ReferenceEquals(frame.Content,entered)||closing)return;
-   if(!settings.AnimationsEnabled){ResetPageEntry();return;}
+   if(!Active())return;
+   pendingEntryTimer?.Stop();pendingEntryTimer=null;
+   if(pendingEntryScroll is not null&&pendingEntryViewChanged is not null)pendingEntryScroll.ViewChanged-=pendingEntryViewChanged;
+   pendingEntryScroll=null;pendingEntryViewChanged=null;
+   entered.Opacity=1;
+   if(!animate||!settings.AnimationsEnabled){ResetPageEntry();return;}
    PrepareEntryOpacity(entered);
    // Animate the XAML properties through one clock. Directly changing the
    // backing Visual.Opacity competes with XAML's initial opacity propagation.
    var transition=new Storyboard();pageEntry=transition;
+   pendingEntryPage=null;
    void Track(DependencyObject target,string property,double from,double to)
    {
     EasingFunctionBase easing=property=="Opacity"&&pageFadeMode=="content"?new QuadraticEase{EasingMode=EasingMode.EaseOut}:new CubicEase{EasingMode=EasingMode.EaseOut};
@@ -281,16 +324,46 @@ public sealed partial class MainWindow : Window
     Storyboard.SetTarget(animation,target);Storyboard.SetTargetProperty(animation,property);transition.Children.Add(animation);
    }
    foreach(var target in entryOpacityTargets)Track(target,"Opacity",0,1);
-   Track(transform,"Y",40,0);
+   Track(transform,"Y",fromY,0);
    transition.Completed+=(_,_)=>{if(ReferenceEquals(pageEntry,transition)&&ReferenceEquals(frame.Content,entered))ResetPageEntry();};
    transition.Begin();
   }
-  if(entered.IsLoaded){Begin();return;}
-  pendingEntryPage=entered;
+  void PositionAndBegin()
+  {
+   if(!Active())return;
+   root.UpdateLayout();
+   if(!enterAtEnd||entered.Content is not ScrollViewer scroll){Begin();return;}
+   void CheckLanding()
+   {
+    if(!Active())return;
+    if(Math.Abs(scroll.VerticalOffset-scroll.ScrollableHeight)<=1/Scale)Begin();
+    else ChangeEntryView(scroll); // Rebase if layout changed during positioning.
+   }
+   pendingEntryScroll=scroll;
+   pendingEntryViewChanged=(_,args)=>{if(!args.IsIntermediate)CheckLanding();};
+   scroll.ViewChanged+=pendingEntryViewChanged;
+   var landingTimer=DispatcherQueue.CreateTimer();pendingEntryTimer=landingTimer;
+   landingTimer.Interval=TimeSpan.FromMilliseconds(450);landingTimer.IsRepeating=false;
+   landingTimer.Tick+=(_,_)=>
+   {
+    if(!ReferenceEquals(pendingEntryTimer,landingTimer)||!Active())return;
+    // ChangeView may be ignored or finish without a final notification. Make
+    // one best-effort bottom request, then release the hidden page and wheel.
+    root.UpdateLayout();
+    if(Math.Abs(scroll.VerticalOffset-scroll.ScrollableHeight)>1/Scale)ChangeEntryView(scroll);
+    Begin();
+   };
+   landingTimer.Start();
+   ChangeEntryView(scroll);
+   // No ViewChanged event is raised if this page already fits its viewport.
+   // The identity guard also makes this callback harmless after interrupted navigation.
+   DispatcherQueue.TryEnqueue(CheckLanding);
+  }
+  if(entered.IsLoaded){PositionAndBegin();return;}
   pendingEntryLoaded=(_,_)=>
   {
    if(pendingEntryLoaded is not null)entered.Loaded-=pendingEntryLoaded;
-   pendingEntryPage=null;pendingEntryLoaded=null;Begin();
+   pendingEntryLoaded=null;PositionAndBegin();
   };
   entered.Loaded+=pendingEntryLoaded;
  }
@@ -303,8 +376,8 @@ public sealed partial class MainWindow : Window
  private void UpdateMinimumWidth()
  {
   try {
-   var s=Scale;var min=(int)Math.Ceiling(MinimumWindowWidthDip*s);
-   if(AppWindow.Presenter is OverlappedPresenter p){p.PreferredMinimumWidth=min;p.PreferredMinimumHeight=(int)(560*s);}
+   var s=Scale;var work=DisplayArea.GetFromWindowId(AppWindow.Id,DisplayAreaFallback.Nearest).WorkArea;var min=Math.Min(work.Width,(int)Math.Ceiling(MinimumWindowWidthDip*s));
+   if(AppWindow.Presenter is OverlappedPresenter p){p.PreferredMinimumWidth=min;p.PreferredMinimumHeight=Math.Min(work.Height,(int)(560*s));}
    if(AppWindow.Size.Width<min)AppWindow.Resize(new SizeInt32(min,AppWindow.Size.Height));
    PositionPill();UpdateDragRegion();
   } catch(Exception error){Debug.WriteLine(error);}
@@ -339,7 +412,7 @@ public sealed partial class MainWindow : Window
  }
  internal StackPanel PageContent(string title)
  {
-  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;page.Children.Add(heading);return page;
+  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
  }
  internal void Section(StackPanel parent,string name){var text=Text(name);text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;text.Margin=new(0,14,0,0);parent.Children.Add(text);}
  internal CardView Card(string title,string description,UIElement? action=null,object? icon=null)=>MakeCard(title,description,action,icon??"info",false);
@@ -396,7 +469,11 @@ public sealed partial class MainWindow : Window
  internal ScrollViewer Scroll(StackPanel content)
  {
   content.HorizontalAlignment=HorizontalAlignment.Left;content.MaxWidth=double.PositiveInfinity;
-  var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch};host.Children.Add(content);
+  content.SizeChanged+=(_,_)=>InvalidateCardSpotlightGeometry();
+  // The content receives bubbling wheel input before its ScrollViewer parent
+  // starts native scrolling. A transparent fill also catches gaps between cards.
+  var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch,Background=Brush("#00000000")};host.Children.Add(content);
+  AttachContentWheelNavigation(host);
   var scroll=new ScrollViewer{Content=host,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
   pageHosts.Clear();pageHosts.Add((content,scroll));
   // Содержимое берётся из pageHosts: при перестройке на месте в этот же ScrollViewer подставляется новое содержимое.

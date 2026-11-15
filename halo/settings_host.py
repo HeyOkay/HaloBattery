@@ -61,10 +61,13 @@ class _Session:
     last_command: int = -1
     catalogs: dict = field(default_factory=dict)
     icon_jobs: object = None
+    catalog_generation: int = 0
+    visible: bool = False
+    restore_view: bool = False
 
 
 class SettingsHost:
-    """Each session owns its process, queue, workers, and handshake deadline."""
+    """Retain one companion until shutdown; closing its window only hides it."""
     def __init__(self, controller, *, popen=None, poll_interval=.75, startup_timeout=15):
         self.controller = controller
         self._popen = popen or subprocess.Popen
@@ -75,21 +78,64 @@ class SettingsHost:
         self._session = None
         self._closed = False
 
-    def open(self, device_key=None, *, page="general"):
-        if page not in PAGES or device_key is not None and not isinstance(device_key, str):
+    def open(self, device_key=None, *, page=None):
+        if (page is not None and (not isinstance(page, str) or page not in PAGES) or
+                device_key is not None and not isinstance(device_key, str)):
             raise ValueError("invalid settings navigation")
+        preserve_view = page is None and device_key is None
         with self._lock:
             if self._closed:
                 return False
             session = self._session
             if session is None or session.stop.is_set():
-                session = _Session(page, device_key)
+                session = _Session(page or "general", device_key)
                 self._session = session
                 self._thread(self._launch, session, "settings-launch")
             else:
-                session.page, session.device_key = page, device_key
-            self._send(session, dict(type="navigate", page=page, deviceKey=device_key))
+                session.restore_view = preserve_view
+                if not preserve_view:
+                    session.page, session.device_key = page or "general", device_key
+            # The handshake publishes the latest target before the first show.
+            # Reopens refresh asynchronously, without waiting for the poll timer
+            # or touching the child process on the tray/menu caller.
+            if session.ready.is_set():
+                self._thread(self._show, session, "settings-show")
         return True
+
+    def _show(self, session):
+        with self._model_lock:
+            if not self._current(session) or not session.ready.is_set():
+                return
+            try:
+                self._publish(session)
+            except Exception:
+                log.exception("settings: unable to refresh companion before restore")
+            finally:
+                # A transient snapshot failure must not strand an already
+                # initialized retained window. Its previous model remains usable.
+                if self._current(session) and session.ready.is_set():
+                    self._show_window(session)
+
+    def _show_window(self, session):
+        with self._lock:
+            message = dict(type="show", page=session.page, deviceKey=session.device_key)
+            if session.restore_view:
+                # Native navigation may have changed since the last tray request.
+                # A generic reopen restores that retained page and selection.
+                message["restoreView"] = True
+        self._send(session, message)
+
+    def _launch_args(self):
+        # The context is fixed at application startup, including portable mode.
+        # Do not assemble a presentation snapshot merely to find its profile.
+        context = getattr(self.controller, "context", None)
+        data_dir = context.get("data_dir") if isinstance(context, dict) else None
+        if data_dir is None:
+            data_dir = self.controller.snapshot().get("data_dir")
+        args = [str(executable_path())]
+        if data_dir:
+            args.extend(("--data-dir", str(Path(data_dir).resolve())))
+        return args
 
     @staticmethod
     def _thread(target, session, name):
@@ -113,7 +159,7 @@ class SettingsHost:
 
     def _launch(self, session):
         try:
-            process = self._popen([str(executable_path())], stdin=subprocess.PIPE,
+            process = self._popen(self._launch_args(), stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
                 errors="strict", bufsize=1, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             session.process = process
@@ -233,7 +279,10 @@ class SettingsHost:
         if not self._current(session):
             return
         state = self._state(session)
-        wire = encode_message(state)
+        # Navigation travels in the small show message. It must not cause an
+        # unchanged retained page to receive and reapply the entire model.
+        wire = encode_message({key: value for key, value in state.items()
+                               if key not in ("page", "selectedDeviceKey")})
         changed = wire != session.last_state
         if changed:
             session.revision += 1
@@ -267,6 +316,7 @@ class SettingsHost:
                 self._send(session, dict(type="welcome", protocol=1, sessionId=session.id))
                 self._publish(session)
                 session.ready.set()
+                self._show_window(session)
                 if callable(getattr(type(self.controller), "create_browse_catalog", None)):
                     jobs = self._ensure_icon_jobs(session)
                     if jobs is not None:
@@ -274,6 +324,13 @@ class SettingsHost:
                 return
             if not session.ready.is_set():
                 raise ValueError("settings handshake required")
+            if kind == "visibility":
+                if set(message) != {"type", "visible"} or type(message["visible"]) is not bool:
+                    raise ValueError("invalid settings visibility")
+                session.visible = message["visible"]
+                if not session.visible:
+                    self._end_browse(session)
+                return
             request_id = message.get("id")
             if type(request_id) is not int or not 0 <= request_id <= 2147483647:
                 raise ValueError("invalid settings request id")
@@ -313,11 +370,22 @@ class SettingsHost:
             if not self._current(session):
                 return None
             if session.icon_jobs is None:
+                generation = session.catalog_generation
                 session.icon_jobs = IconCatalogJobs(self.controller,
                     lambda result: self._send(session, result),
-                    lambda: self._catalog_changed(session), lambda: self._current(session),
+                    lambda: self._catalog_changed(session),
+                    lambda: self._current(session) and generation == session.catalog_generation,
                     catalog_factory=self.controller.create_browse_catalog)
             return session.icon_jobs
+
+    def _end_browse(self, session):
+        with session.cleanup_lock:
+            jobs, session.icon_jobs = session.icon_jobs, None
+            session.catalog_generation += 1
+            if jobs is not None:
+                # Its asynchronous disposal clears temporary search caches while
+                # preserving selected icons, just as a destroyed window did.
+                jobs.close()
 
     def _catalog_changed(self, session):
         with self._model_lock:
@@ -327,7 +395,7 @@ class SettingsHost:
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
             setProvider={"name", "enabled"}, setIconContent={"mode"}, selectDevice={"deviceKey"})
         actions = dict(refresh="refresh", diagnostics="diagnostics", checkUpdate="check_update", startUpdate="start_update",
-            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit")
+            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit", showWhatsNew="show_whats_new")
         if not isinstance(name, str) or not isinstance(args, dict) or name not in fields and name not in actions:
             raise ValueError("unknown settings command")
         if set(args) != fields.get(name, set()):
@@ -354,12 +422,24 @@ class SettingsHost:
             self.controller.set_provider(args["name"], args["enabled"])
         elif name == "setIconContent":
             self.controller.set_icon_content(args["mode"])
+        elif name == "showWhatsNew":
+            # The existing window may fetch release notes. Acknowledge the click
+            # first, then keep that work off the command/state serialization lock.
+            return lambda: self._thread(self._show_whats_new, session, "settings-whats-new")
         elif name == "quit":
             # Ack and state enter the writer queue before App.quit enqueues
             # shutdown. App.quit may be called on this very reader thread.
             return lambda: self.controller.action("quit")
         else:
             self.controller.action(actions[name])
+
+    def _show_whats_new(self, session):
+        if not self._current(session):
+            return
+        try:
+            self.controller.action("show_whats_new")
+        except Exception:
+            log.exception("settings: unable to open the existing what's new window")
 
     def _cleanup(self, session, graceful=False):
         if not session.cleanup_lock.acquire(blocking=False):

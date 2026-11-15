@@ -41,11 +41,75 @@ public sealed partial class MainWindow
             try
             {
                 // Attach is called before Activate; let the real XAML tree load.
-                for (var i = 0; !root.IsLoaded && i < 40; i++) await Task.Delay(50);
-                if (!root.IsLoaded) throw new TimeoutException("Fixture root did not load.");
+                for (var i = 0; (!root.IsLoaded || pagesInitializing) && i < 40; i++) await Task.Delay(50);
+                if (!root.IsLoaded || pagesInitializing) throw new TimeoutException("Fixture root did not load.");
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                if (Arg("--verify-scope") == "window-interactions")
+                {
+                    await VerifyWindowInteractions(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "window-interactions", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "window-lifecycle")
+                {
+                    await VerifyWindowLifecycle(destination,checks);
+                    WriteVerificationReport(destination,new {complete=true,scope="window-lifecycle",firstPreparedView,checks});
+                    return;
+                }
+                if (Arg("--verify-scope") == "window-state")
+                {
+                    await VerifyWindowState(checks);
+                    await VerifyNativeCloseAsync(destination,checks);
+                    return;
+                }
+                if (Arg("--verify-scope") == "wheel-native")
+                {
+                    await VerifyContentWheelNavigation(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "wheel-native", nativeWheelRoutingValidated = wheelFixtureRoutingValidated, checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "spotlight")
+                {
+                    await VerifyCardSpotlights(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "spotlight", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "scrollbar-fallback")
+                {
+                    await VerifyScrollBarFallback(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "scrollbar-fallback", theme = dark ? "dark" : "light", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "entry-recovery")
+                {
+                    await VerifyPageEntryRecovery(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "entry-recovery", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "scrollbar")
+                {
+                    await VerifyPageScrollBar(destination, checks);
+                    await VerifyGlobalScrollBars(destination, checks);
+                    await VerifyWhatsNewAction(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "scrollbar", theme = dark ? "dark" : "light", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "overscroll-placement")
+                {
+                    await VerifyOverscrollPlacement(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "overscroll-placement", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "wheel")
+                {
+                    await VerifyWheelNavigation(checks);
+                    await VerifyOverscrollNavigation(destination, checks);
+                    await VerifyPageLandings(destination, "wheel-landings", checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "wheel", checks });
+                    return;
+                }
                 foreach (var page in State.Pages.Select(item => item.Id).ToArray())
                 {
                     Navigate(page, true);
@@ -416,6 +480,7 @@ public sealed partial class MainWindow
 
     private async Task VerifyWheelNavigation(List<object> checks)
     {
+        VerifyWheelBurstState(checks);
         void Check(string name, bool passed)
         {
             checks.Add(new { name, passed });
@@ -425,6 +490,7 @@ public sealed partial class MainWindow
         int remainder = 0;
         Check("wheel accumulates a partial notch", !AdvanceWheelPage(-60, ref remainder) && current == "general");
         Check("wheel advances after one complete notch", AdvanceWheelPage(-60, ref remainder) && current == "devices");
+        Check("wheel transition arms its fixed cooldown immediately", wheelNavigationGuard.IsBlocked(Environment.TickCount64, false));
         if (AnimationsEnabled)
         {
             Check("page entry blocks wheel immediately including its load wait", PageEntryBlocksWheel &&
@@ -437,6 +503,7 @@ public sealed partial class MainWindow
             Check("entry discards partial navigation and overscroll deltas", !AdvanceWheelPage(-60, ref remainder) &&
                 remainder == 0 && HandleContentOverscroll(-OverscrollGesture.Threshold, 0, 0) && OverscrollState.Raw == 0 && pendingOverscrollNavigation is null);
             var scroll = pageHosts.Single().scroll;
+            Check("page content catches wheel input in card gaps", scroll.Content is Grid { Background: not null, IsHitTestVisible: true });
             var offset = scroll.VerticalOffset;
             var dropped = discardedEntryWheelMessages;
             navigationWheelRemainder = 60;
@@ -453,13 +520,21 @@ public sealed partial class MainWindow
             Check("programmatic end positioning works during entry", PageEntryBlocksWheel &&
                 Math.Abs(scroll.VerticalOffset - scroll.ScrollableHeight) <= 1 / Scale);
             entry.Resume();
-            for (var i = 0; PageEntryBlocksWheel && i < 50; i++) await Task.Delay(20);
-            Check("entry completion restores wheel without replay", !PageEntryBlocksWheel && current == "devices" && navigationWheelRemainder == 0 && OverscrollState.Raw == 0);
-            Check("post-entry wheel starts with a fresh partial notch", !AdvanceWheelPage(-60, ref remainder) && remainder == -60 && current == "devices");
+            for (var i = 0; PageEntryBlocksWheel && i < 50; i++)
+            {
+                PostFixtureWheel(hwnd, 0x020A, unchecked((nuint)(uint)(-120 << 16)), 0);
+                await Task.Delay(20);
+            }
+            Check("entry completion leaves no queued wheel input", !PageEntryBlocksWheel && current == "devices" && navigationWheelRemainder == 0 && OverscrollState.Raw == 0);
+            await VerifyWheelBurstAfterEntry(checks, "forward");
         }
-        else Check("disabled page animations do not block wheel", !PageEntryBlocksWheel);
+        else
+        {
+            Check("disabled page animations do not keep an animation lock", !PageEntryBlocksWheel);
+            await VerifyWheelBurstAfterEntry(checks, "motion-disabled");
+        }
         Check("wheel navigates backward", AdvanceWheelPage(120, ref remainder) && current == "general");
-        for (var i = 0; PageEntryBlocksWheel && i < 50; i++) await Task.Delay(20);
+        for (var i = 0; wheelNavigationGuard.IsBlocked(Environment.TickCount64, PageEntryBlocksWheel) && i < 100; i++) await Task.Delay(20);
         Check("wheel clamps at first page", !AdvanceWheelPage(120, ref remainder) && current == "general");
         SetNavigationSelection(current, false);
     }

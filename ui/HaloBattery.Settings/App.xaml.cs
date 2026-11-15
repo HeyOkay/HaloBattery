@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using HaloBattery.Settings.Controls;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 namespace HaloBattery.Settings;
@@ -20,15 +21,47 @@ public partial class App : Application
   try{InitializeComponent();LogStartup("Initialized XAML resources");}
   catch(Exception error){LogStartup("InitializeComponent failed",error);throw;}
  }
- protected override void OnLaunched(LaunchActivatedEventArgs args)
+ protected override async void OnLaunched(LaunchActivatedEventArgs args)
  {
+  var bridge=new SettingsBridge();
   try
   {
-   LogStartup("Launching native window");
-   var bridge=new SettingsBridge();window=new MainWindow(bridge);bridge.Attach(window);window.Activate();
+   ScrollBarAppearance.Install(Resources);
+   // Await the real backend model before creating any HWND/XAML content.
+   // Profile IO runs alongside the handshake, never after a visible layout.
+   var initialState=bridge.InitializeAsync();
+   var directory=InitialWindowStateDirectory();
+   var preferences=directory is null?null:new WindowStateStore(directory).LoadAsync();
+   var state=await initialState;
+   directory??=Path.GetFullPath(state.DataDir);
+   var saved=await (preferences??new WindowStateStore(directory).LoadAsync());
+   LogStartup("Launching prepared native window");
+   window=new MainWindow(bridge,state,directory,saved);
+   bridge.Attach(window);
+   if(bridge.FixtureMode)window.ShowSettingsWindow(state.Page,state.SelectedDeviceKey);
    LogStartup("Activated native window");
   }
-  catch(Exception error){LogStartup("Window launch failed",error);throw;}
+  catch(Exception error)
+  {
+   LogStartup("Window launch failed",error);
+   bridge.Dispose();
+   Exit();
+  }
+ }
+ private static string? InitialWindowStateDirectory()
+ {
+  var args=Environment.GetCommandLineArgs();
+  string Value(string name){var at=Array.IndexOf(args,name);return at>=0&&at+1<args.Length?args[at+1]:"";}
+  var fixture=Value("--fixture-state");
+  if(fixture.Length>0)
+  {
+   // Fixture JSON contains illustrative paths; it must never touch a profile.
+   var output=Value("--verify-dir");
+   return output.Length>0?Path.GetFullPath(output):Path.Combine(
+    Path.GetDirectoryName(Path.GetFullPath(fixture))!,"native-window-state-"+Environment.ProcessId);
+  }
+  var profile=Value("--data-dir");
+  return profile.Length>0?Path.GetFullPath(profile):null;
  }
  private static void LogStartup(string stage,Exception? error=null)
  {
