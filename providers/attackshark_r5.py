@@ -6,11 +6,10 @@ Ultra, recovered from the vendor's WebHID driver by
 ``cmd 2,2,0,0x83`` and parses a reply with the 0xA1 marker; the battery is
 read-only.
 
-The receiver exposes several vendor collections.  The reference driver probes
-each one with a read-only profile request and keeps the first that answers;
-this provider does the same with the battery request on every vendor-page
-collection until one replies.  No configuration, DPI, lighting or firmware
-command is sent.
+The receiver exposes several vendor collections, including a root `ffff:0000`
+collection on interface 2.  The reference driver probes every collection and
+keeps the one that answers; this provider does the same, but only ever opens
+`373E:0047`.  No configuration, DPI, lighting or firmware command is sent.
 
 The wired id 0x0046 is not claimed here: the report only had the wireless
 receiver, so its collection layout is unverified.
@@ -38,9 +37,8 @@ DELAY_S = 0.05
 READ_ATTEMPTS = 2
 TIMEOUT_MS = 250
 
-# These are the vendor collections seen on the R5 Ultra receiver; the mouse,
-# keyboard and consumer collections are left alone.
-CANDIDATE_PAGES = (0xFFA0, 0xFFFF, 0xFF00)
+# Every collection exposed by the R5 pid is tried; the receiver's root
+# ffff:0000 collection has usage 0 and is not a vendor-page collection.
 
 
 def make_request() -> List[int]:
@@ -81,10 +79,19 @@ def parse_reply(r) -> Optional[Tuple[int, bool]]:
     return None
 
 
-def _candidate(d: dict) -> bool:
+def _score(d: dict):
+    """The reference's order: 0xFF00 page first, then usage 1, then low iface."""
     page = d.get("usage_page") or 0
     usage = d.get("usage") or 0
-    return (page in CANDIDATE_PAGES or page >= 0xFF00) and usage != 0
+    iface = d.get("interface_number")
+    score = 0
+    if page == 0xFF00:
+        score += 100
+    if usage == 0x0001:
+        score += 50
+    if isinstance(iface, int):
+        score += max(0, 10 - min(iface, 10))
+    return -score
 
 
 class AttackSharkR5Provider(Provider):
@@ -101,6 +108,10 @@ class AttackSharkR5Provider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
+            try:
+                dev.set_nonblocking(False)
+            except (AttributeError, OSError, IOError):
+                pass
             for attempt in range(READ_ATTEMPTS):
                 try:
                     sent = dev.send_feature_report(bytes(make_request()))
@@ -139,9 +150,10 @@ class AttackSharkR5Provider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(attackshark_r5): %s", e)
             return []
-        mine = [d for d in infos if d.get("product_id") == PID and _candidate(d)]
+        mine = [d for d in infos if d.get("product_id") == PID]
         if not mine:
             return []
+        mine.sort(key=_score)
         self._diag.append(f"[Attack Shark R5] pid={PID:04x} candidates={len(mine)}")
         # The collector that answers is the one used; stop after the first reply.
         for d in mine:

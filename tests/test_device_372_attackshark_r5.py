@@ -80,9 +80,9 @@ class R5Test(unittest.TestCase):
         self.assertEqual(provider.poll(), [])
         self.assertTrue(any("no battery reply" in line for line in provider.diagnostics()))
 
-    def test_only_the_r5_vendor_collections_are_opened(self):
-        infos = [dict(INFO, usage_page=0x0001, usage=0x0002),
-                 dict(INFO, usage_page=0x000C, usage=0x0001)]
+    def test_only_the_r5_pid_is_opened(self):
+        infos = [dict(INFO, product_id=0x0046, usage_page=0x0001, usage=0x0002),
+                 dict(INFO, product_id=0x0046, usage_page=0x000C, usage=0x0001)]
         dev = FakeDev([reply()])
         self.assertEqual(self.poll(dev, infos).poll(), [])
         self.assertEqual(dev.writes, [])
@@ -96,6 +96,14 @@ class R5Test(unittest.TestCase):
         [st] = self.poll(dev, [first, second]).poll()
         self.assertEqual(st.level, 55)
         self.assertEqual(len(dev.writes), 3)
+
+    def test_the_root_ffff0000_collection_is_included(self):
+        root = dict(INFO, usage_page=0xFFFF, usage=0x0000,
+                    interface_number=2, path=b"root")
+        dev = FakeDev([reply(64, 1)])
+        [st] = self.poll(dev, [root]).poll()
+        self.assertEqual((st.level, st.charging), (64, True))
+        self.assertEqual(len(dev.writes), 1)
 
 
 if __name__ == "__main__":
