@@ -41,11 +41,35 @@ public sealed partial class MainWindow
             try
             {
                 // Attach is called before Activate; let the real XAML tree load.
-                for (var i = 0; !root.IsLoaded && i < 40; i++) await Task.Delay(50);
-                if (!root.IsLoaded) throw new TimeoutException("Fixture root did not load.");
+                for (var i = 0; (!root.IsLoaded || pagesInitializing) && i < 40; i++) await Task.Delay(50);
+                if (!root.IsLoaded || pagesInitializing) throw new TimeoutException("Fixture root did not load.");
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                if (Arg("--verify-scope") == "window-lifecycle")
+                {
+                    await VerifyWindowLifecycle(destination,checks);
+                    WriteVerificationReport(destination,new {complete=true,scope="window-lifecycle",firstPreparedView,checks});
+                    return;
+                }
+                if (Arg("--verify-scope") == "window-state")
+                {
+                    await VerifyWindowState(checks);
+                    await VerifyNativeCloseAsync(destination,checks);
+                    return;
+                }
+                if (Arg("--verify-scope") == "wheel-native")
+                {
+                    await VerifyContentWheelNavigation(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "wheel-native", nativeWheelRoutingValidated = wheelFixtureRoutingValidated, checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "spotlight")
+                {
+                    await VerifyCardSpotlights(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "spotlight", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "scrollbar-fallback")
                 {
                     await VerifyScrollBarFallback(checks);
@@ -64,6 +88,12 @@ public sealed partial class MainWindow
                     await VerifyGlobalScrollBars(destination, checks);
                     await VerifyWhatsNewAction(destination, checks);
                     WriteVerificationReport(destination, new { complete = true, scope = "scrollbar", theme = dark ? "dark" : "light", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "overscroll-placement")
+                {
+                    await VerifyOverscrollPlacement(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "overscroll-placement", checks });
                     return;
                 }
                 if (Arg("--verify-scope") == "wheel")

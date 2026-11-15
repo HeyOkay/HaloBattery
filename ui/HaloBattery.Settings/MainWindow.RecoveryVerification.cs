@@ -118,6 +118,15 @@ public sealed partial class MainWindow
             Check("expired old deadline cannot change the replacement page", ReferenceEquals(frame.Content, replacement) &&
                 current == "about" && !PageEntryBlocksWheel && ((Page)replacement).Opacity == 1 && pageHosts.Single().scroll.VerticalOffset == 0);
 
+            var hidden = await BlockEntry(false);
+            var hiddenTimer = pendingEntryTimer;
+            await HideSettingsWindowAsync();
+            Check("hiding cancels the positioning deadline and restores the retained page", IsSettingsWindowHidden &&
+                hiddenTimer is { IsRunning: false } && pendingEntryTimer is null && hidden.page.Opacity == 1 && !PageEntryBlocksWheel && pageEntryWheelHook == 0 && pageEntryWheelTimer is null);
+            await Task.Delay(500);
+            ShowSettingsWindow(null, null);
+            Check("reopening after a canceled deadline retains visible usable content", ReferenceEquals(frame.Content, hidden.page) &&
+                !IsSettingsWindowHidden && hidden.page.Opacity == 1 && !DiscardNavigationWheel());
         }
         finally { fixtureEntryChangeView = null; ResetPageEntry(); }
     }

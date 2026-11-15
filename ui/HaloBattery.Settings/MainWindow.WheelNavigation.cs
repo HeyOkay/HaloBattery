@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
@@ -15,7 +16,10 @@ public sealed partial class MainWindow
     private bool PageEntryBlocksWheel => pendingEntryPage is not null || pageEntry is not null;
     private nint pageEntryWheelHook;
     private WheelMessageHook? pageEntryWheelCallback;
+    private DispatcherTimer? pageEntryWheelTimer;
     private int discardedEntryWheelMessages;
+    private UIElement? observedContentWheelHost;
+    private PointerRoutedEventArgs? observedContentWheel;
 
     private delegate nint WheelMessageHook(int code, nuint flags, nint message);
 
@@ -74,17 +78,50 @@ public sealed partial class MainWindow
         return CallNextHookEx(pageEntryWheelHook, code, flags, messagePointer);
     }
 
-    private void AttachPageWheelNavigation(UIElement navigation)
+    private void ArmWheelNavigation(long now)
     {
-        pageEntryWheelCallback = FilterPageEntryWheel;
+        wheelNavigationGuard.Arm(now);
+        EnsurePageEntryWheelFilter();
+    }
+
+    private void EnsurePageEntryWheelFilter()
+    {
+        if (closing || !wheelNavigationGuard.IsBlocked(Environment.TickCount64,
+            PageEntryBlocksWheel || pendingOverscrollNavigation is not null) || pageEntryWheelHook != 0) return;
+        pageEntryWheelCallback ??= FilterPageEntryWheel;
         pageEntryWheelHook = InstallWheelHook(3, pageEntryWheelCallback, 0, GetCurrentThreadId());
         if (pageEntryWheelHook == 0)
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to install the settings window wheel filter.");
-        Closed += (_, _) =>
+        // The hook protects embedded native controls during a transition, but
+        // ordinary scrolling and window dragging need no managed message hook.
+        // Poll only while blocked; wheel packets never restart this timer or
+        // extend the guard's fixed deadline.
+        pageEntryWheelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        pageEntryWheelTimer.Tick += PageEntryWheelFilterTick;
+        pageEntryWheelTimer.Start();
+    }
+
+    private void PageEntryWheelFilterTick(object? sender, object args)
+    {
+        if (closing || !wheelNavigationGuard.IsBlocked(Environment.TickCount64,
+            PageEntryBlocksWheel || pendingOverscrollNavigation is not null)) StopPageEntryWheelFilter();
+    }
+
+    private void StopPageEntryWheelFilter()
+    {
+        if (pageEntryWheelTimer is { } timer)
         {
-            if (pageEntryWheelHook != 0) UnhookWindowsHookEx(pageEntryWheelHook);
-            pageEntryWheelHook = 0;
-        };
+            timer.Stop();
+            timer.Tick -= PageEntryWheelFilterTick;
+            pageEntryWheelTimer = null;
+        }
+        if (pageEntryWheelHook != 0) UnhookWindowsHookEx(pageEntryWheelHook);
+        pageEntryWheelHook = 0;
+    }
+
+    private void AttachPageWheelNavigation(UIElement navigation)
+    {
+        Closed += (_, _) => StopPageEntryWheelFilter();
         if (navigation is Panel panel) panel.Background = Brush("#00000000");
         navigation.AddHandler(UIElement.PointerWheelChangedEvent,
             new PointerEventHandler(NavigationWheelChanged), true);
@@ -96,8 +133,61 @@ public sealed partial class MainWindow
     {
         var properties = args.GetCurrentPoint(root).Properties;
         delta = properties.MouseWheelDelta;
-        return !closing && args.KeyModifiers == VirtualKeyModifiers.None &&
-            !properties.IsHorizontalMouseWheel && delta != 0;
+        return !closing && IsPlainVerticalWheel(delta, properties.IsHorizontalMouseWheel, args.KeyModifiers);
+    }
+
+    private static bool IsPlainVerticalWheel(int delta, bool horizontal, VirtualKeyModifiers modifiers) =>
+        delta != 0 && !horizontal && modifiers == VirtualKeyModifiers.None;
+
+    private void AttachContentWheelNavigation(UIElement host)
+    {
+        // Observe boundaries before the ScrollViewer's native wheel handler.
+        // Interior input remains unhandled so DirectManipulation owns its
+        // distance, accumulation and animation; arrow-key line units do not
+        // describe mouse-wheel scrolling.
+        // microsoft/microsoft-ui-xaml, ScrollViewer_Partial.cpp:2614-2620.
+        host.AddHandler(UIElement.PointerWheelChangedEvent,
+            new PointerEventHandler(ContentWheelNavigationChanged), true);
+        if (host is FrameworkElement element)
+            element.Unloaded += (_, _) => { if (ReferenceEquals(observedContentWheelHost, host)) ResetContentWheelObservation(); };
+    }
+
+    private void ResetContentWheelObservation()
+    {
+        observedContentWheelHost = null;
+        observedContentWheel = null;
+    }
+
+    private static bool ContentWheelBelongsToPage(DependencyObject? source, ScrollViewer pageScroll, DependencyObject stop)
+    {
+        for (var node = source; node is not null && node != stop; node = VisualTreeHelper.GetParent(node))
+            if (node is ComboBox or ComboBoxItem or TextBox or PasswordBox or RichEditBox or Slider or NumberBox or ListViewBase or ScrollBar ||
+                node is ScrollViewer nested && !ReferenceEquals(nested, pageScroll)) return false;
+        return true;
+    }
+
+    private void ContentWheelNavigationChanged(object sender, PointerRoutedEventArgs args)
+    {
+        if (DiscardNavigationWheel()) { args.Handled = true; return; }
+        if (args.Handled || !WheelDelta(args, out var delta) ||
+            frame.Content is not Page { Content: ScrollViewer scroll }) return;
+        if (!ContentWheelBelongsToPage(args.OriginalSource as DependencyObject, scroll, (DependencyObject)sender))
+        {
+            CancelOverscroll();
+            return;
+        }
+        observedContentWheelHost = (UIElement)sender;
+        observedContentWheel = args;
+        // Record both consumed and passed-through packets. The outer frame
+        // must not feed this original delta into overscroll a second time.
+        if (ObserveContentWheelNavigation(scroll, delta)) args.Handled = true;
+    }
+
+    private bool ObserveContentWheelNavigation(ScrollViewer scroll, int delta)
+    {
+        if (DiscardNavigationWheel()) return true;
+        if (closing || delta == 0) return false;
+        return HandleContentOverscroll(delta, scroll.VerticalOffset, scroll.ScrollableHeight);
     }
 
     private void NavigationWheelChanged(object sender, PointerRoutedEventArgs args)
@@ -111,16 +201,18 @@ public sealed partial class MainWindow
     private void ContentWheelChanged(object sender, PointerRoutedEventArgs args)
     {
         if (DiscardNavigationWheel()) { args.Handled = true; return; }
+        // The inner host already observed this packet before native scrolling,
+        // including interior packets it deliberately left unhandled. Empty
+        // viewport events still reach this fallback boundary observer.
+        if (ReferenceEquals(args, observedContentWheel)) { ResetContentWheelObservation(); return; }
         if (!WheelDelta(args, out var delta)) return;
         // Native editors and pickers keep their own wheel behavior.
-        for (var node = args.OriginalSource as DependencyObject; node is not null && node != frame;
-            node = VisualTreeHelper.GetParent(node))
-            if (node is ComboBox or ComboBoxItem or TextBox or Slider or ListViewBase)
-            {
-                CancelOverscroll();
-                return;
-            }
         if (frame.Content is not Page { Content: ScrollViewer scroll }) return;
+        if (!ContentWheelBelongsToPage(args.OriginalSource as DependencyObject, scroll, frame))
+        {
+            CancelOverscroll();
+            return;
+        }
         FeedContentOverscroll(delta, scroll, args);
     }
 
@@ -139,7 +231,7 @@ public sealed partial class MainWindow
         var index = Math.Max(0, Array.IndexOf(pages, current));
         var next = Math.Clamp(index - steps, 0, pages.Length - 1);
         if (next == index) return false;
-        wheelNavigationGuard.Arm(Environment.TickCount64);
+        ArmWheelNavigation(Environment.TickCount64);
         Navigate(pages[next], true, preserveWheelBurst: true);
         return true;
     }

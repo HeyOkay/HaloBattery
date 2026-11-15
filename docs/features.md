@@ -76,7 +76,11 @@ development on a machine with the matching shared runtimes already installed.
 before freezing Python. No SDK or shared runtime installer is run by the script.
 
 Open **Settings** from the tray menu. Changes apply immediately and are saved;
-there is no separate Save button. Settings remain available when no devices are
+there is no separate Save button. Position, size, monitor and the navigation
+panel state are restored before the window is shown. Closing Settings hides
+the ready window; reopening keeps its current page and scroll position.
+Window preferences are stored natively in `settings-window.json` inside the
+active installed or portable profile. Settings remain available when no devices are
 connected. The interface keeps seven languages: English, Spanish,
 French, Japanese, Russian, Simplified Chinese and Traditional Chinese.
 

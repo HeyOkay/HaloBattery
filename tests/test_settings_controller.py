@@ -160,6 +160,12 @@ class CompactTrayTests(HideRenameTestCase):
         visible[2](None)
         self.assertTrue(app.wake.is_set())
 
+    def test_placeholder_settings_restores_the_previous_page(self):
+        app = make_app()
+        app.open_settings = mock.Mock()
+        app.build_tray_menu(None).items[1](None)
+        app.open_settings.assert_called_once_with()
+
     def test_compact_labels_strip_only_trailing_ellipses(self):
         app = make_app()
         for label, expected in (("Settings…", "Settings"), ("Settings...", "Settings"),

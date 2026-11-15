@@ -46,9 +46,10 @@ public sealed partial class MainWindow
         {
             pagesInitialized = true;
             Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; pageBindings.Clear(); };
-            Navigate(string.IsNullOrEmpty(state.Page) ? "general" : state.Page, false);
+            Navigate(string.IsNullOrEmpty(State.Page) ? "general" : State.Page, false);
             return;
         }
+        if (pagesInitializing) return;
         // Status/charging/progress updates refresh the existing controls. The only
         // structural changes are localization, device identity and provider families.
         var rebuild = old.Language != state.Language ||
@@ -60,14 +61,7 @@ public sealed partial class MainWindow
 
     public void NavigateFromBackend(string page, string? deviceKey)
     {
-        if (closing) return;
-        if (deviceKey is not null) selectedDeviceKey = deviceKey;
-        if (pagesInitialized)
-        {
-            if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
-            Activate();
-            Navigate(page, true);
-        }
+        ShowSettingsWindow(page,deviceKey);
     }
 
     public void ShowError(string message)
@@ -174,7 +168,7 @@ public sealed partial class MainWindow
     private Button ActionButton(string label, string command)
     {
         var button = Button(T(label), true);
-        button.Click += (_, _) => Bridge.SendCommand(command, new { });
+        button.Click += async (_, _) => await SendUiCommandAsync(command);
         return button;
     }
     private void ActionCard(StackPanel parent, string title, string button, string command, string hint = "", string icon = "external-link")

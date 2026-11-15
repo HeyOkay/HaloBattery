@@ -1469,7 +1469,7 @@ class App:
             state += (custom_id,)
         return state
 
-    def open_settings(self, device_key: Optional[str] = None, *, page: str = "general") -> None:
+    def open_settings(self, device_key: Optional[str] = None, *, page: Optional[str] = None) -> None:
         from halo.settings_host import SettingsHost
         with self.lock:
             if getattr(self, "_settings_host", None) is None:
