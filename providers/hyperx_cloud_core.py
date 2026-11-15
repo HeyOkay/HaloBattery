@@ -57,11 +57,14 @@ PACKET_LEN = 64
 BATTERY_REQUEST = bytes([0xFF, 0x07, 0x00, 0xFD, 0x04, 0x0C, 0xF1, 0x02,
                          0x01, 0x04, 0xF0, 0x0C] + [0] * (PACKET_LEN - 12))
 
-# LennardKittner/HyperHeadset's cloud-core curve. It is deliberately kept
-# approximate: the reference's own measurements came from a failing battery.
-VOLTAGE_THRESHOLDS = (3380, 3430, 3440, 3450, 3460, 3470, 3480, 3490, 3500,
-                      3510, 3520, 3530, 3540, 3550, 3560, 3570, 3580, 3590,
-                      3600, 3610)
+# The Cloud Flight's curve, which the Cloud Core reference used before its
+# failed-battery calibration. The later Cloud Core curve maps 3.6 V to 100 %,
+# so a healthy 3.85 V reading would show full; this curve keeps that readable
+# as roughly 70 %. It is still approximate, not a model-specific discharge
+# table.
+VOLTAGE_THRESHOLDS = (3328, 3584, 3674, 3704, 3732, 3744, 3754, 3764, 3774,
+                      3784, 3794, 3804, 3824, 3840, 3860, 3890, 3910, 3940,
+                      3960, 3970)
 VOLTAGE_PERCENTAGES = (5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70,
                        75, 80, 85, 90, 95, 100)
 

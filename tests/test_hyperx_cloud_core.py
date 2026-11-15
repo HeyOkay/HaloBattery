@@ -97,7 +97,9 @@ class Protocol(Base):
     def test_the_voltage_lookup_clamps_at_both_ends(self):
         self.assertEqual(H.voltage_to_percent(3000), 5)
         self.assertEqual(H.voltage_to_percent(4000), 100)
-        self.assertEqual(H.voltage_to_percent(3441), 15)
+        self.assertEqual(H.voltage_to_percent(3441), 5)
+        # The test build's first reading: 3854 mV must not be shown as full.
+        self.assertEqual(H.voltage_to_percent(3854), 70)
 
 
 class Poll(Base):
@@ -108,10 +110,10 @@ class Poll(Base):
         self.assertEqual(len(out), 1)
         st = out[0]
         self.assertEqual((st.key, st.name, st.level, st.charging, st.kind),
-                         ("hyperx:173f", "HyperX Cloud Core Wireless", 15, False,
+                         ("hyperx:173f", "HyperX Cloud Core Wireless", 5, False,
                           "headset"))
         self.assertEqual(st.source, "hyperx_cloud_core")
-        self.assertEqual(st.approx, "about 15%")
+        self.assertEqual(st.approx, "about 5%")
         self.assertIn("3441 mV", "\n".join(diag))
 
     def test_the_usb_c_id_shares_the_dongle_icon(self):
@@ -119,7 +121,7 @@ class Poll(Base):
         entry = dict(self.entries(pid=0x1740)["vendor"])
         entry["path"] = DONGLE_PATH.replace(b"173f", b"1740")
         out, diag = self.poll(d, entries=[entry])
-        self.assertEqual([(s.key, s.level) for s in out], [("hyperx:173f", 15)])
+        self.assertEqual([(s.key, s.level) for s in out], [("hyperx:173f", 5)])
 
     def test_no_vendor_collection_writes_nothing(self):
         d = FakeDevice(CAPTURED)
