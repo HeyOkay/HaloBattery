@@ -46,6 +46,12 @@ public sealed partial class MainWindow
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                if (Arg("--verify-scope") == "window-interactions")
+                {
+                    await VerifyWindowInteractions(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "window-interactions", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "window-lifecycle")
                 {
                     await VerifyWindowLifecycle(destination,checks);

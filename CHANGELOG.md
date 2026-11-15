@@ -74,6 +74,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Simplify the tray menu to one Settings action, opening the selected device when
   available. Remove trailing action-label ellipses while preserving progress text.
 
+- Avoid redundant page layout while moving the Settings window or animating
+  its navigation panel, preserving DPI updates and card-edge highlights.
+
 - Keep card-edge reveal responsive by combining pointer updates once per frame,
   updating only nearby visible cards, and suspending it during scrollbar dragging.
   Keep XAML's frame clock active only while dragging a native scrollbar thumb

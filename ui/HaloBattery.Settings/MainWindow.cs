@@ -95,9 +95,9 @@ public sealed partial class MainWindow : Window
   InitializeCardSpotlights();
   settings.ColorValuesChanged+=OnColorsChanged;
   AppWindow.Changed+=OnWindowChanged;
-  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;StopRail();ResetPageEntry();};
+  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
   ApplyTheme();
-  root.Loaded+=(_,_)=>{UpdateDragRegion();UpdateMinimumWidth();};
+  root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
   ApplyState(initialState);
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
@@ -140,8 +140,11 @@ public sealed partial class MainWindow : Window
  private void OnWindowChanged(AppWindow sender,AppWindowChangedEventArgs args)
  {
   if(closing)return;
+  if(args.DidPositionChange&&windowInteractionMetrics is {} metrics)metrics.NativePositionEvents++;
   if(args.DidPositionChange||args.DidSizeChange||args.DidPresenterChange)CaptureWindowState();
-  DispatcherQueue.TryEnqueue(()=>{if(!closing){UpdateMaximizeButton();PositionPill();UpdateDragRegion();}});
+  // Moving on the same display changes screen coordinates, not client layout.
+  // DPI changes are handled separately after XamlRoot has its new scale.
+  if(args.DidSizeChange||args.DidPresenterChange||args.DidVisibilityChange&&windowMinimumPending)QueueWindowChromeRefresh();
  }
  private void UpdateMaximizeButton()
  {
@@ -198,9 +201,15 @@ public sealed partial class MainWindow : Window
  private double PageInset(double width)=>44*width/contentWidth;
  private void LayoutPage(StackPanel content,double viewport)
  {
+  if(windowInteractionMetrics is {} metrics)metrics.LayoutCalls++;
   var width=PageWidth(viewport);var inset=PageInset(width);
-  content.Width=width;content.Padding=new(inset,36,inset,36);content.Margin=new(PageLeft(viewport),0,0,0);
-  InvalidateCardSpotlightGeometry();
+  var padding=new Thickness(inset,36,inset,36);var margin=new Thickness(PageLeft(viewport),0,0,0);
+  var geometryChanged=content.Width!=width||!content.Padding.Equals(padding);
+  if(!geometryChanged&&content.Margin.Equals(margin)){RequestSpotlightFrame();return;}
+  if(windowInteractionMetrics is {} changed)changed.PageLayouts++;
+  content.Width=width;content.Padding=padding;content.Margin=margin;
+  // Moving the content does not change card bounds relative to that content.
+  if(geometryChanged)InvalidateCardSpotlightGeometry();else RequestSpotlightFrame();
  }
  private void LayoutPages(){foreach(var (content,scroll) in pageHosts)LayoutPage(content,scroll.ViewportWidth>0?scroll.ViewportWidth:scroll.ActualWidth);PositionOverscrollIndicator();PositionGeneralFooter();}
  private void PositionPill()
@@ -216,7 +225,9 @@ public sealed partial class MainWindow : Window
   if(hamburger is not null){ToolTipService.SetToolTip(hamburger,MenuName);AutomationProperties.SetName(hamburger,MenuName);}
   if(!settings.AnimationsEnabled){rail.Width=new(target);FinishRail();return;}
   var start=rail.Width.Value;var began=Stopwatch.StartNew();var fromOpacity=navLabels.FirstOrDefault()?.Opacity??(expanded?0.0:1.0);var toOpacity=expanded?1.0:0.0;
-  railTick=(_,_)=>{var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);PositionPill();var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
+  // The ScrollViewer's SizeChanged callback lays out the committed viewport.
+  // Repeating it here would use the previous frame's viewport and force reflow.
+  railTick=(_,_)=>{if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
   CompositionTarget.Rendering+=railTick;
  }
  private void FinishRail(){BuildNavigation();PositionPill();UpdateDragRegion();UpdateMinimumWidth();}
