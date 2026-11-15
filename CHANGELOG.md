@@ -55,6 +55,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Prepare the held XM2w 4K/v2 reader with the sourced A1 status exchange,
+  validated replies and isolated HID transactions. Keep normal 4K polling
+  disabled while persistent status-0x08 recovery remains unresolved; confirmed
+  XM2we support is unchanged.
+
 
 - Use the current application logo in Windows tray preferences, notifications
   and What's new. Repeated What's new requests reuse the existing window,

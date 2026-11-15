@@ -27,6 +27,14 @@ Debug: python halo_battery.pyw --probe
 """
 from __future__ import annotations
 
+# Dispatch before application initialization, settings, tray or other device polls.
+if __name__ == "__main__":
+    import sys
+    if "--endgame-worker" in sys.argv:
+        from endgame4k_worker import main as endgame_worker_main
+        endgame_worker_main(sys.argv[sys.argv.index("--endgame-worker") + 1])
+        raise SystemExit(0)
+
 import json
 import logging
 import os
@@ -2842,7 +2850,7 @@ class App:
             settings_host.close()
         self.stop_evt.set()
         for provider in self.providers:
-            if isinstance(provider, AtkKeyboardProvider):
+            if isinstance(provider, (AtkKeyboardProvider, Endgame4kProvider)):
                 provider.close()
         self.history.save(force=True)
         if self.cfg.get("status_file"):

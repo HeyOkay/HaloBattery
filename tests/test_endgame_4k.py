@@ -1,150 +1,188 @@
-"""Endgame Gear 4K dongle (3367:1970): the family's 17-byte status frame. No hardware."""
-import os
-import sys
+
+"""Corrected A1 feature protocol and synthetic replies; no hardware."""
+import json
+from pathlib import Path
 import types
 import unittest
-from unittest import mock
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from providers import endgame_4k as E  # noqa: E402
-
-FEATURE = b"\\\\?\\hid#vid_3367&pid_1970#8&1a2b3c4d&0&0000#{...}"      # ff02:0002
-INPUT = b"\\\\?\\hid#vid_3367&pid_1970#8&1a2b3c4d&0&0000&col02#{...}"  # ff01:0002
+from unittest.mock import patch
+from providers import endgame_4k as E
+from providers import endgame4k_protocol as P
 
 
-def battery_reply(level, charging):
-    body = [0x09, 0x04, 0x00, 0x00, 0x00, 2, level, charging] + [0x00] * 8
-    return body + [(0x55 - sum(body)) & 0xFF]
+def reply(payload=b'', status=1, length=63):
+    raw = bytearray(length)
+    raw[:2] = bytes([0xA1, status])
+    raw[16:16+len(payload)] = payload
+    return bytes(raw)
 
 
-class FakeDongle:
-    def __init__(self, replies=None):
-        self.replies = [list(r) for r in (replies or [])]
+def ident(pid=0x1968):
+    return reply(bytes.fromhex('67 33') + pid.to_bytes(2, 'little') + b'\0\0\1\7')
+
+
+def entry(pid=0x1970, path=b'receiver', page=0xFF01):
+    return dict(vendor_id=0x3367, product_id=pid, path=path, usage_page=page, usage=2)
+
+
+class Fake:
+    def __init__(self, replies):
+        self.replies = iter(replies)
         self.writes = []
-
+        self.closed = 0
+    def open_path(self, path):
+        self.path = path
     def send_feature_report(self, data):
-        self.writes.append(list(data))
+        self.writes.append(bytes(data))
         return len(data)
-
-    def read(self, size, timeout_ms):
-        return self.replies.pop(0) if self.replies else []
-
-
-class FakeBus:
-    def __init__(self, feature, input_, dongle):
-        self.feature, self.input, self.dongle = feature, input_, dongle
-        self.opened = []
-
-    def device_class(self):
-        bus = self
-
-        class FakeDevice:
-            def open_path(self, path):
-                if path not in (bus.feature, bus.input):
-                    raise OSError("cannot open")
-                self.path = path
-                bus.opened.append(path)
-
-            def send_feature_report(self, data):
-                if self.path != bus.feature:
-                    raise AssertionError("a write went to the input collection")
-                return bus.dongle.send_feature_report(data)
-
-            def read(self, size, timeout_ms):
-                if self.path != bus.input:
-                    raise AssertionError("a read went to the feature collection")
-                return bus.dongle.read(size, timeout_ms)
-
-            def close(self):
-                pass
-
-        return FakeDevice
+    def get_feature_report(self, rid, size):
+        item = next(self.replies)
+        if isinstance(item, Exception):
+            raise item
+        return item
+    def close(self):
+        self.closed += 1
 
 
-def entry(pid, path, iface, page, usage):
-    return {"product_id": pid, "interface_number": iface, "usage_page": page,
-            "usage": usage, "path": path, "product_string": "Endgame Gear HS Dongle"}
-
-
-class Endgame4kTest(unittest.TestCase):
+class Endgame4kTests(unittest.TestCase):
     def setUp(self):
-        # Keep checking the experimental framing while stable builds block this PID.
-        policy = mock.patch.object(E, "ENABLED_PIDS", frozenset(E.PIDS))
+        policy = patch.object(E, 'ENABLED_PIDS', frozenset({0x1970, 0x1968, 0x1982}))
         policy.start()
         self.addCleanup(policy.stop)
-        self._saved = (E.hid, E.hidlist)
+        native = patch.object(E.Endgame4kProvider, '_read', E.Endgame4kProvider._read_local)
+        native.start()
+        self.addCleanup(native.stop)
+        self.sleep = patch.object(P.time, 'sleep', lambda _: None)
+        self.sleep.start()
+        self.addCleanup(self.sleep.stop)
 
-    def tearDown(self):
-        E.hid, E.hidlist = self._saved
+    def run_fake(self, replies, entries=None, provider=None):
+        dev = Fake(replies)
+        provider = provider or E.Endgame4kProvider()
+        with patch.object(E, 'hid', types.SimpleNamespace(device=lambda: dev)), patch.object(
+                E.hidlist, 'enumerate', lambda _: [entry()] if entries is None else entries):
+            result = provider.poll()
+        return result, dev, provider
 
-    def poll(self, dongles, entries=None):
-        if entries is None:
-            entries = [entry(0x1970, b"if0", 0, 0x0001, 0x0002),
-                       entry(0x1970, INPUT, 1, 0xFF01, 0x0002),
-                       entry(0x1970, b"ff02-1", 1, 0xFF02, 0x0001),
-                       entry(0x1970, FEATURE, 1, 0xFF02, 0x0002),
-                       entry(0x1970, b"consumer", 1, 0x000C, 0x0001)]
-        P = types.SimpleNamespace(device=FakeBus(FEATURE, INPUT, dongles).device_class())
-        E.hid = P
-        E.hidlist = types.SimpleNamespace(enumerate=lambda vid: list(entries))
-        return E.Endgame4kProvider()
+    def test_confirmed_wireless_identity_and_two_agreeing_values(self):
+        result, dev, _ = self.run_fake([ident(), reply(b'\x23'), reply(b'\x23')])
+        self.assertEqual((result[0].level, result[0].name), (35, 'Endgame Gear XM2w 4k'))
+        self.assertEqual([d[1] for d in dev.writes], [14, 180, 180])
+        self.assertFalse(result[0].charging_known)
+        self.assertEqual(dev.closed, 1)
 
-    def test_the_level_and_the_charging_flag(self):
-        provider = self.poll(FakeDongle([battery_reply(75, 0)]))
-        [st] = provider.poll()
-        self.assertEqual((st.name, st.level, st.charging, st.kind),
-                         ("Endgame Gear 4K mouse", 75, False, "mouse"))
+    def test_boundary_values_zero_and_hundred(self):
+        for pct in (0, 100):
+            result, _, _ = self.run_fake([ident(), reply(bytes([pct])), reply(bytes([pct]))])
+            self.assertEqual(result[0].level, pct)
 
-    def test_charging(self):
-        [st] = self.poll(FakeDongle([battery_reply(40, 1)])).poll()
-        self.assertEqual((st.level, st.charging), (40, True))
+    def test_noisy_read_needs_consecutive_agreement(self):
+        result, _, _ = self.run_fake([ident(), reply(b'\x23'), reply(b'\x28'), reply(b'\x28')])
+        self.assertEqual(result[0].level, 40)
 
-    def test_the_request_is_the_documented_status_frame(self):
-        dongle = FakeDongle([battery_reply(50, 0)])
-        self.poll(dongle).poll()
-        self.assertEqual(dongle.writes[0], E.query_frame(0x04))
-        self.assertEqual(dongle.writes[0][0], 0x08)
-        self.assertEqual(sum(dongle.writes[0]) & 0xFF, 0x55)
+    def test_unstable_read_is_not_averaged_or_published(self):
+        result, _, _ = self.run_fake([ident(), reply(b'\x23'), reply(b'\x28'), reply(b'\x2d')])
+        self.assertEqual(result, [])
 
-    def test_a_bad_checksum_is_skipped(self):
-        bad = battery_reply(10, 0)
-        bad[-1] ^= 0xFF
-        [st] = self.poll(FakeDongle([bad, battery_reply(66, 0)])).poll()
-        self.assertEqual(st.level, 66)
+    def test_out_of_range_percentage_refused(self):
+        self.assertEqual(self.run_fake([ident(), reply(b'\xff')])[0], [])
 
-    def test_no_reply_shows_nothing(self):
-        provider = self.poll(FakeDongle([]))
-        self.assertEqual(provider.poll(), [])
-        self.assertTrue(any("no reply" in line for line in provider.diagnostics()))
+    def test_wired_preferred_no_percentage_and_one_icon(self):
+        result, dev, _ = self.run_fake([ident(), reply(b'\x19')],
+                                      [entry(), entry(0x1968, b'wired')])
+        self.assertEqual(dev.path, b'wired')
+        self.assertEqual(len(result), 1)
+        self.assertIsNone(result[0].level)
+        self.assertTrue(result[0].charging)
+        self.assertFalse(result[0].charging_known)
+        self.assertEqual(result[0].ui_message, 'state.charging_level_unknown')
 
-    def test_parse_bounds(self):
-        self.assertEqual(E.parse_battery([75, 0]), (75, False))
-        self.assertEqual(E.parse_battery([0]), (0, False))
-        self.assertIsNone(E.parse_battery([101, 0]))
-        self.assertIsNone(E.parse_battery([]))
+    def test_other_model_identity_does_not_query_battery(self):
+        result, dev, _ = self.run_fake([ident(0x1972)])
+        self.assertEqual(result, [])
+        self.assertEqual(len(dev.writes), 1)
 
-    def test_only_documented_queries_can_be_built(self):
-        self.assertEqual(E.query_frame(0x03)[1], 0x03)
-        for opcode in (0x07, 0x08, 0x12, 0x00):
+    def test_old_we_collection_is_not_opened(self):
+        result, dev, _ = self.run_fake([], [entry(page=0xFF02)])
+        self.assertEqual(result, [])
+        self.assertEqual(dev.writes, [])
+
+    def test_multiple_receivers_refuse_requests(self):
+        result, dev, _ = self.run_fake([], [entry(), entry(path=b'other')])
+        self.assertEqual(result, [])
+        self.assertEqual(dev.writes, [])
+
+    def test_sleep_stale_state_then_expires_without_wake(self):
+        result, _, provider = self.run_fake([ident(), reply(b'\x23'), reply(b'\x23')])
+        result, dev, _ = self.run_fake([reply(status=8)], provider=provider)
+        self.assertFalse(result[0].online)
+        self.assertTrue(result[0].wake_on_input)
+        self.assertEqual([d[1] for d in dev.writes], [14])
+        provider._seen -= 301
+        self.assertEqual(self.run_fake([reply(status=8)], provider=provider)[0], [])
+
+    def test_receiver_removed_clears_cache(self):
+        _, _, provider = self.run_fake([ident(), reply(b'\x23'), reply(b'\x23')])
+        self.assertEqual(self.run_fake([], [], provider)[0], [])
+        self.assertIsNone(provider._last)
+
+    def test_disappearing_device_closes_handle(self):
+        result, dev, _ = self.run_fake([OSError('gone')])
+        self.assertEqual(result, [])
+        self.assertEqual(dev.closed, 1)
+
+    def test_busy_retry_bounded(self):
+        result, dev, _ = self.run_fake([reply(status=3)] * 4)
+        self.assertEqual(result, [])
+        self.assertEqual(len(dev.writes), 1)
+
+    def test_production_allowlist_excludes_wake_and_configuration(self):
+        for cmd in range(256):
+            if cmd in (14, 180):
+                continue
             with self.assertRaises(ValueError):
-                E.query_frame(opcode)
+                P.frame(cmd)
 
-    def test_two_dongles_pair_their_own_collections(self):
-        other_in = INPUT.replace(b"&1a2b3c4d", b"&9f9f9f9f")
-        other_feat = FEATURE.replace(b"&1a2b3c4d", b"&9f9f9f9f")
-        entries = [entry(0x1970, INPUT, 1, 0xFF01, 0x0002),
-                   entry(0x1970, FEATURE, 1, 0xFF02, 0x0002),
-                   entry(0x1970, other_in, 1, 0xFF01, 0x0002),
-                   entry(0x1970, other_feat, 1, 0xFF02, 0x0002)]
-        [st] = self.poll(FakeDongle([battery_reply(80, 0)]), entries).poll()
-        self.assertEqual(st.level, 80)
+    def test_v2_has_independent_identity_key(self):
+        result, _, _ = self.run_fake([ident(0x1982), reply(b'\x23'), reply(b'\x23')])
+        self.assertEqual(result[0].key, 'endgame_4k:xm2w4kv2')
+        self.assertEqual(result[0].name, 'Endgame Gear XM2w 4k v2')
 
-    def test_receiver_path_ignores_the_collection_part(self):
-        a = b"\\\\?\\hid#vid_3367&pid_1970#8&1a2b3c4d&0&0000#{x}"
-        b = b"\\\\?\\hid#vid_3367&pid_1970#8&1a2b3c4d&0&0000&col02#{x}"
-        self.assertEqual(E.receiver_path(a), E.receiver_path(b))
+    def test_both_observed_lengths_and_malformed_reports(self):
+        for length in (63, 64):
+            raw = reply(b'\x00', length=length)
+            self.assertEqual(P.response(raw), raw)
+        for raw in (b'', b'\xa1', bytes(62), bytes(65), b'\0' + reply()):
+            with self.assertRaises(P.ProtocolError):
+                P.response(raw)
+        for status in (3, 8, 17):
+            with self.assertRaises(P.DeviceStatusError):
+                P.response(reply(bytes([95]), status=status))
 
+    def test_short_send_never_reads_and_closes(self):
+        dev = Fake([])
+        with patch.object(dev, 'send_feature_report', return_value=-1), patch.object(
+                dev, 'get_feature_report') as read, patch.object(
+                E, 'hid', types.SimpleNamespace(device=lambda: dev)):
+            self.assertIsNone(E.Endgame4kProvider()._read_local(entry()))
+            read.assert_not_called()
+        self.assertEqual(dev.closed, 1)
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_wired_identity_mismatch_never_queries_battery(self):
+        result, dev, _ = self.run_fake([ident(0x1982)], [entry(0x1968, b'wired')])
+        self.assertEqual(result, [])
+        self.assertEqual(len(dev.writes), 1)
+
+    def test_wrong_vendor_identity_never_queries_battery(self):
+        data = bytearray(ident())
+        data[16:18] = b'\0\0'
+        result, dev, _ = self.run_fake([data])
+        self.assertEqual(result, [])
+        self.assertEqual(len(dev.writes), 1)
+
+    def test_hold_is_checked_before_enumeration_or_worker(self):
+        with patch.object(E, 'ENABLED_PIDS', frozenset()), patch.object(
+                E.hidlist, 'enumerate') as enumerate_, patch.object(
+                E.Endgame4kProvider, '_read') as read:
+            self.assertEqual(E.Endgame4kProvider().poll(), [])
+            enumerate_.assert_not_called()
+            read.assert_not_called()

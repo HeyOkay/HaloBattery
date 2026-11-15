@@ -1,216 +1,150 @@
-"""Endgame Gear 4K mice behind the "HS Dongle" (3367:1970).
+"""Experimental XM2w status reader, held from normal release polling.
 
-One dongle id serves several mice - XM2w 4K, OP1w 4K and their v2 revisions - and the
-mouse behind it is what the vendor software resolves; the adapter itself is neutral.
-
-The exchange is the family's 17-byte frame, documented for the XM2we by
-okms/xm2we-linux (PROTOCOL.md) and by Janlhin/Endgame_Gear_Web_Configurator
-(src/xm2we.ts: buildFrame, frameValid, readBattery):
-
-    request  feature report 0x08:  08 <opcode> 00 ... <checksum>   (17 bytes,
-                                   checksum = 0x55 - sum of the first 16 bytes)
-    reply    input report 0x09:    09 <opcode> 00 <addr> <size> <data...> <checksum>
-                                   the data starts at byte 6, the whole frame sums to 0x55
-
-Battery is opcode 0x04: data[0] = percent, data[1] = charging. It is read before the
-link state because plugging the cable briefly drops the link while the level stays
-valid. Only these two documented status reads are ever built.
-
-The two collections of one dongle are paired by the receiver part of their HID paths:
-the feature collection is 0xff02:0002, the replies arrive on an 0xff01 collection.
-
-Unverified on this dongle: the frame and the battery opcode are documented for the
-XM2we, and the 4K dongle exposes the same two collections. If it does not answer, the
-diagnostics says so and nothing is shown.
+Status framing: johanneszab/vole re/PROTOCOL.md sections 1-3 at
+4ba29dea54b4628df03cfe2f94f4576c124afd80, and
+stuffz/mouse-battery-monitor docs/ENDGAME.md at
+25871cce3a8266d8d2bc05b0ca81fbb74b3a38b4 (A1/0E/B4, FF01:0002).
+Only those status requests are permitted. No automatic recovery/wake command.
+Public issue: https://github.com/ahmedkhursheed23/HaloBattery/issues/48 .
 """
-from __future__ import annotations
-
-import hashlib
-import re
 import time
-from typing import List, Optional, Tuple
-
+import logging
+from dataclasses import replace
 try:
     import hid
-except ImportError:  # pragma: no cover
+except ImportError:
     hid = None
-
 from . import hidlist
-from .base import DeviceStatus, Provider, hexdump, log
+from .base import DeviceStatus, Provider
+from .endgame4k_protocol import Reader, ProtocolError, identity, battery
 
-VID = 0x3367
-PIDS = {0x1970: "Endgame Gear 4K mouse"}
-
-# #321/#324: the current 4K exchange fails on hardware; correction is pending.
-# The separate, confirmed EndgameWEProvider is unaffected.
+ASLEEP_KEEP = 300
+# Keep the upstream release hold until reliability and final review are resolved.
 ENABLED_PIDS = frozenset()
-
-BATTERY = 0x04
-LINK = 0x03
-REPORT_OUT = 0x08
-REPORT_IN = 0x09
-FRAME_LEN = 17
-CHECKSUM = 0x55
-TIMEOUT = 0.4
-MIN_PERCENT, MAX_PERCENT = 0, 100
-
-
-def receiver_path(path: bytes) -> bytes:
-    """The receiver part of a HID path, without the per-collection identifiers.
-
-    Windows paths carry ColXX in the hardware field and a collection-specific final
-    &000N in the instance field; both are removed so the feature and input collections
-    of one dongle pair up, and two dongles do not.
-    """
-    low = path.lower()
-    parts = low.split(b"#")
-    if len(parts) >= 4 and re.search(br"&col[0-9a-f]{2}$", parts[1]):
-        parts[1] = re.sub(br"&col[0-9a-f]{2}$", b"", parts[1])
-        parts[2] = re.sub(br"&[0-9a-f]{4}$", b"", parts[2])
-        return b"#".join(parts)
-    return re.sub(br"&col[0-9a-f]{2}", b"", low)
-
-
-def query_frame(opcode: int) -> List[int]:
-    """The 17-byte status request. Only the documented reads can be built."""
-    if opcode not in (BATTERY, LINK):
-        raise ValueError("only the battery and link queries are allowed")
-    body = [REPORT_OUT, opcode] + [0x00] * 14
-    return body + [(CHECKSUM - sum(body)) & 0xFF]
-
-
-def reply_data(data, opcode: int) -> Optional[List[int]]:
-    """The data bytes of a status reply, or None when this is not one."""
-    if len(data) != FRAME_LEN or data[0] != REPORT_IN or data[1] != opcode:
-        return None
-    if sum(data) & 0xFF != CHECKSUM or list(data[2:5]) != [0, 0, 0]:
-        return None
-    size = data[5]
-    if not 1 <= size <= 10:
-        return None
-    return list(data[6:6 + size])
-
-
-def parse_battery(data) -> Optional[Tuple[int, bool]]:
-    """(level, charging) from a battery reply's data, or None."""
-    if not data or len(data) < 1:
-        return None
-    level = data[0]
-    if not MIN_PERCENT <= level <= MAX_PERCENT:
-        return None
-    return level, (len(data) > 1 and data[1] != 0)
+UNIT_KEYS = {'1968': 'xm2w4k', '1982': 'xm2w4kv2'}
 
 
 class Endgame4kProvider(Provider):
-    name = "endgame_4k"
+    name = 'endgame_4k'
 
     def __init__(self):
-        self._diag: List[str] = []
+        self._diag = []
+        self._last = None
+        self._seen = 0
+        from endgame4k_transaction import Transactions
+        self._transactions = Transactions()
 
-    def _ask(self, dev, reader, opcode: int) -> Optional[List[int]]:
-        frame = query_frame(opcode)
+    def close(self):
+        self._transactions.close()
+
+    def diagnostics(self):
+        return list(self._diag)
+
+    def _read(self, info):
+        result = self._transactions.run(info)
+        self._diag.extend(result['diagnostics'])
+        if result['status'] is None:
+            logging.getLogger(__name__).info('Endgame bounded failure: %s', ' | '.join(result['diagnostics']))
+            return None
+        return DeviceStatus(**result['status'])
+
+    def _read_local(self, info):
+        device = None
+        reader = None
+        started = time.monotonic()
+        phase = 'open'
+        samples = []
         try:
-            sent = dev.send_feature_report(frame)
-        except (OSError, IOError, ValueError) as e:
-            self._diag.append(f"  query {opcode:02x}: send failed: {e}")
-            return None
-        if sent != len(frame):
-            self._diag.append(f"  query {opcode:02x}: short send ({sent})")
-            return None
-        deadline = time.monotonic() + TIMEOUT
-        while time.monotonic() < deadline:
-            try:
-                r = reader.read(64, max(1, int((deadline - time.monotonic()) * 1000)))
-            except (OSError, IOError, ValueError) as e:
-                self._diag.append(f"  query {opcode:02x}: read failed: {e}")
+            device = hid.device()
+            device.open_path(info['path'])
+            reader = Reader(device)
+            phase = 'identity'
+            found = identity(reader.exchange(0x0E))
+            if found['mouse_pid'] not in UNIT_KEYS:
+                self._diag.append('  paired model is not enabled; only original XM2w 4k and v2 identities are permitted')
                 return None
-            if not r:
-                continue
-            data = reply_data(r, opcode)
-            if data is None:
-                self._diag.append(f"  query {opcode:02x}: other frame {hexdump(r, FRAME_LEN)}")
-                continue
-            self._diag.append(f"  query {opcode:02x}: {hexdump(r, FRAME_LEN)}")
-            return data
-        self._diag.append(f"  query {opcode:02x}: no reply")
-        return None
-
-    def _read_dongle(self, feature: dict, input_: dict) -> Optional[Tuple[int, bool]]:
-        dev = hid.device()
-        reader = hid.device()
-        try:
-            dev.open_path(feature["path"])
-            reader.open_path(input_["path"])
-        except (OSError, IOError) as e:
-            self._diag.append(f"  open: {e}")
-            return None
-        try:
-            # the level first: on the cable the link drops for a moment, the level does not
-            data = self._ask(dev, reader, BATTERY)
-            got = parse_battery(data)
-            if got is not None:
-                return got
-            self._diag.append("  no battery reading")
-            return None
-        except (OSError, IOError, ValueError) as e:
-            self._diag.append(f"  query error: {e}")
+            wired = info['product_id'] != 0x1970
+            if wired and int(found['mouse_pid'], 16) != info['product_id']:
+                raise ProtocolError('wired identity does not match selected device')
+            previous = None
+            phase = 'battery'
+            for _ in range(3):
+                sample = battery(reader.exchange(0xB4), wired)
+                current = sample['raw_battery_byte']
+                samples.append(current)
+                if wired or current == previous:
+                    break
+                previous = current
+            else:
+                raise ProtocolError('no two consecutive agreeing battery reads')
+            # Only one unit is supported: keep its preferences across transports.
+            st = DeviceStatus('endgame_4k:' + UNIT_KEYS[found['mouse_pid']], 'Endgame Gear ' + found['model'],
+                              None if wired else current, wired, True, self.name,
+                              kind='mouse', charging_known=False)
+            if wired:
+                st.approx = 'charging (level not reported while charging)'
+                st.ui_message = 'state.charging_level_unknown'
+            self._diag.append(f"  {found['model']} FW bytes={found['firmware_bytes']}; "
+                              f"transport={'wired' if wired else 'receiver'}")
+            return st
+        except (ProtocolError, OSError, ValueError) as exc:
+            # Diagnostic-only: never publish report payloads or HID paths.
+            event = reader.events[-1] if reader and reader.events else None
+            if event:
+                replies = event['replies']
+                last = bytes.fromhex(replies[-1]) if replies else b''
+                status = f'0x{last[1]:02x}' if len(last) > 1 else 'unavailable'
+                self._diag.append(
+                    f"  command=0x{event['command']} reply_count={len(replies)} "
+                    f"last_length={len(last)} status={status} "
+                    f"phase={phase} poll_elapsed_ms={(time.monotonic() - started) * 1000:.0f}")
+            else:
+                self._diag.append('  no recorded exchange; failure before request recording')
+            self._diag.append('  ' + (str(exc) if isinstance(exc, ProtocolError) else
+                                     type(exc).__name__ + ' during status exchange'))
+            # Only already-validated battery bytes, at most three per poll. Never
+            # dump the response buffer, paths, serials, or device exception text.
+            self._diag.append(f'  phase={phase} validated_battery_samples={samples}')
+            logging.getLogger(__name__).info('Endgame recovery failure: %s', ' | '.join(self._diag[-3:]))
             return None
         finally:
-            for d in (dev, reader):
+            if device is not None:
                 try:
-                    d.close()
-                except Exception:
+                    device.close()
+                except OSError:
                     pass
 
-    def poll(self) -> List[DeviceStatus]:
-        self._diag = []
-        if hid is None:  # pragma: no cover
+    def poll(self):
+        self._diag = ['[Endgame 4K] A1 feature status on ff01:0002; no wake probes']
+        if not ENABLED_PIDS:
+            self._diag.append('  release hold: corrected reader remains experimental')
+            return []
+        if hid is None:
             return []
         try:
-            infos = hidlist.enumerate(VID)
-        except Exception as e:  # pragma: no cover
-            log.warning("hid.enumerate(endgame): %s", e)
+            raw = hidlist.enumerate(0x3367)
+        except OSError:
+            self._diag.append('  enumeration failed')
             return []
-        out: List[DeviceStatus] = []
-        for pid, name in PIDS.items():
-            mine = [d for d in infos if d["product_id"] == pid]
-            if not mine:
-                continue
-            if pid not in ENABLED_PIDS:
-                self._diag.append(f"[Endgame] pid={pid:04x}: release hold; not opening")
-                continue
-            features = [d for d in mine
-                        if (d.get("usage_page"), d.get("usage")) == (0xFF02, 0x0002)]
-            inputs = [d for d in mine if d.get("usage_page") == 0xFF01]
-            self._diag.append(f"[Endgame] pid={pid:04x} '{name}' "
-                              f"collections={len(mine)} feature={len(features)} "
-                              f"input={len(inputs)}")
-            if not features or not inputs:
-                self._diag.append("  no useable collection pair (0xff02:0002 + 0xff01)")
-                continue
-            pairs: List[Tuple[dict, dict]] = []
-            for f in features:
-                key = receiver_path(f["path"])
-                match = next((i for i in inputs if receiver_path(i["path"]) == key), None)
-                if match is not None:
-                    pairs.append((f, match))
-            if not pairs:
-                self._diag.append("  the feature and input collections do not pair up")
-                continue
-            for f, i in pairs:
-                self._diag.append(f"  dongle iface={f.get('interface_number')} "
-                                  f"{f.get('usage_page', 0):04x}:{f.get('usage', 0):04x}"
-                                  f" -> input iface={i.get('interface_number')}")
-                got = self._read_dongle(f, i)
-                if got is None:
-                    continue
-                level, charging = got
-                # the key carries a digest of the receiver path: two dongles of this id
-                # are two mice, and the path is what tells them apart
-                instance = hashlib.sha1(receiver_path(f["path"])).hexdigest()[:8]
-                out.append(DeviceStatus(f"endgame:{pid:04x}:{instance}", name, level,
-                                        charging, True, "endgame_4k", kind="mouse"))
-        return out
-
-    def diagnostics(self) -> List[str]:
-        return list(self._diag)
+        infos = {}
+        for d in raw:
+            if d.get('product_id') in ENABLED_PIDS and (
+                    d.get('usage_page'), d.get('usage')) == (0xFF01, 2) and d.get('path'):
+                infos[d['path']] = d
+        selected = list(infos.values())
+        if not selected:
+            self._last = None
+            return []
+        receivers = [d for d in selected if d['product_id'] == 0x1970]
+        wired = [d for d in selected if d['product_id'] in (0x1968, 0x1982)]
+        if len(receivers) > 1 or len(wired) > 1:
+            self._diag.append('  multiple units unsupported; no status requests sent')
+            return []
+        st = self._read((wired or receivers)[0])
+        if st:
+            self._last, self._seen = st, time.monotonic()
+            return [st]
+        if self._last and time.monotonic() - self._seen < ASLEEP_KEEP:
+            if self._last.level is not None:
+                return [replace(self._last, online=False, charging=False, wake_on_input=True)]
+        return []
