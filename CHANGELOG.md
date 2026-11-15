@@ -56,11 +56,35 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Reuse the existing What's new window and consume cached release notes under
-  the configuration lock.
+- Use the current application logo in Windows tray preferences, notifications
+  and What's new. Repeated What's new requests reuse the existing window,
+  and consume cached release notes under the configuration lock.
+
+- Restore the Settings window position, size, monitor and navigation panel
+  before its first display. Reopen the retained window with its current page
+  and scroll position, without an empty layout or repeated startup.
+
+- Keep the overscroll indicator centered between the page edge and nearby
+  content throughout elastic motion, with a slightly stronger ring stroke. On
+  General, use the full page edge and last card rather than the fixed Exit footer.
+
+- Share one Windows tray visibility preference across device icons and safely
+  migrate old records for the current executable, with a recoverable backup.
 
 - Simplify the tray menu to one Settings action, opening the selected device when
   available. Remove trailing action-label ellipses while preserving progress text.
+
+- Avoid redundant page layout while moving the Settings window or animating
+  its navigation panel, preserving DPI updates and card-edge highlights.
+
+- Keep card-edge reveal responsive by combining pointer updates once per frame,
+  updating only nearby visible cards, and suspending it during scrollbar dragging.
+  Keep XAML's frame clock active only while dragging a native scrollbar thumb
+  to prevent intermittent stalls, and release it immediately when dragging ends.
+  Keep native Windows mouse-wheel scrolling, including its system step and inertia,
+  while consuming only boundary gestures for overscroll navigation. Install the
+  native wheel filter only during page entry and its fixed cooldown, leaving
+  ordinary input outside the hook.
 
 - Use consistent scrollbars throughout settings, including lists, dropdowns and
   dialogs: immediate hover animations, inset ends and centered arrows matching

@@ -43,7 +43,7 @@ public sealed partial class MainWindow
         // Exercise a complete fixed window against the native message filter,
         // independently of how much time the preceding paused entry consumed.
         var began = Environment.TickCount64;
-        wheelNavigationGuard.Arm(began);
+        ArmWheelNavigation(began);
         Check("page intercepts wheel before native scrolling while clicks and layout stay enabled", scroll.Content is Microsoft.UI.Xaml.Controls.Grid { Background: not null, IsHitTestVisible: true } &&
             scroll.IsEnabled && scroll.IsHitTestVisible && scroll.VerticalScrollBarVisibility == Microsoft.UI.Xaml.Controls.ScrollBarVisibility.Auto);
         var posted = true;

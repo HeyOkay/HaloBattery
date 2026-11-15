@@ -51,18 +51,20 @@ public sealed partial class MainWindow
             overscrollIndicator.Children.Count == 0 && OverscrollRingVisual.Shapes.Count == 2);
         Check("overscroll target accumulates partial raw progress", current == "general" && OverscrollProgressTarget == .125f && OverscrollIndicatorVisible);
         root.UpdateLayout();
-        var indicatorTop = overscrollIndicator.TransformToVisual(overscrollHost).TransformPoint(new Windows.Foundation.Point()).Y;
-        Check("General indicator stops 32 DIP inside the full host edge below the fixed footer", generalFooter?.ActualHeight > 0 &&
+        overscrollPresence.TryGetScalar("Boundary", out var bottomBoundary);
+        overscrollPresence.TryGetScalar("ContentEdge", out var bottomCardEdge);
+        Check("General HUD uses the full page gap independently of its fixed footer", generalFooter?.ActualHeight > 0 &&
             Grid.GetRowSpan(overscrollIndicator) == 2 && Canvas.GetZIndex(overscrollIndicator) > Canvas.GetZIndex(generalFooter) &&
-            Math.Abs(indicatorTop - (overscrollHost.ActualHeight - 40)) <= 1 / Scale,
-            new { indicatorTop, hostHeight = overscrollHost.ActualHeight, frameHeight = frame.ActualHeight, footerHeight = generalFooter?.ActualHeight });
+            Math.Abs(bottomBoundary - overscrollHost.ActualHeight) <= 1 / Scale &&
+            bottomBoundary > frame.ActualHeight + 1 / Scale && bottomCardEdge <= bottomBoundary,
+            new { bottomBoundary, bottomCardEdge, hostHeight = overscrollHost.ActualHeight, frameHeight = frame.ActualHeight });
         var progressClock = OverscrollProgressGeometry.TryGetAnimationController("TrimEnd");
         var presenceClock = OverscrollPresenceProperties.TryGetAnimationController("Presence");
         if (AnimationsEnabled)
             Check("progress and presence run on native animation clocks", progressClock is not null && presenceClock is not null);
-        Check("fade and slide share presence", overscrollPresenceAnimations.Count == 3 &&
+        Check("HUD midpoint follows the native page spring independently of appearance", overscrollPresenceAnimations.Count == 3 &&
             overscrollPresenceAnimations["Opacity"].Expression == "cue.Presence" &&
-            overscrollPresenceAnimations["Offset.Y"].Expression == "cue.Edge * 32 * (1 - cue.Presence)");
+            overscrollPresenceAnimations["Offset.Y"].Expression == "(cue.Boundary + cue.ContentEdge + page.Translation.Y) * 0.5 - 8");
         Check("indicator grows linearly with animated fill", overscrollPresenceAnimations["Scale"].Expression ==
             "Vector3(0.5 + arc.TrimEnd, 0.5 + arc.TrimEnd, 1)");
         var stroke = OverscrollRingVisual.Shapes[1] as CompositionSpriteShape;
@@ -99,7 +101,11 @@ public sealed partial class MainWindow
         Navigate("devices", false);
         await Task.Delay(100);
         HandleContentOverscroll(90, 0, 1000);
-        Check("top overscroll stops 32 DIP inside with opposite content pull", OverscrollIndicatorDirection == -1 && overscrollIndicator.Margin.Top == 24 && OverscrollPullTarget > 0 && OverscrollPullTarget <= 32);
+        overscrollPresence.TryGetScalar("Boundary", out var topBoundary);
+        overscrollPresence.TryGetScalar("ContentEdge", out var headingEdge);
+        Check("top HUD is anchored between the viewport and heading", OverscrollIndicatorDirection == -1 &&
+            Math.Abs(topBoundary) <= 1 / Scale && headingEdge >= topBoundary && overscrollIndicator.Margin.Top == 0 &&
+            OverscrollPullTarget > 0 && OverscrollPullTarget <= 32);
         await Task.Delay(OverscrollGesture.IdleMilliseconds + OverscrollGesture.ResetMilliseconds + 80);
         Check("idle clears charge and all animation targets", OverscrollState.Raw == 0 && !OverscrollIndicatorVisible && OverscrollProgressTarget == 0 && OverscrollPullTarget == 0);
         Navigate("general", false);

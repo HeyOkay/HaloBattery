@@ -36,12 +36,14 @@ import tempfile
 import threading
 import time
 import uuid
-import zlib
 from dataclasses import replace
 from logging.handlers import RotatingFileHandler
 from typing import Callable, Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
+# Stable registration label for the branded app preference. Explorer also
+# caches the initial tooltip; do not reuse the unbranded prototype's label.
+TRAY_APP_TIP = "HaloBattery - wireless device batteries"
 APP_TITLE = "Halo Battery"
 VERSION = "1.17.0"
 PRETEND_VERSION = ""             # --pretend-version 1.0.0: test the updater with a built copy
@@ -137,7 +139,7 @@ except ImportError:
 import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
-from halo import flyout, history, icons, updates, whatsnew, winevents  # noqa: E402
+from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
@@ -456,17 +458,8 @@ APP_ICON_PATH = os.path.join(DATA_DIR, "notification_icon.png")
 def app_icon_png(path: str) -> bool:
     """The app icon (the same drawing as halo.ico) as a PNG for the notification header."""
     try:
-        from PIL import Image, ImageDraw
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        size, ss = 64, 4
-        big = size * ss
-        img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-        ImageDraw.Draw(img).ellipse((0, 0, big - 1, big - 1), fill=(32, 32, 32, 255))
-        ring = icons.render(75, True, True, 20, light_taskbar=False, badge="")
-        ring = ring.resize((int(big * 0.84),) * 2, Image.LANCZOS)
-        off = (big - ring.width) // 2
-        img.alpha_composite(ring, (off, off))
-        img.resize((size, size), Image.LANCZOS).save(path)
+        app_icon.render(64).save(path)
         return True
     except Exception as e:
         log.warning("notification icon: %s", e)
@@ -648,13 +641,15 @@ _tray_classes: Dict[type, type] = {}
 
 
 def icon_uid(key: str) -> int:
-    """A tray icon id that is the same on every start for the same device.
+    """One persistent Windows preference for this app's distinct owner windows.
 
-    Windows remembers where the user put a tray icon (on the taskbar or in the
-    hidden-icons flyout) by the program's path and this id. pystray uses the
-    Python object's id, which changes on every start, so Windows saw new icons
-    each time and forgot their place (#38)."""
-    return zlib.crc32(key.encode("utf-8")) & 0x7FFFFFFF
+    Shell_NotifyIcon identifies a live icon by (hWnd, uID). pystray gives every
+    device its own hWnd, so they can share uID without sharing callbacks or
+    images. Explorer remembers the executable path and uID; using one value
+    avoids another Windows Settings row for every device/reconnection.
+    https://learn.microsoft.com/windows/win32/api/shellapi/ns-shellapi-notifyicondataw
+    """
+    return tray_history.MASTER_UID
 
 
 def _destroy_handles(cache: dict) -> None:
@@ -670,10 +665,10 @@ def _destroy_handles(cache: dict) -> None:
 
 def _make_tray_class(base: type) -> type:
     class TrayIcon(base):
-        """pystray's icon with two changes, both in pystray's own private methods,
+        """pystray's icon with shared identity, branding and cached image handles,
         which are the same in pystray 0.19.0 - 0.19.5 (the Windows backend):
 
-        * the id Windows knows the icon by is icon_uid(key), not id(self);
+        * every owner window uses the stable app-wide icon_uid(key);
         * the icon handle of every image is kept. pystray writes each new image to a
           temporary .ico file and loads it back, so the charging animation wrote
           a file for every charging frame, which a disk and an antivirus notice
@@ -684,6 +679,8 @@ def _make_tray_class(base: type) -> type:
             # DPI swap. Keep handle loading, notification and disposal atomic.
             self._hb_handle_lock = threading.RLock()
             self._hb_handles_closed = False
+            self._hb_brand_icon_handle = None
+            self._hb_pending_brand_restore = False
             super().__init__(*args, **kwargs)
 
         def _update_icon(self):
@@ -719,6 +716,30 @@ def _make_tray_class(base: type) -> type:
                 return super()._message(code, flags, **kwargs)
             import ctypes
             from pystray._util import win32
+            if code == win32.NIM_ADD and self._hb_pending_brand_restore:
+                # A failed MODIFY and failed compensating DELETE can leave a
+                # registered icon that pystray still considers invisible. Repair
+                # it first, rather than retrying ADD forever against that HWND.
+                try:
+                    self._message(win32.NIM_MODIFY, flags, **kwargs)
+                except OSError:
+                    self._message(win32.NIM_DELETE, 0)
+                else:
+                    self._hb_pending_brand_restore = False
+                    return True
+            actual_tip = kwargs.get("szTip") if code == win32.NIM_ADD else None
+            registration_tip = TRAY_APP_TIP if getattr(self, "_hb_branding", False) else APP_NAME
+            actual_icon = None
+            if (code == win32.NIM_ADD and flags & win32.NIF_ICON
+                    and getattr(self, "_hb_branding", False)):
+                brand = self._brand_icon_handle()
+                if brand:
+                    actual_icon = kwargs.get("hIcon")
+                    kwargs["hIcon"] = brand
+            if actual_tip is not None:
+                # Keep the persisted preference app-wide; the live tooltip is
+                # restored immediately after ADD and remains device-specific.
+                kwargs["szTip"] = registration_tip
             succeeded = win32.Shell_NotifyIcon(code, win32.NOTIFYICONDATAW(
                 cbSize=ctypes.sizeof(win32.NOTIFYICONDATAW),
                 hWnd=self._hwnd,
@@ -730,6 +751,39 @@ def _make_tray_class(base: type) -> type:
                 # Keep pystray's best-effort tooltip/balloon updates. Only failed
                 # image swaps need retrying; GetLastError is not reliable here.
                 raise OSError(f"Shell_NotifyIcon failed (operation={code}, uid={uid})")
+            if succeeded and code == win32.NIM_DELETE:
+                self._hb_pending_brand_restore = False
+            if succeeded and code == win32.NIM_ADD:
+                self._hb_pending_brand_restore = actual_icon is not None
+                live_flags, live = 0, {}
+                if actual_icon is not None:
+                    live_flags |= win32.NIF_ICON
+                    live["hIcon"] = actual_icon
+                if actual_tip and actual_tip != registration_tip:
+                    live_flags |= win32.NIF_TIP
+                    live["szTip"] = actual_tip
+                if live_flags:
+                    try:
+                        self._message(win32.NIM_MODIFY, live_flags, **live)
+                    except OSError:
+                        # ADD was accepted but pystray has not marked it visible.
+                        # Roll it back so the next attempt can ADD cleanly.
+                        self._message(win32.NIM_DELETE, 0)
+                        raise
+                self._hb_pending_brand_restore = False
+            return succeeded
+
+        def _brand_icon_handle(self):
+            # Explorer caches the first registered artwork for this executable's
+            # shared Settings row. Device frames/animation stay separate and are
+            # restored immediately in the same native transaction.
+            if not self._hb_brand_icon_handle:
+                try:
+                    self._hb_brand_icon_handle = tray_dpi.load_icon_handle(app_icon.render(32))
+                except (OSError, ValueError) as error:
+                    log.warning("tray application logo: %s", error)
+                    self._hb_branding = False
+            return self._hb_brand_icon_handle
 
         def _assert_icon_handle(self):
             with self._hb_handle_lock:
@@ -787,6 +841,9 @@ def _make_tray_class(base: type) -> type:
                 cache = getattr(self, "_hb_handles", None)
                 if cache:
                     _destroy_handles(cache)
+                if self._hb_brand_icon_handle:
+                    tray_dpi.destroy_icon_handle(self._hb_brand_icon_handle)
+                    self._hb_brand_icon_handle = None
                 self._icon_handle = None
 
     return TrayIcon
@@ -813,6 +870,9 @@ def tray_icon(key: str, *args, **kwargs):
         cls = _tray_classes[base] = _make_tray_class(base)
     ic = cls(*args, **kwargs)
     ic._hb_uid = icon_uid(key)
+    # Branding belongs to this application's EXE, never to a shared Python
+    # interpreter used by developer scripts or unrelated programs.
+    ic._hb_branding = bool(getattr(sys, "frozen", False))
     ic._hb_handles = {}
     handlers = getattr(ic, "_message_handlers", None)
     if handlers is not None:
@@ -1409,7 +1469,7 @@ class App:
             state += (custom_id,)
         return state
 
-    def open_settings(self, device_key: Optional[str] = None, *, page: str = "general") -> None:
+    def open_settings(self, device_key: Optional[str] = None, *, page: Optional[str] = None) -> None:
         from halo.settings_host import SettingsHost
         with self.lock:
             if getattr(self, "_settings_host", None) is None:
@@ -2810,8 +2870,48 @@ class App:
         if ui_host is not None and ui_host is not host:
             ui_host.stop()
 
+    def start_tray_history_cleanup(self):
+        """Only the normal frozen app owns this executable's shell preferences."""
+        if sys.platform != "win32" or not getattr(sys, "frozen", False) or not _pystray_known():
+            return
+        try:
+            # run() calls this before launching the first polling/icon worker.
+            # Capture the old visibility now; preparing in the cleanup thread
+            # can lose that preference if Explorer registers the new row first.
+            prepared = tray_history.prepare(sys.executable)
+            threading.Thread(target=self.cleanup_tray_history, args=(prepared,),
+                             name="tray-history-cleanup", daemon=True).start()
+        except Exception:
+            log.warning("tray history: unable to start migration", exc_info=True)
+
+    def cleanup_tray_history(self, prepared=None):
+        if prepared is None:
+            try:
+                # Usually precedes the first ADD. If Explorer wins the race,
+                # prepare preserves its existing master preference instead.
+                prepared = tray_history.prepare(sys.executable)
+            except Exception:
+                log.warning("tray history: unable to prepare migration", exc_info=True)
+                return
+        # Explorer creates its cache asynchronously. Keep registry/disk work off
+        # icon, animation and Settings threads, and stop promptly with the app.
+        for _ in range(30):
+            if self.stop_evt.wait(1):
+                return
+            result = tray_history.reconcile(sys.executable, DATA_DIR, prepared)
+            if result.status == "pending":
+                continue
+            if result.status == "error":
+                log.warning("tray history: %s", result.error)
+            elif result.removed or result.visibility_migrated:
+                log.info("tray history: removed %d old records (visibility migrated: %s)",
+                         result.removed, result.visibility_migrated)
+            return
+        log.info("tray history: shell preference not ready; migration deferred")
+
     def run(self):
         log.info("start v%s", VERSION)
+        self.start_tray_history_cleanup()
         worker = threading.Thread(target=self.loop, daemon=True)
         worker.start()
         threading.Thread(target=self.theme_loop, daemon=True).start()

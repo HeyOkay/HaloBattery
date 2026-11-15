@@ -32,7 +32,8 @@ public sealed partial class MainWindow
     private SpringVector3NaturalMotionAnimation? overscrollLastPullSpring;
     private DispatcherTimer? overscrollTimer;
     private int overscrollVisualDirection;
-    private string? overscrollTarget;
+    private string? overscrollTarget, overscrollAnchorPage;
+    private bool overscrollMidpointFrozen;
     private bool overscrollNavigation;
     private bool? overscrollDark;
     private long overscrollCompletionUntil, overscrollIdleUntil, overscrollHideUntil;
@@ -79,7 +80,8 @@ public sealed partial class MainWindow
         var compositor = CompositionTarget.GetCompositorForCurrentThread();
         overscrollPresence = compositor.CreatePropertySet();
         overscrollPresence.InsertScalar("Presence", 0);
-        overscrollPresence.InsertScalar("Edge", 1);
+        overscrollPresence.InsertScalar("Boundary", 0);
+        overscrollPresence.InsertScalar("ContentEdge", 0);
         overscrollRingVisual = compositor.CreateShapeVisual();
         overscrollRingVisual.Size = new Vector2(16);
         overscrollRingVisual.CenterPoint = new Vector3(8, 8, 0);
@@ -96,7 +98,7 @@ public sealed partial class MainWindow
         {
             var shape = compositor.CreateSpriteShape(geometry);
             shape.StrokeBrush = brush;
-            shape.StrokeThickness = 1.1f;
+            shape.StrokeThickness = 1.4f;
             shape.StrokeStartCap = CompositionStrokeCap.Round;
             shape.StrokeEndCap = CompositionStrokeCap.Round;
             return shape;
@@ -116,13 +118,16 @@ public sealed partial class MainWindow
             var animation = compositor.CreateExpressionAnimation(expression);
             animation.SetReferenceParameter("cue", overscrollPresence);
             animation.SetReferenceParameter("arc", overscrollArc);
+            animation.SetExpressionReferenceParameter("page", overscrollContent);
             overscrollPresenceAnimations[property] = animation;
             overscrollRingVisual.StartAnimation(property, animation);
         }
-        // Fade/slide share presence; size follows the animated fill linearly.
+        // Keep the center halfway across the live gap for every compositor
+        // frame, including the elastic return. Appearance has no extra slide
+        // that would move the ring away from that midpoint.
         Bind("Opacity", "cue.Presence");
         Bind("Scale", "Vector3(0.5 + arc.TrimEnd, 0.5 + arc.TrimEnd, 1)");
-        Bind("Offset.Y", "cue.Edge * 32 * (1 - cue.Presence)");
+        Bind("Offset.Y", "(cue.Boundary + cue.ContentEdge + page.Translation.Y) * 0.5 - 8");
         ElementCompositionPreview.SetElementChildVisual(overscrollIndicator, overscrollRingVisual);
         overscrollHost.SizeChanged += (_, _) =>
         {
@@ -137,14 +142,48 @@ public sealed partial class MainWindow
         return overscrollHost;
     }
 
-    private void PositionOverscrollIndicator()
+    private void PositionOverscrollIndicator(bool newGesture = false)
     {
+        if (overscrollPresence is null || pageHosts.Count == 0) return;
+        // A completion fade belongs to the source page. Do not re-anchor it
+        // to the next page while that page is entering.
+        if (!newGesture && OverscrollIndicatorVisible && overscrollAnchorPage is not null &&
+            overscrollAnchorPage != current) return;
+        var (content, scroll) = pageHosts[0];
+        if (!content.IsLoaded || scroll.ActualHeight <= 0) return;
+        var origin = scroll.TransformToVisual(overscrollContent).TransformPoint(new Point()).Y;
+        var top = overscrollVisualDirection < 0;
+        var boundary = origin + (top ? 0 : scroll.ActualHeight);
+        // General's fixed Exit footer reduces the scroll viewport, but it is
+        // not a content anchor. Use the full page edge for the bottom gap.
+        if (!top && current == "general") boundary = overscrollHost.ActualHeight;
+        double edge;
+        if (top && content.Children.OfType<TextBlock>().FirstOrDefault() is { } heading)
+        {
+            // Character bounds follow the current font/language's text line.
+            var textTop = HeadingTextTop(heading);
+            edge = origin + heading.TransformToVisual(scroll).TransformPoint(new Point(0, textTop)).Y;
+        }
+        else
+        {
+            var bottoms = cards.Where(c => c.IsLoaded && c.Visibility == Visibility.Visible)
+                .Select(c => c.TransformToVisual(scroll).TransformPoint(new Point(0, c.ActualHeight)).Y).ToArray();
+            edge = origin + (bottoms.Length > 0 ? bottoms.Max() : scroll.ActualHeight - content.Padding.Bottom);
+        }
+        // Fractional-DPI rounding and an asynchronous layout can put an edge
+        // just outside the viewport; never move the HUD outside its page.
+        edge = Math.Clamp(edge, origin, origin + scroll.ActualHeight);
+        overscrollPresence.InsertScalar("Boundary", (float)boundary);
+        overscrollPresence.InsertScalar("ContentEdge", (float)edge);
+        if (newGesture && overscrollMidpointFrozen)
+        {
+            overscrollRingVisual.StartAnimation("Offset.Y", overscrollPresenceAnimations["Offset.Y"]);
+            overscrollMidpointFrozen = false;
+        }
+        overscrollAnchorPage = current;
         var width = overscrollHost.ActualWidth;
         var x = PageLeft(width) + PageWidth(width) / 2 - 8;
-        // The center travels from the host edge to 32 DIPs inside it.
-        // Match the presence offset above so the hidden origin stays at the edge.
-        var y = overscrollVisualDirection < 0 ? 24 : Math.Max(24, overscrollHost.ActualHeight - 40);
-        overscrollIndicator.Margin = new Thickness(Math.Max(0, x), y, 0, 0);
+        overscrollIndicator.Margin = new Thickness(Math.Max(0, x), 0, 0, 0);
     }
 
     private void FeedContentOverscroll(int delta, ScrollViewer scroll, PointerRoutedEventArgs args)
@@ -178,15 +217,16 @@ public sealed partial class MainWindow
                     dark ? (byte)255 : (byte)0, dark ? (byte)255 : (byte)0, dark ? (byte)255 : (byte)0);
                 overscrollArcBrush.Color = Color.FromArgb(dark ? (byte)0xA0 : (byte)0x90,
                     dark ? (byte)255 : (byte)0, dark ? (byte)255 : (byte)0, dark ? (byte)255 : (byte)0);
-                overscrollPresence.InsertScalar("Edge", cueDirection);
-                PositionOverscrollIndicator();
             }
+            // Geometry can change between two gestures with the same target.
+            // Refresh only on wheel events; Composition still owns every frame.
+            PositionOverscrollIndicator(newGesture: true);
         }
         overscrollIdleUntil = OverscrollState.IsCharged ? now + OverscrollGesture.IdleMilliseconds : 0;
         if (direction != 0)
         {
             overscrollCompletionUntil = 0;
-            wheelNavigationGuard.Arm(now);
+            ArmWheelNavigation(now);
             pendingOverscrollNavigation = new(current, pages[index + direction].Id, direction, overscrollGeneration);
         }
         else if (!OverscrollState.IsCharged && !consumed) overscrollCompletionUntil = 0;
@@ -208,6 +248,7 @@ public sealed partial class MainWindow
             CancelOverscroll();
             return;
         }
+        FreezeOverscrollMidpoint();
         ClearPendingOverscrollNavigation();
         overscrollCompletionUntil = Environment.TickCount64 + 80;
         var next = pending.Target;
@@ -215,6 +256,19 @@ public sealed partial class MainWindow
         try { Navigate(next, true, enterAtEnd: pending.Direction < 0, preserveWheelBurst: true); }
         finally { overscrollNavigation = false; }
 
+    }
+
+    private void FreezeOverscrollMidpoint()
+    {
+        // Capture the compositor's effective position, not a CPU mirror of its
+        // spring. The source page is removed next; its HUD can finish fading
+        // without jumping when the shared page wrapper returns to zero.
+        var hold = overscrollArc.Compositor.CreateScalarKeyFrameAnimation();
+        hold.InsertExpressionKeyFrame(1, "this.StartingValue");
+        hold.Duration = TimeSpan.FromMilliseconds(250);
+        hold.StopBehavior = AnimationStopBehavior.LeaveCurrentValue;
+        overscrollRingVisual.StartAnimation("Offset.Y", hold);
+        overscrollMidpointFrozen = true;
     }
 
     private void ClearPendingOverscrollNavigation()

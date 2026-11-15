@@ -56,7 +56,9 @@ class SettingsHostTests(unittest.TestCase):
 
     def hello(self):
         self.manager._handle(self.session, dict(type="hello", protocol=1, uiVersion="1"))
-        return self.drain()
+        welcome, state, shown = self.drain()
+        self.assertEqual(shown, dict(type="show", page=self.session.page, deviceKey=self.session.device_key))
+        return welcome, state
 
     def command(self, name, args, request_id=1):
         self.manager._handle(self.session, dict(type="command", protocol=1, id=request_id, name=name, args=args))
@@ -195,7 +197,152 @@ class SettingsHostTests(unittest.TestCase):
             self.assertTrue(manager.open("b", page="icons"))
             self.assertIs(manager._session, session)
             thread.assert_called_once()
-        self.assertEqual(self.drain(session)[-1]["deviceKey"], "b")
+        self.assertEqual(self.drain(session), [])
+        self.assertEqual((session.page, session.device_key), ("icons", "b"))
+        self.controller.snapshot.assert_not_called()
+
+    def test_generic_cold_open_defaults_to_general_without_restore_flag(self):
+        manager = host.SettingsHost(self.controller)
+        with patch.object(manager, "_thread"):
+            manager.open()
+        session = manager._session
+        manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+        welcome, state, shown = self.drain(session)
+        self.assertEqual(state["page"], "general")
+        self.assertEqual(shown, dict(type="show", page="general", deviceKey="a"))
+        self.assertFalse(session.restore_view)
+
+    def test_generic_warm_open_preserves_view_and_explicit_navigation_overrides_it(self):
+        self.session.page, self.session.device_key = "devices", "b"
+        self.hello()
+        with patch.object(self.manager, "_thread"):
+            self.manager.open()
+        self.assertEqual((self.session.page, self.session.device_key), ("devices", "b"))
+        self.manager._show(self.session)
+        self.assertEqual(self.drain(),
+            [dict(type="show", page="devices", deviceKey="b", restoreView=True)])
+        with patch.object(self.manager, "_thread"):
+            self.manager.open("a", page="icons")
+        self.assertFalse(self.session.restore_view)
+        self.manager._show(self.session)
+        self.assertEqual(self.drain(), [dict(type="show", page="icons", deviceKey="a")])
+
+    def test_explicit_device_without_page_retains_default_general_navigation(self):
+        self.hello()
+        with patch.object(self.manager, "_thread"):
+            self.manager.open("b")
+        self.manager._show(self.session)
+        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey="b")])
+
+    def test_invalid_navigation_values_are_rejected_before_changing_session(self):
+        for kwargs in (dict(page=""), dict(page="invalid"), dict(page=[]), dict(page=False),
+                       dict(page=1), dict(device_key=2), dict(device_key=[])):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                self.manager.open(**kwargs)
+        self.assertEqual((self.session.page, self.session.device_key), ("general", None))
+        self.assertFalse(self.session.restore_view)
+
+    def test_first_show_follows_latest_complete_state(self):
+        manager = host.SettingsHost(self.controller)
+        with patch.object(manager, "_thread"):
+            manager.open("a", page="devices")
+            manager.open("b", page="icons")
+        session = manager._session
+        manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+        messages = self.drain(session)
+        self.assertEqual([m["type"] for m in messages], ["welcome", "state", "show"])
+        self.assertEqual(messages[1]["page"], "icons")
+        self.assertEqual(messages[1]["selectedDeviceKey"], "b")
+        self.assertEqual(messages[2], dict(type="show", page="icons", deviceKey="b"))
+
+    def test_hidden_reopen_reuses_host_and_only_shows_unchanged_state(self):
+        self.hello()
+        self.session.process = Process()
+        self.manager._handle(self.session, dict(type="visibility", visible=False))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open("b", page="devices")
+        worker.assert_called_once_with(self.manager._show, self.session, "settings-show")
+        self.manager._show(self.session)
+        self.assertEqual(self.drain(), [dict(type="show", page="devices", deviceKey="b")])
+        self.assertIs(self.manager._session, self.session)
+        self.assertFalse(self.session.stop.is_set())
+        self.assertIsNone(self.session.process.poll())
+        self.controller.preview.assert_not_called()
+
+    def test_reopen_refreshes_changed_state_before_show_without_polling(self):
+        self.hello()
+        self.controller.snapshot.return_value["cfg"]["low"] = 25
+        self.manager._show(self.session)
+        state, shown = self.drain()
+        self.assertEqual(state["type"], "state")
+        self.assertEqual(state["settings"]["low"], 25)
+        self.assertEqual(state["revision"], 2)
+        self.assertEqual(shown["type"], "show")
+
+    def test_reopen_keeps_cached_window_usable_when_snapshot_temporarily_fails(self):
+        self.hello()
+        self.controller.snapshot.side_effect = OSError("temporary snapshot failure")
+        with self.assertLogs("halo_battery", level="ERROR"):
+            self.manager._show(self.session)
+        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey="a")])
+        self.assertIs(self.manager._session, self.session)
+        self.assertFalse(self.session.stop.is_set())
+        self.assertEqual(self.session.revision, 1)
+
+    def test_navigation_does_not_publish_a_duplicate_model_on_next_poll(self):
+        self.hello()
+        self.session.page, self.session.device_key = "icons", "b"
+        self.manager._publish(self.session)
+        self.assertEqual(self.drain(), [])
+        self.assertEqual(self.session.revision, 1)
+
+    def test_visibility_is_strict_and_requires_handshake(self):
+        with self.assertRaises(ValueError):
+            self.manager._handle(self.session, dict(type="visibility", visible=False))
+        self.hello()
+        for message in (dict(type="visibility", visible=0), dict(type="visibility"),
+                        dict(type="visibility", visible=False, id=1)):
+            with self.subTest(message=message), self.assertRaises(ValueError):
+                self.manager._handle(self.session, message)
+        self.manager._handle(self.session, dict(type="visibility", visible=True))
+        self.assertTrue(self.session.visible)
+        self.assertEqual(self.drain(), [])
+
+    def test_hide_disposes_only_temporary_catalog_and_suppresses_old_replies(self):
+        self.hello()
+        with patch("halo.iconify_host.IconCatalogJobs") as jobs_type:
+            first = self.manager._ensure_icon_jobs(self.session)
+            current = jobs_type.call_args.args[3]
+            self.assertTrue(current())
+            self.manager._handle(self.session, dict(type="visibility", visible=False))
+            first.close.assert_called_once_with()
+            self.assertIsNone(self.session.icon_jobs)
+            self.assertFalse(current())
+            self.assertIs(self.manager._session, self.session)
+            self.manager._ensure_icon_jobs(self.session)
+            self.assertEqual(jobs_type.call_count, 2)
+            self.assertTrue(jobs_type.call_args.args[3]())
+        self.controller.action.assert_not_called()
+        self.controller.set_device.assert_not_called()
+
+    def test_bootstrap_profile_uses_exact_portable_context_without_snapshot(self):
+        portable = Path("portable profile 日本語")
+        self.controller.context = {"data_dir": portable}
+        self.assertEqual(self.manager._launch_args(), [str(host.executable_path()),
+            "--data-dir", str(portable.resolve())])
+        self.controller.snapshot.assert_not_called()
+
+    def test_bootstrap_profile_falls_back_for_custom_controller(self):
+        self.assertEqual(self.manager._launch_args()[1:],
+                         ["--data-dir", str(Path("data").resolve())])
+
+    def test_stale_show_worker_cannot_restore_successor(self):
+        self.hello()
+        self.manager._session = host._Session("about", None)
+        self.controller.snapshot.reset_mock()
+        self.manager._show(self.session)
+        self.controller.snapshot.assert_not_called()
+        self.assertEqual(self.drain(), [])
 
     def test_failed_spawn_is_retryable_and_does_not_touch_successor(self):
         manager = host.SettingsHost(self.controller, popen=Mock(side_effect=OSError("missing")))
@@ -210,7 +357,7 @@ class SettingsHostTests(unittest.TestCase):
         manager._send(old, {"type": "shutdown"})
         manager._cleanup(old)
         self.assertIs(manager._session, successor)
-        self.assertEqual([m["type"] for m in self.drain(successor)], ["navigate"])
+        self.assertEqual(self.drain(successor), [])
 
     def test_spawn_uses_private_utf8_handles_and_timeout_reaps_child(self):
         process = Process()

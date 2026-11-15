@@ -326,19 +326,9 @@ def flatten(img, background: Tuple[int, int, int], key: Tuple[int, int, int], cu
 
 
 def app_logo(size: int, background: Tuple[int, int, int], key: Tuple[int, int, int]):
-    """The app's logo (the exe icon: a green ring on a dark disc) as an RGB picture whose
-    corners are the colour key."""
-    from PIL import Image, ImageDraw
-    from . import icons
-    ss = 4
-    big = size * ss
-    disc = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(disc).ellipse((0, 0, big - 1, big - 1), fill=(32, 32, 32, 255))
-    ring = icons.render(75, True, True, 20, light_taskbar=False, badge="")
-    ring = ring.resize((int(big * 0.84),) * 2, Image.LANCZOS)
-    off = (big - ring.width) // 2
-    disc.alpha_composite(ring, (off, off))
-    return flatten(disc.resize((size, size), Image.LANCZOS), background, key)
+    """The approved app artwork flattened for the acrylic window's colour key."""
+    from . import app_icon
+    return flatten(app_icon.render(size), background, key)
 
 
 def button_image(w: int, h: int, radius: int, fill: Tuple[int, int, int], state: str,

@@ -141,7 +141,7 @@ public sealed partial class MainWindow
     }
 
     private int CatalogPixelSize => Math.Clamp((int)Math.Round(32 * Scale), 8, 192);
-    private bool CatalogActive(IconCatalogView view) => !closing && view.Active &&
+    private bool CatalogActive(IconCatalogView view) => !closing && !IsSettingsWindowHidden && view.Active &&
         ReferenceEquals(iconCatalog, view) && current == "devices" && selectedDeviceKey == view.DeviceKey;
 
     private void StopIconCatalog()

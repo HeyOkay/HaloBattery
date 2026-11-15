@@ -46,7 +46,7 @@ public sealed partial class MainWindow
         var before = Bridge.FixtureCommands.Count;
         var peer = new ButtonAutomationPeer(quit!);
         ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)).Invoke();
-        await Task.Delay(30);
+        for (var i=0;Bridge.FixtureCommands.Count==before && i<100;i++) await Task.Delay(20);
         Check("fixed Exit invokes existing quit command", Bridge.FixtureCommands.Count == before + 1 &&
             JsonDocument.Parse(Bridge.FixtureCommands.Last()).RootElement.GetProperty("name").GetString() == "quit");
         Navigate("about", false);
