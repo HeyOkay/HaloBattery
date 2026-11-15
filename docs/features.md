@@ -28,6 +28,21 @@ The menu follows the Windows light or dark app theme and display scale. If it
 does not work on your PC, set `"fluent_menu": false` in
 `%APPDATA%\HaloBattery\config.json` to use the classic Windows menu.
 
+## Windows tray visibility
+
+All device icons share one Windows visibility preference per executable path.
+Use the HaloBattery switch under **Taskbar → Other system tray icons** to choose
+the taskbar or hidden-icons flyout for the whole application. Per-device hiding
+remains available on the Devices page in HaloBattery.
+
+The packaged app migrates its old per-device Windows records after creating the
+shared entry. It backs up removed values to `tray-history-backup-*.json` in the
+app's data folder and preserves the existing shared preference. Cleanup matches
+only the current executable's exact path, so installed and portable copies remain
+separate. Source launches never clean shared Python executable records. Explorer
+can retain old rows in memory until the next Windows sign-in; the app does not
+restart Explorer or clear other applications' tray history.
+
 ## Settings
 
 Settings run in a native C# WinUI 3 companion process; Python remains responsible

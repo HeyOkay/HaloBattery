@@ -125,11 +125,11 @@ class TrayIconTests(unittest.TestCase):
     def test_the_class_follows_pystray_icon(self):
         self.assertIsInstance(hb.tray_icon("x"), FakeWinIcon)
 
-    def test_icon_uid_is_stable_and_differs_per_device(self):
-        self.assertEqual(hb.icon_uid("logitech:C15E09CD"), hb.icon_uid("logitech:C15E09CD"))
-        self.assertNotEqual(hb.icon_uid("logitech:C15E09CD"), hb.icon_uid("xinput:0"))
-        self.assertNotEqual(hb.icon_uid(hb.IDLE_KEY), hb.icon_uid("xinput:0"))
-        self.assertTrue(0 <= hb.icon_uid("xinput:0") <= 0x7FFFFFFF)
+    def test_icon_uid_is_stable_and_shared_by_device_and_idle_windows(self):
+        self.assertEqual(hb.icon_uid("logitech:C15E09CD"), hb.tray_history.MASTER_UID)
+        self.assertEqual(hb.icon_uid("xinput:0"), hb.tray_history.MASTER_UID)
+        self.assertEqual(hb.icon_uid(hb.IDLE_KEY), hb.tray_history.MASTER_UID)
+        self.assertTrue(0 < hb.icon_uid("xinput:0") <= 0x7FFFFFFF)
 
 
 class ConfigTests(unittest.TestCase):

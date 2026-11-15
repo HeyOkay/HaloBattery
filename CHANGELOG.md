@@ -56,8 +56,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Reuse the existing What's new window and consume cached release notes under
-  the configuration lock.
+- Use the current application logo in Windows tray preferences, notifications
+  and What's new. Repeated What's new requests reuse the existing window,
+  and consume cached release notes under the configuration lock.
+
+- Share one Windows tray visibility preference across device icons and safely
+  migrate old records for the current executable, with a recoverable backup.
 
 - Simplify the tray menu to one Settings action, opening the selected device when
   available. Remove trailing action-label ellipses while preserving progress text.
