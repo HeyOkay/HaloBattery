@@ -23,6 +23,12 @@ class SettingsControllerTests(HideRenameTestCase):
         self.controller = SettingsController(app)
         return app, self.controller
 
+    def test_whats_new_reuses_the_existing_application_window(self):
+        app, controller = self.setup_controller()
+        with mock.patch.object(app, "show_whats_new") as show:
+            controller.action("show_whats_new")
+        show.assert_called_once_with()
+
     def test_snapshot_is_detached_and_hidden_devices_remain_editable(self):
         app, controller = self.setup_controller()
         key = dev().key
@@ -146,13 +152,42 @@ class CompactTrayTests(HideRenameTestCase):
         app.open_settings = mock.Mock()
         menu = app.build_tray_menu(owner)
         visible = [i for i in menu.items if i.visible]
-        self.assertEqual(len(visible), 6)
+        self.assertEqual(len(visible), 5)
         self.assertFalse(any(i.submenu for i in visible))
         visible[1](None)
         app.open_settings.assert_called_once_with(owner.key, page="devices")
         app.wake.clear()
         visible[2](None)
         self.assertTrue(app.wake.is_set())
+
+    def test_compact_labels_strip_only_trailing_ellipses(self):
+        app = make_app()
+        for label, expected in (("Settings…", "Settings"), ("Settings...", "Settings"),
+                                ("Settings...… ", "Settings"),
+                                ("Choose... a device…", "Choose... a device")):
+            with self.subTest(label=label), mock.patch.object(app, "tr", return_value=label):
+                self.assertEqual(app.build_tray_menu(None).items[1].text, expected)
+
+    def test_compact_labels_have_no_trailing_ellipsis_in_every_language_and_update_state(self):
+        for language in hb.i18n.LANGUAGES:
+            app = make_app({"language": language})
+            app.apply([dev(name="Work... mouse…")])
+            device_owner = next(iter(app.icons.values()))
+            for owner in (device_owner, None):
+                for state in (None, "download", "install", "progress"):
+                    with self.subTest(language=language, device=owner is not None, state=state):
+                        app.update = None if state is None else types.SimpleNamespace(version="2.0.0")
+                        app.install_ok = state == "install"
+                        app.update_progress = 42 if state == "progress" else None
+                        visible = [item for item in app.build_tray_menu(owner).items if item.visible]
+                        self.assertEqual(len(visible), 5 if state is None else 6)
+                        for item in visible[1:]:
+                            self.assertFalse(item.text.endswith(("...", "…")))
+                        if state == "progress":
+                            self.assertEqual(visible[3].text, hb.update_item_text(
+                                "2.0.0", False, 42, language=language))
+                        if owner is not None:
+                            self.assertIn("Work... mouse…", visible[0].text)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows tray notifications")
     def test_double_click_opens_once_and_single_click_does_not_refresh(self):

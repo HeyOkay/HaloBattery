@@ -18,8 +18,8 @@ The low battery notification fires once, and again only after the device has bee
 
 ## Tray menu
 
-Right-click a device icon for **Device settings…**, **Refresh now**, **Settings…**,
-**Diagnostics…** and **Exit**, plus an update action when a release is available.
+Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
+and **Exit**, plus an update action when a release is available.
 Double-click an icon to open settings for that exact device, even when several
 devices have the same name. Device customization and app preferences are in the
 settings window.
@@ -60,7 +60,7 @@ development on a machine with the matching shared runtimes already installed.
 `scripts/build_exe.bat` and both release workflows include this publish step
 before freezing Python. No SDK or shared runtime installer is run by the script.
 
-Open **Settings…** from the tray menu. Changes apply immediately and are saved;
+Open **Settings** from the tray menu. Changes apply immediately and are saved;
 there is no separate Save button. Settings remain available when no devices are
 connected. The interface keeps seven languages: English, Spanish,
 French, Japanese, Russian, Simplified Chinese and Traditional Chinese.

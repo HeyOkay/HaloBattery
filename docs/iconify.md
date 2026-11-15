@@ -163,7 +163,12 @@ Catalog master RAM is capped at 64 MiB plus separately held active selections.
 Conservative geometry bounds include strokes and transforms, followed by two
 real-alpha raster passes to remove empty viewBox margins. The ink is centered
 and uniformly fitted to the established 11 / 16 maximum ink span and 5.9 / 16 radial budget, preserving
-clearance from the ring. The 13 already bundled Lucide symbols reuse the exact
+clearance from the ring. A separate draw-time placement pass compensates for
+asymmetric alpha coverage with a small bounded translation, preserving the
+existing scale, source colors and stored PNG masters. Balanced artwork stays
+in place; translations that would violate the safe circle are refused. The
+same pass applies to catalogue previews and offline selections. The 13 already
+bundled Lucide symbols reuse the exact
 existing per-size masks, coverage and reviewed optical placement, so choosing
 `lucide:mouse` produces the same pixels as the standard mouse. Other names use
 the general real-ink fitting policy. Previously saved v1 masters are validated

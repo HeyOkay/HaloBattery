@@ -345,6 +345,7 @@ public sealed partial class MainWindow
         var version = Card("HaloBattery", F("settings.version", ("version", State.Version)), icon: "loader-circle");
         p.Children.Add(version);
         pageBindings.Add(() => version.SetDescription(Text(F("settings.version", ("version", State.Version)), 12, true)));
+        ActionCard(p, "whatsnew.title", "settings.open", "showWhatsNew", icon: "info");
         Section(p, T("settings.support"));
         ActionCard(p, "menu.diagnostics", "settings.open", "diagnostics", icon: "wrench");
         ActionCard(p, "settings.data_folder", "settings.open", "openData", State.DataDir, "folder-open");

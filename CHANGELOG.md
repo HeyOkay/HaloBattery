@@ -7,6 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -54,6 +55,26 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+
+- Reuse the existing What's new window and consume cached release notes under
+  the configuration lock.
+
+- Simplify the tray menu to one Settings action, opening the selected device when
+  available. Remove trailing action-label ellipses while preserving progress text.
+
+- Use consistent scrollbars throughout settings, including lists, dropdowns and
+  dialogs: immediate hover animations, inset ends and centered arrows matching
+  the expanded thumb width, including fractional-DPI alignment. Fall back to
+  native scrollbars if the optional shared style is unavailable.
+
+- Animate backward overscroll at the end of the previous settings page and keep
+  wheel input blocked until landing finishes. Slightly increase scroll resistance.
+  Intercept native page wheel input during entry and a fixed 450 ms cooldown,
+  without extending it when wheel input continues or blocking button clicks.
+  Recover page entry if the native scrolling completion event is missing.
+
+- Optically center asymmetric Iconify pictograms without changing their size
+  or source colors.
 
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 

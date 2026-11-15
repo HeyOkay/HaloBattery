@@ -40,7 +40,6 @@ public sealed partial class MainWindow
     private float overscrollProgressTo, overscrollPresenceTo, overscrollPullTo;
     private readonly OverscrollSpringTrajectory overscrollPullMotion = new();
     private PendingOverscrollNavigation? pendingOverscrollNavigation;
-    private List<object>? fixtureScrollEntryTrace;
 
     private sealed class PendingOverscrollNavigation(string source, string target, int direction, long generation)
     {
@@ -158,7 +157,7 @@ public sealed partial class MainWindow
         var pages = State.Pages.ToArray();
         var index = Array.FindIndex(pages, page => page.Id == current);
         if (index < 0 || closing || delta == 0) return false;
-        if (DiscardWheelDuringPageEntry()) return true;
+        if (DiscardNavigationWheel()) return true;
         // Once committed, finish the visible fill without queuing wheel input.
         if (pendingOverscrollNavigation is not null) return true;
         var now = Environment.TickCount64;
@@ -187,6 +186,7 @@ public sealed partial class MainWindow
         if (direction != 0)
         {
             overscrollCompletionUntil = 0;
+            wheelNavigationGuard.Arm(now);
             pendingOverscrollNavigation = new(current, pages[index + direction].Id, direction, overscrollGeneration);
         }
         else if (!OverscrollState.IsCharged && !consumed) overscrollCompletionUntil = 0;
@@ -212,32 +212,9 @@ public sealed partial class MainWindow
         overscrollCompletionUntil = Environment.TickCount64 + 80;
         var next = pending.Target;
         overscrollNavigation = true;
-        try { Navigate(next, true); }
+        try { Navigate(next, true, enterAtEnd: pending.Direction < 0, preserveWheelBurst: true); }
         finally { overscrollNavigation = false; }
-        // Upward overscroll enters the end of the previous page. Guard both
-        // generation and page identity so subsequent navigation wins the race.
-        if (pending.Direction < 0 && frame.Content is Page { Content: ScrollViewer entered })
-        {
-            var generation = overscrollGeneration;
-            fixtureScrollEntryTrace?.Add(new { kind = "queued", generation, current, loaded = entered.IsLoaded,
-                height = entered.ScrollableHeight, offset = entered.VerticalOffset, tick = Environment.TickCount64 });
-            if (fixtureScrollEntryTrace is not null)
-                entered.ViewChanged += (_, args) => fixtureScrollEntryTrace?.Add(new { kind = "viewChanged", current,
-                    height = entered.ScrollableHeight, offset = entered.VerticalOffset, args.IsIntermediate, tick = Environment.TickCount64 });
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
-            {
-                fixtureScrollEntryTrace?.Add(new { kind = "callback", generation, actualGeneration = overscrollGeneration,
-                    current, next, loaded = entered.IsLoaded, height = entered.ScrollableHeight, offset = entered.VerticalOffset, tick = Environment.TickCount64 });
-                if (!closing && generation == overscrollGeneration && current == next &&
-                    frame.Content is Page { Content: ScrollViewer active } && ReferenceEquals(active, entered))
-                {
-                    root.UpdateLayout();
-                    var accepted = entered.ChangeView(null, entered.ScrollableHeight, null, true);
-                    fixtureScrollEntryTrace?.Add(new { kind = "changeView", accepted, current, loaded = entered.IsLoaded,
-                        height = entered.ScrollableHeight, offset = entered.VerticalOffset, tick = Environment.TickCount64 });
-                }
-            });
-        }
+
     }
 
     private void ClearPendingOverscrollNavigation()

@@ -1419,9 +1419,14 @@ class App:
 
     def build_tray_menu(self, owner: Optional[DeviceIcon]) -> Menu:
         """Quick actions only; all configuration lives in the Settings window."""
-        def selected():
-            self.open_settings(owner.key if owner is not None else None,
-                               page="devices" if owner is not None else "general")
+        def clean(text):
+            text = text.strip()
+            while text.endswith(("…", "...")):
+                text = text[:-1 if text.endswith("…") else -3].rstrip()
+            return text
+
+        def label(key, **values):
+            return clean(self.tr(key, **values))
 
         def title():
             return self.display_name(owner.status) if owner and owner.status else self.tr("settings.header_app")
@@ -1431,16 +1436,15 @@ class App:
 
         return Menu(
             flyout.HeaderItem(title, detail),
-            Item(self.tr("settings.open_device") if owner is not None else self.tr("settings.open_app"),
-                 lambda i, it: selected(), default=True),
-            Item(self.tr("menu.refresh"), lambda i, it: self.wake.set()),
-            Item(self.tr("settings.open_app"), lambda i, it: self.open_settings(), visible=owner is not None),
-            Item(lambda it: update_item_text(self.update.version, getattr(self, "install_ok", False),
-                                            getattr(self, "update_progress", None), language=self.cfg["language"])
-                 if self.update else self.tr("menu.download_update"),
+            Item(label("settings.open_app"), lambda i, it: self.open_settings(owner.key, page="devices")
+                 if owner is not None else self.open_settings(), default=True),
+            Item(label("menu.refresh"), lambda i, it: self.wake.set()),
+            Item(lambda it: clean(update_item_text(self.update.version, getattr(self, "install_ok", False),
+                                            getattr(self, "update_progress", None), language=self.cfg["language"]))
+                 if self.update else label("menu.download_update"),
                  lambda i, it: self.start_update(), visible=lambda it: self.update is not None),
-            Item(self.tr("menu.diagnostics"), lambda i, it: self.request_diag()),
-            Item(self.tr("menu.exit", version=VERSION), lambda i, it: self.quit()))
+            Item(label("menu.diagnostics"), lambda i, it: self.request_diag()),
+            Item(label("menu.exit", version=VERSION), lambda i, it: self.quit()))
 
     def set_language(self, language: str) -> None:
         """Refresh presentation under the same lock as polls, without polling hardware."""
@@ -2748,7 +2752,10 @@ class App:
             self.show_whats_new(from_version or prev or "")
 
     def show_whats_new(self, from_version: str = "") -> None:
-        notes = self.cfg.pop("whats_new_notes", None)
+        with self.lock:
+            notes = self.cfg.pop("whats_new_notes", None)
+            language = self.cfg.get("language", "en")
+            save_config(self.cfg)
         if not isinstance(notes, dict) or notes.get("version") != VERSION or not notes.get("notes"):
             try:
                 rel = updates.fetch_release(VERSION, VERSION)
@@ -2757,11 +2764,10 @@ class App:
             except Exception as e:
                 log.info("what's new: release notes not available (%s)", e)
                 notes = {"version": VERSION, "notes": "", "url": updates.RELEASES_URL, "date": ""}
-        save_config(self.cfg)
         host = self.ui_host
         whatsnew.show(host, VERSION, notes.get("notes", ""), notes.get("url") or updates.RELEASES_URL,
                       from_version=from_version, date=notes.get("date", ""), open_url=self.open_url,
-                      language=self.cfg.get("language", "en"))
+                      language=language)
 
     def open_url(self, url: str) -> None:
         try:
