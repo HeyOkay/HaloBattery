@@ -10,7 +10,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Open the existing What's new window from About, directly below the version.
 - Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
   control channel, using the read-only status query from
-  marcinjakubowski/zoneout; unverified until the reporter's test build (#387).
+  marcinjakubowski/zoneout; confirmed on hardware by the reporter in #387.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth

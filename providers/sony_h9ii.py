@@ -18,8 +18,8 @@ The reply echoes command 0x06 at byte 9; byte 14 is the charging flag and byte
 15 the battery percentage on a headset.
 
 Read-only: only the status command is sent. No volume, noise-control, Bluetooth
-or firmware setting is written. Unverified against this reporter's hardware until
-the test build is run.
+or firmware setting is written. Confirmed on the reporter's H9 II hardware
+(#387) with the read-only test build.
 """
 from __future__ import annotations
 

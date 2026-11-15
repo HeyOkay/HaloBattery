@@ -653,6 +653,5 @@ answered by a 64-byte report with command `0x06` at byte 9, the charging flag at
 byte 14 and the level at byte 15. Only this read-only query is sent.
 
 From [marcinjakubowski/zoneout](https://github.com/marcinjakubowski/zoneout)
-(MIT), which supports the H9 II and INZONE Buds. **Unverified** in Halo Battery
-until the reporter of #387 runs the test build.
-
+(MIT), which supports the H9 II and INZONE Buds. **Confirmed on hardware** by
+the reporter of #387, who ran the read-only test build with the H9 II receiver.
