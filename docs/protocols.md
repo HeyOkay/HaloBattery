@@ -150,7 +150,7 @@ A MediaTek command channel, not the PA protocol of the 2020/2023 models: report 
 
 `0x21` reads the percentage, `0x2A` the charging flag; both are GETs and nothing else is sent. A bad checksum, a wrong sequence/domain/command, a missing acknowledgement or a zero payload count is refused, as openrazer's kernel driver does.
 
-Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.com/justik13/razer-blackshark-v2-hyperspeed-webhid) (MIT), with read-only implementations in [arkady-emelyanov/blackshark-battery](https://github.com/arkady-emelyanov/blackshark-battery) and [openrazer PR #2974](https://github.com/openrazer/openrazer/pull/2974). **Unverified on hardware here**: the reference implementations were checked on this headset, but this provider has not seen one yet - the reporters of #85 and #86 have the test build.
+Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.com/justik13/razer-blackshark-v2-hyperspeed-webhid) (MIT), with read-only implementations in [arkady-emelyanov/blackshark-battery](https://github.com/arkady-emelyanov/blackshark-battery) and [openrazer PR #2974](https://github.com/openrazer/openrazer/pull/2974). **Confirmed on hardware** in [#86](https://github.com/HeyOkay/HaloBattery/issues/86): level and charging both work on the receiver and the USB-C cable.
 
 ### Sony INZONE H9
 

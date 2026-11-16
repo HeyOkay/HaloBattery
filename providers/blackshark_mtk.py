@@ -22,9 +22,9 @@ the domain, an acknowledgement byte 0x01, a payload count and then the value:
 the percent for 0x21, the charging flag for 0x2A. Both are GET requests and
 nothing else is ever sent.
 
-**Unverified** until the reporters of #85 and #86 run the test build: the
-reference implementations were validated on this hardware, but this provider
-has not seen one yet.
+**Confirmed on hardware** in #86: the receiver and the USB-C cable both
+reported the level and the charging state. The reference implementations
+were also validated on this hardware.
 """
 from __future__ import annotations
 

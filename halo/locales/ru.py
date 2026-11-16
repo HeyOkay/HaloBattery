@@ -70,6 +70,7 @@ MESSAGES = {
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
     "provider.barracuda_x": "Razer Barracuda X",
+    "provider.blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
     "provider.corsair": "Гарнитуры Corsair",
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Мыши G-Wolves",
