@@ -57,7 +57,12 @@ class SettingsHostTests(unittest.TestCase):
     def hello(self):
         self.manager._handle(self.session, dict(type="hello", protocol=1, uiVersion="1"))
         welcome, state, shown = self.drain()
-        self.assertEqual(shown, dict(type="show", page=self.session.page, deviceKey=self.session.device_key))
+        expected = dict(type="show", page=self.session.page, deviceKey=self.session.device_key,
+                        requestId=self.session.show_generation)
+        if self.session.restore_view:
+            expected["restoreView"] = True
+        self.assertEqual(shown, expected)
+        self.manager._handle(self.session, dict(type="visibility", visible=True, requestId=shown["requestId"]))
         return welcome, state
 
     def command(self, name, args, request_id=1):
@@ -201,7 +206,7 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual((session.page, session.device_key), ("icons", "b"))
         self.controller.snapshot.assert_not_called()
 
-    def test_generic_cold_open_defaults_to_general_without_restore_flag(self):
+    def test_generic_cold_open_restores_native_saved_view(self):
         manager = host.SettingsHost(self.controller)
         with patch.object(manager, "_thread"):
             manager.open()
@@ -209,8 +214,8 @@ class SettingsHostTests(unittest.TestCase):
         manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
         welcome, state, shown = self.drain(session)
         self.assertEqual(state["page"], "general")
-        self.assertEqual(shown, dict(type="show", page="general", deviceKey="a"))
-        self.assertFalse(session.restore_view)
+        self.assertEqual(shown, dict(type="show", page="general", deviceKey=None, restoreView=True, requestId=1))
+        self.assertTrue(session.restore_view)
 
     def test_generic_warm_open_preserves_view_and_explicit_navigation_overrides_it(self):
         self.session.page, self.session.device_key = "devices", "b"
@@ -220,19 +225,19 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual((self.session.page, self.session.device_key), ("devices", "b"))
         self.manager._show(self.session)
         self.assertEqual(self.drain(),
-            [dict(type="show", page="devices", deviceKey="b", restoreView=True)])
+            [dict(type="show", page="general", deviceKey=None, restoreView=True, requestId=2)])
         with patch.object(self.manager, "_thread"):
             self.manager.open("a", page="icons")
         self.assertFalse(self.session.restore_view)
         self.manager._show(self.session)
-        self.assertEqual(self.drain(), [dict(type="show", page="icons", deviceKey="a")])
+        self.assertEqual(self.drain(), [dict(type="show", page="icons", deviceKey="a", requestId=3)])
 
     def test_explicit_device_without_page_retains_default_general_navigation(self):
         self.hello()
         with patch.object(self.manager, "_thread"):
             self.manager.open("b")
         self.manager._show(self.session)
-        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey="b")])
+        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey="b", requestId=2)])
 
     def test_invalid_navigation_values_are_rejected_before_changing_session(self):
         for kwargs in (dict(page=""), dict(page="invalid"), dict(page=[]), dict(page=False),
@@ -253,7 +258,7 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual([m["type"] for m in messages], ["welcome", "state", "show"])
         self.assertEqual(messages[1]["page"], "icons")
         self.assertEqual(messages[1]["selectedDeviceKey"], "b")
-        self.assertEqual(messages[2], dict(type="show", page="icons", deviceKey="b"))
+        self.assertEqual(messages[2], dict(type="show", page="icons", deviceKey="b", requestId=2))
 
     def test_hidden_reopen_reuses_host_and_only_shows_unchanged_state(self):
         self.hello()
@@ -263,7 +268,7 @@ class SettingsHostTests(unittest.TestCase):
             self.manager.open("b", page="devices")
         worker.assert_called_once_with(self.manager._show, self.session, "settings-show")
         self.manager._show(self.session)
-        self.assertEqual(self.drain(), [dict(type="show", page="devices", deviceKey="b")])
+        self.assertEqual(self.drain(), [dict(type="show", page="devices", deviceKey="b", requestId=2)])
         self.assertIs(self.manager._session, self.session)
         self.assertFalse(self.session.stop.is_set())
         self.assertIsNone(self.session.process.poll())
@@ -272,6 +277,8 @@ class SettingsHostTests(unittest.TestCase):
     def test_reopen_refreshes_changed_state_before_show_without_polling(self):
         self.hello()
         self.controller.snapshot.return_value["cfg"]["low"] = 25
+        with patch.object(self.manager, "_thread"):
+            self.manager.open(page="general")
         self.manager._show(self.session)
         state, shown = self.drain()
         self.assertEqual(state["type"], "state")
@@ -279,12 +286,217 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(state["revision"], 2)
         self.assertEqual(shown["type"], "show")
 
+    def test_closing_is_strict_and_requires_handshake(self):
+        with self.assertRaises(ValueError):
+            self.manager._handle(self.session, dict(type="closing"))
+        self.hello()
+        with self.assertRaises(ValueError):
+            self.manager._handle(self.session, dict(type="closing", visible=False))
+        self.assertFalse(self.session.closing)
+        self.manager._handle(self.session, dict(type="closing"))
+        self.assertTrue(self.session.closing)
+        self.assertFalse(self.session.stop.is_set())
+
+    def test_closing_drains_final_edit_before_eof_and_queued_reopen(self):
+        self.hello()
+        self.session.process = Process()
+        self.session.process.stdout = io.StringIO(host.encode_message(dict(type="command", protocol=1,
+            id=1, name="setDevice", args=dict(deviceKey="a", field="name", value="Final edit"))))
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.assertTrue(self.manager.open("b", page="devices"))
+            worker.assert_not_called()
+            self.assertIs(self.manager._session, self.session)
+            self.manager._read(self.session)
+            successor = self.manager._session
+            worker.assert_called_once_with(self.manager._launch, successor, "settings-launch")
+        self.controller.set_device.assert_called_once_with("a", "name", "Final edit")
+        self.assertIsNot(successor, self.session)
+        self.assertEqual((successor.page, successor.device_key), ("devices", "b"))
+        self.assertFalse(successor.restore_view)
+        self.assertEqual([message["type"] for message in self.drain()], ["result", "state"])
+
+    def test_latest_open_during_closing_wins_including_generic_restore(self):
+        for requests, expected in (([("devices", "b"), (None, None)], ("general", None, True)),
+                                   ([(None, None), ("icons", "a")], ("icons", "a", False))):
+            with self.subTest(requests=requests):
+                manager = host.SettingsHost(self.controller)
+                session = host._Session("about", "b", closing=True)
+                manager._session = session
+                with patch.object(manager, "_thread") as worker:
+                    for page, device in requests:
+                        self.assertTrue(manager.open(device, page=page))
+                    worker.assert_not_called()
+                    manager._cleanup(session)
+                    successor = manager._session
+                    worker.assert_called_once_with(manager._launch, successor, "settings-launch")
+                self.assertEqual((successor.page, successor.device_key, successor.restore_view), expected)
+
+    def test_show_worker_queued_before_closing_cannot_show_exiting_window(self):
+        self.hello()
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open("b", page="devices")
+        target, session, _ = worker.call_args.args
+        self.manager._handle(self.session, dict(type="closing"))
+        target(session)
+        self.assertEqual(self.drain(), [])
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager._cleanup(self.session)
+            successor = self.manager._session
+            worker.assert_called_once_with(self.manager._launch, successor, "settings-launch")
+        self.assertEqual((successor.page, successor.device_key), ("devices", "b"))
+
+    def test_older_visibility_ack_cannot_consume_newer_scheduled_open(self):
+        self.hello()
+        with patch.object(self.manager, "_thread"):
+            self.manager.open("b", page="devices")
+        self.manager._handle(self.session, dict(type="visibility", visible=True, requestId=1))
+        self.assertEqual(self.session.pending_show, (2, "devices", "b"))
+        self.manager._handle(self.session, dict(type="closing"))
+        self.assertEqual(self.manager._pending_open, ("devices", "b"))
+
+    def test_unversioned_startup_splash_ack_does_not_consume_newer_open(self):
+        manager = host.SettingsHost(self.controller)
+        with patch.object(manager, "_thread"):
+            manager.open()
+            session = manager._session
+            session.ready.set()
+            manager.open("b", page="devices")
+        manager._handle(session, dict(type="visibility", visible=True))
+        self.assertEqual(session.pending_show, (2, "devices", "b"))
+        manager._handle(session, dict(type="closing"))
+        self.assertEqual(manager._pending_open, ("devices", "b"))
+
+    def test_user_close_during_initial_loading_does_not_reopen(self):
+        manager = host.SettingsHost(self.controller)
+        with patch.object(manager, "_thread") as worker:
+            manager.open()
+            session = manager._session
+            session.ready.set()
+            manager._handle(session, dict(type="visibility", visible=True))
+            self.assertIsNone(session.pending_show)
+            manager._handle(session, dict(type="closing"))
+            worker.reset_mock()
+            manager._cleanup(session)
+            worker.assert_not_called()
+        self.assertIsNone(manager._session)
+
+    def test_show_workers_coalesce_latest_request_and_match_visibility_ack(self):
+        self.hello()
+        with patch.object(self.manager, "_thread"):
+            self.manager.open("b", page="devices")
+            self.manager.open("a", page="icons")
+        self.manager._show(self.session)
+        self.manager._show(self.session)
+        self.assertEqual(self.drain(), [dict(type="show", page="icons", deviceKey="a", requestId=3)])
+        self.manager._handle(self.session, dict(type="visibility", visible=True, requestId=2))
+        self.assertEqual(self.session.pending_show, (3, "icons", "a"))
+        self.manager._handle(self.session, dict(type="visibility", visible=True, requestId=3))
+        self.assertIsNone(self.session.pending_show)
+
+    def test_unacknowledged_show_reopens_after_simultaneous_close(self):
+        for device, page, expected in (("b", "devices", ("devices", "b", False)),
+                                       (None, None, ("general", None, True))):
+            with self.subTest(page=page):
+                manager = host.SettingsHost(self.controller)
+                session = host._Session("general", None)
+                manager._session = session
+                manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+                self.drain(session)
+                manager._handle(session, dict(type="visibility", visible=True))
+                with patch.object(manager, "_thread") as worker:
+                    manager.open(device, page=page)
+                    manager._show(session)
+                    manager._handle(session, dict(type="closing"))
+                    worker.reset_mock()
+                    manager._cleanup(session)
+                    successor = manager._session
+                    worker.assert_called_once_with(manager._launch, successor, "settings-launch")
+                self.assertEqual((successor.page, successor.device_key, successor.restore_view), expected)
+                self.assertIsNone(session.pending_show)
+
+    def test_acknowledged_show_does_not_reopen_after_user_close(self):
+        self.hello()
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open("b", page="devices")
+            self.manager._show(self.session)
+            self.assertEqual(self.session.pending_show, (2, "devices", "b"))
+            self.manager._handle(self.session, dict(type="visibility", visible=True, requestId=2))
+            self.assertIsNone(self.session.pending_show)
+            self.manager._handle(self.session, dict(type="closing"))
+            worker.reset_mock()
+            self.manager._cleanup(self.session)
+            worker.assert_not_called()
+        self.assertIsNone(self.manager._session)
+
+    def test_acknowledged_initial_show_does_not_reopen_after_user_close(self):
+        self.hello()
+        self.assertIsNone(self.session.pending_show)
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager._cleanup(self.session)
+        worker.assert_not_called()
+        self.assertIsNone(self.manager._session)
+
+    def test_failed_show_enqueue_is_not_remembered_for_reopen(self):
+        self.hello()
+        with patch.object(self.manager, "_thread"):
+            self.manager.open(page="general")
+        with patch.object(self.manager, "_send", return_value=False):
+            self.manager._show_window(self.session)
+        self.assertIsNone(self.session.pending_show)
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager._cleanup(self.session)
+        worker.assert_not_called()
+        self.assertIsNone(self.manager._session)
+
+    def test_host_quit_cancels_pending_reopen(self):
+        self.hello()
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open("b", page="devices")
+            self.manager.close()
+            self.manager._cleanup(self.session)
+        worker.assert_not_called()
+        self.assertIsNone(self.manager._session)
+        self.assertIsNone(self.manager._pending_open)
+        self.assertFalse(self.manager.open())
+
+    def test_final_quit_command_cancels_pending_reopen_after_ack(self):
+        self.hello()
+        self.session.process = Process()
+        self.controller.action.side_effect = lambda name: self.manager.close()
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open("b", page="devices")
+            messages = self.command("quit", {})
+        worker.assert_not_called()
+        self.assertEqual([item["type"] for item in messages], ["result", "state", "shutdown"])
+        self.assertTrue(messages[0]["ok"])
+        self.assertIsNone(self.manager._session)
+        self.assertIsNone(self.manager._pending_open)
+
+    def test_host_quit_during_child_reap_prevents_pending_reopen(self):
+        self.hello()
+        self.session.process = Process()
+        self.session.process.wait = Mock(side_effect=lambda timeout: self.manager.close())
+        self.manager._handle(self.session, dict(type="closing"))
+        with patch.object(self.manager, "_thread") as worker:
+            self.manager.open()
+            self.manager._cleanup(self.session)
+        worker.assert_not_called()
+        self.assertIsNone(self.manager._session)
+        self.assertIsNone(self.manager._pending_open)
+
     def test_reopen_keeps_cached_window_usable_when_snapshot_temporarily_fails(self):
         self.hello()
         self.controller.snapshot.side_effect = OSError("temporary snapshot failure")
+        with patch.object(self.manager, "_thread"):
+            self.manager.open(page="general")
         with self.assertLogs("halo_battery", level="ERROR"):
             self.manager._show(self.session)
-        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey="a")])
+        self.assertEqual(self.drain(), [dict(type="show", page="general", deviceKey=None, requestId=2)])
         self.assertIs(self.manager._session, self.session)
         self.assertFalse(self.session.stop.is_set())
         self.assertEqual(self.session.revision, 1)
@@ -301,7 +513,10 @@ class SettingsHostTests(unittest.TestCase):
             self.manager._handle(self.session, dict(type="visibility", visible=False))
         self.hello()
         for message in (dict(type="visibility", visible=0), dict(type="visibility"),
-                        dict(type="visibility", visible=False, id=1)):
+                        dict(type="visibility", visible=False, id=1),
+                        dict(type="visibility", visible=True, requestId=True),
+                        dict(type="visibility", visible=True, requestId=0),
+                        dict(type="visibility", visible=True, requestId="1")):
             with self.subTest(message=message), self.assertRaises(ValueError):
                 self.manager._handle(self.session, message)
         self.manager._handle(self.session, dict(type="visibility", visible=True))

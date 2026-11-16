@@ -64,10 +64,15 @@ class _Session:
     catalog_generation: int = 0
     visible: bool = False
     restore_view: bool = False
+    closing: bool = False
+    show_generation: int = 0
+    enqueued_show_generation: int = 0
+    startup_visibility_seen: bool = False
+    pending_show: tuple[int, str | None, str | None] | None = None
 
 
 class SettingsHost:
-    """Retain one companion until shutdown; closing its window only hides it."""
+    """Launch one on-demand companion and drain its commands before reopening."""
     def __init__(self, controller, *, popen=None, poll_interval=.75, startup_timeout=15):
         self.controller = controller
         self._popen = popen or subprocess.Popen
@@ -76,6 +81,7 @@ class SettingsHost:
         self._lock = threading.Lock()
         self._model_lock = threading.RLock()
         self._session = None
+        self._pending_open = None
         self._closed = False
 
     def open(self, device_key=None, *, page=None):
@@ -87,20 +93,36 @@ class SettingsHost:
             if self._closed:
                 return False
             session = self._session
+            if session is not None and session.closing:
+                # Leave the draining session current until EOF: its final edits
+                # still belong to it. A later open supersedes this request.
+                self._pending_open = (page, device_key)
+                return True
             if session is None or session.stop.is_set():
                 session = _Session(page or "general", device_key)
+                session.restore_view = preserve_view
                 self._session = session
+                self._request_show(session)
                 self._thread(self._launch, session, "settings-launch")
             else:
                 session.restore_view = preserve_view
                 if not preserve_view:
                     session.page, session.device_key = page or "general", device_key
+                self._request_show(session)
             # The handshake publishes the latest target before the first show.
             # Reopens refresh asynchronously, without waiting for the poll timer
             # or touching the child process on the tray/menu caller.
             if session.ready.is_set():
                 self._thread(self._show, session, "settings-show")
         return True
+
+    @staticmethod
+    def _request_show(session):
+        # Caller holds the host lock. Preserve intent before a worker can run or
+        # native closing can arrive; an older visibility ack cannot consume it.
+        session.show_generation += 1
+        page, device_key = (None, None) if session.restore_view else (session.page, session.device_key)
+        session.pending_show = (session.show_generation, page, device_key)
 
     def _show(self, session):
         with self._model_lock:
@@ -118,12 +140,23 @@ class SettingsHost:
 
     def _show_window(self, session):
         with self._lock:
-            message = dict(type="show", page=session.page, deviceKey=session.device_key)
-            if session.restore_view:
+            if self._session is not session or session.stop.is_set() or session.closing:
+                return
+            if session.show_generation == 0:
+                self._request_show(session)
+            request = session.pending_show
+            if request is None or request[0] == session.enqueued_show_generation:
+                return
+            generation, page, device_key = request
+            message = dict(type="show", page=page or "general", deviceKey=device_key, requestId=generation)
+            if page is None:
                 # Native navigation may have changed since the last tray request.
-                # A generic reopen restores that retained page and selection.
+                # Restore its live or persisted page and device selection.
                 message["restoreView"] = True
-        self._send(session, message)
+            if self._send(session, message):
+                session.enqueued_show_generation = generation
+            else:
+                session.pending_show = None
 
     def _launch_args(self):
         # The context is fixed at application startup, including portable mode.
@@ -324,10 +357,34 @@ class SettingsHost:
                 return
             if not session.ready.is_set():
                 raise ValueError("settings handshake required")
+            if kind == "closing":
+                if set(message) != {"type"}:
+                    raise ValueError("invalid settings closing")
+                with self._lock:
+                    if self._session is not session or session.stop.is_set():
+                        return
+                    session.closing = True
+                    if self._pending_open is None and session.pending_show is not None:
+                        self._pending_open = session.pending_show[1:]
+                    session.pending_show = None
+                return
             if kind == "visibility":
-                if set(message) != {"type", "visible"} or type(message["visible"]) is not bool:
+                if (set(message) not in ({"type", "visible"}, {"type", "visible", "requestId"}) or
+                        type(message["visible"]) is not bool or
+                        "requestId" in message and (type(message["requestId"]) is not int or message["requestId"] < 1)):
                     raise ValueError("invalid settings visibility")
-                session.visible = message["visible"]
+                with self._lock:
+                    session.visible = message["visible"]
+                    if session.visible:
+                        # The startup splash appears before the first show is
+                        # read. Its one unversioned ack consumes only launch intent.
+                        startup_ack = not session.startup_visibility_seen and "requestId" not in message
+                        session.startup_visibility_seen = True
+                        if (session.pending_show is not None and
+                                (startup_ack and session.pending_show[0] == 1 or
+                                 message.get("requestId") == session.pending_show[0] and
+                                 message.get("requestId") == session.enqueued_show_generation)):
+                            session.pending_show = None
                 if not session.visible:
                     self._end_browse(session)
                 return
@@ -476,12 +533,21 @@ class SettingsHost:
             with self._lock:
                 if self._session is session:
                     self._session = None
+                    pending, self._pending_open = self._pending_open, None
+                    if pending is not None and not self._closed:
+                        page, device_key = pending
+                        successor = _Session(page or "general", device_key)
+                        successor.restore_view = page is None and device_key is None
+                        self._request_show(successor)
+                        self._session = successor
+                        self._thread(self._launch, successor, "settings-launch")
         finally:
             session.cleanup_lock.release()
 
     def close(self):
         with self._lock:
             self._closed = True
+            self._pending_open = None
             session = self._session
         if session is not None:
             self._cleanup(session, graceful=True)

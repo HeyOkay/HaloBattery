@@ -78,9 +78,12 @@ public sealed partial class MainWindow : Window
  private static string Arg(string name,string fallback="") {var args=Environment.GetCommandLineArgs();var i=Array.IndexOf(args,name);return i>=0&&i+1<args.Length?args[i+1]:fallback;}
  internal MainWindow(SettingsBridge bridge,UiState initialState,string windowStateDirectory,SettingsWindowState preferences)
  {
-  Bridge=bridge;State=initialState;
+  Bridge=bridge;State=initialState;pagesInitializing=true;
   themeOverride=Arg("--theme");diagnostics=Arg("--diagnostics");Title="HaloBattery";
   hwnd=WinRT.Interop.WindowNative.GetWindowHandle(this);
+  dark=ReadDarkTheme();
+  startupWindowBackground=new(hwnd,dark);
+  Closed+=(_,_)=>ReleaseStartupWindowBackground();
   try{AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));}catch(Exception error){Debug.WriteLine(error);}
   if(AppWindow.Presenter is OverlappedPresenter p)p.SetBorderAndTitleBar(true,false);
   InitializeWindowState(windowStateDirectory,preferences);
@@ -95,10 +98,11 @@ public sealed partial class MainWindow : Window
   InitializeCardSpotlights();
   settings.ColorValuesChanged+=OnColorsChanged;
   AppWindow.Changed+=OnWindowChanged;
-  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
+  Closed+=(_,_)=>{closing=true;CancelStartupSplash();settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
-  ApplyState(initialState);
+  BuildHeader();
+  InitializeStartupSplash();
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
  private double Scale=>root.XamlRoot?.RasterizationScale??GetDpiForWindow(hwnd)/96.0;
@@ -116,8 +120,9 @@ public sealed partial class MainWindow : Window
  }
  private void OnColorsChanged(UISettings sender,object args)=>DispatcherQueue.TryEnqueue(async()=>
  {
-  if(closing||changingTheme)return;changingTheme=true;
+   if(IsClosingSettings||changingTheme)return;changingTheme=true;
   try {
+   if(pagesInitializing){ApplyTheme();return;}
    ResetPageEntry();
    if(IsSettingsWindowHidden||!settings.AnimationsEnabled){ApplyTheme();Rebuild();return;}
    var previous=new RenderTargetBitmap();await previous.RenderAsync(root);ApplyTheme();Rebuild();
@@ -127,11 +132,12 @@ public sealed partial class MainWindow : Window
  });
  private void ApplyTheme()
  {
-  dark=themeOverride.Length==0?settings.GetColorValue(UIColorType.Background).R<128:themeOverride.Equals("dark",StringComparison.OrdinalIgnoreCase);root.RequestedTheme=dark?ElementTheme.Dark:ElementTheme.Light;accent=settings.GetColorValue(dark?UIColorType.AccentLight2:UIColorType.AccentDark1);
+  dark=ReadDarkTheme();startupWindowBackground?.UpdateTheme(dark);root.RequestedTheme=dark?ElementTheme.Dark:ElementTheme.Light;accent=settings.GetColorValue(dark?UIColorType.AccentLight2:UIColorType.AccentDark1);
   Application.Current.Resources["SystemAccentColor"]=accent;Application.Current.Resources["ControlCornerRadius"]=new CornerRadius(15);Application.Current.Resources["OverlayCornerRadius"]=new CornerRadius(16);Application.Current.Resources["ContentControlThemeFontFamily"]=bodyFont;
   if(Environment.OSVersion.Version.Build>=22000&&Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported()){SystemBackdrop=new MicaBackdrop();root.Background=Brush("#00000000");}else{SystemBackdrop=null;root.Background=Brush(dark?"#202020":"#F3F3F3");}
   card.Background=Brush(dark?"#181818":"#FFFFFF");card.Shadow=new ThemeShadow();card.Translation=new(0,0,12);
  }
+ private bool ReadDarkTheme()=>themeOverride.Length==0?settings.GetColorValue(UIColorType.Background).R<128:themeOverride.Equals("dark",StringComparison.OrdinalIgnoreCase);
  private void Rebuild(){Navigate(current,false);}
  private string MenuName=>V(expanded?"paneClose":"paneOpen");
  private double HeaderControlsWidth=>HeaderEdgeInset+3*HeaderButtonSize+2*HeaderButtonGap;
@@ -185,6 +191,7 @@ public sealed partial class MainWindow : Window
   var brand=new TextBlock{FontSize=16,FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.SemiBold,Foreground=TextBrush,CharacterSpacing=-12,VerticalAlignment=VerticalAlignment.Center,TextLineBounds=TextLineBounds.Tight};brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Halo",FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-Medium.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=TextBrush});brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Battery",Foreground=textAccent});Grid.SetColumn(brand,1);content.Children.Add(brand);
   pill.Child=content;pill.IsHitTestVisible=false;header.Children.Add(pill);
   windowButtons.Children.Clear();var minimize=HeaderButton("minus",T("settings.minimize"));maximizeButton=HeaderButton("maximize-2",T("settings.maximize"));displayedMaximized=null;var close=HeaderButton("x",T("settings.close"));foreach(var button in new[]{minimize,maximizeButton,close})windowButtons.Children.Add(button);minimize.Click+=(_,_)=>((OverlappedPresenter)AppWindow.Presenter).Minimize();maximizeButton.Click+=(_,_)=>{var p=(OverlappedPresenter)AppWindow.Presenter;if(p.State==OverlappedPresenterState.Maximized)p.Restore();else p.Maximize();UpdateMaximizeButton();};close.Click+=(_,_)=>Close();header.Children.Add(windowButtons);UpdateMaximizeButton();PositionPill();
+  SetStartupChromeVisibility();
  }
  // В развёрнутом окне страница и омнибокс центрируются по всему окну, а не по области справа от панели вкладок.
  // Если места не хватает - сдвигаются вправо ровно настолько, чтобы не заходить под панель и не вылезать за подложку.
@@ -237,6 +244,9 @@ public sealed partial class MainWindow : Window
  }
  internal void Navigate(string page,bool motion,bool enterAtEnd=false,bool preserveWheelBurst=false)
  {
+  pendingEditorCommit?.Invoke();pendingEditorCommit=null;
+  CaptureSettingsViewState();
+  if(pagesInitializing)startupNavigationVersion++;
   if(!preserveWheelBurst)wheelNavigationGuard.Reset();
   ResetContentWheelObservation();
   ResetOverscrollForNavigation();
@@ -267,6 +277,7 @@ public sealed partial class MainWindow : Window
   }
   AttachSpotlightScroll();
   BuildNavigation();BuildHeader();
+  RestoreSettingsViewStateAfterNavigation();
   DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,UpdateMinimumWidth);
  }
  private void ResetPageEntry()

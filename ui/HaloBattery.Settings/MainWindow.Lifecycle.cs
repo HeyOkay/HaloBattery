@@ -8,9 +8,29 @@ public sealed partial class MainWindow
     private PreparedWindowView? firstPreparedView;
     private sealed record PreparedWindowView(int X,int Y,int Width,int Height,bool RailExpanded,double RailWidth,string Page,bool PageReady,int LabelCount,bool VisibleBeforeShow);
 
-    internal void ShowSettingsWindow(string? page,string? deviceKey)
+    internal void ShowSettingsWindow(string? page,string? deviceKey,long? requestId=null)
     {
-        if(closing || !pagesInitialized) return;
+        if(IsClosingSettings) return;
+        if(pagesInitializing)
+        {
+            if(startupRevealing)
+            {
+                showAfterStartup=new(page,deviceKey,requestId);
+                return;
+            }
+            pendingStartupPage=page;pendingStartupDeviceKey=deviceKey;
+            startupNavigationVersion++;
+            if(pagesInitialized && page is not null)
+            {
+                if(deviceKey is not null)selectedDeviceKey=deviceKey;
+                Navigate(page,false);
+            }
+            // Acknowledge this show request even while loading. Python can
+            // distinguish an accepted show from a request racing with close.
+            Bridge.SendVisibility(true,requestId);
+            return;
+        }
+        if(!pagesInitialized)return;
         page??=current;
         var selectionChanged=deviceKey is not null && selectedDeviceKey!=deviceKey;
         if(deviceKey is not null) selectedDeviceKey=deviceKey;
@@ -26,7 +46,7 @@ public sealed partial class MainWindow
         Activate();
         windowShowCount++;
         if(previewImage is not null) StartPreview();
-        Bridge.SendVisibility(true);
+        Bridge.SendVisibility(true,requestId);
     }
 
     private void OnSettingsWindowHidden()
