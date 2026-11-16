@@ -279,7 +279,8 @@ than guessing.
 Protocol and offsets from [OpenLogi's Darmoshark driver](https://github.com/ayasaki-exs/OpenLogi/tree/feat/darmoshark-driver)
 and [ayasaki-exs/darmoshark-battery](https://github.com/ayasaki-exs/darmoshark-battery);
 the receiver and its docs were supplied by the [#430](https://github.com/HeyOkay/HaloBattery/issues/430)
-reporter. **Unverified** on this provider until that reporter's test build runs.
+reporter. **Confirmed on hardware** in #430: the receiver's power reply read
+**63%**, matching the mouse. Charging is not decoded.
 
 ### MCHOSE A5 Pro Max
 

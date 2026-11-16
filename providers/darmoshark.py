@@ -15,7 +15,8 @@ The answer is a 64-byte input report with the same operation/sub-command after
 masking bit 6. Two layouts exist: the legacy one carries the percentage at
 byte 6; the v2 layout marks itself with `15 19` at bytes 6-7 and carries it at
 byte 11. The charging state is not decoded, so the app reports the level with
-no charging ring instead of guessing.
+no charging ring instead of guessing. Confirmed on hardware in #430: 63%,
+matching the mouse.
 """
 from __future__ import annotations
 

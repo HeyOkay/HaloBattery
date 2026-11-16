@@ -9,8 +9,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Open the existing What's new window from About, directly below the version.
 - Darmoshark N5 (`1915:0723` receiver / `1915:073c` cable): the 64-byte `ff0a:0001`
-  power query, level byte 6 (legacy) or byte 11 (v2); test build until the
-  reporter of [#430](https://github.com/HeyOkay/HaloBattery/issues/430) confirms it.
+  power query, level byte 6 (legacy) or byte 11 (v2); confirmed on hardware in
+  [#430](https://github.com/HeyOkay/HaloBattery/issues/430) at 63%, matching the mouse.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
