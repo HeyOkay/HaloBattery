@@ -275,8 +275,12 @@ the byte after the level was `0x01` with the keyboard full and **not** on the
 cable, so the provider reads only the level and never claims charging.
 
 The **G98 Pro** (`41E4:2004`, product string `MCHOSE 2.4G Wireless`) publishes
-the same command collection and is queried with the identical frame; that path
-is **unverified** on hardware (#378).
+the same command collection and is queried with the identical frame. The
+reporter's hardware answers 97% with flags `0x00` on 2.4 GHz and 50% with
+flags `0x10` on the charging cable. Test build 2 reads the high nibble as the
+charge state: the K87's `0x01` while full and **not** on the cable is the
+separate low-nibble full status, so it is not treated as charging. Charging
+confirmation on the G98 Pro is with the reporter in #378.
 
 ### MCHOSE A5 Pro Max
 

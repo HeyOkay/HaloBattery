@@ -57,10 +57,10 @@ def parse_reply(resp) -> Optional[Tuple[int, int]]:
     """(level, flags) from the getBattery answer, or None.
 
     ``flags`` is the byte after the level: the vendor schema splits it into
-    ``fullStatus`` (high nibble) and ``chargeStatus`` (low nibble). Measured on the hardware
-    here, a full keyboard that is **not** on the cable answers ``0x01``, so the low nibble is
-    not "charging right now" - it reads 1 while the pack is full, and the tray must not show
-    the breathing-charging animation for it. The flag is kept for diagnostics only.
+    ``fullStatus`` (low nibble) and ``chargeStatus`` (high nibble). Measured on
+    the K87, a full keyboard that is **not** on the cable answers ``0x01``; the
+    G98 Pro on its cable answers ``0x10``. The high nibble is therefore the
+    charging state, not a "charging right now" reading of the low nibble.
     """
     if not resp or len(resp) < 7:
         return None
@@ -71,6 +71,14 @@ def parse_reply(resp) -> Optional[Tuple[int, int]]:
     if level > 100:
         return None
     return level, r[6]
+
+
+def parse_charging(flags: int) -> Optional[bool]:
+    """True when the high nibble says charging, False on battery, None if unknown."""
+    state = (flags >> 4) & 0x0F
+    if state in (0, 1):
+        return bool(state)
+    return None
 
 
 class MchoseKbProvider(Provider):
@@ -146,11 +154,15 @@ class MchoseKbProvider(Provider):
                 self._diag.append("    no answer (keyboard asleep?)")
                 continue
             level, flags = got
+            charging = parse_charging(flags)
             seen.add(key)
             self._last[key] = (level, name, time.time())
-            self._diag.append(f"  -> {key}: {level}% (flags 0x{flags:02x})")
-            out.append(DeviceStatus(key, name, level, False, True,
-                                    "mchose_kb", kind="keyboard", wake_on_input=True))
+            state = (" charging" if charging else " on battery"
+                     if charging is not None else " charging unknown")
+            self._diag.append(f"  -> {key}: {level}% (flags 0x{flags:02x}){state}")
+            out.append(DeviceStatus(key, name, level, bool(charging), True,
+                                    "mchose_kb", kind="keyboard", wake_on_input=True,
+                                    charging_known=charging is not None))
 
         if not seen:
             # only the models actually present; do not invent a K87 when a
