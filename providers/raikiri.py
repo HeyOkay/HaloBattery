@@ -3,12 +3,12 @@
 The controller enumerates as 0b05:1c92 and exposes a vendor collection on
 interface 4, usage page 0xFF03 / usage 0x0001. Its read-only query is
 
-    B0 12 04 00 ...        (64-byte feature report)
+    B0 12 04 00 ...        (64-byte output report)
 
-answered with the same header; the level is zero-based byte 5 (counting the
-report id) and byte 10 is the charging state according to ASUS GearLink's
-SDK. The reporter confirmed the level on hardware (65 % while Armoury Crate
-showed 65 %); the charging byte is not yet confirmed.
+answered with the same header on an input report; the level is zero-based byte
+5 (counting the report id) and byte 10 is the charging state. The reporter
+confirmed both on hardware: 72% not charging over wireless, 73% charging with
+the USB cable, and the charging flag has also been seen on the dock.
 
 The app must not show the generic Windows "Xbox 360 Controller" icon next to
 this reading, so this module is called from the XInput provider's one-slot
@@ -35,6 +35,8 @@ QUERY = bytes([0xB0, 0x12, 0x04]) + bytes(61)
 REPORT_LEN = 64
 LEVEL_INDEX = 5
 CHARGING_INDEX = 10
+READ_TIMEOUT_MS = 250
+READ_ATTEMPTS = 6
 
 
 class Reading(NamedTuple):
@@ -84,18 +86,22 @@ def read_connected(diag: List[str]) -> Optional[Reading]:
     dev = hid.device()  # type: ignore[union-attr]
     try:
         dev.open_path(d["path"])
-        sent = dev.send_feature_report(QUERY)
-        if sent is not None and sent < 0:
-            diag.append(f"[Raikiri] feature write refused ({sent})")
+        sent = dev.write(QUERY)
+        if sent is None or sent < 0:
+            diag.append(f"[Raikiri] output write refused ({sent})")
             return None
-        r = dev.get_feature_report(0, REPORT_LEN)
-        if r:
-            diag.append(f"[Raikiri] reply: {hexdump(r, 12)}")
-        reading = parse_reply(r)
-        if reading is not None:
-            diag.append(f"[Raikiri] {reading.name}: {reading.level}%"
-                        f"{' charging' if reading.charging else ''}")
-        return reading
+        diag.append(f"[Raikiri] sent {sent} bytes")
+        for attempt in range(READ_ATTEMPTS):
+            r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
+            if r:
+                diag.append(f"[Raikiri] reply {attempt + 1}: {hexdump(r, 12)}")
+            reading = parse_reply(r)
+            if reading is not None:
+                diag.append(f"[Raikiri] {reading.name}: {reading.level}%"
+                            f"{' charging' if reading.charging else ''}")
+                return reading
+        diag.append("[Raikiri] no battery reply")
+        return None
     except (OSError, IOError, ValueError) as e:
         diag.append(f"[Raikiri] {e}")
         return None

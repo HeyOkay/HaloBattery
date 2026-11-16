@@ -26,16 +26,18 @@ class FakeDevice:
         self.writes = []
         self.opened = []
         self.closed = False
+        self.reads = 0
 
     def open_path(self, path):
         self.opened.append(path)
 
-    def send_feature_report(self, data):
+    def write(self, data):
         self.writes.append(bytes(data))
         return self.sent
 
-    def get_feature_report(self, rid, length):
-        return self.frame
+    def read(self, length, timeout_ms):
+        self.reads += 1
+        return list(self.frame)
 
     def close(self):
         self.closed = True
@@ -65,6 +67,7 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(64, len(dev.writes[0]))
         self.assertEqual(bytes([0xB0, 0x12, 0x04]), dev.writes[0][:3])
         self.assertTrue(all(b == 0 for b in dev.writes[0][3:]))
+        self.assertGreaterEqual(dev.reads, 1)
 
     def test_charging_is_byte_ten(self):
         reading, _ = self.read(reply(charging=1))

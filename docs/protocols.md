@@ -467,13 +467,14 @@ Listened to, never written: byte 14 of the controller's enhanced input report (r
 
 **Connection:** 2.4 GHz receiver (`0B05:1C92`), vendor collection `ff03:0001` on interface 4
 
-Read-only feature report `B0 12 04` (64 bytes, zero padded); the reply carries
+Read-only output report `B0 12 04` (64 bytes, zero padded); the reply carries
 the same header, the level at zero-based byte 5 and the charging state at byte
-10 (the GearLink SDK's label; charging transitions still unverified). Read on
-the reporter's hardware at 65 %, matching Armoury Crate. The XInput provider
-pairs the reading to the controller's one slot and uses the ROG name, so the
-generic Windows Xbox entry is not duplicated. **Charging byte unverified**;
-test build 1 is with [#269](https://github.com/HeyOkay/HaloBattery/issues/269).
+10. Read on the reporter's hardware at 72 % not charging over wireless and
+73 % charging with the USB cable; the reporter also saw the charging flag on
+the dock in a local build. The XInput provider pairs the reading to the
+controller's one slot and uses the ROG name, so the generic Windows Xbox entry
+is not duplicated. **Confirmed for level and charging by the reporter**; test
+build 2 uses output/input reports (test 1's feature write was refused).
 
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
