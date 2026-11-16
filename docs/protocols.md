@@ -210,6 +210,7 @@ The keyboards are named from the pair list: Azoth, Azoth Extreme (and its SE),
 Profile, and the **Strix Morph 96 Wireless** (`1cea`, #340) - the last on the
 family's byte-6 layout. The reporter confirmed an accurate level on the
 test build in #340 on 2026-11-05; the separate Maono microphone request remains open.
+The Azoth X itself was confirmed on hardware in #269 with test build 2 (100%).
 
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
 
@@ -469,12 +470,12 @@ Listened to, never written: byte 14 of the controller's enhanced input report (r
 
 Read-only output report `B0 12 04` (64 bytes, zero padded); the reply carries
 the same header, the level at zero-based byte 5 and the charging state at byte
-10. Read on the reporter's hardware at 72 % not charging over wireless and
-73 % charging with the USB cable; the reporter also saw the charging flag on
-the dock in a local build. The XInput provider pairs the reading to the
-controller's one slot and uses the ROG name, so the generic Windows Xbox entry
-is not duplicated. **Confirmed for level and charging by the reporter**; test
-build 2 uses output/input reports (test 1's feature write was refused).
+10. **Confirmed on the reporter's hardware** in #269 with test build 2: 70%
+over wireless, then 69% with the charging ring on the USB cable; the diagnostic
+probe showed the 64-byte write and `0x01` at byte 10. The XInput provider pairs
+the reading to the controller's one slot and uses the ROG name, so the generic
+Windows Xbox entry is not duplicated. Test 1's feature write was refused; test
+2 uses output/input reports.
 
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
