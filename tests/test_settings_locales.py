@@ -3,7 +3,7 @@ from string import Formatter
 import unittest
 
 from halo import i18n
-from halo.locales import en, es, fr, ja, ru, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, pl, ru, zh_CN, zh_TW
 
 
 class SettingsCatalogTests(unittest.TestCase):
@@ -13,7 +13,7 @@ class SettingsCatalogTests(unittest.TestCase):
         self.assertIn("settings.no_devices", expected)
         self.assertIn("settings.quiet_hint", expected)
         self.assertIn("settings.close", expected)
-        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("ru", ru),
+        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("pl", pl), ("ru", ru),
                              ("zh-CN", zh_CN), ("zh-TW", zh_TW)):
             with self.subTest(language=code):
                 actual = {key for key in module.MESSAGES if key.startswith("settings.")}
@@ -27,7 +27,8 @@ class SettingsCatalogTests(unittest.TestCase):
                         self.assertEqual(value, value.strip())
 
     def test_language_heading_uses_the_selected_language(self):
-        for module, expected in ((en, "Language"), (fr, "Langue"), (es, "Idioma")):
+        for module, expected in ((en, "Language"), (fr, "Langue"), (es, "Idioma"),
+                                 (pl, "Language / Langue / Język")):
             with self.subTest(language=expected):
                 self.assertEqual(module.MESSAGES["preferences.language"], expected)
 
@@ -39,7 +40,7 @@ class SettingsCatalogTests(unittest.TestCase):
             "settings.version": {"version"},
             "settings.iconify_page": {"page"},
         }
-        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("ru", ru),
+        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("pl", pl), ("ru", ru),
                              ("zh-CN", zh_CN), ("zh-TW", zh_TW)):
             for key, value in module.MESSAGES.items():
                 if not key.startswith("settings."):

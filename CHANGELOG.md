@@ -39,7 +39,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
   Double-clicking a device's tray icon opens settings for that exact device.
   The compact right-click menu keeps device settings, refresh, app settings,
-  diagnostics, updates when available and exit within reach. All seven
+  diagnostics, updates when available and exit within reach. All eight
   interface languages remain available.
 - Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
   navigation and control glyphs for the settings window.
@@ -120,6 +120,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   transitions, and position backward navigation before the page settles.
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
+- Polish interface translation, including Windows language detection and Polish
+  plural forms for estimates and device counts.
 
 ## [1.17.0] - 2026-11-12
 

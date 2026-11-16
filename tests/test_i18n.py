@@ -120,6 +120,16 @@ class CatalogTests(unittest.TestCase):
         for hours in (0.5, 1, 1.5, 5.4, 47.9, 48, 72, 200):
             self.assertEqual(i18n.format_left(hours * 3600), hb.history.format_left(hours * 3600))
 
+    def test_polish_plural_rules_and_genitive_months(self):
+        expected = {0: "many", 1: "one", 2: "few", 4: "few", 5: "many",
+                    12: "many", 14: "many", 22: "few", 25: "many"}
+        for count, form in expected.items():
+            with self.subTest(count=count):
+                self.assertEqual(i18n.LANGUAGES["pl"].plural_rule(count), form)
+                self.assertIn(str(count), i18n.translate("duration.hours", language="pl", count=count))
+        self.assertEqual(i18n.translate("date.month.11", language="pl"), "listopada")
+        self.assertEqual(hb.whatsnew.nice_date("2026-11-16", language="pl"), "16 listopada 2026")
+
     def test_nonpositive_estimates_and_positive_boundary(self):
         expected = {"en": "no use left", "fr": "aucune autonomie restante",
                     "zh-TW": "無剩餘使用時間", "zh-CN": "无剩余使用时间",
