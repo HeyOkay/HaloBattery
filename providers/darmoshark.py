@@ -12,15 +12,16 @@ The frame layout and power offsets follow the OpenLogi Darmoshark driver:
     [63] checksum; the whole report sums to 0xa1 mod 256
 
 The answer is a 64-byte input report with the same operation/sub-command after
-masking bit 6. Two layouts exist: the legacy one carries the percentage at
-byte 6; the v2 layout marks itself with `15 19` at bytes 6-7 and carries it at
-byte 11. The charging state is not decoded, so the app reports the level with
-no charging ring instead of guessing. Confirmed on hardware in #430: 63%,
-matching the mouse.
+masking bit 6. Two layouts exist: the legacy one carries the charging state at
+byte 5 and the percentage at byte 6; the v2 layout marks itself with `15 19`
+at bytes 6-7 and carries the charging state at byte 10 and the percentage at
+byte 11. The Darmoshark web app treats state 1 (and 3 on the legacy layout) as
+charging, 2 as fully charged and 0 as on battery; v2 raw 3 is normalized to 0.
+Confirmed on hardware in #430: 63%, matching the mouse.
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 try:
     import hid  # type: ignore
@@ -61,22 +62,38 @@ def make_query(wireless: bool) -> bytes:
     return bytes(frame)
 
 
-def parse_reply(data) -> Optional[int]:
-    """The percentage from a power response, or None for anything else.
+def parse_power(data) -> Optional[Tuple[int, bool, bool]]:
+    """(level, charging, charging_known) from a power response, or None.
 
-    The documented layouts put the level at byte 6 (legacy) or byte 11 (v2),
-    detected by the `15 19` pair at bytes 6-7. A value above 100 is not a
-    reading.
+    Legacy replies carry the state at byte 5 and the level at byte 6; v2
+    replies mark themselves with `15 19` and carry the state at byte 10 and
+    the level at byte 11. The web app's own UI maps 1 (and 3 in the legacy
+    layout) to "charging", 2 to "fully charged", and 0 to "on battery";
+    v2 raw 3 is normalized to 0. A value above 100 is not a reading.
     """
     d = list(data or [])
     if len(d) < 12:
         return None
     if (d[0] & 0x3F) != TYPE_POWER or d[3] != SUB_POWER:
         return None
-    level = d[11] if d[6] == 0x15 and d[7] == 0x19 else d[6]
-    if 0 <= level <= 100:
-        return level
-    return None
+    v2 = d[6] == 0x15 and d[7] == 0x19
+    level = d[11] if v2 else d[6]
+    if not 0 <= level <= 100:
+        return None
+    state = d[10] if v2 else d[5]
+    if v2 and state == 3:
+        state = 0
+    if state in (1, 3):
+        return level, True, True
+    if state in (0, 2):
+        return level, False, True
+    return level, False, False
+
+
+def parse_reply(data) -> Optional[int]:
+    """The level alone, kept for callers that only need the percentage."""
+    parsed = parse_power(data)
+    return None if parsed is None else parsed[0]
 
 
 def candidates(infos: List[dict]) -> List[dict]:
@@ -94,7 +111,7 @@ class DarmosharkProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
 
-    def _read(self, d: dict) -> Optional[int]:
+    def _read(self, d: dict) -> Optional[Tuple[int, bool, bool]]:
         wireless = d.get("product_id") == RECEIVER_PID
         dev = hid.device()  # type: ignore[union-attr]
         try:
@@ -107,9 +124,9 @@ class DarmosharkProvider(Provider):
                 r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
                 if r:
                     self._diag.append(f"  reply {attempt + 1}: {hexdump(r, 14)}")
-                level = parse_reply(r)
-                if level is not None:
-                    return level
+                parsed = parse_power(r)
+                if parsed is not None:
+                    return parsed
             self._diag.append("  no power reply")
             return None
         except (OSError, IOError, ValueError) as e:
@@ -137,12 +154,13 @@ class DarmosharkProvider(Provider):
             self._diag.append(f"[Darmoshark] pid={d['product_id']:04x} "
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-            level = self._read(d)
-            if level is not None:
+            parsed = self._read(d)
+            if parsed is not None:
+                level, charging, charging_known = parsed
                 name = NAME if d["product_id"] == RECEIVER_PID else NAME + " (USB cable)"
-                self._diag.append(f"  -> {level}%")
-                return [DeviceStatus(KEY, name, level, False, True, self.name,
-                                     kind="mouse", charging_known=False)]
+                self._diag.append(f"  -> {level}% charging={charging} known={charging_known}")
+                return [DeviceStatus(KEY, name, level, charging, True, self.name,
+                                     kind="mouse", charging_known=charging_known)]
         return []
 
     def diagnostics(self) -> List[str]:

@@ -271,10 +271,12 @@ The non-numbered 64-byte output/input pair on `ff0a:0001`. The power query is
 `41 00 81 01` followed by zeroes (the `0x40` bit marks the receiver; the wired
 mouse uses `01`), with the last byte completing the report's sum to `0xA1`.
 The reply is matched by operation `0x01` and sub-command `0x01`; the legacy
-layout carries the percentage at byte 6, and the `15 19` pair at bytes 6-7 marks
-the v2 layout with the percentage at byte 11. Only 0-100 is accepted. The
-charging-state byte is not decoded, so the app shows no charging ring rather
-than guessing.
+layout carries the charging state at byte 5 and the percentage at byte 6, and
+the `15 19` pair at bytes 6-7 marks the v2 layout with the charging state at
+byte 10 and the percentage at byte 11. Only 0-100 is accepted. The Darmoshark
+web app treats state 1 (and legacy state 3) as charging, 2 as fully charged and
+0 as on battery; v2 raw 3 is normalized to 0. The charging mapping is in test
+build 2, waiting for hardware confirmation.
 
 Protocol and offsets from [OpenLogi's Darmoshark driver](https://github.com/ayasaki-exs/OpenLogi/tree/feat/darmoshark-driver)
 and [ayasaki-exs/darmoshark-battery](https://github.com/ayasaki-exs/darmoshark-battery);
