@@ -105,17 +105,10 @@ class Reader:
                 raw = bytes(self.device.get_feature_report(0xA1, 64))
                 event['replies'].append(raw.hex(' '))
                 try:
+                    # No sourced command/target echo: success does not prove freshness.
                     return response(raw)
                 except DeviceStatusError as exc:
                     if exc.status != 3 or attempt == 3:
                         raise
                     self.sleep(0.2 * (attempt + 1))
         raise ProtocolError('unreachable')
-
-    def sample(self, transport_pid):
-        found = identity(self.exchange(0x0E))
-        wired = transport_pid != RECEIVER
-        if wired and int(found['mouse_pid'], 16) != transport_pid:
-            raise ProtocolError('wired identity does not match selected device')
-        return {**found, 'transport': 'wired' if wired else 'receiver',
-                **battery(self.exchange(0xB4), wired)}

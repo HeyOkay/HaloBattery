@@ -6,8 +6,25 @@ import sys
 import tempfile
 import atexit
 import threading
+import shutil
 
-_children = set()
+
+class WorkerDirectory:
+    """Explicit cleanup only: no exit finalizer may remove a live child's files."""
+    def __init__(self):
+        self.parent = Path(tempfile.gettempdir()).resolve()
+        self.name = tempfile.mkdtemp(prefix='halobattery-4k-', dir=self.parent)
+
+    def cleanup(self):
+        path = Path(self.name).resolve()
+        if path.parent != self.parent or not path.name.startswith('halobattery-4k-'):
+            raise ValueError('unexpected worker cleanup path')
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            pass
+
+_children = {}  # process -> temporary directory, retained while a child may live
 _lifecycle = threading.Lock()
 _stopping = False
 
@@ -16,12 +33,15 @@ def shutdown():
     global _stopping
     with _lifecycle:
         _stopping = True
-        children = list(_children)
-    for child in children:
+        children = list(_children.items())
+    for child, temporary in children:
         try:
             if child.poll() is None:
                 child.kill()
             child.wait(timeout=1)
+            with _lifecycle:
+                _children.pop(child, None)
+            temporary.cleanup()
         except (OSError, subprocess.TimeoutExpired):
             pass
 
@@ -82,7 +102,7 @@ class Transactions:
                 except (OSError, subprocess.TimeoutExpired):
                     return
                 with _lifecycle:
-                    _children.discard(process)
+                    _children.pop(process, None)
                 temp.cleanup()
                 self.pending = None
         finally:
@@ -103,10 +123,10 @@ class Transactions:
                 return {'status': None, 'diagnostics': ['prior worker still terminating; no new request sent']}
             process.wait()
             with _lifecycle:
-                _children.discard(process)
+                _children.pop(process, None)
             temp.cleanup()
             self.pending = None
-        temp = tempfile.TemporaryDirectory(prefix='halobattery-4k-')
+        temp = WorkerDirectory()
         directory = Path(temp.name)
         request = {'path_hex': info['path'].hex(), 'product_id': info['product_id']}
         if simulate is not None:
@@ -125,7 +145,7 @@ class Transactions:
                 process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-                _children.add(process)
+                _children[process] = temp
                 self.active = process
             try:
                 process.wait(timeout=self.deadline)
@@ -160,6 +180,6 @@ class Transactions:
                     self.active = None
             if process is not None and process.poll() is not None:
                 with _lifecycle:
-                    _children.discard(process)
+                    _children.pop(process, None)
             if not self.pending or self.pending[0] is not process:
                 temp.cleanup()

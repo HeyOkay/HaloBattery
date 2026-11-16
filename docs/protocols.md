@@ -65,7 +65,11 @@ not enable OP1w or other identities. Accept only explicit `0xA1` replies at the
 observed 63/64-byte lengths and success status `0x01`. Failed replies may retain
 old payloads; reject them. Wireless percentage at offset 16 must be in 0–100, with
 two consecutive agreeing samples in at most three attempts. That retry policy is
-an implementation choice. Cabled PID must match identity; prefer cable and show
+an implementation choice, not proof of reply freshness. The sourced response layout
+has no established command/target echo or sequence identifier; an old successful
+reply cannot be reliably distinguished. Status rejection and agreement checks
+do not resolve that limitation. No speculative drain or additional HID requests
+are added. Cabled PID must match identity; prefer cable and show
 inferred Charging without a percentage. Multiple receivers or cabled bodies are
 refused rather than associated by guesswork.
 
@@ -77,6 +81,9 @@ closes the boundary; abrupt termination and unusual driver behavior remain
 unverified. No extra dependency, wake command, `0x0D` follow-up or automatic
 `0x0F` recovery is added. Returning `0x08` is distinct from a blocked native call;
 process isolation does not establish a fix for the persistent status stall.
+Shutdown cleans registered worker directories only after their children are reaped.
+If termination fails, files remain intentionally: no interpreter-exit finalizer
+may remove a live worker's files. Abrupt process exit can still leave leftovers.
 
 ### HyperX Cloud Alpha 2
 

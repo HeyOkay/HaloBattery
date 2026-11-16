@@ -6,6 +6,51 @@ from endgame4k_transaction import Transactions
 
 
 class ProcessBoundaryTests(unittest.TestCase):
+    def test_worker_directory_has_explicit_idempotent_cleanup(self):
+        from endgame4k_transaction import WorkerDirectory
+        temporary = WorkerDirectory()
+        path = Path(temporary.name)
+        self.assertTrue(path.is_dir())
+        temporary.cleanup()
+        temporary.cleanup()
+        self.assertFalse(path.exists())
+
+    def test_worker_directory_has_no_automatic_exit_finalizer(self):
+        import tempfile
+        import subprocess
+        with tempfile.TemporaryDirectory() as parent:
+            script = ('import sys; import endgame4k_transaction as t; '
+                      't.tempfile.gettempdir=lambda:sys.argv[1]; '
+                      'directory=t.WorkerDirectory()')
+            result = subprocess.run([sys.executable, '-c', script, parent],
+                                    capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # Even interpreter exit must not implicitly delete a worker's files.
+            self.assertEqual(len(list(Path(parent).glob('halobattery-4k-*'))), 1)
+
+    def test_shutdown_cleans_reaped_child_directory(self):
+        from unittest.mock import Mock, patch
+        import endgame4k_transaction as module
+        process, temporary = Mock(), Mock()
+        process.poll.return_value = 0
+        with patch.object(module, '_children', {process: temporary}), patch.object(module, '_stopping', False):
+            module.shutdown()
+            process.wait.assert_called_once_with(timeout=1)
+            temporary.cleanup.assert_called_once()
+            self.assertEqual(module._children, {})
+
+    def test_shutdown_retains_directory_while_child_is_unreaped(self):
+        from unittest.mock import Mock, patch
+        import subprocess
+        import endgame4k_transaction as module
+        process, temporary = Mock(), Mock()
+        process.poll.return_value = None
+        process.wait.side_effect = subprocess.TimeoutExpired('worker', 1)
+        with patch.object(module, '_children', {process: temporary}), patch.object(module, '_stopping', False):
+            module.shutdown()
+            temporary.cleanup.assert_not_called()
+            self.assertIs(module._children[process], temporary)
+
     def test_real_child_success_and_validation(self):
         boundary = Transactions()
         result = boundary.run({'path': b'fake', 'product_id': 0x1970}, simulate='success')

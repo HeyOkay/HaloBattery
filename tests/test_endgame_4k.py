@@ -44,6 +44,21 @@ class Fake:
 
 
 class Endgame4kTests(unittest.TestCase):
+    def test_success_has_no_proven_command_correlation(self):
+        # The documented header has status, not an echoed command identifier.
+        raw = ident()
+        dev = Fake([raw])
+        reader = P.Reader(dev, sleep=lambda _: None)
+        self.assertEqual(reader.exchange(0xB4), raw)
+        # Identity-shaped data fails range checking, not command correlation.
+        with self.assertRaises(P.ProtocolError):
+            P.battery(raw, False)
+
+    def test_two_identical_old_successes_cannot_prove_freshness(self):
+        old_success = reply(bytes([45]))
+        result, _, _ = self.run_fake([ident(), old_success, old_success])
+        self.assertEqual(result[0].level, 45)
+
     def setUp(self):
         policy = patch.object(E, 'ENABLED_PIDS', frozenset({0x1970, 0x1968, 0x1982}))
         policy.start()

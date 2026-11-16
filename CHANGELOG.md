@@ -60,7 +60,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   disabled while persistent status-0x08 recovery remains unresolved; confirmed
   XM2we support is unchanged.
 
-
 - Use the current application logo in Windows tray preferences, notifications
   and What's new. Repeated What's new requests reuse the existing window,
   and consume cached release notes under the configuration lock.
