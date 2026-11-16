@@ -144,7 +144,7 @@ from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
-                       DeviceStatus, DjiProvider,
+                       DeviceStatus, DjiProvider, DarmosharkProvider,
                        EightBitDoProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
@@ -212,6 +212,7 @@ PROVIDER_LABELS = {
     "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
     "dji": "DJI Mic Mini 2",
+    "darmoshark": "Darmoshark N5",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "finalmouse": "Finalmouse UltralightX",
@@ -276,7 +277,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
+            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
 
 
 # ---------------------------------------------------------------- config
