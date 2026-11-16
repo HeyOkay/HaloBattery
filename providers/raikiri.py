@@ -7,8 +7,8 @@ interface 4, usage page 0xFF03 / usage 0x0001. Its read-only query is
 
 answered with the same header on an input report; the level is zero-based byte
 5 (counting the report id) and byte 10 is the charging state. The reporter
-confirmed both on hardware: 72% not charging over wireless, 73% charging with
-the USB cable, and the charging flag has also been seen on the dock.
+confirmed both on hardware with test build 2: 70% over wireless and 69% with
+the charging ring on the USB cable.
 
 The app must not show the generic Windows "Xbox 360 Controller" icon next to
 this reading, so this module is called from the XInput provider's one-slot
