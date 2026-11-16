@@ -31,6 +31,23 @@ def executable_path():
     return Path(override) if override else Path(__file__).resolve().parent.parent / ".build" / "settings-ui" / "HaloBattery.Settings.exe"
 
 
+def allow_companion_foreground(process_id):
+    """Transfer this user activation to our companion, never to all processes."""
+    if sys.platform != "win32" or type(process_id) is not int or not 0 < process_id < 0xFFFFFFFF:
+        return False
+    try:
+        import ctypes
+        allow = ctypes.WinDLL("user32", use_last_error=True).AllowSetForegroundWindow
+        allow.argtypes = [ctypes.c_ulong]
+        allow.restype = ctypes.c_int
+        # Called on the tray/menu caller before scheduling asynchronous refresh.
+        # https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-allowsetforegroundwindow
+        return bool(allow(process_id))
+    except (OSError, AttributeError):
+        log.debug("settings: foreground activation grant unavailable", exc_info=True)
+        return False
+
+
 def encode_message(message):
     return json.dumps(message, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n"
 
@@ -113,6 +130,7 @@ class SettingsHost:
             # Reopens refresh asynchronously, without waiting for the poll timer
             # or touching the child process on the tray/menu caller.
             if session.ready.is_set():
+                allow_companion_foreground(getattr(session.process, "pid", None))
                 self._thread(self._show, session, "settings-show")
         return True
 
@@ -199,6 +217,7 @@ class SettingsHost:
             if not self._current(session):
                 self._cleanup(session)
                 return
+            allow_companion_foreground(getattr(process, "pid", None))
             for target, name in ((self._write, "settings-writer"), (self._read, "settings-commands"),
                                  (self._stderr, "settings-log"), (self._poll, "settings-state")):
                 self._thread(target, session, name)

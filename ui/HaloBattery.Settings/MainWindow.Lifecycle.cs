@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using System.Runtime.InteropServices;
 
 namespace HaloBattery.Settings;
 
@@ -13,6 +14,7 @@ public sealed partial class MainWindow
         if(IsClosingSettings) return;
         if(pagesInitializing)
         {
+            ActivateSettingsWindow();
             if(startupRevealing)
             {
                 showAfterStartup=new(page,deviceKey,requestId);
@@ -40,14 +42,29 @@ public sealed partial class MainWindow
             Navigate(page,!IsSettingsWindowHidden);
         firstPreparedView??=new(AppWindow.Position.X,AppWindow.Position.Y,AppWindow.Size.Width,AppWindow.Size.Height,
             expanded,rail.Width.Value,current,frame.Content is not null,State.Labels.Count,AppWindow.IsVisible);
-        PrepareSettingsWindowForShow();
         RefreshBindings();
-        AppWindow.Show();
-        Activate();
+        ActivateSettingsWindow();
         windowShowCount++;
         if(previewImage is not null) StartPreview();
         Bridge.SendVisibility(true,requestId);
     }
+
+    private void ActivateSettingsWindow()
+    {
+        if(IsClosingSettings)return;
+        PrepareSettingsWindowForShow();
+        AppWindow.Show();
+        Activate();
+        // The tray process transfers foreground permission on the user click.
+        // Window.Activate alone is not a foreground request for background apps.
+        // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setforegroundwindow
+        SetForegroundWindow(hwnd);
+    }
+
+    [DllImport("user32.dll")][return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint window);
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
 
     private void OnSettingsWindowHidden()
     {

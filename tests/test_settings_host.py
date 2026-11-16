@@ -81,6 +81,43 @@ class SettingsHostTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             host.encode_message(dict(value=float('nan')))
 
+    def test_reopen_grants_foreground_to_existing_companion_before_worker(self):
+        self.hello()
+        self.session.process = SimpleNamespace(pid=43210)
+        order = []
+        with patch.object(host, "allow_companion_foreground", side_effect=lambda pid: order.append(("grant", pid))), \
+                patch.object(self.manager, "_thread", side_effect=lambda *args: order.append(("worker", args[2]))):
+            self.assertTrue(self.manager.open("b", page="devices"))
+        self.assertEqual(order, [("grant", 43210), ("worker", "settings-show")])
+        self.assertEqual((self.session.page, self.session.device_key), ("devices", "b"))
+
+    def test_refused_foreground_grant_does_not_block_settings_navigation(self):
+        self.hello()
+        self.session.process = SimpleNamespace(pid=43210)
+        with patch.object(host, "allow_companion_foreground", return_value=False) as grant, \
+                patch.object(self.manager, "_thread") as worker:
+            self.assertTrue(self.manager.open("b", page="devices"))
+        grant.assert_called_once_with(43210)
+        worker.assert_called_once_with(self.manager._show, self.session, "settings-show")
+
+    def test_foreground_grant_is_scoped_and_handles_unavailable_api(self):
+        import ctypes
+        with patch.object(host.sys, "platform", "win32"), patch.object(ctypes, "WinDLL", create=True) as library:
+            for pid in (None, 0, -1, True, "123", 0xFFFFFFFF, 0x100000000):
+                self.assertFalse(host.allow_companion_foreground(pid))
+            library.assert_not_called()
+            allow = library.return_value.AllowSetForegroundWindow
+            allow.return_value = 1
+            self.assertTrue(host.allow_companion_foreground(43210))
+            allow.assert_called_once_with(43210)
+            allow.return_value = 0
+            self.assertFalse(host.allow_companion_foreground(43210))
+            library.side_effect = OSError("unavailable")
+            self.assertFalse(host.allow_companion_foreground(43210))
+        with patch.object(host.sys, "platform", "linux"), patch.object(ctypes, "WinDLL", create=True) as library:
+            self.assertFalse(host.allow_companion_foreground(43210))
+            library.assert_not_called()
+
     def test_handshake_then_typed_state_without_forms_or_raw_status(self):
         welcome, state = self.hello()
         self.assertEqual(welcome, dict(type="welcome", protocol=1, sessionId=self.session.id))

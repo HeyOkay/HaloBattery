@@ -58,6 +58,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bring the existing Settings window to the foreground when a tray icon is
+  double-clicked, restoring it if minimized.
+
 - Use the current application logo in Windows tray preferences, notifications
   and What's new. Repeated What's new requests reuse the existing window,
   and consume cached release notes under the configuration lock.
