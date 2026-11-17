@@ -130,22 +130,59 @@ class PollTest(unittest.TestCase):
         K.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(infos))
         return self.provider.poll()
 
-    def test_the_receiver_reports_the_battery_level(self):
+    def test_the_receiver_reports_the_battery_level_and_charging(self):
         infos = entries(0x056C)
-        cols = {b"056c-ff14": FakeDevice({K.CMD_BATTERY: 44})}
+        cols = {b"056c-ff14": FakeDevice({K.CMD_BATTERY: 44, K.CMD_CHARGING: 1})}
         res = self.poll(infos, cols)
         self.assertEqual([(r.key, r.name, r.level, r.charging, r.online, r.kind) for r in res],
-                         [("kraken_v4", "Razer Kraken V4", 44, False, True, "headset")])
-        self.assertFalse(res[0].charging_known)
+                         [("kraken_v4", "Razer Kraken V4", 44, True, True, "headset")])
+        self.assertTrue(res[0].charging_known)
         dev = cols[b"056c-ff14"]
         self.assertEqual([0x80, 0x21], [dev.frames[0][9], dev.frames[0][10]])
-        self.assertEqual(1, len(dev.frames))
+        self.assertEqual([0x80, 0x2A], [dev.frames[1][9], dev.frames[1][10]])
+        self.assertEqual(2, len(dev.frames))
 
-    def test_only_the_battery_command_is_sent(self):
+    def test_the_battery_and_charging_commands_are_sent(self):
+        infos = entries(0x056C)
+        dev = FakeDevice({K.CMD_BATTERY: 44, K.CMD_CHARGING: 0})
+        self.poll(infos, {b"056c-ff14": dev})
+        self.assertEqual([0x21, 0x2A], [f[10] for f in dev.frames])
+
+    def test_a_charging_reply_of_zero_keeps_the_ring_off(self):
+        infos = entries(0x056C)
+        cols = {b"056c-ff14": FakeDevice({K.CMD_BATTERY: 44, K.CMD_CHARGING: 0})}
+        res = self.poll(infos, cols)
+        self.assertEqual([(r.level, r.charging, r.charging_known) for r in res],
+                         [(44, False, True)])
+
+    def test_a_missing_charging_reply_still_shows_the_level(self):
         infos = entries(0x056C)
         dev = FakeDevice({K.CMD_BATTERY: 44})
-        self.poll(infos, {b"056c-ff14": dev})
-        self.assertEqual([0x21], [f[10] for f in dev.frames])
+        cols = {b"056c-ff14": dev}
+        res = self.poll(infos, cols)
+        self.assertEqual([(r.level, r.charging, r.charging_known) for r in res],
+                         [(44, False, False)])
+        self.assertEqual([0x21, 0x2A], [f[10] for f in dev.frames])
+        self.assertIn("no charging reply; keeping the level",
+                      "\n".join(self.provider.diagnostics()))
+
+    def test_an_invalid_charging_value_is_treated_as_unknown(self):
+        infos = entries(0x056C)
+        cols = {b"056c-ff14": FakeDevice({K.CMD_BATTERY: 44, K.CMD_CHARGING: 2})}
+        res = self.poll(infos, cols)
+        self.assertEqual([(r.level, r.charging, r.charging_known) for r in res],
+                         [(44, False, False)])
+        self.assertIn("refused charging value 2",
+                      "\n".join(self.provider.diagnostics()))
+
+    def test_the_cable_reports_charging_too(self):
+        infos = entries(0x056B)
+        dev = FakeDevice({K.CMD_BATTERY: 60, K.CMD_CHARGING: 1})
+        res = self.poll(infos, {b"056b-ff14": dev})
+        self.assertEqual([(r.level, r.charging, r.charging_known) for r in res],
+                         [(60, True, True)])
+        self.assertEqual([0x21, 0x2A], [f[10] for f in dev.frames])
+        self.assertEqual([0x00, 0x00], [f[9] for f in dev.frames])
 
     def test_the_cable_is_read_before_the_dongle(self):
         infos = entries(0x056C, 0x056B)
@@ -196,7 +233,7 @@ class PollTest(unittest.TestCase):
         dev.values = {}
         res = self.poll(infos, cols)
         self.assertEqual([(r.level, r.online) for r in res], [(44, False)])
-        self.provider._last = (44, time.time() - K.ASLEEP_KEEP)
+        self.provider._last = (44, False, time.time() - K.ASLEEP_KEEP)
         self.assertEqual(self.poll(infos, cols), [])
 
 

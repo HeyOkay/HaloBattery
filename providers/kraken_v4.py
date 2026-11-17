@@ -8,11 +8,15 @@ the dongle, 0x00 on the cable), the command in [10] and an XOR checksum in
 [62]. OpenRGB names commands 0x21 and 0x2A as present but unknown; the
 BlackShark sibling uses 0x21 as the battery GET and 0x2A as the charging GET.
 
-This provider sends only the 0x21 battery GET. Charging has not been decoded
-on the Kraken V4, so the status is left unknown rather than guessed.
+This provider sends the 0x21 battery GET and the 0x2A charging GET. The
+charging reply is 0 on battery and 1 while charging; if it does not answer,
+the level is still shown with charging_known=False. The reply's data-valid
+byte is not the charging state.
 
-Sources: OpenRGB merge request 3042 (Kraken V4 frame and packet capture) and
-openrazer issue 2298 (device identification and protocol discussion).
+Sources: OpenRGB merge request 3042 (Kraken V4 frame and packet capture),
+openrazer issue 2298 (device identification and protocol discussion), and
+Sebax95/Razer-Kraken-V4-Pro-Battery-Detector-Linux (the 0x2A value mapping
+and the data-valid-byte trap for the same frame family).
 """
 from __future__ import annotations
 
@@ -40,9 +44,11 @@ REPORT_ID = 0x02
 REPORT_SIZE = 64
 SEQ_BASE = 0x60
 CMD_BATTERY = 0x21
+CMD_CHARGING = 0x2A
 
 READ_ATTEMPTS = 6
 READ_TIMEOUT_MS = 200
+COMMAND_GAP_S = 0.02           # the dock drops back-to-back commands
 ASLEEP_KEEP = 180                # s; the headset is either on or off
 
 
@@ -105,7 +111,7 @@ class KrakenV4Provider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[int, float]] = None
+        self._last: Optional[Tuple[int, Optional[bool], float]] = None
         self._seq = 0
 
     def _query(self, dev, domain: int, cmd: int) -> Optional[int]:
@@ -133,8 +139,8 @@ class KrakenV4Provider(Provider):
                 return value
         return None
 
-    def _read(self, path: bytes, domain: int) -> Optional[int]:
-        """The battery percentage, or None when the headset is silent."""
+    def _read(self, path: bytes, domain: int) -> Optional[Tuple[int, Optional[bool]]]:
+        """-> (battery percent, charging or None when the headset does not say)."""
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -148,7 +154,15 @@ class KrakenV4Provider(Provider):
             if level > 100:
                 self._diag.append(f"    refused battery value {level}")
                 return None
-            return level
+            time.sleep(COMMAND_GAP_S)
+            charging = self._query(dev, domain, CMD_CHARGING)
+            if charging not in (0, 1):
+                if charging is not None:
+                    self._diag.append(f"    refused charging value {charging}")
+                else:
+                    self._diag.append("    no charging reply; keeping the level")
+                return level, None
+            return level, bool(charging)
         finally:
             try:
                 dev.close()
@@ -172,6 +186,7 @@ class KrakenV4Provider(Provider):
             for d in mine[:4]))
 
         level = None
+        charging = None
         for pid in (0x056B, 0x056C):            # cable first: the dongle goes quiet
             group = [d for d in mine if d.get("product_id") == pid]
             if not group:
@@ -183,17 +198,20 @@ class KrakenV4Provider(Provider):
             domain = PIDS[pid]
             self._diag.append(f"  pid={pid:04x} domain={domain:02x} "
                               f"iface={d.get('interface_number')}")
-            level = self._read(d["path"], domain)
-            if level is not None:
+            got = self._read(d["path"], domain)
+            if got is not None:
+                level, charging = got
                 break
             self._diag.append("  no answer (headset off, or the link is not up)")
 
         if level is not None:
-            self._last = (level, time.time())
-            return [DeviceStatus(KEY, NAME, level, False, True, "kraken_v4",
-                                 kind="headset", charging_known=False)]
+            self._last = (level, charging, time.time())
+            return [DeviceStatus(KEY, NAME, level,
+                                 bool(charging) if charging is not None else False,
+                                 True, "kraken_v4", kind="headset",
+                                 charging_known=charging is not None)]
 
-        if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
+        if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, self._last[0], False, False, "kraken_v4",
                                  kind="headset", charging_known=False)]
         return []

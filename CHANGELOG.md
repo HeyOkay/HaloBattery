@@ -16,8 +16,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Razer Kraken V4 (2.4 GHz receiver `1532:056C` or USB-C cable
-  `1532:056B`): read the battery level over its MediaTek channel. Test build,
-  unverified on hardware; charging is not decoded.
+  `1532:056B`): read the battery level and charging state over its MediaTek
+  channel. Test build 2, unverified on hardware.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.

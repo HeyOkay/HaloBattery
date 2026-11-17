@@ -143,11 +143,11 @@ The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xF
 
 **Connection:** 2.4 GHz receiver (1532:056C) or USB-C cable (1532:056B), both on usage page 0xFF14
 
-The receiver presents a MediaTek command channel, the same 64-byte frame family as the BlackShark V2 HyperSpeed: report id 2, sequence in byte 2, payload length in byte 6, address/domain in byte 9 (0x80 through the receiver, 0x00 on the cable), command in byte 10 and an XOR checksum in byte 62. Only command 0x21 (battery) is sent; the reply's first payload byte is the percentage.
+The receiver presents a MediaTek command channel, the same 64-byte frame family as the BlackShark V2 HyperSpeed: report id 2, sequence in byte 2, payload length in byte 6, address/domain in byte 9 (0x80 through the receiver, 0x00 on the cable), command in byte 10 and an XOR checksum in byte 62. Commands 0x21 (battery) and 0x2A (charging) are sent in that order. The reply's value byte is the percentage for 0x21, and 0 on battery / 1 while charging for 0x2A; the data-valid byte is not the charging state. If 0x2A is silent or returns anything other than 0/1, the level is still shown with charging unknown.
 
-OpenRGB's [Kraken V4 merge request](https://gitlab.com/CalcProgrammer1/OpenRGB/-/merge_requests/3042) documents this frame and the packet capture for this model, and [openrazer issue 2298](https://github.com/openrazer/openrazer/issues/2298) identifies the device. OpenRGB lists commands 0x21 and 0x2A as present but not decoded; the BlackShark sibling uses 0x21 for the level and 0x2A for charging. Charging is not decoded here, so the icon shows no charge state. Read-only: no setting, lighting or firmware command is sent.
+OpenRGB's [Kraken V4 merge request](https://gitlab.com/CalcProgrammer1/OpenRGB/-/merge_requests/3042) documents this frame and the packet capture for this model, and [openrazer issue 2298](https://github.com/openrazer/openrazer/issues/2298) identifies the device. OpenRGB lists commands 0x21 and 0x2A as present but not decoded; the BlackShark sibling uses 0x21 for the level and 0x2A for charging. [Sebax95's Kraken V4 Pro battery tool](https://github.com/Sebax95/Razer-Kraken-V4-Pro-Battery-Detector-Linux) documents the same 0x2A mapping and warns that the reply's data-valid byte is always 1, not the charging state. Read-only: no setting, lighting or firmware command is sent.
 
-**Status:** test build 1; waiting for the reporter to confirm the level on hardware.
+**Status:** test build 2; waiting for the reporter to confirm the level and charging state on hardware.
 
 ### Sony INZONE H9
 
