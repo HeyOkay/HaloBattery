@@ -106,6 +106,7 @@ MESSAGES = {
     "provider.atk_keyboard": "ATK V75X keyboard",
     "provider.atk_nearlink": "ATK X1 Nearlink mice",
     "provider.aula": "AULA F87 Pro V2C keyboards",
+    "provider.aula_f108": "AULA F108 Pro keyboards",
     "provider.dareu": "DAREU mice",
     "provider.eweadn": "EWEADN / 前行者 mice",
     "provider.endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
