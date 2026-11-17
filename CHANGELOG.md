@@ -15,8 +15,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
-- Teevolution Terra Pro on its 1K receiver (`3554:F520`), and the existing
-  `3554:F523` reader now uses the mouse pictogram (#448).
+- Teevolution Terra Pro on its 1K receiver (`3554:F520`), confirmed on
+  hardware in #448; the existing `3554:F523` reader now uses the mouse pictogram.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
