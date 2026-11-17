@@ -220,6 +220,14 @@ Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile, and on a Keris II A
 
 The newer routed exchange that ckb-next calls "bragi" and OpenLinkHub "slipstream": 64-byte frames behind report id 0, route `0x09` asks the mouse behind the receiver (the receiver itself is `0x08`), command `0x02` "get property", property `0x0F` battery. The answer `01 02 00 <value:2 LE> ...` carries the level in tenths of a percent (`26 02` = 550 = 55 %). Frames that are not exactly that shape - the receiver's device records, its notices - are not levels. The M75 Wireless (`1B1C:1BDC`, the "SLIPSTREAM WIRELESS USB Receiver") answers the same exchange and is confirmed on hardware by @SpaceJesusCosmic in #301. The request and the answer were captured from the reporter's dongle in #56 and the exchange is confirmed on hardware: KKiruano's test build run showed the same level SignalRGB does. Because the answer echoes the command and not the property, a second app on the same dongle (iCUE, SignalRGB) can put an answer for another property on the channel; the provider asks twice and takes only two equal answers, waits in a time window (traffic frames end a read early) and holds a per-dongle budget. No charging state is reported. The wired id 1B1C:1B7E is left out.
 
+### Corsair M65 RGB Ultra Wireless
+
+**Connection:** 2.4 GHz SLIPSTREAM receiver (`1B1C:1BA6`) or USB cable (`1B1C:1BB5`)
+
+The receiver publishes the same `FF42:0001`/`FF42:0002` pair as the Dark Core dongle and answers the routed `0x09` battery property. While the mouse is charging on its cable it changes identity to `1B1C:1BB5` and the receiver stops answering. The cable identity publishes the same pair and uses target `0x08` for both the level (`00 08 02 0F`) and the charge property (`00 08 02 10`), as OpenLinkHub's `m65rgbultraWU` package does. The two identities share the `corsair:m65` icon; when both are present the cable reading, with its charge state, replaces the receiver's. The receiver itself has no charge flag.
+
+**Confirmed on hardware** in #411: test build 5 read 83-84 % while charging, which the reporter's iCUE showed as 85 %, and about 55 % unplugged. The cable's percentage rising while charging is real, not a stale or fixed value. The cable identity is preferred when it answers; the receiver is skipped while the cable owns the mouse. The receiver's own level is used when the cable is absent.
+
 ### G-Wolves HSK Pro ACE and the other models with a receiver of their own
 
 **Connection:** the model's own receiver (e.g. 33E4:5803 for the HSK Pro ACE, #105) or USB cable
