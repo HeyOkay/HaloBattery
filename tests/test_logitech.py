@@ -269,6 +269,15 @@ class ReceiverTests(LogitechTestCase):
                          ("Logitech device", 90, "about 90% (full)", False, "logitech:c52b:3"))
         self.assertIn((b"short", [0x10, 3, 0x81, 0x07, 0, 0, 0]), bus.writes)
 
+    def test_the_mx_revolution_gets_its_model_name(self):
+        # #449: the C525 receiver's paired HID++ 1.0 device has no feature table,
+        # so the receiver id is the only model hint available
+        dev = FakeHidpp(registers={0x0D: [75, 0, 0x30, 0]})
+        self.use(receiver(0xC525), {b"long": ({1: dev}, b"short")})
+        [st] = L.LogitechProvider().poll()
+        self.assertEqual((st.name, st.level, st.kind, st.key),
+                         ("Logitech MX Revolution", 75, "mouse", "logitech:c525:1"))
+
     def test_the_status_register_charging_byte(self):
         dev = FakeHidpp(registers={0x07: [5, 0x21, 0x00, 0x00]})
         self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})

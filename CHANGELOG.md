@@ -13,6 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
+  the mouse pictogram; the existing charge-register reader already returned
+  75% on the reporter's receiver.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
