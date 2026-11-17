@@ -62,7 +62,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
+- **MCHOSE X9** headset on its 2.4 GHz dongle (`3837:6045`), read with M HUB's own
+  BLK battery query (`65 01` on report `0x55`). Confirmed on hardware: the level and
+  the discharging state on the dongle. On its cable the headset leaves the dongle and
+  appears as `3837:6044`, which M HUB does not read: nothing is sent to it, and no
+  charging state is shown.
+
 ### Fixed
+
+- A MCHOSE headset unplugged in the middle of a poll no longer hides the other MCHOSE
+  devices for that poll.
 
 - Bring the existing Settings window to the foreground when a tray icon is
   double-clicked, restoring it if minimized.

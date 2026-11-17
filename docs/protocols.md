@@ -287,6 +287,12 @@ A different chip from the M7 Ultra, and a different protocol: a 65-byte output r
 
 The vendor collection (usage page 0xFF01; the sibling 0xFF0B never answers): feature report 0x11 (the shorter report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns `53 52 31 00 02 05 07 00 09 64 00 64` — vid 0x5253, model 0x31, firmware, flags, then the level and the charging byte (1 while charging). The request has to be repeated for each read, and the receiver only relays a real value while the mouse is awake: asleep it answers with zeros, so a silent mouse keeps its last level on a greyed icon. On the cable the mouse answers on its own PID (5253:0031, the number it reports as its model id) and the receiver goes quiet: both connections share one icon, and whichever one reports charging wins
 
+### MCHOSE X9
+
+**Connection:** 2.4 GHz dongle (3837:6045, C-Media strings)
+
+MCHOSE's own web driver, M HUB (www.mchose.com.cn, `assets/main-DQZs6ZzX.js`, fetched 2026-11-17), lists the headset as `createAudioHidProduct({modelKey:"MCHOSE X9", vendorId:14391, productId:24645, protocolProfile:AUDIO_PROTOCOL_PROFILE.BLK})`. The only request sent is that BLK profile's `audio.blk.readBattery`: output report 0x55 with 63 data bytes, `65 01` and zeros. The reply on input report 0x55 carries the level in data byte 1 and the state in byte 2, decoded the way M HUB's `parseBatteryResponse` does it: 2 discharging, 3 charging, 4 full, 26 asleep (no level shown). Any other state, a level above 100 or a short reply is refused. The report lives on the vendor collection `ff90:0001`, the only one written to. Confirmed on an X9 on its dongle: `55 65 28 02`, which is 40 % and discharging, within 30 ms. On its cable the headset drops its radio link and the dongle stops answering. The headset then shows up as a second USB device, 3837:6044 "MCHOSE X9 HEADSET", which M HUB does not list, so nothing is written to it: a charging X9 keeps its last level greyed out for five minutes, like the other MCHOSE devices, and no charging state is shown.
+
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
 **Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 3554:F506, 3710:3414)
