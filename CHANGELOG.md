@@ -13,6 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Logitech G325 LIGHTSPEED (`046D:0B21`): read its vendor `0x50`/`0x23`
+  battery report on `ffa0:0001`, including the charging state. Test build 1,
+  awaiting comparison with G HUB.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.

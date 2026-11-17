@@ -86,6 +86,7 @@ MESSAGES = {
     "provider.lamzu_sw": "Lamzu Tachi (8K receiver)",
     "provider.lofree": "Claviers Lofree, souris AULA V9",
     "provider.logitech": "Logitech",
+    "provider.logitech_g325": "Logitech G325 LIGHTSPEED",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Souris MCHOSE",
     "provider.nintendo": "Manettes Nintendo Switch",
