@@ -28,7 +28,7 @@ class SettingsCatalogTests(unittest.TestCase):
 
     def test_language_heading_uses_the_selected_language(self):
         for module, expected in ((en, "Language"), (fr, "Langue"), (es, "Idioma"),
-                                 (pl, "Language / Langue / Język")):
+                                 (pl, "Język")):
             with self.subTest(language=expected):
                 self.assertEqual(module.MESSAGES["preferences.language"], expected)
 

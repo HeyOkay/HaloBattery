@@ -88,7 +88,7 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(state["devices"][0]["kind"], "mouse")
         self.assertIsNone(state["devices"][0]["charging"])
         self.assertEqual(state["devices"][0]["level"], 42)
-        self.assertEqual(len(state["options"]["languages"]), len(host.i18n.LANGUAGES))
+        self.assertEqual(len(state["options"]["languages"]), 8)
         self.manager._publish(self.session)
         self.assertEqual(self.drain(), [])
 

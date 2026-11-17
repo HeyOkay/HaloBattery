@@ -10,6 +10,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
+- Polish interface translation, including Windows language detection and Polish
+  plural forms for estimates and device counts.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
   name filters. Search all reviewed names with 50-candidate pages, round arrow
   and number buttons, predecoded neighboring previews and bounded parallel
@@ -120,8 +122,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   transitions, and position backward navigation before the page settles.
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
-- Polish interface translation, including Windows language detection and Polish
-  plural forms for estimates and device counts.
 
 ## [1.17.0] - 2026-11-12
 
