@@ -6,7 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Match What's new branding to Settings, with Outfit lettering, closer icon
+  spacing and a brighter accent. Soften inactive navigation labels and glyphs,
+  and fade the header wordmark on hover. Share Close
+  and Exit HaloBattery hover colors, with themed pressed feedback.
+
 ### Added
+- A fading app splash with a soft icon shadow and theme-matched startup background
+  while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
@@ -56,13 +64,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bring the existing Settings window to the foreground when a tray icon is
+  double-clicked, restoring it if minimized.
+
 - Use the current application logo in Windows tray preferences, notifications
   and What's new. Repeated What's new requests reuse the existing window,
   and consume cached release notes under the configuration lock.
 
-- Restore the Settings window position, size, monitor and navigation panel
-  before its first display. Reopen the retained window with its current page
-  and scroll position, without an empty layout or repeated startup.
+- Restore the Settings window position, size, monitor, navigation panel,
+  selected device, page and scroll position behind the startup splash.
+  Closing Settings releases its process memory while the tray app keeps running.
 
 - Keep the overscroll indicator centered between the page edge and nearby
   content throughout elastic motion, with a slightly stronger ring stroke. On

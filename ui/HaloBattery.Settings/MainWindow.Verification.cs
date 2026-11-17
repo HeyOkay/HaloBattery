@@ -46,6 +46,19 @@ public sealed partial class MainWindow
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                if (Arg("--verify-scope") == "window-activation")
+                {
+                    await VerifySettingsActivation(checks);
+                    WriteVerificationReport(destination,new {complete=true,scope="window-activation",checks});
+                    return;
+                }
+                if (Arg("--verify-scope") == "startup-splash")
+                {
+                    await VerifyStartupSplash(checks);
+                    await VerifySettingsViewPersistence(checks);
+                    WriteVerificationReport(destination,new {complete=true,scope="startup-splash",checks});
+                    return;
+                }
                 if (Arg("--verify-scope") == "window-interactions")
                 {
                     await VerifyWindowInteractions(checks);

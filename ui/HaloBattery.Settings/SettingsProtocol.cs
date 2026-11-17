@@ -103,8 +103,9 @@ public sealed class SettingsBridge : IDisposable
 
     private string? fixturePath;
     private bool initialized;
+    private sealed record FlushBarrier(TaskCompletionSource<bool> Completion);
 
-    // No native window is created until this handshake has delivered real data.
+    // The splash can be shown while the real model arrives over this handshake.
     public async Task<UiState> InitializeAsync()
     {
         if(initialized) throw new InvalidOperationException("Settings bridge already initialized.");
@@ -167,9 +168,35 @@ public sealed class SettingsBridge : IDisposable
         _=Task.Run(ReadLoop);
     }
 
-    internal void SendVisibility(bool visible)
+    internal void SendVisibility(bool visible,long? requestId=null)
     {
-        if(!fixture) Enqueue(new {type="visibility",visible});
+        if(!fixture)
+        {
+            if(requestId is {} id)Enqueue(new {type="visibility",visible,requestId=id});
+            else Enqueue(new {type="visibility",visible});
+        }
+    }
+
+    internal void SendClosing()
+    {
+        if(!fixture)Enqueue(new {type="closing"});
+    }
+
+    internal async Task FlushAsync()
+    {
+        if(fixture || disposed)return;
+        var drained=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancel.Token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(2));
+        try
+        {
+            // A barrier in the same queue proves every earlier edit reached the
+            // pipe before Dispose cancels the writer on native Window.Closed.
+            await outgoing.Writer.WriteAsync(new FlushBarrier(drained),deadline.Token);
+            await drained.Task.WaitAsync(deadline.Token);
+        }
+        catch(Exception error) when(error is OperationCanceledException or ChannelClosedException)
+        { System.Diagnostics.Debug.WriteLine(error); }
     }
 
     public long SendCommand(string name,object args)
@@ -212,6 +239,12 @@ public sealed class SettingsBridge : IDisposable
         {
             await foreach(var message in outgoing.Reader.ReadAllAsync(cancel.Token))
             {
+                if(message is FlushBarrier barrier)
+                {
+                    await output!.FlushAsync(cancel.Token);
+                    barrier.Completion.TrySetResult(true);
+                    continue;
+                }
                 await output!.WriteLineAsync(JsonSerializer.Serialize(message,Json));
                 await output.FlushAsync(cancel.Token);
             }
@@ -261,7 +294,8 @@ public sealed class SettingsBridge : IDisposable
                 case "show":
                     var restore=message.TryGetProperty("restoreView",out var restoreView) && restoreView.ValueKind==JsonValueKind.True;
                     window.ShowSettingsWindow(restore?null:message.GetProperty("page").GetString(),
-                        !restore && message.TryGetProperty("deviceKey",out var showKey) && showKey.ValueKind==JsonValueKind.String?showKey.GetString():null);
+                        !restore && message.TryGetProperty("deviceKey",out var showKey) && showKey.ValueKind==JsonValueKind.String?showKey.GetString():null,
+                        message.TryGetProperty("requestId",out var requestId) && requestId.ValueKind==JsonValueKind.Number && requestId.TryGetInt64(out var showId)?showId:null);
                     break;
                 case "navigate":
                     window.NavigateFromBackend(message.GetProperty("page").GetString() ?? "general",

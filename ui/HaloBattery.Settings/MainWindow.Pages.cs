@@ -21,6 +21,7 @@ public sealed partial class MainWindow
     private string? previewDeviceKey;
     private string lastError = "";
     private long previewGeneration;
+    private Action? pendingEditorCommit;
 
     private bool BoolCfg(string key, bool fallback = false) => State.Settings.TryGetValue(key, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : fallback;
     private int IntCfg(string key, int fallback = 0) => State.Settings.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : fallback;
@@ -36,20 +37,23 @@ public sealed partial class MainWindow
     private void SetGlobal(string key, object? value) => Bridge.SendCommand("setGlobal", new { key, value });
     public void ApplyState(UiState state)
     {
-        if (closing) return;
+        if (IsClosingSettings) return;
         var old = State;
         var oldSelection = selectedDeviceKey;
         State = state;
-        selectedDeviceKey = state.SelectedDeviceKey ?? state.Devices.FirstOrDefault()?.Key;
+        // Native navigation survives a fresh process. An actual backend device
+        // selection change still takes precedence over that retained selection.
+        if (state.SelectedDeviceKey != old.SelectedDeviceKey || !state.Devices.Any(d => d.Key == selectedDeviceKey))
+            selectedDeviceKey = state.SelectedDeviceKey ?? state.Devices.FirstOrDefault()?.Key;
         previewDirty = true;
+        if (pagesInitializing && !buildingStartupContent && !pagesInitialized) return;
         if (!pagesInitialized)
         {
             pagesInitialized = true;
             Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; pageBindings.Clear(); };
-            Navigate(string.IsNullOrEmpty(State.Page) ? "general" : State.Page, false);
+            Navigate(InitialSettingsPage(pendingStartupPage,pendingStartupDeviceKey), false);
             return;
         }
-        if (pagesInitializing) return;
         // Status/charging/progress updates refresh the existing controls. The only
         // structural changes are localization, device identity and provider families.
         var rebuild = old.Language != state.Language ||
@@ -212,6 +216,7 @@ public sealed partial class MainWindow
             {
                 if (name.Text != committed) { committed = name.Text; ChangeDevice("name", name.Text); }
             }
+            pendingEditorCommit=Commit;
             name.LostFocus += (_, _) => Commit();
             name.KeyDown += (_, e) =>
             {
@@ -426,6 +431,6 @@ public sealed partial class MainWindow
             if (previewImage is not null) { ResizePreview(); previewImage.Source = bitmap; }
         }
         catch (Exception error) { System.Diagnostics.Debug.WriteLine(error); }
-        finally { previewPending = false; }
+        finally { previewPending = false; startupPreviewReady?.TrySetResult(true); }
     }
 }
