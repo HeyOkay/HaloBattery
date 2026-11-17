@@ -162,7 +162,14 @@ WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
                   "blackshark", "barracuda", "nari")
 
 
+# The BlackShark V3 X (057d) speaks its own 0x07/08 protocol in blackshark_v3x.py;
+# the standard Razer frames get "read error" on every channel (#280).
+BLACKSHARK_V3X_PIDS = {0x057D}
+
+
 def maybe_wireless(pid: int, name: str) -> bool:
+    if pid in BLACKSHARK_V3X_PIDS:
+        return False
     n = name.lower()
     return pid in KNOWN or pid in blackshark.PA_PIDS or any(w in n for w in WIRELESS_WORDS)
 
