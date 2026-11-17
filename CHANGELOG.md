@@ -21,7 +21,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   everyoneexe/blackshark-linux's Synapse captures. A different protocol from
   the BlackShark V3's `0x02` frames; **confirmed on hardware** in #280 for the
   level, with a charging query (`0x84`) added from openrazer PR #2899 in test
-  build 3 and the cable identity `057C` in test build 4.
+  build 3, the cable identity `057C` in test build 4, and the observed charge
+  flag at byte 10 in test build 5.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.

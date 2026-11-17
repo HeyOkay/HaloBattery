@@ -37,10 +37,11 @@ def charge_reply(state, status=B.STATUS_OK):
     frame[0] = B.REPORT_ID
     frame[1] = status
     frame[2] = B.TRANSACTION
-    frame[6] = 0x01
+    frame[6] = 0x02
     frame[7] = B.CLASS_BATTERY
     frame[8] = B.CMD_CHARGING
-    frame[9] = state
+    frame[9] = 0x00
+    frame[10] = state
     frame[62] = B.checksum(frame)
     return bytes(frame)
 
@@ -94,11 +95,19 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual((0x02, 0x07, 0x84, 0x00, 0x00),
                          (q[6], q[7], q[8], q[9], q[10]))
 
-    def test_a_charge_reply_is_byte_nine(self):
+    def test_a_charge_reply_is_byte_ten(self):
         self.assertEqual(1, B.parse_reply(charge_reply(1), B.CMD_CHARGING))
         self.assertEqual(0, B.parse_reply(charge_reply(0), B.CMD_CHARGING))
         self.assertIsNone(B.parse_reply(charge_reply(2), B.CMD_CHARGING))
         self.assertIsNone(B.parse_reply(charge_reply(1), B.CMD_BATTERY))
+
+    def test_the_reported_cable_reply_reads_charging(self):
+        # Exact shape from the #280 test-build 4 diagnostic:
+        # 07 02 03 00 00 00 02 07 84 00 01 ...
+        frame = bytearray(64)
+        frame[0:11] = bytes.fromhex("07 02 03 00 00 00 02 07 84 00 01")
+        frame[62] = B.checksum(frame)
+        self.assertEqual(1, B.parse_reply(frame, B.CMD_CHARGING))
 
     def test_the_reply_level_is_byte_ten(self):
         self.assertEqual(92, B.parse_reply(reply(92)))

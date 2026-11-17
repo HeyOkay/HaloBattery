@@ -556,12 +556,12 @@ identities share one icon.
 
 **Confirmed on hardware** in [#280](https://github.com/HeyOkay/HaloBattery/issues/280)
 with test build 2: the reporter saw a live level (49%). The charging state is
-class `0x07`, command `0x04` read as `0x84`; its reply carries one argument at
-byte 9 (0 on battery, 1 charging). The query is implemented from
+class `0x07`, command `0x04` read as `0x84`; its reply carries the charge flag at
+byte 10 (0 on battery, 1 charging). The query is implemented from
 [openrazer PR #2899](https://github.com/openrazer/openrazer/pull/2899), which
-tested both the receiver and the cable on hardware. Test build 3 only saw the
-receiver; test build 4 adds the cable identity `057C` and is waiting for the
-reporter's confirmation.
+tested both the receiver and the cable on hardware. Test build 4 added the cable
+identity `057C`; test build 5 fixes the charge flag offset observed in its
+reply and awaits confirmation.
 
 ### Razer Barracuda X (2022) (2.4 GHz)
 

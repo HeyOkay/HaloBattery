@@ -21,7 +21,7 @@ Every frame is a 64-byte feature report with report id 0x07:
 Battery is a read-only GET: class 0x07, command 0x80, one zero argument.
 The reply keeps the same fields; byte 10 is the percentage (0..100).
 Charging is class 0x07, command 0x84, two zero arguments; its reply carries
-one argument at byte 9, where 0 means on battery and 1 means charging.
+one argument at byte 10, where 0 means on battery and 1 means charging.
 
 The repository opens the first interface that accepts the feature report; a
 receiver may expose several vendor pages, so all of them are tried here.  No
@@ -92,7 +92,7 @@ def parse_reply(data, command: int = CMD_BATTERY) -> Optional[int]:
     headset is still getting the answer ready.  A finished reply has the
     request's transaction id and class/command, a valid checksum, status OK
     (0x02) and the expected arguments: the level at byte 10 for the battery,
-    or the 0/1 charge flag at byte 9 for charging.
+    or the 0/1 charge flag at byte 10 for charging.
     """
     d = list(data or [])
     if len(d) < REPORT_LEN or d[0] != REPORT_ID:
@@ -109,7 +109,7 @@ def parse_reply(data, command: int = CMD_BATTERY) -> Optional[int]:
     if d[1] != STATUS_OK:
         return None
     if command == CMD_CHARGING:
-        state = d[9]
+        state = d[10]
         return state if state in (0, 1) else None
     level = d[10]
     if 0 <= level <= 100:
