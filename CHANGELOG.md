@@ -63,6 +63,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Prepare the held XM2w 4K/v2 reader with the sourced A1 status exchange,
+  validated replies and isolated HID transactions. Keep normal 4K polling
+  disabled while persistent status-0x08 recovery remains unresolved; confirmed
+  XM2we support is unchanged.
 
 - Bring the existing Settings window to the foreground when a tray icon is
   double-clicked, restoring it if minimized.

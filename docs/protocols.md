@@ -44,13 +44,46 @@ The routed exchange the Dark Core row describes, framed on report `0x02`: the re
 **Disabled in 1.17.0:** the provider does not open the 4K dongle. Owner tests in
 [#321](https://github.com/HeyOkay/HaloBattery/issues/321) and
 [#324](https://github.com/HeyOkay/HaloBattery/issues/324) reject the historical
-XM2we-derived exchange below with `short send (-1)`. The separate correction has a
-later detection-loss report ([public status](https://github.com/nqble/HaloBattery/blob/main/docs/endgame/4k-status.md));
-it is not included here. Confirmed XM2we support uses its separate provider.
+XM2we-derived exchange with `short send (-1)`. This tree prepares its replacement,
+but `ENABLED_PIDS` remains empty: normal polls send no 4K requests. Detection loss
+remains unresolved ([public status](https://github.com/nqble/HaloBattery/blob/main/docs/endgame/4k-status.md)).
+Confirmed XM2we support uses its separate provider.
+Model-specific hardware findings and limitations, credited to Janlhin and Mqtteo0,
+are recorded in the [public Endgame findings](https://github.com/nqble/HaloBattery/tree/main/docs/endgame).
+These observations concern earlier experimental builds, not this refreshed source snapshot.
 
 **Connection:** the 4K dongle, "Endgame Gear HS Dongle" (`3367:1970`)
 
-One dongle id serves several mice - the XM2w 4K, the OP1w 4K and their v2 revisions - and the adapter itself stays neutral; the vendor software resolves which mouse is behind it. The exchange is the family's 17-byte frame, documented for the XM2we by okms/xm2we-linux and by Janlhin/Endgame_Gear_Web_Configurator: a feature report `0x08` carrying `<opcode> 00 ...` with a `0x55 - sum` checksum, answered by an input report `0x09` whose data starts at byte 6 and whose bytes sum to `0x55`. Battery is opcode `0x04` - `data[0]` the percentage, `data[1]` the charging flag - and it is read before the link state because plugging the cable drops the link for a moment while the level stays valid. The dongle's two collections are paired by the receiver part of their HID paths: the feature collection is `ff02:0002`, the replies arrive on an `ff01` collection. Only the two documented status reads are built; nothing is written to the mouse. **Unverified** on this dongle - the frame is the XM2we's, and a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
+The replacement uses collection `0xFF01:0002`, 64-byte feature requests with report
+ID `0xA1`, identity command `0x0E` and battery command `0xB4`. Sources:
+[Vole PROTOCOL.md sections 1–3](https://github.com/johanneszab/vole/blob/4ba29dea54b4628df03cfe2f94f4576c124afd80/re/PROTOCOL.md)
+and [mouse-battery-monitor ENDGAME.md](https://github.com/stuffz/mouse-battery-monitor/blob/25871cce3a8266d8d2bc05b0ca81fbb74b3a38b4/docs/ENDGAME.md).
+OP1w source evidence does not establish XM2w hardware compatibility.
+
+The candidate validates VID `0x3367` plus identity PID `0x1968` or `0x1982`; it does
+not enable OP1w or other identities. Accept only explicit `0xA1` replies at the
+observed 63/64-byte lengths and success status `0x01`. Failed replies may retain
+old payloads; reject them. Wireless percentage at offset 16 must be in 0–100, with
+two consecutive agreeing samples in at most three attempts. That retry policy is
+an implementation choice, not proof of reply freshness. The sourced response layout
+has no established command/target echo or sequence identifier; an old successful
+reply cannot be reliably distinguished. Status rejection and agreement checks
+do not resolve that limitation. No speculative drain or additional HID requests
+are added. Cabled PID must match identity; prefer cable and show
+inferred Charging without a percentage. Multiple receivers or cabled bodies are
+refused rather than associated by guesswork.
+
+Open/send/read/close run in a disposable child process. The parent waits up to
+eight seconds after launch, then attempts termination and reaping for one second.
+An unreaped child blocks another transaction. Enumeration and process creation
+are outside this bound; this is not a deadline on the whole poll. Normal shutdown
+closes the boundary; abrupt termination and unusual driver behavior remain
+unverified. No extra dependency, wake command, `0x0D` follow-up or automatic
+`0x0F` recovery is added. Returning `0x08` is distinct from a blocked native call;
+process isolation does not establish a fix for the persistent status stall.
+Shutdown cleans registered worker directories only after their children are reaped.
+If termination fails, files remain intentionally: no interpreter-exit finalizer
+may remove a live worker's files. Abrupt process exit can still leave leftovers.
 
 ### HyperX Cloud Alpha 2
 
