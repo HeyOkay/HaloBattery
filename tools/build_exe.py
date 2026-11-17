@@ -41,7 +41,8 @@ def main() -> None:
              (str(ROOT / "halo/iconify_data/manifests"), "halo/iconify_data/manifests"),
              (str(ROOT / "docs/licenses"), "licenses"),
              (str(ROOT / "docs/credits.md"), "licenses"),
-             (str(ROOT / "assets/app-icon.png"), "assets")]
+             (str(ROOT / "assets/app-icon.png"), "assets"),
+             (str(ROOT / "assets/app-icon-header-dark.png"), "assets")]
     spec = f"""from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis([{str(ROOT / 'halo_battery.pyw')!r}],

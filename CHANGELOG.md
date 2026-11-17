@@ -7,8 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- Refine native navigation and window-control feedback, with softer inactive
-  labels and glyphs, brighter header branding and a smooth wordmark hover fade.
+- Match What's new branding to Settings, with Outfit lettering, closer icon
+  spacing and a brighter accent. Soften inactive navigation labels and glyphs,
+  and fade the header wordmark on hover. Share Close
+  and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
 - A fading app splash with a soft icon shadow and theme-matched startup background
