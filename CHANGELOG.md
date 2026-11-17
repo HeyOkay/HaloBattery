@@ -14,7 +14,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
-  33-byte battery reply; charging is not exposed. Test build 1.
+  33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
