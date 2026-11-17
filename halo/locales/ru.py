@@ -86,6 +86,7 @@ MESSAGES = {
     "provider.lofree": "Клавиатуры Lofree, мыши AULA V9",
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
+    "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.mchose": "Мыши MCHOSE",
     "provider.nintendo": "Контроллеры Nintendo Switch",
     "provider.playstation": "Контроллеры PlayStation",

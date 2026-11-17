@@ -12,6 +12,20 @@ what comes back, and where each protocol was taken from.
 
 The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte reports, report id 0x02, `02 0c <len> 00 <cmd> <handle>`. Battery command 0x06 answers with the level in byte 6 and byte 8 set while the headset sits on the dock (charging). The protocol is HeadsetControl's, reverse-engineered from G HUB captures and verified on this USB id; it is neither HID++ nor the A50 X's Centurion protocol. **Unverified** - no A50 was on hand, so a level out of 0..100 is refused rather than shown
 
+### Logitech G435 LIGHTSPEED (046D:0ACB, Realtek receiver)
+
+**Connection:** LIGHTSPEED receiver
+
+This is the original Realtek receiver, not the Holtek variant (`046D:0ADF`). It speaks no HID++, and it has no passive status channel: volume keys, mute, power cycles and USB-C charge events produced no frames on either vendor collection during two long listens. The battery is only reachable through the receiver's own PA command bridge, in bootloader mode.
+
+Feature report 6 on usage page `0xFFC0` (63 data bytes) carries `[06, 01, 03, 0…]` to enter bootloader, `[06, 08, 03, 0…]` to leave it, and `[06, 04, 03, 00, len, …]` to forward a PA command. The commands are `LQ 0x0E E1 01` (remote mode), `OTA 0x06 31` (get battery) and `LQ 0x0E E1 00` (local mode). The reply is `06 80 00 <millivolts u16 LE> 00 00`.
+
+Two traps: without the remote-mode switch the receiver answers locally with `102`, even with the headset switched off and even after a cold replug; and the first read after entering bootloader can arrive without the `P I` prefix, so the payload is searched for rather than indexed.
+
+Bootloader mode mutes USB audio for about 0.8 s, so the provider reads at most once every 15 minutes and caches between reads. The percentage is an estimate from a generic 3.7 V Li-ion curve, and the protocol exposes no charging flag, hence `approx` and `charging_known=False`.
+
+**Verified on hardware:** running Halo from source with the receiver plugged in and the headset switched on, `--probe` reads `about 73%` (3954 mV), consistent with the headset's LED band, which shows green (31–100%). The protocol itself was measured with an independent reader (https://github.com/fr0styJS/g435-lightspeed-battery).
+
 ### Audeze Maxwell
 
 **Connection:** 2.4 GHz dongle (3329:4B19) and USB-C cable (3329:4B1A)

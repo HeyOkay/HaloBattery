@@ -13,6 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
+  approximate level, read at most once every 15 minutes and cached between reads
+  because each read mutes USB audio for about 0.8 s.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
