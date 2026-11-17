@@ -87,6 +87,7 @@ MESSAGES = {
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Мыши MCHOSE",
+    "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Контроллеры Nintendo Switch",
     "provider.playstation": "Контроллеры PlayStation",
     "provider.plantronics": "Гарнитуры Plantronics (адаптер BT600)",

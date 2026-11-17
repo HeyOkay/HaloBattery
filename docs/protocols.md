@@ -572,6 +572,14 @@ same RACE commands wrapped in `02 80 <len> <crcLo> <crcHi> payload` with a CRC-1
 over the whole report and an `'O'`/`'F'` input-report acknowledgement - documented in that
 project, not implemented here until a 0550 unit can test it.
 
+### ATTACKSHARK X66
+
+**Connection:** 2.4 GHz receiver (`0C45:FEFE`, product `X66 2.4G`), interface 3, usage `FF60:0061`
+
+The receiver uses the Sonix 33-byte dongle reports documented and tested on an AJAZZ AK980 V2 by YellowHearth1/ajazz-ak980-v2-linux (`docs/PROTOCOL.md`, `crates/ak980-core/src/device.rs`): a 33-byte output report with report id 0 and the command `20 01`, zero-padded, with the byte sum in the last byte. The reply repeats `20 01 00` and carries the level in byte 3. The first request after the radio sleeps may only wake the link, so the query is sent twice. There is no charging flag in this reply, so `charging_known=False`.
+
+The receiver is shared by several OEM keyboards; this provider claims it only when the product string contains `X66`. **Unverified in Halo**: test build 1 is with @VipexArtz in #446.
+
 ### URX Core75 (2.4 GHz)
 
 **Connection:** 2.4 GHz dongle (36B0:3002, "URX Core75 Wireless")
