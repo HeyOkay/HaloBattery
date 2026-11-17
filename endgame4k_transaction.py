@@ -7,6 +7,7 @@ import tempfile
 import atexit
 import threading
 import shutil
+import logging
 
 
 class WorkerDirectory:
@@ -16,13 +17,18 @@ class WorkerDirectory:
         self.name = tempfile.mkdtemp(prefix='halobattery-4k-', dir=self.parent)
 
     def cleanup(self):
-        path = Path(self.name).resolve()
-        if path.parent != self.parent or not path.name.startswith('halobattery-4k-'):
-            raise ValueError('unexpected worker cleanup path')
         try:
+            path = Path(self.name).resolve()
+            if path.parent != self.parent or not path.name.startswith('halobattery-4k-'):
+                raise ValueError('unexpected worker cleanup path')
             shutil.rmtree(path)
         except FileNotFoundError:
             pass
+        except OSError as exc:
+            # Cleanup is best effort: preserve valid results and never log paths.
+            logging.getLogger(__name__).warning(
+                'Endgame worker directory cleanup deferred (%s); files may remain',
+                type(exc).__name__)
 
 _children = {}  # process -> temporary directory, retained while a child may live
 _lifecycle = threading.Lock()

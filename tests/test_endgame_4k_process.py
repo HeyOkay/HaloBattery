@@ -6,6 +6,52 @@ from endgame4k_transaction import Transactions
 
 
 class ProcessBoundaryTests(unittest.TestCase):
+    def test_cleanup_path_resolution_error_does_not_escape(self):
+        from unittest.mock import patch
+        from endgame4k_transaction import WorkerDirectory
+        temporary = WorkerDirectory()
+        try:
+            with patch('endgame4k_transaction.Path.resolve', side_effect=PermissionError('PRIVATE-PATH')):
+                with self.assertLogs('endgame4k_transaction', level='WARNING') as captured:
+                    temporary.cleanup()
+            self.assertNotIn('PRIVATE', str(captured.output))
+        finally:
+            temporary.cleanup()
+
+    def test_cleanup_filesystem_errors_are_logged_without_private_paths(self):
+        from unittest.mock import patch
+        from endgame4k_transaction import WorkerDirectory
+        temporary = WorkerDirectory()
+        try:
+            for error in (PermissionError('PRIVATE-PATH'), OSError('PRIVATE-PATH')):
+                with patch('endgame4k_transaction.shutil.rmtree', side_effect=error), self.assertLogs(
+                        'endgame4k_transaction', level='WARNING') as captured:
+                    temporary.cleanup()
+                self.assertTrue(Path(temporary.name).is_dir())
+                self.assertNotIn('PRIVATE', str(captured.output))
+                self.assertIn(type(error).__name__, str(captured.output))
+        finally:
+            temporary.cleanup()
+
+    def test_cleanup_permission_error_does_not_discard_valid_worker_result(self):
+        from unittest.mock import patch
+        from endgame4k_transaction import WorkerDirectory
+        created = []
+        original = WorkerDirectory.__init__
+        def remember(temporary):
+            original(temporary)
+            created.append(temporary)
+        try:
+            with patch.object(WorkerDirectory, '__init__', remember), patch(
+                    'endgame4k_transaction.shutil.rmtree', side_effect=PermissionError('PRIVATE-PATH')):
+                with self.assertLogs('endgame4k_transaction', level='WARNING'):
+                    result = Transactions().run({'path': b'fake', 'product_id': 0x1970}, simulate='success')
+            self.assertEqual(result['status']['level'], 45)
+            self.assertNotIn('PRIVATE', str(result))
+        finally:
+            for temporary in created:
+                temporary.cleanup()
+
     def test_worker_directory_has_explicit_idempotent_cleanup(self):
         from endgame4k_transaction import WorkerDirectory
         temporary = WorkerDirectory()
