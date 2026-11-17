@@ -49,7 +49,7 @@ class NumberRenderTests(unittest.TestCase):
 
     def test_even_100_stays_inside_the_ring(self):
         inner = 31.5 - 6.5                # ring radius minus its width, in icon pixels
-        for text in ("7", "67", "100"):
+        for text in ("7", "67", "100", "~100"):
             with self.subTest(text=text):
                 far = max(((x + 0.5 - 32) ** 2 + (y + 0.5 - 32) ** 2) ** 0.5
                           for x, y in self.changed_pixels(text))
@@ -92,10 +92,15 @@ class NumberSettingTests(HideRenameTestCase):
     def test_charging(self):
         self.assertEqual(self.texts_drawn(mouse(40, charging=True), {"percent_in_icon": True}), {"40"})
 
-    def test_rough_levels_and_no_level_keep_the_pictogram(self):
+    def test_approximate_levels_use_a_tilde_and_no_level_keeps_the_pictogram(self):
         self.assertEqual(self.texts_drawn(mouse(55, approx="about 55% (medium)"),
-                                          {"percent_in_icon": True}), {""})
+                                          {"percent_in_icon": True}), {"~55"})
         self.assertEqual(self.texts_drawn(mouse(None), {"percent_in_icon": True}), {""})
+
+    def test_approximate_and_exact_levels_are_drawn_differently(self):
+        self.assertEqual(self.texts_drawn(mouse(55, approx="about 55%"),
+                                          {"percent_in_icon": True}), {"~55"})
+        self.assertEqual(self.texts_drawn(mouse(55), {"percent_in_icon": True}), {"55"})
 
     def test_menu_toggles(self):
         app = make_app()
