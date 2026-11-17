@@ -35,15 +35,27 @@ GARBAGE = reply(bytes.fromhex("11 22 33 44 55 66 77"))
 
 
 class FakeDevice:
-    def __init__(self, replies):
+    def __init__(self, replies, fail_open=False):
         self.replies = list(replies)
         self.sent = []
         self.opened = []
+        self.open_attempts = 0
+        self.fail_open = fail_open
+        self.fail_exit_once = False
+        self.exit_attempts = 0
 
     def open_path(self, path):
+        self.open_attempts += 1
+        if self.fail_open:
+            raise OSError("device busy")
         self.opened.append(path)
 
     def send_feature_report(self, data):
+        if data[1] == 8:                      # exit bootloader
+            self.exit_attempts += 1
+            if self.fail_exit_once:
+                self.fail_exit_once = False
+                raise OSError("write failed")
         self.sent.append(bytes(data))
         return len(data)
 
@@ -182,7 +194,24 @@ class PollTest(unittest.TestCase):
         self.assertEqual(8, frames[-1][1])
         self.assertTrue(any(f[1] == 4 and f[10] == 0xE1 and f[11] == 0x00 for f in frames))
 
+    def test_a_failed_open_does_not_arm_the_cache(self):
+        self.device.fail_open = True
+        status, = self.poll_with([[], GOOD_3840])
+        self.assertIsNone(status.level)
+        self.assertFalse(status.online)
+        self.device.fail_open = False
+        self.now[0] += 60                       # well inside the 15-minute floor
+        status, = self.poll_with([[], GOOD_3840])
+        self.assertEqual(56, status.level)
+        self.assertEqual(2, self.device.open_attempts)
+
+    def test_exit_bootloader_is_retried_when_the_first_write_fails(self):
+        self.device.fail_exit_once = True
+        self.poll_with([[], GOOD_3840])
+        self.assertEqual(2, self.device.exit_attempts)
+        exits = [f for f in self.device.sent if f[1] == 8]
+        self.assertEqual(1, len(exits))
+
 
 if __name__ == "__main__":
     unittest.main()
-

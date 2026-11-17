@@ -22,7 +22,7 @@ Feature report 6 on usage page `0xFFC0` (63 data bytes) carries `[06, 01, 03, 0â
 
 Two traps: without the remote-mode switch the receiver answers locally with `102`, even with the headset switched off and even after a cold replug; and the first read after entering bootloader can arrive without the `P I` prefix, so the payload is searched for rather than indexed.
 
-Bootloader mode mutes USB audio for about 0.8 s, so the provider reads at most once every 15 minutes and caches between reads. The percentage is an estimate from a generic 3.7 V Li-ion curve, and the protocol exposes no charging flag, hence `approx` and `charging_known=False`.
+Bootloader mode mutes USB audio for about 0.8 s, so the provider reads at most once every 15 minutes and caches between reads. A headset switched off inside that window keeps showing its last level, still marked online, until the next read; the greyed state only appears once a read actually fails. The percentage is an estimate from a generic 3.7 V Li-ion curve, and the protocol exposes no charging flag, hence `approx` and `charging_known=False`.
 
 **Verified on hardware:** running Halo from source with the receiver plugged in and the headset switched on, `--probe` reads `about 73%` (3954 mV), consistent with the headset's LED band, which shows green (31â€“100%). The protocol itself was measured with an independent reader (https://github.com/fr0styJS/g435-lightspeed-battery).
 

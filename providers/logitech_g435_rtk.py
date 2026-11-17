@@ -152,7 +152,13 @@ class LogitechG435RtkProvider(Provider):
             self._diag.append(f"  cached ({int(now - self._when)} s ago)")
             return [self._status()]
 
-        mv = self._read(d)
+        started, mv = self._read(d)
+        if not started:
+            # A failed open or bootloader entry is transient (busy device, a
+            # pending replug). Do not arm the cache for it: the next poll must
+            # try again rather than serve the previous level for 15 minutes.
+            self._diag.append("  no bootloader session; retrying on the next poll")
+            return [self._status()]
         if mv is None:
             self._online = False
         else:
@@ -176,15 +182,24 @@ class LogitechG435RtkProvider(Provider):
 
     # ------------------------------------------------------------------ read
 
-    def _read(self, d: dict) -> Optional[int]:
+    def _read(self, d: dict):
+        """(session_started, millivolts) for one attempt.
+
+        ``session_started`` is False when the device could not be opened or the
+        bootloader entry could not be written: that is transient, and the caller
+        must not cache it.
+        """
         dev = hid.device()  # type: ignore[union-attr]
         try:
             dev.open_path(d["path"])
         except Exception as e:
             self._diag.append(f"  open: {e}")
-            return None
+            return False, None
+        started = False
         try:
-            self._send(dev, ENTER)
+            if not self._send(dev, ENTER):
+                return False, None
+            started = True
             time.sleep(SETTLE_S)
             self._get(dev)                      # drain the enter ack
             try:
@@ -196,27 +211,35 @@ class LogitechG435RtkProvider(Provider):
                     frame = self._get(dev)
                     mv = parse_mv(frame) if frame else None
                     if mv is not None:
-                        return mv
+                        return True, mv
                     time.sleep(READ_PAUSE_S)
                 self._diag.append("  no battery reply")
-                return None
+                return True, None
             finally:
                 # the headset must never be left in remote mode, even when the
                 # read threw or timed out (review, #443)
                 self._send(dev, REMOTE_OFF)
         finally:
             # and the receiver must never be left in bootloader mode: audio is
-            # muted for as long as it stays there
-            self._send(dev, EXIT)
-            dev.close()
+            # muted for as long as it stays there, so one retry is worth it
+            if started and not self._send(dev, EXIT):
+                self._send(dev, EXIT)
+            try:
+                dev.close()
+            except Exception:                   # pragma: no cover - hidapi raises OSError
+                pass
 
-    def _send(self, dev, frame: bytes) -> None:
+    def _send(self, dev, frame: bytes) -> bool:
+        """Write one feature report; True when the device accepted it."""
         try:
             sent = dev.send_feature_report(frame)
             if sent is not None and sent < 0:
                 self._diag.append(f"  feature write refused ({sent})")
+                return False
+            return True
         except Exception as e:                  # pragma: no cover - hidapi raises OSError
             self._diag.append(f"  write: {e}")
+            return False
 
     def _get(self, dev):
         try:
