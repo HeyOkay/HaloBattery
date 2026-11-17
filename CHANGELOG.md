@@ -7,12 +7,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- URX Core75 now checks the product string as well as `36B0:3002`, so an
+  EVO75 on the same receiver id is no longer labelled as a URX board (#448).
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Teevolution Terra Pro on its 1K receiver (`3554:F520`), and the existing
+  `3554:F523` reader now uses the mouse pictogram (#448).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
