@@ -29,8 +29,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(quit, T("settings.quit"));
         quit.HorizontalAlignment = HorizontalAlignment.Right;
         // halo/icons.py RED: the same color as a discharged device indicator.
-        quit.Resources["ButtonBackgroundPointerOver"] = Brush("#E81123");
-        quit.Resources["ButtonBackgroundPressed"] = Brush("#E81123");
+        quit.Resources["ButtonBackgroundPointerOver"] = Brush(ExitHoverBackground);
+        quit.Resources["ButtonBackgroundPressed"] = Brush(ExitPressedBackground);
         quit.Resources["ButtonForegroundPointerOver"] = Brush("#FFFFFF");
         quit.Resources["ButtonForegroundPressed"] = Brush("#FFFFFF");
         generalFooterContent.Child = quit;

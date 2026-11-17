@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Refine native navigation and window-control feedback, with softer inactive
+  labels and glyphs, brighter header branding and a smooth wordmark hover fade.
+
 ### Added
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.

@@ -102,6 +102,7 @@ public sealed partial class MainWindow : Window
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
   BuildHeader();
+  InitializeBrandHover();
   InitializeStartupSplash();
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
@@ -161,7 +162,7 @@ public sealed partial class MainWindow : Window
   // These Lucide paths span 18 grid units; Close spans 12. Match their
   // visible bounds and stroke width while keeping every hit target 40 x 40.
   var glyph=(FrameworkElement)LucideIcon(maximized?"minimize-2":"maximize-2",HeaderIconSize*2/3,null,2.25);
-  glyph.Tag=maximized?"restore":"maximize";maximizeButton.Content=glyph;
+  glyph.Tag=maximized?"restore":"maximize";glyph.Opacity=ChromeGlyphOpacity(maximizeButton);maximizeButton.Content=glyph;
   var label=T(maximized?"settings.restore":"settings.maximize");
   ToolTipService.SetToolTip(maximizeButton,label);AutomationProperties.SetName(maximizeButton,label);
  }
@@ -178,17 +179,30 @@ public sealed partial class MainWindow : Window
    button.Resources["ButtonForegroundPointerOver"]=TextBrush;
    button.Resources["ButtonForegroundPressed"]=TextBrush;
   }
+  if(dark)
+  {
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(DarkChromeHoverBackground);
+   button.Resources["ButtonBackgroundPressed"]=Brush(DarkChromePressedBackground);
+  }
+  if(glyph=="x")
+  {
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(ExitHoverBackground);
+   button.Resources["ButtonBackgroundPressed"]=Brush(ExitPressedBackground);
+  }
+  BindChromeGlyph(button,()=>button.Content as FrameworkElement,close:glyph=="x");
   ToolTipService.SetToolTip(button,label);AutomationProperties.SetName(button,label);
   return button;
  }
  private void BuildHeader()
  {
   header.Children.Clear();
-  var textAccent=new SolidColorBrush(Desaturate(accent,0.5,dark?0.72:-1));
+  var textAccent=new SolidColorBrush(Desaturate(accent,0.8,dark?0.76:-1));
   hamburger=HeaderButton("menu",MenuName);hamburger.Margin=new(HeaderEdgeInset,0,0,0);hamburger.HorizontalAlignment=HorizontalAlignment.Left;hamburger.Click+=(_,_)=>ToggleRail();header.Children.Add(hamburger);
   pill.Background=Brush("#00000000");var content=new Grid();foreach(var width in new[]{GridLength.Auto,GridLength.Auto})content.ColumnDefinitions.Add(new(){Width=width});
   var logo=new Image{Source=dark?darkHeaderLogo:lightHeaderLogo,Width=22,Height=22,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,2,0)};content.Children.Add(logo);
   var brand=new TextBlock{FontSize=16,FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.SemiBold,Foreground=TextBrush,CharacterSpacing=-12,VerticalAlignment=VerticalAlignment.Center,TextLineBounds=TextLineBounds.Tight};brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Halo",FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-Medium.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=TextBrush});brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Battery",Foreground=textAccent});Grid.SetColumn(brand,1);content.Children.Add(brand);
+  brandLabel=brand;brandHovered=false;brand.Opacity=RestingBrandOpacity;
+  brand.OpacityTransition=settings.AnimationsEnabled?new ScalarTransition{Duration=TimeSpan.FromMilliseconds(BrandFadeMilliseconds)}:null;
   pill.Child=content;pill.IsHitTestVisible=false;header.Children.Add(pill);
   windowButtons.Children.Clear();var minimize=HeaderButton("minus",T("settings.minimize"));maximizeButton=HeaderButton("maximize-2",T("settings.maximize"));displayedMaximized=null;var close=HeaderButton("x",T("settings.close"));foreach(var button in new[]{minimize,maximizeButton,close})windowButtons.Children.Add(button);minimize.Click+=(_,_)=>((OverlappedPresenter)AppWindow.Presenter).Minimize();maximizeButton.Click+=(_,_)=>{var p=(OverlappedPresenter)AppWindow.Presenter;if(p.State==OverlappedPresenterState.Maximized)p.Restore();else p.Maximize();UpdateMaximizeButton();};close.Click+=(_,_)=>Close();header.Children.Add(windowButtons);UpdateMaximizeButton();PositionPill();
   SetStartupChromeVisibility();
