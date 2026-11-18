@@ -1,10 +1,15 @@
 # Code signing policy
 
 SignPath Foundation approved HaloBattery on 18 November 2026 and created the
-project organization with a self-signed test certificate. Production signing
-is not enabled. TEST Actions integration is prepared in a separate follow-up;
-this policy does not claim a verified live signing run or identify any
-published binaries as signed.
+project organization with a valid self-signed test certificate. The owner accepted
+the invitation and confirmed the CI notification email. The two explicit TEST
+artifact configurations are valid, and GitHub's `signpath-test` environment is
+restricted to reviewed `pre-release` runs with owner approval.
+
+The local [test-signing pipeline](signing.md) is prepared. A test-only CI
+credential, authorized source integration and the first successful hosted run are
+still required before CI signing is active. The production certificate remains
+pending. This setup does not identify any published binaries as signed.
 
 ## Responsibilities
 

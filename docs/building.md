@@ -121,3 +121,8 @@ not a substitute for the actual GitHub repository setting.
 A failed upload or attestation can leave an unpublished draft. A rerun stops
 rather than modifying it. Inspect the failed run and draft, retain evidence,
 and recover deliberately; there is no automated asset deletion or overwrite.
+
+## Test code signing
+
+See [Test signing with SignPath](signing.md) for the explicit manual TEST mode,
+protected environment setup and remaining production-signing requirements.
