@@ -105,6 +105,7 @@ MESSAGES = {
     "provider.steelseries": "SteelSeries",
     "provider.steelseries_elite": "SteelSeries Arctis Nova Elite",
     "provider.wlmouse": "WLmouse",
+    "provider.wraith": "Wraith W1",
     "provider.xinput": "Mandos compatibles con Xbox",
     # Basic states from #249; detailed/coarse states extend that contribution.
     "state.no_link": "sin conexión (apagado o suspendido)",

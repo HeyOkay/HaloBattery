@@ -685,3 +685,10 @@ is excluded before opening HID: collection layout alone was the evidence for try
 the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
 providers are unchanged. These two exclusions resolve the historical fork #30 and
 Lamzu half of #34 release holds; their protocol tests remain for further development.
+
+### Wraith W1
+
+**Connection:** 2.4 GHz receiver `093A:522C` or USB cable `093A:622C`; the ids are shared with Incott mice.
+
+Device-info feature report `09` / command `8F`: reply byte 3 is 18 for the W1 or 20 for the Freestyle. After that, read-only `86` button queries (0, 1, 2, 4, 3) prompt the mouse to push input report `09`, whose byte 1 is charging bit 7 plus the low 7-bit percentage. A device that does not answer 8F is left to the Incott path. Protocol from the Wraith web driver and W1 Service. **Unverified in this app.**
+

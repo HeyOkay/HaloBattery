@@ -72,6 +72,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **MSI VERSA 300 ELITE and Clutch GM31 / GM41** on their receivers or cables:
   read-only status query, plus the GM41's passive raw report. Unverified in the app.
 
+- **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
+  status report, level and charging. Unverified in the app.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is

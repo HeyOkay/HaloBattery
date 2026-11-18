@@ -142,7 +142,7 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (AmInfinityProvider, AresonProvider, FantechProvider, MsiProvider, ArbiterProvider, AstroProvider, AsusProvider,  # noqa: E402
+from providers import (AmInfinityProvider, AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider,
                        EightBitDoProvider,
@@ -263,6 +263,7 @@ PROVIDER_LABELS = {
     "turtlebeach": "Turtle Beach headsets",
     "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
+    "wraith": "Wraith W1",
     "xinput": "Xbox-compatible controllers",
 }
 
@@ -272,7 +273,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(), JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), WraithProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(), JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),

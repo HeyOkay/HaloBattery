@@ -96,6 +96,7 @@ MESSAGES = {
     "provider.steelseries": "SteelSeries",
     "provider.steelseries_elite": "SteelSeries Arctis Nova Elite",
     "provider.wlmouse": "WLmouse",
+    "provider.wraith": "Wraith W1",
     "provider.xinput": "Xbox-compatible controllers",
     "state.no_link": "no link (off or asleep)",
     "state.level": "{level}%",
