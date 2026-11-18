@@ -15,6 +15,8 @@ Run from the repository root:
 """
 import os
 import sys
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -47,8 +49,11 @@ def stop_readers(providers):
         if reader is None:
             continue
         reader.stop()
-        if reader.is_alive():
-            reader.join(5)
+        # Not join() or is_alive(): the DJI reader keeps its stop flag in `_stop`, which
+        # on Python 3.12 hides the Thread method of that name that both of them call.
+        deadline = time.monotonic() + 5
+        while reader in threading.enumerate() and time.monotonic() < deadline:
+            time.sleep(0.01)
 
 
 class PollWithoutDevicesTests(unittest.TestCase):
@@ -93,11 +98,9 @@ class PollWithoutDevicesTests(unittest.TestCase):
         self.check(odd_descriptors, self.Unopenable)
 
     def test_no_usb_reader_is_left_running(self):
-        import threading
         from providers import dji
         self.check(lambda *a, **k: [], self.Unopenable)
-        self.assertEqual([], [t for t in threading.enumerate()
-                              if isinstance(t, dji._Receiver) and t.is_alive()])
+        self.assertEqual([], [t for t in threading.enumerate() if isinstance(t, dji._Receiver)])
 
 
 if __name__ == "__main__":
