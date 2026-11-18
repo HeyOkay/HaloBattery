@@ -85,7 +85,10 @@ public sealed partial class MainWindow : Window
   startupWindowBackground=new(hwnd,dark);
   Closed+=(_,_)=>ReleaseStartupWindowBackground();
   try{AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));}catch(Exception error){Debug.WriteLine(error);}
-  if(AppWindow.Presenter is OverlappedPresenter p)p.SetBorderAndTitleBar(true,false);
+  // A missing projected presenter must fail startup, not leave duplicate chrome or broken buttons.
+  if(AppWindow.Presenter is not OverlappedPresenter p)throw new InvalidOperationException("The Settings window presenter is unavailable.");
+  p.SetBorderAndTitleBar(true,false);
+  if(p.HasTitleBar || !p.HasBorder)throw new InvalidOperationException("The Settings window frame could not be initialized.");
   InitializeWindowState(windowStateDirectory,preferences);
   root.RowDefinitions.Add(new(){Height=new(56)});root.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});
   body.ColumnDefinitions.Add(rail);body.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
@@ -147,7 +150,9 @@ public sealed partial class MainWindow : Window
  private void OnWindowChanged(AppWindow sender,AppWindowChangedEventArgs args)
  {
   if(closing)return;
+#if HALO_BATTERY_VERIFICATION
   if(args.DidPositionChange&&windowInteractionMetrics is {} metrics)metrics.NativePositionEvents++;
+#endif
   if(args.DidPositionChange||args.DidSizeChange||args.DidPresenterChange)CaptureWindowState();
   // Moving on the same display changes screen coordinates, not client layout.
   // DPI changes are handled separately after XamlRoot has its new scale.
@@ -222,12 +227,16 @@ public sealed partial class MainWindow : Window
  private double PageInset(double width)=>44*width/contentWidth;
  private void LayoutPage(StackPanel content,double viewport)
  {
+#if HALO_BATTERY_VERIFICATION
   if(windowInteractionMetrics is {} metrics)metrics.LayoutCalls++;
+#endif
   var width=PageWidth(viewport);var inset=PageInset(width);
   var padding=new Thickness(inset,36,inset,36);var margin=new Thickness(PageLeft(viewport),0,0,0);
   var geometryChanged=content.Width!=width||!content.Padding.Equals(padding);
   if(!geometryChanged&&content.Margin.Equals(margin)){RequestSpotlightFrame();return;}
+#if HALO_BATTERY_VERIFICATION
   if(windowInteractionMetrics is {} changed)changed.PageLayouts++;
+#endif
   content.Width=width;content.Padding=padding;content.Margin=margin;
   // Moving the content does not change card bounds relative to that content.
   if(geometryChanged)InvalidateCardSpotlightGeometry();else RequestSpotlightFrame();
@@ -248,7 +257,11 @@ public sealed partial class MainWindow : Window
   var start=rail.Width.Value;var began=Stopwatch.StartNew();var fromOpacity=navLabels.FirstOrDefault()?.Opacity??(expanded?0.0:1.0);var toOpacity=expanded?1.0:0.0;
   // The ScrollViewer's SizeChanged callback lays out the committed viewport.
   // Repeating it here would use the previous frame's viewport and force reflow.
-  railTick=(_,_)=>{if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
+  railTick=(_,_)=>{
+#if HALO_BATTERY_VERIFICATION
+   if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;
+#endif
+   var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
   CompositionTarget.Rendering+=railTick;
  }
  private void FinishRail(){BuildNavigation();PositionPill();UpdateDragRegion();UpdateMinimumWidth();}
@@ -310,12 +323,17 @@ public sealed partial class MainWindow : Window
   // briefly reveal the original zero opacity / 40 DIP offset on landing.
   finished?.Stop();
  }
- // Fixture fault injection is never consulted for a live host connection.
+ #if HALO_BATTERY_VERIFICATION
+ // Fixture fault injection is absent from normal release builds.
  private Action<ScrollViewer>? fixtureEntryChangeView;
+ #endif
  private void ChangeEntryView(ScrollViewer scroll)
  {
+ #if HALO_BATTERY_VERIFICATION
   if(Bridge.FixtureMode&&fixtureEntryChangeView is {} changeView)changeView(scroll);
-  else scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
+  else
+ #endif
+   scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
  }
  private void FadePageEntry(Page entered,bool animate,bool enterAtEnd)
  {
