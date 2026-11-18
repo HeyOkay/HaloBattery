@@ -63,6 +63,44 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Restrict the URX Core75 query to its confirmed product and collection, so an
+  EVO75 sharing the USB IDs is not queried or shown as Core75. Require complete
+  raw-HID reports and accept the maker-defined 0-100% battery range.
+- Use the opened WLmouse collection's feature-report length and skip input reads
+  on feature-only collections. Retry a paused provider after a bounded cooldown
+  only when its previous native I/O has finished, without accepting late readings
+  or issuing false charge notifications. Keep provider recovery state bounded.
+- Hold the unconfirmed BlackShark PA fallback on the Razer 0550 bridge.
+  Preserve ordinary reads and confirmed headset routes; 0550 may show no level
+  until its own protocol is verified.
+- Preserve independent Audeze headsets and Keychron receivers, with safe one-time
+  migration of unambiguous per-device settings and history to stable identities.
+- Match the MCHOSE K87 query to the manufacturer's exact checked frame.
+- Query Keychron only on its documented battery collection; retry the captured
+  status frame as an output report and decode its charging bit correctly.
+- Attempt to restore Barracuda X local mode after a lost or invalid remote-mode
+  acknowledgement, and retain diagnostics when restoration cannot be confirmed.
+- Limit EWEADN queries to the sourced receiver collection `089d:062f`,
+  `ff01:0010`. Hold wired `088d:062e` requests until a cable-specific exchange
+  is documented; receiver request bytes and normal sleep handling are unchanged.
+- Query the Alienware Pro Wireless keyboard only on the captured `ff00:0001`
+  interface 1; missing control collections no longer trigger a fallback write.
+- Restrict Corsair battery and diagnostic writes to documented control
+  collections and sourced 64/65-byte report shapes; never probe unrelated
+  collections or resize requests to arbitrary HID capabilities.
+- Send Astro A50 battery requests only to the documented `ff32:0074`
+  collection; other collections are left unopened when it is absent.
+- Identify Azoth 96 HE through the shared SPEEDNOVA receiver's pair list before
+  sending its keyboard request. Hold ambiguous Harpe II receiver mouse queries
+  until a sourced discriminator exists; its cable and OMNI routes remain enabled.
+- Send Audeze requests only to the sourced FF13:0001 collection and hold the
+  inferred Xbox cable identity until its protocol is documented.
+- Restrict WLmouse feature queries to sourced receiver IDs and FFFF:0000;
+  keep passive cable heartbeats without guessing a new writable identity.
+- Send the AULA F87 battery request only to its confirmed FEFC receiver and
+  vendor collection, leaving unrelated Sonix products unopened.
+- Do not open or send unsupported battery commands to the Razer Barracuda X
+  (2022) USB cable identity; supported receiver readings are unchanged.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 
@@ -282,9 +320,12 @@ source; their settings and battery history remain compatible.
   `3822 mV -> 38 %`, samples within 9 mV, reported as not charging; the charging inference
   still needs a run with the cable in.
 
-- **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
-  collection the PA headset path reads, and the id was simply not routed there. Unverified
-  on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+- **Razer Barracuda X (2022)** (`1532:0536`): **support claim withdrawn.** This
+  USB cable identity was incorrectly advertised as a receiver. Its borrowed
+  BlackShark PA exchange was not sourced for this target, and the reporter
+  observed write refusals in [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+  The [#414](https://github.com/HeyOkay/HaloBattery/pull/414) safety correction holds
+  this identity before device access; supported `1532:0552` receiver reads remain.
 
 ### Not enabled in this release
 

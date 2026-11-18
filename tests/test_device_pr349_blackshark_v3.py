@@ -11,6 +11,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Synapse 1532:057a capture in HaloBattery #292; XOR bytes 0-61 stored at 62.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -47,7 +50,10 @@ def frame(cmd_class, kind, value):
     b = [0] * 64
     b[0], b[1], b[2], b[6], b[9] = 2, 2, 0x60, 5, 0x80
     b[10], b[11], b[12], b[13] = cmd_class, kind, 1, value
-    b[62] = V.checksum(b)
+    checksum = 0
+    for value in b[:62]:
+        checksum ^= value
+    b[62] = checksum
     return b
 
 

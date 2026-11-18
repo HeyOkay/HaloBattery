@@ -1,13 +1,14 @@
 """Tests for providers/mchose_kb.py - no hardware needed.
 
 The exchange is the one MCHOSE's own web driver (M HUB, www.mchose.com.cn) uses; the command
-table in its ``assets/purify.es-*.js`` bundle has
+table and wireless readCommand in ``assets/main-DQZs6ZzX.js`` have
 
     ["getBattery", {default: {wirelessCommand: "13 4a 01 00 ...",
                               wirelessParser: batteryLevel:u8, fullStatus:bit4, chargeStatus:bit4}}]
 
-0x13 is the report id, so the frame on the wire is ``13 4a 01`` and zeros, on the 20-byte
-output report of the vendor collection (usage page 0xFF02). Captured on a K87 receiver
+The 19-byte template receives its additive checksum 0x5e before sendReport removes
+report ID 0x13. HIDAPI's complete wire frame is 20 bytes, ``13 4a 01`` + 16 zeros +
+``5e``, on the FF02:0002 collection of interface 1. Captured on a K87 receiver
 (41E4:2001):
 
     13 4A 01 00 02 64 01 00 ... 00 C5
@@ -79,8 +80,11 @@ CMD_PATH = entries()[2]["path"]
 
 class ParseTest(unittest.TestCase):
     def test_the_request_frame(self):
-        self.assertEqual(bytes(K.REQUEST)[:6], bytes([0x13, 0x4A, 0x01, 0x00, 0x00, 0x02]))
-        self.assertEqual(len(K.REQUEST), 19)
+        # Pinned manufacturer wire frame, not derived from provider constants.
+        expected = bytes.fromhex("13 4a 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 5e")
+        self.assertEqual(K.REQUEST, expected)
+        self.assertEqual(len(K.REQUEST), 20)
+        self.assertEqual(K.REQUEST[-1], sum(K.REQUEST[:-1]) & 0xff)
 
     def test_the_captured_answer_reads_the_level(self):
         self.assertEqual(K.parse_reply(reply(0x64, 0x01)), (100, 0x01))
@@ -100,6 +104,27 @@ class ParseTest(unittest.TestCase):
     def test_a_short_reply_is_refused(self):
         self.assertIsNone(K.parse_reply([0x13, 0x4A, 0x01]))
         self.assertIsNone(K.parse_reply(None))
+
+
+    def test_boundary_levels_are_valid_only_in_complete_matching_frames(self):
+        for level in (0, 100):
+            with self.subTest(level=level):
+                self.assertEqual(K.parse_reply(reply(level)), (level, 1))
+
+    def test_truncated_corrupt_and_unrelated_frames_are_refused(self):
+        captured = bytes.fromhex("13 4a 01 00 02 64 01 00 00 00 00 00 00 00 00 00 00 00 00 c5")
+        self.assertEqual(K.parse_reply(captured), (100, 1))
+        for length in range(20):
+            with self.subTest(length=length):
+                self.assertIsNone(K.parse_reply(captured[:length]))
+        for index in (0, 1, 2, 3, 5, 19):
+            corrupt = bytearray(captured)
+            corrupt[index] ^= 1
+            with self.subTest(index=index):
+                self.assertIsNone(K.parse_reply(corrupt))
+        for malformed in (None, 7, "13 4a", {}, [None] * 20, [-1] * 20, [256] * 20):
+            with self.subTest(malformed=malformed):
+                self.assertIsNone(K.parse_reply(malformed))
 
 
 class PollTest(unittest.TestCase):
@@ -143,6 +168,39 @@ class PollTest(unittest.TestCase):
         out, _ = self.poll(fake, entries(vid=0x5253))
         self.assertEqual(out, [])
         self.assertEqual(fake.sent, [])
+
+
+    def test_only_the_sourced_product_and_exact_command_collection_are_written(self):
+        for changes in ({"product_id": 0x2002}, {"usage_page": 0xff04},
+                        {"usage": 1}, {"interface_number": 2}):
+            ents = [dict(e, **changes) for e in entries()]
+            with self.subTest(changes=changes):
+                fake = FakeKeyboard([reply()])
+                _out, _diag = self.poll(fake, ents)
+                self.assertEqual(fake.sent, [])
+
+    def test_short_or_refused_writes_do_not_consume_a_stale_input_reply(self):
+        class Refused(FakeKeyboard):
+            def __init__(self, result):
+                super().__init__([reply()])
+                self.result, self.reads, self.closed = result, 0, False
+            def write(self, data):
+                self.sent.append((self.path, bytes(data)))
+                return self.result
+            def read(self, *args, **kwargs):
+                self.reads += 1
+                return super().read(*args, **kwargs)
+            def close(self):
+                self.closed = True
+        for result in (-1, 0, 19, None):
+            with self.subTest(result=result):
+                fake = Refused(result)
+                out, diag = self.poll(fake, entries())
+                self.assertIsNone(out[0].level)
+                self.assertFalse(out[0].online)
+                self.assertEqual(fake.reads, 0)
+                self.assertTrue(fake.closed)
+                self.assertTrue(any("write refused/short" in line for line in diag))
 
 
 if __name__ == "__main__":

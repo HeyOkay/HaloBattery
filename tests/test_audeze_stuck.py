@@ -6,6 +6,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HeadsetControl lib/devices/audeze_maxwell.hpp, RACE battery marker d6 0c 00 00.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import unittest
@@ -21,12 +24,12 @@ PATH = b"\\\\?\\hid#vid_3329&pid_4b18&mi_00&col02#x"
 
 def echo(req):
     """What the stuck 4B18 dongle answered: 07 00 <byte 2 of the request> 00 ..."""
-    return [audeze.REPORT_ID_IN, 0x00, req[2]] + [0] * (audeze.MSG_SIZE - 3)
+    return [0x07, 0x00, req[2]] + [0] * (62 - 3)
 
 
 def battery(level):
-    return ([audeze.REPORT_ID_IN, 0x05, 0x5D, 0x07, 0x00] + list(audeze.BATTERY_MARKER)
-            + [level] + [0] * (audeze.MSG_SIZE - 10))
+    return ([0x07, 0x05, 0x5D, 0x07, 0x00] + list(bytes.fromhex("d6 0c 00 00"))
+            + [level] + [0] * (62 - 10))
 
 
 class FakeDongle:
@@ -34,11 +37,13 @@ class FakeDongle:
 
     def __init__(self, stuck, level=80):
         self.stuck, self.level, self.last = stuck, level, None
+        self.opened, self.writes = [], []
 
     def open_path(self, path):
-        pass
+        self.opened.append(path)
 
     def write(self, data):
+        self.writes.append(bytes(data))
         self.last = list(data)
         return len(data)
 
@@ -56,6 +61,60 @@ def ifaces(product="Audeze Maxwell HID", pid=0x4B18):
     return [{"product_id": pid, "serial_number": "0000000000000000", "path": PATH,
              "usage_page": 0xFF13, "usage": 0x0001, "interface_number": 0,
              "product_string": product}]
+
+
+class TargetTests(unittest.TestCase):
+    def setUp(self):
+        self.dongle = FakeDongle(stuck=False)
+        self.infos = []
+        for p in (mock.patch.object(audeze.hid, "device", lambda: self.dongle),
+                  mock.patch.object(audeze.hidlist, "enumerate", lambda vid: self.infos),
+                  mock.patch.object(audeze.time, "sleep", lambda s: None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_all_sourced_identities_use_the_exact_collection(self):
+        # Maxwell 2's interface 5 must not be rejected by an interface-0 rule.
+        for pid, interface in ((0x4B19, 0), (0x4B18, 0), (0x4B1A, 0),
+                               (0x4B29, 5), (0x4B28, 5)):
+            with self.subTest(pid=pid):
+                self.dongle.opened.clear()
+                self.dongle.writes.clear()
+                self.infos = [dict(ifaces(pid=pid)[0], interface_number=interface)]
+                out = audeze.AudezeProvider().poll()
+                self.assertEqual([(s.level, s.charging) for s in out],
+                                 [(80, pid == 0x4B1A)])
+                self.assertEqual(self.dongle.opened, [PATH])
+                self.assertEqual(self.dongle.writes,
+                                 [bytes([0x06, 0x07, 0x80, 0x05, 0x5A, 0x03,
+                                         0x00, 0xD6, 0x0C]) + bytes(53)])
+
+    def test_the_inferred_xbox_cable_identity_is_not_opened_or_written(self):
+        self.infos = ifaces("Audeze Maxwell Headset", pid=0x4B1E)
+        self.assertEqual(audeze.AudezeProvider().poll(), [])
+        self.assertEqual(self.dongle.opened, [])
+        self.assertEqual(self.dongle.writes, [])
+
+    def test_other_vendor_collections_are_not_opened_or_written(self):
+        for page, usage in ((0xFF13, 0x0002), (0xFF00, 0x0001), (0x000C, 0x0001),
+                            (0xFF13, None)):
+            with self.subTest(page=page, usage=usage):
+                info = dict(ifaces(pid=0x4B19)[0], usage_page=page, usage=usage)
+                if usage is None:
+                    del info["usage"]
+                self.infos = [info]
+                out = audeze.AudezeProvider().poll()
+                self.assertTrue(all(s.level is None for s in out))
+                self.assertEqual(self.dongle.opened, [])
+                self.assertEqual(self.dongle.writes, [])
+
+    def test_excluded_siblings_do_not_hide_the_allowed_collection(self):
+        allowed = dict(ifaces(pid=0x4B19)[0], path=b"allowed")
+        self.infos = [dict(allowed, path=b"wrong-usage", usage=0x0002),
+                      dict(allowed, path=b"wrong-page", usage_page=0xFF00), allowed]
+        self.assertEqual([s.level for s in audeze.AudezeProvider().poll()], [80])
+        self.assertEqual(self.dongle.opened, [b"allowed"])
+        self.assertEqual(len(self.dongle.writes), 1)
 
 
 class StuckDongleTests(unittest.TestCase):
@@ -86,7 +145,7 @@ class StuckDongleTests(unittest.TestCase):
         self.assertEqual(len(res), 1)
         st = res[0]
         self.assertEqual((st.key, st.name, st.level, st.online, st.approx),
-                         ("audeze:0000000000000000", "Audeze Maxwell", None, True, audeze.STUCK_TEXT))
+                         ("audeze:hid-c71f8d5fa49911f7d921e1ea19a8b56827f8c98396a4854b8379e5cff3d55978", "Audeze Maxwell", None, True, audeze.STUCK_TEXT))
 
     def test_replug_brings_the_level_back_under_the_same_key(self):
         self.p.poll()
