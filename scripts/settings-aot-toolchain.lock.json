@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "msvcLayout": "VC/Tools/MSVC/14.44.35207",
+  "maxEntries": 10000,
+  "maxExpandedBytes": 700000000,
+  "inputs": [
+    {
+      "name": "Microsoft.VC.14.44.17.14.CRT.Headers.base.vsix",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/c610cd8c-801b-44b8-a80a-82cc382aeb43/852382a9aa73502b7849c1bcadfb603ba7175c4e8b60e6aba03c7de711d4ece5/Microsoft.VC.14.44.17.14.CRT.Headers.base.vsix",
+      "sha256": "852382a9aa73502b7849c1bcadfb603ba7175c4e8b60e6aba03c7de711d4ece5",
+      "bytes": 2116223,
+      "kind": "msvc"
+    },
+    {
+      "name": "Microsoft.VC.14.44.17.14.CRT.x64.Desktop.base.vsix",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/67cf767c-5e71-47c2-a54a-cd5631e28942/f01f701a7bcd9587a340898c851424f6a52bb913a70c185ff0d5bf0288c5831a/Microsoft.VC.14.44.17.14.CRT.x64.Desktop.base.vsix",
+      "sha256": "f01f701a7bcd9587a340898c851424f6a52bb913a70c185ff0d5bf0288c5831a",
+      "bytes": 50776097,
+      "kind": "msvc"
+    },
+    {
+      "name": "Microsoft.VC.14.44.17.14.Tools.HostX64.TargetX64.base.vsix",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/68398668-2749-47a9-a7be-0f777acfa4bf/fb0eb9097fcac86ae264917fa543aecb6ab88c6656f29d912de56bfde802c541/Microsoft.VC.14.44.17.14.Tools.HostX64.TargetX64.base.vsix",
+      "sha256": "fb0eb9097fcac86ae264917fa543aecb6ab88c6656f29d912de56bfde802c541",
+      "bytes": 26606933,
+      "kind": "msvc"
+    },
+    {
+      "name": "Microsoft.VC.14.44.17.14.Tools.HostX64.TargetX64.Res.base.enu.vsix",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/68398668-2749-47a9-a7be-0f777acfa4bf/aa79883c5534acad5f506f66a6e4f40c0a1f89b6867c3733d82583c34d7f0b30/Microsoft.VC.14.44.17.14.Tools.HostX64.TargetX64.Res.base.enu.vsix",
+      "sha256": "aa79883c5534acad5f506f66a6e4f40c0a1f89b6867c3733d82583c34d7f0b30",
+      "bytes": 231727,
+      "kind": "msvc"
+    },
+    {
+      "name": "Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/67cf767c-5e71-47c2-a54a-cd5631e28942/9135b03c0df53c7a0aa9bef7230a1c2ff4263a0ee7baa7e419d034f484f6bb56/Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix",
+      "sha256": "9135b03c0df53c7a0aa9bef7230a1c2ff4263a0ee7baa7e419d034f484f6bb56",
+      "bytes": 27596908,
+      "kind": "msvc",
+      "include": [
+        "Contents/VC/Tools/MSVC/14.44.35207/lib/x64/oldnames.lib"
+      ]
+    },
+    {
+      "name": "microsoft.windows.sdk.cpp.x64.10.0.26100.4654.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.windows.sdk.cpp.x64/10.0.26100.4654/microsoft.windows.sdk.cpp.x64.10.0.26100.4654.nupkg",
+      "sha256": "81d8682ff04ba4dc3c3757b749f88eb9d109bd17179c233d36b0c71780f2aad5",
+      "bytes": 52143455,
+      "kind": "sdk"
+    }
+  ]
+}
