@@ -63,6 +63,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Refuse the captured GameSir Nova 2 Lite full-capacity placeholder instead of
+  showing a false 100%, while retaining real full readings on other controllers.
+- Refuse malformed Windows controller capacities before percentage conversion;
+  retain genuine full reports and the confirmed model-specific placeholder rules.
+- Refuse reserved/error PlayStation battery codes and truncated full reports
+  instead of converting them into a full battery.
+- Keep XInput readings tied to their own slots and clear stale state on
+  disconnect instead of pairing multiple WGI controllers by list position.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 

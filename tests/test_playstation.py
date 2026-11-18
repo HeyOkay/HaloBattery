@@ -194,7 +194,7 @@ class ProviderTest(unittest.TestCase):
         usb_report = [0x01] + [0] * 77
         usb_report[53] = 0x16                       # 60 %, charging
         usb.on_read = lambda: usb_report
-        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac="")], {BT_PATH: bt, USB_PATH: usb})
+        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac="a0:ab:51:12:34:56")], {BT_PATH: bt, USB_PATH: usb})
         self.assertEqual(len(out), 1)
         self.assertEqual((out[0].level, out[0].charging), (60, True))
         self.assertEqual(bt.features, [])
@@ -217,10 +217,11 @@ class ProviderTest(unittest.TestCase):
         second = {s.level: s.key for s in self.poll(list(reversed(entries)), pads)}
         self.assertEqual(first, second)
 
-    def test_one_usb_controller_keeps_its_old_key(self):
-        # names and hidden settings are saved under the key
+    def test_one_usb_controller_has_stable_endpoint_key_and_legacy_alias(self):
+        # The old count-dependent key is migrated only for this sole USB pad.
         out = self.poll([entry(USB_PATH, mac="")], {USB_PATH: usb_pad(0x08)})
-        self.assertEqual([s.key for s in out], ["ps:0ce6:"])
+        self.assertEqual([s.key for s in out], ["ps:0ce6:usb-8&1234abcd&0"])
+        self.assertEqual(self.provider.legacy_key_aliases(), {"ps:0ce6:": out[0].key})
 
     def test_collections_of_one_usb_controller_stay_one_icon(self):
         # one controller with two collections: same instance, the last part is the
@@ -230,11 +231,11 @@ class ProviderTest(unittest.TestCase):
         out = self.poll([entry(c1, mac=""), entry(c2, mac="")],
                         {c1: usb_pad(0x08), c2: usb_pad(0x08)})
         self.assertEqual(len(out), 1)
-        self.assertEqual(out[0].key, "ps:0ce6:")
+        self.assertEqual(out[0].key, "ps:0ce6:usb-8&1234abcd&0")
 
     def test_bluetooth_and_two_usb_controllers_keep_every_controller(self):
         # one controller on Bluetooth and its cable, plus a second one on USB only
-        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac=""), entry(USB_PATH_2, mac="")],
+        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac="a0ab51123456"), entry(USB_PATH_2, mac="")],
                         {BT_PATH: FakePad("basic"), USB_PATH: usb_pad(0x16),
                          USB_PATH_2: usb_pad(0x04)})
         self.assertEqual(len(out), 2)

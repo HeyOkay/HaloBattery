@@ -466,7 +466,22 @@ Listened to, never written: byte 14 of the controller's enhanced input report (r
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)
 
-Windows.Gaming.Input battery report: exact percentage and charging state. XInput is the fallback (four levels only)
+For a single unambiguous controller, use the Windows.Gaming.Input battery report;
+XInput's four coarse levels remain the fallback. With several XInput controllers,
+WGI enumeration order cannot establish the slot identity, so readings, names and
+charging states are not paired by list position. Observing a slot disconnect clears
+its previous reading and cached WGI association before the slot can be reused.
+The value `1000/1000` is not rejected globally: that blanket rule was rejected in
+[#216](https://github.com/HeyOkay/HaloBattery/pull/216); the existing narrowly scoped
+FlyDigi (`37D7`) placeholder rule is retained from the hardware reports.
+
+Microsoft defines both [remaining capacity](https://learn.microsoft.com/en-us/uwp/api/windows.devices.power.batteryreport.remainingcapacityinmilliwatthours)
+and [full-charge capacity](https://learn.microsoft.com/en-us/uwp/api/windows.devices.power.batteryreport.fullchargecapacityinmilliwatthours)
+as nullable `Int32` values, with the level calculated from their ratio. Before any
+conversion, the provider requires actual integers (excluding booleans) and
+`0 <= remaining <= full <= 2147483647`, with `full > 0`. Invalid or missing capacities
+leave the coarse XInput fallback available; they never become a percentage through
+string, float or boolean conversion.
 
 ### BEITONG KP40D
 
@@ -479,6 +494,23 @@ The vendor collection on interface 1 (`00ff:0003`): a 64-byte output report `02 
 **Connection:** Bluetooth (057E:2009, 2006, 2007)
 
 Byte 2 of the controller's own input report: level 0-8 in steps of 2 (full, medium, low, critical, empty) and the charging bit, shown as SDL shows it (level / 8, so 100 / 75 / 50 / 25 / 0 %) with the level name in the tooltip. When Steam has put the controller in the full mode, the 0x30 reports carry the byte and nothing is written; otherwise one read-only subcommand (0x02, request device info) is sent and its 0x21 reply carries the byte. The controller mode is never changed. USB is not read (the controller charges there). **Unverified** - no Switch controller was on hand, so a level above 8 is refused rather than shown
+
+Sony's battery-status validation follows the Sony-authored
+[Linux hid-playstation driver at commit 666539eecdf4db623f5e3c3e55cf9f2dfad24aa4](https://github.com/torvalds/linux/blob/666539eecdf4db623f5e3c3e55cf9f2dfad24aa4/drivers/hid/hid-playstation.c).
+Full reports must contain at least 64 bytes on USB or 78 on Bluetooth.
+DualSense charge states `0`/`1` accept levels `0..10`; state `2` explicitly means
+full. Charging-error and reserved states are refused. DualShock 4 accepts ordinary
+levels `0..10` and cable-connected `11` as full, refusing reserved/error values.
+No additional HID requests are introduced by these validation changes.
+
+USB endpoint keys no longer change when another controller is attached. USB and
+Bluetooth are combined only when existing serial metadata supplies a unique,
+matching valid MAC for that PID. Empty, placeholder or cloned metadata does not
+prove a match; endpoints remain distinct. This may show two connections for one
+physical pad when USB lacks its MAC, but it cannot replace a different controller's
+battery. Legacy plain USB preferences/history migrate only for one unambiguous
+USB candidate. No new pairing feature report is sent to discover missing MACs.
+
 
 ### Sony DualSense (PS5)
 
@@ -649,3 +681,23 @@ is excluded before opening HID: collection layout alone was the evidence for try
 the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
 providers are unchanged. These two exclusions resolve the historical fork #30 and
 Lamzu half of #34 release holds; their protocol tests remain for further development.
+### Confirmed GameSir Nova 2 Lite full-capacity placeholder
+
+In [#142](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5879245780)
+the owner reported Windows 100% while GameSir's app showed 69%. The
+[captured WGI probe](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5885746260)
+identifies its own object as `3537:1098`, `Discharging`, `remain=1000`,
+`full=1000`, `rate=None`. The existing
+[test-build fix at f2e6a834](https://github.com/casparas123/HaloBattery/commit/f2e6a834dde1aa829f708a16f473b5f18718f752)
+was missing from the integrated provider. Reject that exact report on its own
+WGI identity before fusion, preserving raw diagnostic fields. A real `690/1000`,
+zero, other valid full capacities, charging/idle status and reported rates remain
+valid. GameSir G7 Pro and other model/vendor identities are unaffected.
+
+This is a model-specific quality rule, not a claim that all `1000/1000` reports
+are placeholders. The [#216 review](https://github.com/HeyOkay/HaloBattery/pull/216)
+explicitly retained genuine full reports from other controllers. Existing
+confirmed FlyDigi and 8BitDo handling remains. Without a proven physical
+WGI-to-XInput association, another slot's coarse reading cannot override a
+valid percentage. A wired XInput level byte is not independent battery evidence.
+No new device request, guessed mapping or hardware test was introduced here.
