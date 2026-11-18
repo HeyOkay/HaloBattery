@@ -6,6 +6,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
+  (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
+  short, `ff43:0302` long) while keeping existing `ff00` paths preferred.
+  Also recognize the related `046d:c54d` receiver and `046d:c0a9` wired
+  interface. Confirmed on a physical mouse under Windows: battery level
+  matches Logitech G HUB, charging is reported, and the tray icon greys out
+  when powered off and recovers on reconnect. The additional receiver/cable
+  paths and low-battery notifications have not been verified on hardware.
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
