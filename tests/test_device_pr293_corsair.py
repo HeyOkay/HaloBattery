@@ -16,6 +16,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HeadsetControl corsair_void_v2w.hpp; Virtuoso reply captures in HaloBattery #204.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -34,8 +37,8 @@ def entry(pid, path, iface, page, usage, name=DONGLE):
             "path": path, "product_string": name, "serial_number": ""}
 
 
-def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0x00,
-                report_id=False, size=C.BRAGI_MSG_SIZE):
+def bragi_reply(value=550, route=0x01, cmd=0x02, err=0x00,
+                report_id=False, size=64):
     """A reply frame of the shape the dongle sends; value is in tenths of a percent."""
     payload = bytearray(size)
     payload[0] = route
@@ -46,12 +49,12 @@ def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
-def bragi_se_reply(value=960, source=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET,
-                   err=0x00, report_id=False, size=C.BRAGI_MSG_SIZE):
+def bragi_se_reply(value=960, source=0x01, cmd=0x02,
+                   err=0x00, report_id=False, size=64):
     """The Virtuoso receivers' answer shape (probe-measured, #204): the source
     byte sits between the route and the command - `01 01 02 00 <v LE>`."""
     payload = bytearray(size)
-    payload[0] = C.BRAGI_ROUTE_CHILD
+    payload[0] = 0x01
     payload[1] = source
     payload[2] = cmd
     payload[3] = err
@@ -148,7 +151,7 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(bus.opened, [b"k65-answers"])
         w = bus.dongles[b"k65-answers"].writes[0]
         self.assertEqual((w[0], w[1], w[2], w[3], len(w)),
-                         (0x00, 0x09, 0x02, 0x0F, C.BRAGI_MSG_SIZE + 1))
+                         (0x00, 0x09, 0x02, 0x0F, 64 + 1))
 
 
     def test_the_headset_family_is_untouched(self):

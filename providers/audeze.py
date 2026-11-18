@@ -29,7 +29,7 @@ Either that byte is not a plain read/write marker, or that one packet is not a
 plain read. Since it is part of the vendor's own initialisation and HeadsetControl
 sends it on every read, it stays - but the claim that the sequence writes nothing
 at all is withdrawn. What is enforced instead: the sequence is only sent to the
-product ids in KNOWN, and only ever to a vendor collection.
+product ids in KNOWN, and only ever to the FF13:0001 collection.
 
 Protocol and the packet tables come from the HeadsetControl project
 (Sapd/HeadsetControl, lib/devices/audeze_maxwell.hpp). The battery is their
@@ -75,10 +75,10 @@ before anything else and reports nothing while it says Dongle: a switched-off
 headset leaves the tray through the usual "two misses" path, is never reported as
 0%, and its 1.5 s battery sequence is not sent at all.
 
-Both endpoints report serial number ``0000000000000000``, so the icon key is that
-serial and two Maxwells on one machine would share one icon (and only the first
-would be read). Nothing that can be done about it here: the headset does not
-report anything unique over HID.
+Some endpoints report the placeholder serial ``0000000000000000``. That is not
+physical identity: those endpoints use stable HID-path keys and are never
+merged by the placeholder alone. Trusted nonzero serials still join the cable
+and dongle of one headset; unrelated headsets are polled independently.
 
 With the USB-C cable plugged in instead, a switched-off headset keeps reporting
 its real level on 0x4B1A: 85% while the LED showed charging, up from 83% before
@@ -92,6 +92,7 @@ HID" - poll() uses that to tell a switched-off headset from a live one.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -102,24 +103,22 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 AUDEZE_VID = 0x3329
 
-# PID -> name. 0x4B19 (the Maxwell dongle) and 0x4B1A (the USB-C cable) are
-# confirmed on hardware; the others use the same protocol and are listed so
-# their icon gets the right name, but nobody has confirmed them.
+# PID -> name. HeadsetControl's audeze_maxwell.hpp lines 52-54 and 91-93 list
+# 4B19/4B18 and FF13:0001; audeze_maxwell2.hpp lists 4B29/4B28 on FF13:0001:
+# https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/audeze_maxwell.hpp
+# https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/audeze_maxwell2.hpp
+# 4B1A is the USB-C cable measured above. 4B1E was inferred, not measured,
+# and is excluded until its identity and exchange have a source.
 KNOWN = {
     0x4B19: "Audeze Maxwell",
     0x4B18: "Audeze Maxwell (Xbox)",
     0x4B1A: "Audeze Maxwell (USB cable)",
-    # 0x4B1E is derived, not measured: it is 0x4B18 (the Xbox dongle) with the same
-    # +1 offset that separates the PC dongle 0x4B19 from its cable 0x4B1A. If the
-    # offset does not hold for the Xbox model, an Xbox cable is read as 0x4B18 and
-    # reported as "not charging" rather than as a cable.
-    0x4B1E: "Audeze Maxwell (Xbox, USB cable)",
     0x4B29: "Audeze Maxwell 2",
     0x4B28: "Audeze Maxwell 2 (Xbox)",
 }
 
 # the cable endpoints: read before the dongle, see poll()
-CABLE_PIDS = {0x4B1A, 0x4B1E}
+CABLE_PIDS = {0x4B1A}
 
 # one icon per headset, so whichever endpoint answered is called this
 HEADSET_NAME = "Audeze Maxwell"
@@ -269,6 +268,20 @@ def no_headset_linked(ifaces) -> bool:
                for d in ifaces)
 
 
+def device_identity(info):
+    """Keep real serial identities; never merge missing/placeholder identities."""
+    serial = info.get("serial_number")
+    serial = serial.strip() if isinstance(serial, str) else ""
+    if serial and serial.strip("0-{} "):
+        return serial, serial
+    path = info.get("path")
+    if isinstance(path, str):
+        path = path.encode("utf-8", errors="surrogatepass")
+    if not isinstance(path, bytes) or not path:
+        return None, serial
+    return "hid-" + hashlib.sha256(path.lower()).hexdigest(), serial
+
+
 class AudezeProvider(Provider):
     name = "audeze"
 
@@ -285,6 +298,11 @@ class AudezeProvider(Provider):
         self._last_echo_only = False     # set by _read_battery for the read it just did
         self._up_since: Dict[str, float] = {}   # serial -> when the headset started answering
         self.pending = False             # a 0% was held back: the app re-checks in 3 s
+        self._legacy_aliases = {}
+
+    def legacy_key_aliases(self):
+        """Cached unambiguous old identities; never query a device here."""
+        return dict(self._legacy_aliases)
 
     # ---- low level -------------------------------------------------------
     def _read_frame(self, dev) -> Optional[bytes]:
@@ -383,6 +401,7 @@ class AudezeProvider(Provider):
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         self.pending = False
+        self._legacy_aliases = {}
         try:
             infos = hidlist.enumerate(AUDEZE_VID)
         except Exception as e:  # pragma: no cover
@@ -395,6 +414,7 @@ class AudezeProvider(Provider):
         # something a battery reader should do. An unknown id is named in the diagnostics
         # so a reporter can ask for it.
         groups: Dict[Tuple[int, str], List[dict]] = {}
+        aliases = {}
         for d in infos:
             pid = d["product_id"]
             if pid not in KNOWN:
@@ -404,7 +424,17 @@ class AudezeProvider(Provider):
                 if line not in self._diag:
                     self._diag.append(line)
                 continue
-            groups.setdefault((pid, d.get("serial_number") or ""), []).append(d)
+            identity, old_serial = device_identity(d)
+            if identity is None:
+                continue
+            # Only the sourced control path can identify an anonymous endpoint.
+            # Consumer/audio siblings are not separate unknown headsets.
+            if identity != old_serial and not is_vendor_interface(d):
+                continue
+            groups.setdefault((pid, identity), []).append(d)
+            if identity != old_serial:
+                aliases.setdefault("audeze:" + old_serial, set()).add("audeze:" + identity)
+        self._legacy_aliases = {old: next(iter(keys)) for old, keys in aliases.items() if len(keys) == 1}
 
         # One icon per headset. The dongle and the cable are the same Maxwell:
         # plugged in for charging the headset keeps its wireless link and both
@@ -416,18 +446,16 @@ class AudezeProvider(Provider):
         # icon survives plugging the cable in and out.
         order = sorted(groups.items(),
                        key=lambda kv: (kv[0][0] not in CABLE_PIDS, kv[0][0], kv[0][1]))
-        out: List[DeviceStatus] = []
-        stuck: Optional[DeviceStatus] = None
+        out: Dict[str, DeviceStatus] = {}
+        stuck: Dict[str, DeviceStatus] = {}
+        completed = set()
         for (pid, serial), ifaces in order:
+            if serial in completed:
+                self._diag.append("  this headset already answered through its preferred endpoint")
+                continue
             name = KNOWN.get(pid) or (ifaces[0].get("product_string") or f"Audeze {pid:04x}").strip()
             diag_from = len(self._diag)
             self._diag.append(f"[Audeze] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
-            # The vendor collection (usage page 0xFF13) is the only one that
-            # speaks this protocol. The consumer-control and telephony
-            # collections on the same interface answer nothing at all, and
-            # writing the sequence to them cost 2.6 s and ~45 log lines per poll
-            # while the headset was switched off, so they are only tried on a
-            # device that has no 0xFF13 collection at all.
             # A switched-off headset: the dongle keeps answering, but with the last
             # value it held, and there is no way to tell that from a live reading -
             # the icon sat there showing the stale level for as long as the headset
@@ -437,19 +465,15 @@ class AudezeProvider(Provider):
             # a switched-off device) and the battery sequence is not sent at all,
             # 1.5 s saved per poll for a value that cannot change while it is off.
             off = pid not in CABLE_PIDS and no_headset_linked(ifaces)
-            # The vendor collection (usage page 0xFF13) is the only one that speaks this
-            # protocol, and only vendor collections are ever written to: a device whose
-            # vendor collection is missing gets nothing rather than the sequence going to
-            # its consumer-control and telephony collections, which answer nothing, cost
-            # about 2.6 s per poll and are not meant to receive it.
-            cands = ([d for d in ifaces if is_vendor_interface(d)]
-                     or [d for d in ifaces if d.get("usage_page") == VENDOR_USAGE_PAGE]
-                     or [d for d in ifaces if (d.get("usage_page") or 0) >= 0xFF00])
+            # Only the sourced FF13:0001 collection receives this protocol. Other
+            # usages on FF13 and other vendor pages are not fallback targets.
+            # Do not require interface 0: Maxwell 2 uses interface 5.
+            cands = [d for d in ifaces if is_vendor_interface(d)]
             if not cands:
-                self._diag.append("    no vendor collection on this device "
-                                  "(not writing to the standard collections)")
-                out.append(DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
-                                        "audeze", kind="headset"))
+                self._diag.append("    no FF13:0001 battery collection on this device "
+                                  "(not writing to other collections)")
+                out[serial] = DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
+                                           "audeze", kind="headset")
                 continue
             level = None
             echoed = False
@@ -461,7 +485,12 @@ class AudezeProvider(Provider):
                     if len(cands) > 1:
                         self._diag.append(f"  iface={d.get('interface_number')} "
                                           f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                    level, _ = self._read_battery(d["path"], (pid, serial))
+                    try:
+                        self._last_echo_only = False
+                        level, _ = self._read_battery(d["path"], (pid, serial))
+                    except Exception as e:
+                        self._diag.append(f"    battery read failed on this endpoint: {e}")
+                        continue
                     if level is not None:
                         break
                     echoed = echoed or self._last_echo_only
@@ -472,10 +501,10 @@ class AudezeProvider(Provider):
             # dongle that says a headset is linked gets here ("off" above skips the read).
             n = self._echo_polls[(pid, serial)] = (
                 self._echo_polls.get((pid, serial), 0) + 1 if level is None and echoed else 0)
-            if n >= STUCK_POLLS and stuck is None:
+            if n >= STUCK_POLLS:
                 self._diag.append(f"    stuck for {n} polls in a row: showing \"{STUCK_TEXT}\"")
-                stuck = DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
-                                     "audeze", STUCK_TEXT, kind="headset", ui_message="state.audeze_stuck")
+                stuck[serial] = DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
+                                             "audeze", STUCK_TEXT, kind="headset", ui_message="state.audeze_stuck")
             if level is None:
                 # A switched-off headset is a routine state, not a fault. Log the
                 # outage once per headset and stay quiet until it answers again:
@@ -487,7 +516,6 @@ class AudezeProvider(Provider):
                     log.info("[Audeze] %s: no battery reading", name)
                     for line in self._diag[diag_from:]:
                         log.info("%s", line)
-                self._up_since.pop(serial, None)     # the next answer starts a new grace period
                 continue
             # whichever endpoint answered, this headset is alive again
             self._down_logged.discard(serial)
@@ -497,11 +525,12 @@ class AudezeProvider(Provider):
                 self._diag.append(f"    0% within {now - since:.0f} s of the headset coming on: "
                                   f"not measured yet, re-checking in a few seconds")
                 self.pending = True
-                out.append(DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
-                                        "audeze", WAKING_TEXT, kind="headset", ui_message="state.pending"))
-                break
+                out[serial] = DeviceStatus(f"audeze:{serial}", HEADSET_NAME, None, False, True,
+                                           "audeze", WAKING_TEXT, kind="headset", ui_message="state.pending")
+                completed.add(serial)
+                continue
             if len(order) > 1:
-                self._diag.append(f"  {name} answered, the other endpoint is not read")
+                self._diag.append(f"  {name} answered; only this headset's duplicate endpoint is skipped")
             # The cable endpoint is the charging source: a Maxwell charges
             # whenever it is on USB-C (there is no way to switch that off), so the
             # cable answering means "on power". The protocol itself carries no
@@ -509,18 +538,19 @@ class AudezeProvider(Provider):
             # the icon still breathes where the headset's own LED is solid green.
             # It is worth it: a headset plugged in while nearly empty is no longer
             # told to charge.
-            out.append(DeviceStatus(f"audeze:{serial}",
-                                    HEADSET_NAME if pid in KNOWN else name,
-                                    level, pid in CABLE_PIDS, True, "audeze",
-                                    kind="headset"))
-            break
-        if not out and stuck is not None:
-            out.append(stuck)
+            out[serial] = DeviceStatus(f"audeze:{serial}",
+                                       HEADSET_NAME if pid in KNOWN else name,
+                                       level, pid in CABLE_PIDS, True, "audeze",
+                                       kind="headset")
+            completed.add(serial)
+        for serial, hint in stuck.items():
+            if serial not in completed:
+                out[serial] = hint
         # a dongle that was unplugged starts a new grace period when it comes back
         present = {serial for _, serial in groups}
-        for serial in [s for s in self._up_since if s not in present]:
+        for serial in [s for s in self._up_since if s not in present or s not in completed]:
             del self._up_since[serial]
-        return out
+        return list(out.values())
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

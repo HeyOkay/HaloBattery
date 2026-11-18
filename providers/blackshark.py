@@ -39,7 +39,9 @@ ATTEMPTS = 3
 WAKE_ATTEMPTS = 4
 REPLY_TIMEOUT_MS = 150
 
-PA_PIDS = {0x0555, 0x0556, 0x0583, 0x0536}   # 0x0536: Barracuda X (2022), #256
+# Not here: 1532:0536. It is the Barracuda X (2022) on its USB cable, not a receiver, and
+# its ff00:0001 interface has no output endpoint: Windows refused every write (#256).
+PA_PIDS = {0x0555, 0x0556, 0x0583}
 
 
 def frame_query(cmd_id: int, cmd_type: int = TYPE_QUERY) -> bytes:
@@ -160,8 +162,8 @@ def read_battery(path: bytes, diag: List[str]) -> Tuple[str, Optional[int], bool
     """-> ('ok'|'offline'|'nowake'|'fail', level, charging)
 
     'ok'      - a reading.
-    'offline' - the interface accepted a command and the headset did not answer the battery
-                query: this IS the right collection, the headset is switched off.
+    'offline' - the interface accepted a command, but the battery query gave no usable
+                reading: this IS the right collection, with the headset off or an invalid reply.
     'nowake'  - the interface opened but never accepted a single command (or the reopen
                 failed): the receiver is present, but the headset is off, the USB device is
                 suspended, or this is the wrong collection.
@@ -210,9 +212,9 @@ def read_battery(path: bytes, diag: List[str]) -> Tuple[str, Optional[int], bool
             # is simply not answering. This is the one "no reading" answer worth remembering.
             return "offline", None, False
         level = bat[0]
-        if level > 100:
+        if not 0 <= level <= 100:
             diag.append(f"    unexpected battery value: {level}")
-            level = min(level, 100)
+            return "offline", None, False
         chg = s.query(CMD_CHARGING)
         charging = bool(chg and chg[0])
         return "ok", level, charging
