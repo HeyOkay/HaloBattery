@@ -147,7 +147,7 @@ The receiver presents a MediaTek command channel, the same 64-byte frame family 
 
 OpenRGB's [Kraken V4 merge request](https://gitlab.com/CalcProgrammer1/OpenRGB/-/merge_requests/3042) documents this frame and the packet capture for this model, and [openrazer issue 2298](https://github.com/openrazer/openrazer/issues/2298) identifies the device. OpenRGB lists commands 0x21 and 0x2A as present but not decoded; the BlackShark sibling uses 0x21 for the level and 0x2A for charging. [Sebax95's Kraken V4 Pro battery tool](https://github.com/Sebax95/Razer-Kraken-V4-Pro-Battery-Detector-Linux) documents the same 0x2A mapping and warns that the reply's data-valid byte is always 1, not the charging state. Read-only: no setting, lighting or firmware command is sent.
 
-**Status:** test build 2; waiting for the reporter to confirm the level and charging state on hardware.
+**Status:** **confirmed on hardware by @Zireael3Z**: the level matched the receiver at 87%, and the charging ring changed and reported charging while the cable was connected.
 
 ### Sony INZONE H9
 

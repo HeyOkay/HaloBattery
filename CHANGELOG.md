@@ -17,7 +17,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   while the settings window loads and restores its saved view.
 - Razer Kraken V4 (2.4 GHz receiver `1532:056C` or USB-C cable
   `1532:056B`): read the battery level and charging state over its MediaTek
-  channel. Test build 2, unverified on hardware.
+  channel. Confirmed on hardware by @Zireael3Z: 87% matched the receiver and
+  the charging ring followed the cable.
 - Open the existing What's new window from About, directly below the version.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
