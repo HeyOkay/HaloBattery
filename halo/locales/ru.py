@@ -105,6 +105,7 @@ MESSAGES = {
     "provider.atk_keyboard": "Клавиатура ATK V75X",
     "provider.atk_nearlink": "Мыши ATK X1 Nearlink",
     "provider.aula": "Клавиатуры AULA F87 Pro V2C",
+    "provider.aula_f108": "Клавиатуры AULA F108 Pro",  # 설정에 표시할 장치 이름
     "provider.dareu": "Мыши DAREU",
     "provider.eweadn": "Мыши EWEADN / 前行者",
     "provider.endgame_4k": "Мыши Endgame Gear 4K (XM2w / OP1w)",
