@@ -5,8 +5,8 @@ first-generation A5 Pro Max (docs/PROTOCOL.md and lib/a5-protocol.ts): 64-byte f
 reports on the vendor collection (usage page 0xFFFF), report id 0; the reference's
 payload carries route 2 at its byte 2, its own length 2 at byte 3, page 0 at byte 4 and
 command 0x83 at byte 5. The reply starts with the 0xA1 marker and echoes page and
-command at its bytes 4 and 5, with the charging state in byte 6 and the level in byte 7
-(clamped to 100, as the reference clamps it). The collection shape is the reporter's
+command at its bytes 4 and 5, with the charging state in byte 6 and the percentage in
+byte 7. Out-of-range percentages are refused. The collection shape is the reporter's
 diagnostics dump from issue #149 (2023:f013 'MCHOSE A5 2.4G': the mouse, ffa0:0001 and
 ffff:0001 on interface 1, a keyboard, consumer and system collection, then ffff:0000 on
 interface 2).
@@ -15,6 +15,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: z750sasr/mchose-a5-pro-max-web-driver, A5 battery page 00/command 83; HaloBattery #149.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -27,7 +30,7 @@ from providers import mchose as M  # noqa: E402
 
 def answer(level=58, charging=False):
     """A reply as the reference expects it: 0xA1, ..., page, command, charge, level."""
-    return ([0xA1, 0x00, 0x00, 0x00, M.A5_PAGE, M.A5_CMD_BATTERY,
+    return ([0xA1, 0x00, 0x00, 0x00, 0x00, 0x83,
              1 if charging else 0, level] + [0x00] * 56)
 
 
@@ -56,7 +59,7 @@ class FakeMchose:
     def get_feature_report(self, report_id, length):
         self.reads += 1
         if self.path == self.answer_path:
-            return [M.A5_REPORT_ID] + answer(self.level, self.charging)
+            return [0x00] + answer(self.level, self.charging)
         return [0x00] * length               # silent: no 0xA1 marker in it
 
 
@@ -94,8 +97,15 @@ class ParseTest(unittest.TestCase):
     def test_the_report_id_may_lead_the_answer(self):
         self.assertEqual(M.parse_a5([0x00] + answer(58, True)), (58, True))
 
-    def test_a_level_above_100_is_clamped_as_the_reference_clamps_it(self):
-        self.assertEqual(M.parse_a5(answer(200, False)), (100, False))
+    def test_literal_percentages_are_validated_with_both_charging_states(self):
+        # Literal reply payloads; only the charge byte changes between variants.
+        for raw, expected in (("00", 0), ("64", 100), ("65", None), ("ff", None)):
+            for charging in (0, 1):
+                frame = bytes.fromhex("a1 00 00 00 00 83 " + f"{charging:02x} " + raw + " 00")
+                want = None if expected is None else (expected, bool(charging))
+                with self.subTest(raw=raw, charging=charging):
+                    self.assertEqual(M.parse_a5(frame), want)
+                    self.assertEqual(M.parse_a5(b"\x00" + frame), want)
 
     def test_another_page_or_command_is_refused(self):
         wrong = answer()
@@ -137,6 +147,21 @@ class PollTest(unittest.TestCase):
                            "mchose", "mouse")])
         self.assertEqual({p for p, _ in fake.sent}, {FF_F1})    # nothing else was written to
         self.assertEqual(fake.sent[0][1], bytes(M.make_a5_request()))
+
+    def test_invalid_percentage_does_not_replace_or_refresh_last_good_value(self):
+        fake = FakeMchose(level=58, answer_path=FF_F1)
+        ents = entries()
+        M.hid = types.SimpleNamespace(device=lambda: fake)
+        M.hidlist = types.SimpleNamespace(
+            enumerate=lambda vid=0: [e for e in ents if e["vendor_id"] == vid])
+        provider = M.MchoseProvider()
+        self.assertEqual([s.level for s in provider.poll()], [58])
+        before = dict(provider._last)
+        fake.level, fake.charging = 255, True
+        self.now[0] += 1
+        out = provider.poll()
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(58, False, False)])
+        self.assertEqual(provider._last, before)
 
     def test_the_second_ffff_collection_is_tried_too(self):
         # the same reply arrives on either ffff collection depending on the model/revision

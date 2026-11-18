@@ -26,6 +26,10 @@ from .base import DeviceStatus, Provider, hexdump, log
 VID, PID = 0x320F, 0x5088
 USAGE_PAGE, USAGE = 0xFF1C, 0x0092
 PRODUCT = "ATK V75X 2.4G Dongle"
+# PR #407, pinned 675198a6b37bb221: captured N75 Pro response to the
+# same ATK HUB Evision battery command, on 320F:5088 FF1C:0092.
+# The cable identity below remains ATK-only; shared USB ids are not enough.
+PRODUCT_NAMES = {PRODUCT: "ATK V75X", "VGN N75 PRO 2.4G Dongle": "VGN N75 PRO"}
 WIRED_PID, WIRED_PRODUCT = 0x5055, "ATK V75X"
 REPORT_ID, CMD_BATTERY = 0x04, 0x1A
 TIMEOUT, READ_MS = 1.0, 100
@@ -57,6 +61,7 @@ class AtkKeyboardProvider(Provider):
         self._tried = None    # monotonic time of the last request
         self._path = None
         self._paused = None
+        self._label = "ATK V75X"
 
     def _read(self, path) -> Optional[Tuple[int, bool]]:
         self._sequence = self._sequence % 0xFFFF + 1
@@ -93,18 +98,26 @@ class AtkKeyboardProvider(Provider):
             log.warning("hid.enumerate(atk_keyboard): %s", e)
             return []
         def found(pid, product, usage=(USAGE_PAGE, USAGE)):
-            return [e for e in infos if e.get("product_id") == pid
+            products = (product,) if isinstance(product, str) else product
+            allowed = {value.casefold() for value in products}
+            return [e for e in infos if e.get("vendor_id") == VID and e.get("product_id") == pid
                     and (e.get("usage_page"), e.get("usage")) == usage
-                    and (e.get("product_string") or "").strip().casefold() == product.casefold()]
+                    and isinstance(e.get("product_string"), str)
+                    and e["product_string"].strip().casefold() in allowed]
         # The cable wins when both are connected: it answers while charging.
         for d in found(WIRED_PID, WIRED_PRODUCT):
+            self._select_label("ATK V75X")
             self._diag.append(f"[ATK V75X] {VID:04x}:{WIRED_PID:04x} USB cable")
             self.activity.configure([])
             self._switch(d["path"])
             return [self._poll_wired(d["path"])]
-        for d in found(PID, PRODUCT):
-            self._diag.append(f"[ATK V75X] {VID:04x}:{PID:04x} 2.4 GHz")
-            self.activity.configure([e["path"] for e in found(PID, PRODUCT, (1, 6))])
+        for d in found(PID, PRODUCT_NAMES):
+            product = d["product_string"].strip()
+            label = next(name for target, name in PRODUCT_NAMES.items()
+                         if product.casefold() == target.casefold())
+            self._select_label(label)
+            self._diag.append(f"[{self._label}] {VID:04x}:{PID:04x} 2.4 GHz")
+            self.activity.configure([e["path"] for e in found(PID, product, (1, 6))])
             self._switch(d["path"])
             if not self.activity.start() or not self.activity.active():
                 if self._paused is not True:
@@ -138,6 +151,14 @@ class AtkKeyboardProvider(Provider):
         self.activity.configure([])
         return []
 
+    def _select_label(self, label):
+        # Another supported brand is a different keyboard, even when its USB
+        # path/receiver id was reused. Never relabel the previous one's level.
+        if self._label != label:
+            self._cached = self._fresh = self._tried = None
+            self._paused = None
+            self._label = label
+
     def _switch(self, path):
         """Cable and dongle are the same keyboard: keep its level across a switch,
         but not the charging state or the request timers."""
@@ -159,14 +180,14 @@ class AtkKeyboardProvider(Provider):
 
     def _status(self):
         level, charging = self._cached
-        return DeviceStatus("atk_keyboard:320f:5088", "ATK V75X", level, charging, True,
+        return DeviceStatus("atk_keyboard:320f:5088", self._label, level, charging, True,
                             self.name, kind="keyboard")
 
     def _idle_status(self, paused=True):
         level = self._cached[0] if self._cached else None
         text = "" if paused else (f"{level}% (last known; no fresh reply)" if level is not None
                                   else "battery not reported yet")
-        return DeviceStatus("atk_keyboard:320f:5088", "ATK V75X", level, False, False,
+        return DeviceStatus("atk_keyboard:320f:5088", self._label, level, False, False,
                             self.name, approx=text, kind="keyboard", polling_paused=paused)
 
     def close(self):

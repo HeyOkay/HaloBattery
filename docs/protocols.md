@@ -267,13 +267,23 @@ The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
 
-A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the vendor collection (usage page `0xFFFF`, report id 0), from the community web driver [z750sasr/mchose-a5-pro-max-web-driver](https://github.com/z750sasr/mchose-a5-pro-max-web-driver) - the same route/length/page/command framing for every command, battery on page `0x00` command `0x83`, whose reply carries the `0xA1` marker, echoes page and command, and holds the charging state in byte 6 and the level in byte 7 (clamped to 100, as the reference clamps it). The transport is corroborated by [Klegus/mchose-macos](https://github.com/Klegus/mchose-macos), an independent reverse-engineering of the same vendor id's driver. **Confirmed on hardware** (@Pekish992, [#149](https://github.com/HeyOkay/HaloBattery/issues/149)): his 1K receiver answered 22 % and then 25 % while charging, matching the MCHOSE software and its charging animation; the 4K receiver and cable ids are still untried
+A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the vendor collection (usage page `0xFFFF`, report id 0), from the community web driver [z750sasr/mchose-a5-pro-max-web-driver](https://github.com/z750sasr/mchose-a5-pro-max-web-driver) - the same route/length/page/command framing for every command, battery on page `0x00` command `0x83`, whose reply carries the `0xA1` marker, echoes page and command, and holds the charging state in byte 6 and the percentage in byte 7. Halo Battery refuses values above 100 rather than turning a malformed reading into a full battery. The transport is corroborated by [Klegus/mchose-macos](https://github.com/Klegus/mchose-macos), an independent reverse-engineering of the same vendor id's driver. **Confirmed on hardware** (@Pekish992, [#149](https://github.com/HeyOkay/HaloBattery/issues/149)): his 1K receiver answered 22 % and then 25 % while charging, matching the MCHOSE software and its charging animation; the 4K receiver and cable ids are still untried
 
 ### MCHOSE A7 V2 Ultra
 
 **Connection:** 2.4 GHz receiver (3837:100B, RealTek strings)
 
 The same protocol as the M7 Ultra on MCHOSE's newer vendor id, which the reference driver treats identically: the diagnostics in [#4](https://github.com/HeyOkay/HaloBattery/issues/4) show the same interface shape (collections 0xFF0B:0x104 and 0xFF01:0x01 on interface 2). The status read is documented on the shorter 0x11 report, so both report ids are tried, and the mouse is named from the receiver's own product string. Icon of its own, so it and an M7 Ultra stay two devices. **Unverified** — no A7 V2 Ultra was on hand, so a level out of range is refused rather than shown
+
+The generic `3837` mouse exchange is restricted to `3837:100B`, interface 2,
+`FF01:0001`, as documented in [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
+and [#20](https://github.com/HeyOkay/HaloBattery/pull/20). VID `3837` also covers
+keyboards and products with different protocols: the K99 `3033` and V7 `1016`
+diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189) do not
+justify sending the RealTek mouse feature request to them. Those and other
+unmapped products remain unopened by that route. The separately confirmed V9
+headset routes `6008`/`600A` are preserved. The original `5253`, G7 and A5 Pro Max
+exchanges are unchanged.
 
 ### MCHOSE G7
 
@@ -429,6 +439,25 @@ Keychron's vendor protocol on interface 4: a 64-byte feature report `b3 06` (sta
 **Connection:** 2.4 GHz dongle (388D:0025)
 
 The transaction Lofree's own web driver (hyzen.lofree.tech) uses, on report 0x04 of the vendor collection 0xFF1C:0x92: start (`00 00 01`), the command, end (`00 00 02`), each acknowledged in byte 2. Command `AA` asks if the keyboard is online, command `1A` returns the level in byte 7. As in the web driver, only the dongle is read, and not while the same keyboard is on its cable; no charging state. **Unverified** - no Lofree keyboard was on hand
+
+### Lofree Flow Lite84
+
+**Target:** `05ac:024f`, captured product `2.4G Wireless Receiver`, control
+collection `FF02:0002`. The USB ID is shared with Apple keyboards and AULA F108
+receivers, so a matching ID elsewhere never authorizes a Flow request.
+
+Source: Lofree Control HUB (`lofree.tech/home`, bundle `index-BTVblIUr.js`),
+recorded in [`providers/lofree.py`](../providers/lofree.py) and
+[PR #169](https://github.com/HeyOkay/HaloBattery/pull/169).
+Its 17-byte output frame uses report ID `08`, keyboard flag `80` at index 5,
+and a checksum whose complete-frame sum is `55`. Command `03` must report online
+before command `04` supplies the percentage at index 6 and charging flag at 7.
+
+Only that receiver product and control collection are selected. Unknown output
+caps remain compatible with the previously supported path; known incompatible
+caps refuse the request before opening a device. There is no fallback to another
+collection or to an AULA receiver. Existing community hardware confirmation
+does not represent a new hardware test of this guard.
 
 ### Logitech G502 LIGHTSPEED, G502 X PLUS
 
@@ -649,3 +678,76 @@ is excluded before opening HID: collection layout alone was the evidence for try
 the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
 providers are unchanged. These two exclusions resolve the historical fork #30 and
 Lamzu half of #34 release holds; their protocol tests remain for further development.
+## Guarded integrations from pending device pull requests
+
+These are local integrations into the current native transport. The upstream
+PR's owner observations establish their stated device evidence; they are not
+hardware tests of this new implementation, and do not establish every charging
+transition or sibling model.
+
+### AULA F108 Pro
+
+**Target:** `05ac:024f`, exact product `F108Pro Dongle`, interface 3 `FF60:0061`.
+The same USB ID also belongs to a Lofree receiver, so USB ID alone never permits
+a write. [AulaKit](https://github.com/meitar/aula-driver/blob/985df39f8224d6f031aeafdacf1a6328f458600f/Sources/AulaKit/Hardware/WirelessAulaDevice.swift#L82-L95)
+sources command `20 01`; its lines 174-185 define the additive checksum.
+[PR #402](https://github.com/HeyOkay/HaloBattery/pull/402) records the Windows
+33-byte output request and the owner's 33% reply. The parser accepts the complete
+32-byte payload, optionally preceded by report-ID zero, checks command/padding,
+checksum and range, and keeps charging unknown. Native writes must complete the
+actual padded output size. Stable per-path keys keep identical receivers separate;
+the old singleton key is migrated only when exactly one eligible receiver exists.
+No short-request fallback is added.
+
+### MCHOSE K7 V2 Ultra+
+
+**Target:** receiver `3837:1018`, interface 2 `FF01:0001` only. M HUB's
+`assets/main-DQZs6ZzX.js` (SHA-256
+`52b25bf9cdb449b84c69f50970c1612a2e33b3c98b7caffd03c1c8e9dca1ce1a`),
+`getCommandBuffer`, `readDeviceInfo` and `deviceInfoToObj`, source a 64-byte output
+report `4D`, command `0900`. [PR #403](https://github.com/HeyOkay/HaloBattery/pull/403)
+records the 85% reply and charge flags 0/1. Validate supported flags, command,
+payload length, XOR checksum, vendor identity, zero padding and percentage.
+The embedded mouse PID is not required to equal its receiver's USB PID. A zero
+level means unlinked, not an empty battery. Other new receiver PIDs are held;
+silence never falls back to the legacy `06` feature query.
+
+### EWEADN X23 Pro
+
+**Target:** receiver `04f3:026f`, interface 1 `000A:0000`. The official
+[device list](https://hub.eweadn.cn/deviceJson/other.json) maps it to the YDX driver.
+The text-only archived [main bundle](https://hub.eweadn.cn/ydx/web/assets/index-BvEqCbAL.js)
+(`ca5d68f36d8b276a7ff4386b8fc4f478b51d22f6e2813bc0f2e025e4ecefd402`)
+calls `receiveFeatureReport(5)` and decodes input report 4. The
+[device view](https://hub.eweadn.cn/ydx/web/assets/DeviceView-ss1Fdo4r.js)
+(`80b55838f8bb10d13f6468aacc3225fbdfb15e7f0761bca0ed425d7cc1928870`)
+maps charge 1 to charging and 2 to full.
+
+[PR #406 at ad77d41](https://github.com/HeyOkay/HaloBattery/blob/ad77d41e109814df2c19d8abbe03e6000ccaad43/providers/eweadn_ydx.py)
+is the pinned Windows 31-byte-payload/report-ID collection-size declaration;
+an independent raw descriptor capture is not available. Cached native HID caps
+must identify exactly one input-32 and one feature-32 collection on the **same
+receiver**. Legacy HIDAPI uses a bounded descriptor parser. Missing/ambiguous
+roles fail closed. Drain bounded old input, GET feature 5 once, then listen for
+input 4 under one shared 1.5-second budget, divided fairly between receivers.
+Starting receiver order rotates, and response waiting is divided only after
+setup/trigger. The shared deadline stops new work; native calls already in flight
+retain their own bounded completion/cleanup timeouts. Deferred receiver readings
+use a bounded, unplug-pruned cache marked offline/stale, without fresh history or
+alerts. No output/SET feature/configuration query or wired `026e` path is enabled.
+Link, byte types, complete length and range are checked before treating a full
+flag as 100%; unknown charging remains unknown.
+
+### Delux M900 Pro and VGN N75 PRO
+
+[PR #407 at 675198a](https://github.com/HeyOkay/HaloBattery/pull/407) records passive
+`03 3f 40 01 4a` (74%) for Delux `1d57:fa65`. The existing Inphic listener accepts
+model `3F` only on that PID; it sends no command. The longer twelve-read window
+is limited to FA65; FA60 keeps its previous five reads and model allowlist.
+
+VGN N75 PRO is an exact `VGN N75 PRO 2.4G Dongle` product alias on `320f:5088`,
+using the existing ATK `FF1C:0092` interface-1 output `04`/command `1A` exchange
+documented under ATK V75X. No generic brand match or new command is added.
+Changing between VGN receiver and ATK wired identities resets the label and
+cached value; the same ATK model retains cable/receiver continuity. PR evidence
+confirms level observations, not a new charging transition test.
