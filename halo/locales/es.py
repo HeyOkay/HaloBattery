@@ -11,6 +11,7 @@ MESSAGES = {
     "startup.hid_unavailable": 'Windows no pudo cargar la compatibilidad HID. No se pueden leer las baterías por USB ni por 2,4 GHz. Bluetooth y Configuración siguen disponibles. Abre Diagnóstico para ver los detalles.',
     "state.poll_unavailable": 'Consulta de batería no disponible',
     "state.poll_stale": '{level}% (último valor; consulta de batería no disponible)',
+    "notification.update_not_completed": "La actualización a v{target} no se completó. HaloBattery sigue ejecutando v{version}. Inténtalo de nuevo o descarga la versión manualmente.",
     "settings.open_failed": "No se pudo abrir Configuración. Las preferencias básicas siguen disponibles en {preferences} en el menú del icono de la bandeja.",
     "preferences.icon_style": "Estilo de iconos",
     "icon_style.outline": "Contorno",

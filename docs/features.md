@@ -160,6 +160,11 @@ Windows SmartScreen may warn about an unrecognized app on first launch, because 
 
 To keep the settings, the log and the battery history next to the app instead of in `%APPDATA%\HaloBattery` (for a USB stick or a folder you sync), create an empty file named `portable.txt` in the app's folder, next to `HaloBattery.exe` (or `halo_battery.pyw` when running from source), and restart the app. The folder must be writable: if it is not (e.g. inside `C:\Program Files`), the app keeps using `%APPDATA%\HaloBattery`. Settings are not moved over by themselves: copy `config.json` from `%APPDATA%\HaloBattery` to keep them. **Start with Windows** still adds an entry to the registry of the current user.
 
+Setup and uninstall close only the app and Settings from the selected install
+folder. Uninstall preserves settings, history, custom icons and other user files
+stored beside the executable. Deleting `%APPDATA%\HaloBattery` remains an
+explicit choice in interactive uninstall; silent uninstall keeps that data.
+
 ## Run from source
 
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.

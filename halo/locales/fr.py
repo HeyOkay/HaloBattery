@@ -4,6 +4,7 @@ MESSAGES = {
     "startup.hid_unavailable": 'Windows n’a pas pu charger la prise en charge HID. La lecture des batteries par USB et 2,4 GHz est indisponible. Bluetooth et les paramètres restent accessibles. Ouvrez le diagnostic pour plus de détails.',
     "state.poll_unavailable": 'Lecture de la batterie indisponible',
     "state.poll_stale": '{level}% (dernière valeur ; lecture de la batterie indisponible)',
+    "notification.update_not_completed": "La mise à jour vers v{target} ne s’est pas terminée. HaloBattery utilise toujours v{version}. Réessayez ou téléchargez la version manuellement.",
     "settings.open_failed": "Impossible d’ouvrir les paramètres. Les réglages de base restent accessibles dans {preferences}, depuis le menu de l’icône de notification.",
     "preferences.icon_style": "Style des icônes",
     "icon_style.outline": "Contour",

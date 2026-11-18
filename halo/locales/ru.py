@@ -4,6 +4,7 @@ MESSAGES = {
     "startup.hid_unavailable": 'Windows не удалось загрузить HID-модуль. Уровни заряда по USB и 2,4 ГГц недоступны. Bluetooth и настройки продолжают работать. Подробности - в диагностике.',
     "state.poll_unavailable": 'Не удалось обновить заряд',
     "state.poll_stale": '{level}% (последнее показание; не удалось обновить заряд)',
+    "notification.update_not_completed": "Не удалось завершить обновление до v{target}. HaloBattery продолжает работать на v{version}. Повторите попытку или скачайте релиз вручную.",
     "settings.open_failed": "Не удалось открыть настройки. Основные параметры доступны в пункте «{preferences}» меню значка в трее.",
     "preferences.icon_style": "Стиль значков",
     "icon_style.outline": "Контур",
