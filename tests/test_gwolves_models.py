@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: G-Wolves mouse.xyz feature-report protocol (64-byte payload plus report ID).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -23,7 +26,7 @@ from providers import gwolves as G  # noqa: E402
 class Mouse:
     """One collection with the 64-byte feature report. answer: (charging, battery) or None."""
 
-    def __init__(self, answer=(0, 64), feature_len=G.FEATURE_LENGTH):
+    def __init__(self, answer=(0, 64), feature_len=65):
         self.answer = answer
         self.feature_len = feature_len
         self.sent = []
@@ -90,7 +93,7 @@ class ModelTest(unittest.TestCase):
 
     def receiver(self, entries, target=6, **kw):
         # only the collection at `target` has the 64-byte feature report
-        return {e["path"]: Mouse(feature_len=G.FEATURE_LENGTH if n == target else 9, **kw)
+        return {e["path"]: Mouse(feature_len=65 if n == target else 9, **kw)
                 for n, e in enumerate(entries)}
 
     def test_hsk_pro_ace_issue_105(self):

@@ -1,8 +1,7 @@
 """Tests for providers/hyperx.py. No hardware: the dongles are fakes answering with the
 frames the reference projects describe.
 
-The Kingston revision (0951:1718) is pinned to its three references: HeadsetControl's
-hyperx_cloud_2_wireless_kingston.hpp, HyperHeadset's cloud_ii_wireless.rs and
+The Kingston revision (0951:1718) is pinned to HyperHeadset's cloud_ii_wireless.rs and
 Agustin-Jerusalinsky/hyperx-cloud-II-battery - the request preamble, the report-0x0B
 reply shape, the level at byte 7 and the charging state at byte 4. The HP-branded 52-byte
 exchange keeps a regression pin of its own.
@@ -11,6 +10,10 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HyperHeadset57dfa2b src/devices/cloud_ii_wireless.rs
+# L33-34 (commands), L172-205 (0b 00 bb replies, level byte7/charge byte4).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -24,7 +27,7 @@ from providers import hyperx as H  # noqa: E402
 def kingston_reply(cmd, level=0, charging=0):
     """A 64-byte reply as the references describe: 0B 00 BB <cmd> ..."""
     r = [0x0B, 0x00, 0xBB, cmd, charging, 0x00, 0x00, level]
-    return bytes(r + [0x00] * (H.KINGSTON_READ_LEN - len(r)))
+    return bytes(r + [0x00] * (64 - len(r)))
 
 
 KINGSTON_SHAPE = [  # iface, usage page, usage - the reporter's dump in #192
@@ -94,17 +97,17 @@ class KingstonTests(unittest.TestCase):
         return self.provider.poll()
 
     def test_the_request_is_the_references_frame_byte_for_byte(self):
-        self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL),
-                       kingston_reply(H.KINGSTON_CMD_CHARGING)])
+        self.run_with([kingston_reply(0x02),
+                       kingston_reply(0x03)])
         sent = self.dongle.written
         self.assertEqual(2, len(sent))
-        self.assertEqual(H.kingston_request(H.KINGSTON_CMD_LEVEL), sent[0])
+        self.assertEqual(H.kingston_request(0x02), sent[0])
         self.assertEqual(62, len(sent[0]))
         self.assertEqual([0x06, 0x00, 0x02, 0x00], sent[0][:4])
         self.assertEqual([0x9A, 0x00, 0x00, 0x68, 0x4A, 0x8E, 0x0A], sent[0][4:11])
         self.assertEqual(0xBB, sent[0][14])
-        self.assertEqual(H.KINGSTON_CMD_LEVEL, sent[0][15])
-        self.assertEqual(H.KINGSTON_CMD_CHARGING, sent[1][15])
+        self.assertEqual(0x02, sent[0][15])
+        self.assertEqual(0x03, sent[1][15])
         self.assertEqual([0x00] * 45, sent[0][17:])
 
     def test_a_failed_write_is_not_followed_by_a_read(self):
@@ -116,19 +119,19 @@ class KingstonTests(unittest.TestCase):
         self.assertTrue(any("write failed" in line for line in self.provider.diagnostics()))
 
     def test_prepare_read_before_every_write(self):
-        self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL),
-                       kingston_reply(H.KINGSTON_CMD_CHARGING)])
+        self.run_with([kingston_reply(0x02),
+                       kingston_reply(0x03)])
         self.assertEqual(2, self.dongle.prepares)
 
     def test_a_failed_prepare_read_is_ignored(self):
         self.dongle.prepare_fails = True
-        found = self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL, level=44),
-                               kingston_reply(H.KINGSTON_CMD_CHARGING)])
+        found = self.run_with([kingston_reply(0x02, level=44),
+                               kingston_reply(0x03)])
         self.assertEqual([s.level for s in found], [44])
 
     def test_the_level_and_charging_are_read(self):
-        found = self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL, level=57),
-                               kingston_reply(H.KINGSTON_CMD_CHARGING, charging=0)])
+        found = self.run_with([kingston_reply(0x02, level=57),
+                               kingston_reply(0x03, charging=0)])
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.kind) for s in found],
                          [("hyperx:1718", "HyperX Cloud II Wireless", 57, False, True, "headset")])
 
@@ -136,28 +139,28 @@ class KingstonTests(unittest.TestCase):
         for value, expected in ((1, True), (2, True), (0, False)):
             with self.subTest(value=value):
                 self.fresh()
-                found = self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL, level=88),
-                                       kingston_reply(H.KINGSTON_CMD_CHARGING, charging=value)])
+                found = self.run_with([kingston_reply(0x02, level=88),
+                                       kingston_reply(0x03, charging=value)])
                 self.assertEqual([s.charging for s in found], [expected])
 
     def test_a_reply_that_is_not_the_answer_is_refused(self):
-        wrong_id = bytes([0x07] + list(kingston_reply(H.KINGSTON_CMD_LEVEL, 9))[1:])
-        wrong_marker = bytes([0x0B, 0x00, 0x00] + list(kingston_reply(H.KINGSTON_CMD_LEVEL, 9))[3:])
-        wrong_echo = kingston_reply(H.KINGSTON_CMD_CHARGING, level=9)   # answered, asked for 2
+        wrong_id = bytes([0x07] + list(kingston_reply(0x02, 9))[1:])
+        wrong_marker = bytes([0x0B, 0x00, 0x00] + list(kingston_reply(0x02, 9))[3:])
+        wrong_echo = kingston_reply(0x03, level=9)   # answered, asked for 2
         for bad in (wrong_id, wrong_marker, wrong_echo):
             with self.subTest(first=bad[:4]):
                 self.fresh()
                 self.assertEqual([], self.run_with([bad]))
 
     def test_a_level_above_100_is_refused(self):
-        self.assertEqual([], self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL, level=101)]))
+        self.assertEqual([], self.run_with([kingston_reply(0x02, level=101)]))
 
     def test_100_and_0_are_levels(self):
         for level in (0, 100):
             with self.subTest(level=level):
                 self.fresh()
-                found = self.run_with([kingston_reply(H.KINGSTON_CMD_LEVEL, level=level),
-                                       kingston_reply(H.KINGSTON_CMD_CHARGING)])
+                found = self.run_with([kingston_reply(0x02, level=level),
+                                       kingston_reply(0x03)])
                 self.assertEqual([s.level for s in found], [level])
 
     def test_no_vendor_collection_gets_no_write(self):
@@ -197,7 +200,7 @@ class OldRevisionTests(unittest.TestCase):
         found = H.HyperXProvider().poll()
         self.assertEqual([(s.key, s.level, s.charging) for s in found],
                          [("hyperx:0696", 66, True)])
-        self.assertEqual(H.make_request(H.CMD_LEVEL), self.dongle.written[0])
+        self.assertEqual(H.make_request(0x02), self.dongle.written[0])
         self.assertEqual(52, len(self.dongle.written[0]))
 
     def test_a_failed_write_is_not_followed_by_a_read(self):
