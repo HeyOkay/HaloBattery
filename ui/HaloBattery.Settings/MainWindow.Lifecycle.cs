@@ -69,6 +69,7 @@ public sealed partial class MainWindow
     private void OnSettingsWindowHidden()
     {
         StopRail();
+        ClosePopupSpotlights();
         ResetCardSpotlights();
         ResetContentWheelObservation();
         rail.Width=new(expanded?228:64);

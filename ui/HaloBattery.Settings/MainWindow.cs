@@ -179,7 +179,7 @@ public sealed partial class MainWindow : Window
   button.HorizontalContentAlignment=HorizontalAlignment.Center;button.VerticalContentAlignment=VerticalAlignment.Center;button.Padding=new(0);button.CornerRadius=new(10);
   if(!dark)
   {
-   button.Resources["ButtonBackgroundPointerOver"]=Brush("#1F000000");
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(NavigationHighlightColor);
    button.Resources["ButtonBackgroundPressed"]=Brush("#2C000000");
    button.Resources["ButtonForegroundPointerOver"]=TextBrush;
    button.Resources["ButtonForegroundPressed"]=TextBrush;
@@ -278,6 +278,7 @@ public sealed partial class MainWindow : Window
   ResetContentWheelObservation();
   ResetOverscrollForNavigation();
   ResetCardSpotlights();
+  ClearControlSpotlights();
   var next=State.Pages.Any(p=>p.Id==page)?page:State.Pages.FirstOrDefault()?.Id??"general";
   var switching=frame.Content is not null&&next!=current;
   // Перестройка той же страницы (после действия, смены переключателя) сохраняет раскрытые карточки.
@@ -451,6 +452,7 @@ public sealed partial class MainWindow : Window
   }
   if(primary){b.Background=Brush($"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");b.Foreground=Brush(dark?"#000000":"#FFFFFF");b.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;}
   if(!enabled){ToolTipService.SetToolTip(b,Later);AutomationProperties.SetHelpText(b,Later);}
+  if(!chrome)EnableControlSpotlight(b);
   return b;
  }
  internal StackPanel PageContent(string title)
@@ -494,6 +496,7 @@ public sealed partial class MainWindow : Window
   var item=new Style(typeof(ComboBoxItem));item.Setters.Add(new Setter(ComboBoxItem.CornerRadiusProperty,new CornerRadius(15)));item.Setters.Add(new Setter(ComboBoxItem.MinHeightProperty,30.0));item.Setters.Add(new Setter(ComboBoxItem.FontSizeProperty,13.0));item.Setters.Add(new Setter(ComboBoxItem.PaddingProperty,new Thickness(12,0,12,0)));item.Setters.Add(new Setter(ComboBoxItem.MarginProperty,new Thickness(4,0,4,4)));box.ItemContainerStyle=item;
   box.Resources["ComboBoxDropdownContentMargin"]=new Thickness(0,4,0,0);
   ConfigureComboSelection(box);
+  EnableControlSpotlight(box);
   return box;
  }
  // Ширина поля - по самому длинному пункту (+ отступы и стрелка), чтобы пункты меню целиком помещались; потом не меняется.
@@ -512,7 +515,13 @@ public sealed partial class MainWindow : Window
  internal ScrollViewer Scroll(StackPanel content)
  {
   content.HorizontalAlignment=HorizontalAlignment.Left;content.MaxWidth=double.PositiveInfinity;
-  content.SizeChanged+=(_,_)=>InvalidateCardSpotlightGeometry();
+  content.SizeChanged+=(_,e)=>
+  {
+   // Expander rows stay in their card's Canvas while only its visible height
+   // changes. Rebase card origins without rediscovering every row's ancestry.
+   if(e.NewSize.Width==e.PreviousSize.Width && cards.Any(c=>c.IsAnimating))InvalidateCardSpotlightBounds();
+   else InvalidateCardSpotlightGeometry();
+  };
   // The content receives bubbling wheel input before its ScrollViewer parent
   // starts native scrolling. A transparent fill also catches gaps between cards.
   var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch,Background=Brush("#00000000")};host.Children.Add(content);
