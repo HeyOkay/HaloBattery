@@ -1,6 +1,4 @@
 """Renderer states/DPI with offline handoff glyphs; no device or network access."""
-import base64
-import hashlib
 import math
 import os
 import sys
@@ -100,39 +98,25 @@ class ArtworkTests(unittest.TestCase):
         self.assertEqual(icon_artwork._image("xbox-color",256).getchannel("A").getbbox(),(33,33,223,223))
         self.assertEqual(icon_artwork._image("playstation-color",256).getchannel("A").getbbox(),(34,54,222,202))
 
-    def test_dark_xbox_master_preserves_historical_source_bytes(self):
-        encoded = icon_artwork._PNG["xbox-color-dark", 256]
-        self.assertEqual(hashlib.sha256(base64.b64decode(encoded)).hexdigest(),
-                         "b60a398bb2871a8baf2b70714eeff04028083c691f623263c4ecdc69da7617f6")
-        self.assertEqual(icon_artwork._image("xbox-color-dark", 256).getchannel("A").getbbox(),
-                         (27, 35, 217, 225))
-
-    def test_xbox_color_uses_accepted_optical_placement_for_each_theme(self):
-        def alpha_centroid(image):
-            alpha = image.getchannel("A")
-            pixels = [(x + .5, y + .5, alpha.getpixel((x, y)))
-                      for y in range(image.height) for x in range(image.width)]
-            mass = sum(a for x, y, a in pixels)
-            return (sum(x * a for x, y, a in pixels) / mass,
-                    sum(y * a for x, y, a in pixels) / mass)
-
+    def test_xbox_color_outer_circle_is_centered_in_both_themes(self):
+        # The asymmetric X changes ink mass, so measure the outer circle bounds
+        # at half coverage instead of the alpha centroid or alpha-1 ringing.
+        master_alpha = icon_artwork._image("xbox-color", 256).getchannel("A")
+        self.assertEqual(master_alpha.point(lambda a: 255 if a >= 128 else 0).getbbox(),
+                         (33, 33, 223, 223))
         for size in (16, 20, 24, 32, 40, 48, 64):
             with self.subTest(size=size):
                 dark = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", True)
                 light = icon_artwork.glyph("gamepad", size, (0, 0, 0), 255, "xbox", True)
-                mono = icon_artwork.glyph("gamepad", size, (255, 255, 255), 255, "xbox", False)
-                self.assertEqual(light.tobytes(), icon_artwork._image("xbox-color", size).tobytes())
-                self.assertEqual(dark.tobytes(), icon_artwork._image("xbox-color-dark", size).tobytes())
-                self.assertNotEqual(dark.tobytes(), light.tobytes())
-                # Historical per-size masks differ slightly at antialiased edges.
-                # Compare ink placement rather than requiring identical alpha bytes.
-                for actual, expected in zip(alpha_centroid(light), alpha_centroid(mono)):
-                    self.assertAlmostEqual(actual, expected, delta=.025)
-                # The historical dark placement is baked once into its master;
-                # per-size antialiasing changes its measured centroid by <.05 px.
-                for actual, centered, offset in zip(alpha_centroid(dark), alpha_centroid(mono),
-                                                   (-.375, .125)):
-                    self.assertAlmostEqual(actual - centered, offset * size / 16, delta=.05)
+                self.assertEqual(dark.tobytes(), light.tobytes())
+                for glyph in (dark, light):
+                    bounds = glyph.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
+                    self.assertIsNotNone(bounds)
+                    # Thresholded raster edges land on physical pixel boundaries;
+                    # one edge rounding differently permits at most half a pixel.
+                    for center in ((bounds[0] + bounds[2]) / 2,
+                                   (bounds[1] + bounds[3]) / 2):
+                        self.assertAlmostEqual(center, size / 2, delta=.5)
                 for theme in (False, True):
                     plain = icons.render(75, False, True, light_taskbar=theme, size=size)
                     branded = icons.render(75, False, True, light_taskbar=theme, size=size,
@@ -141,6 +125,36 @@ class ArtworkTests(unittest.TestCase):
                         for x in range(size):
                             if math.hypot(x + .5 - size / 2, y + .5 - size / 2) > 6.8 * size / 16:
                                 self.assertEqual(branded.getpixel((x, y)), plain.getpixel((x, y)))
+
+    def test_xbox_color_stays_centered_across_battery_states(self):
+        states = (("normal", 75, False, True, False),
+                  ("low", 10, False, True, False),
+                  ("charging known", 60, True, True, False),
+                  ("charging unknown", None, True, True, False),
+                  ("offline", None, False, False, False),
+                  ("paused", None, False, True, True))
+        for size in (16, 20, 24, 32, 40, 48, 64):
+            bounds_by_state = []
+            for light in (False, True):
+                for name, level, charging, online, paused in states:
+                    with self.subTest(size=size, light=light, state=name):
+                        image = icons.render(level, charging, online, light_taskbar=light,
+                            size=size, badge="gamepad", brand="xbox", brand_color=True,
+                            force_active=paused, animation_phase=.37, pulse=.3)
+                        # Restrict to the circle's interior to exclude even green
+                        # charging arcs. Normalize half coverage for offline fading.
+                        threshold = 55 if name == "offline" else 128
+                        points = [(x, y) for y in range(size) for x in range(size)
+                                  if math.hypot(x + .5 - size / 2, y + .5 - size / 2) < .42 * size
+                                  and image.getpixel((x, y))[3] >= threshold]
+                        self.assertTrue(points)
+                        bounds = (min(x for x, y in points), min(y for x, y in points),
+                                  max(x for x, y in points) + 1, max(y for x, y in points) + 1)
+                        bounds_by_state.append(bounds)
+                        for center in ((bounds[0] + bounds[2]) / 2,
+                                       (bounds[1] + bounds[3]) / 2):
+                            self.assertAlmostEqual(center, size / 2, delta=.5)
+            self.assertEqual(len(set(bounds_by_state)), 1)
 
     def test_charging_animation_changes_ring_without_modulating_brand(self):
         frames=icons.charging_frames(None,True,20,False,"gamepad","",size=20,brand="playstation",brand_color=True)

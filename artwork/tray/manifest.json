@@ -1283,17 +1283,6 @@
       "optical_offset_already_applied": true
     },
     {
-      "name": "xbox-color-dark",
-      "size": 256,
-      "file": "xbox-color-dark.png",
-      "source": "simple_icons",
-      "optical_offset_logical_px": [
-        -0.375,
-        0.125
-      ],
-      "optical_offset_already_applied": true
-    },
-    {
       "name": "playstation-color",
       "size": 256,
       "file": "playstation-color.png",

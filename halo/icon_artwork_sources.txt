@@ -12,11 +12,11 @@ https://unpkg.com/lucide-static@1.17.0/
 Historical 56 masks: extracted from the central glyph region of the cleaned handoff
 prototype/lab-assets.json at 16,20,24,32,40,48,64 px. Demonstration arcs and states
 are excluded. Color masters: artwork/optical-master-{xbox,playstation}-color.png.
-Xbox uses the canonical centered master (zero optical offset) on light taskbars.
-Dark taskbars use xbox-color-dark.png, byte-identical to the historical master at
-6795db2:artwork/tray/xbox-color.png, with -0.375,+0.125 logical px already baked in.
-These two optical placements were retained after direct user feedback on both
-contrasts. Runtime selects the prealigned master and applies no further offset.
+Xbox uses the canonical centered master (zero optical offset) on both taskbar
+themes. Its 256px outer circle has visible bounds [33,33,223,223], centered on
+[128,128]. The former dark-only variant baked in a -0.375,+0.125 logical-pixel
+shift and was removed because it displaced the circle inside the battery ring.
+Runtime applies no theme-specific translation or further optical offset.
 Lucide: ISC (Feather-derived headphones: MIT). Simple Icons: CC0-1.0.
 PlayStation classic artwork: Sony, Wikimedia Commons source above.
 
@@ -122,7 +122,7 @@ remains byte-exact at stroke 2. Speaker (0.455), Smart home (0.45) and Display
 (0.43) all center measured visible ink once during generation. Exact generation
 parameters, bounds and translations are in manifest.json. This is source fitting,
 not a runtime translation or theme-specific adjustment. No stretching is applied.
-Watch, Tracker and all 66 pre-existing assets are unchanged (80 payloads).
+Watch, Tracker and the 65 retained pre-existing assets are unchanged (79 payloads).
 
 User-reviewed optical nudges, applied after geometric centering: Health,
 Display/TV and Webcam [0,+0.25] logical px; Smart home [0,-0.25] logical px.

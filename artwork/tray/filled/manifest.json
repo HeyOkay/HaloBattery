@@ -1,0 +1,146 @@
+{
+  "format": 1,
+  "sizes": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64
+  ],
+  "glyphs": {
+    "headset": {
+      "file": "lucide-headphones.svg",
+      "sha256": "598fac2729b63abe414498eace5f7fcdfe615daa20889083a79bc7d8dc742534",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/headphones.svg",
+      "upstream_sha256": "5692c74d160ec6c54993be380cb14260e9fb9f02d4099b90fb9949cf01634543",
+      "scale": 0.45,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
+    },
+    "mouse": {
+      "file": "lucide-mouse.svg",
+      "sha256": "b49fe3823b2235c7fdb9b71870f009bee65e52aef296c58c11f7d2e3a9f3516b",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/mouse.svg",
+      "upstream_sha256": "1d9662e58671096ff6d425b689f2ecb824d79ebaaa656efa5ec0dde08b7a8bfd",
+      "scale": 0.5,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
+    },
+    "keyboard": {
+      "file": "lucide-keyboard.svg",
+      "sha256": "a8675bf94692c47748f82ee795d8f29f61558bc9d1611b7a03feada1d896587a",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/keyboard.svg",
+      "upstream_sha256": "27671a4fd0aeeadca298bf878ebbcd53ac6649ca61d4e8d024c761dd048eb3fb",
+      "scale": 0.455,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
+    },
+    "microphone": {
+      "file": "lucide-mic.svg",
+      "sha256": "737544b2dd7bb2ed8fdb832341bd60a34316bd449ba10965ea14c48f85aaa948",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/mic.svg",
+      "upstream_sha256": "05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117",
+      "scale": 0.5,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
+    },
+    "gamepad": {
+      "file": "lucide-gamepad-2.svg",
+      "sha256": "cb7efa111be1f783a4632f6bb98bc1d2f7ea31c07294b82d23430c6671e0100e",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/gamepad-2.svg",
+      "upstream_sha256": "9f9f6f987d2101987665b4334786a2ae397e4a2ced2629977bcf5b19a2b9481a",
+      "scale": 0.5,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
+    },
+    "speaker": {
+      "file": "lucide-speaker.svg",
+      "sha256": "9960bda3b860f4a4825d4b8eee9549ff6a6919d947a2afeecab4252cc91739ec",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg",
+      "upstream_sha256": "a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3",
+      "scale": 0.455,
+      "translation": [
+        8.0,
+        8.0
+      ],
+      "stroke_width": 2.1978021978021975
+    },
+    "webcam": {
+      "file": "lucide-webcam.svg",
+      "sha256": "2d4832fbfab4cabbca097678062aa65afd235899755b50ea11ce24b53601901e",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg",
+      "upstream_sha256": "5301b9ff75048743f5436594c0c7ce1fada1653620b1c9f6f34fa3c667b09b60",
+      "scale": 0.5,
+      "translation": [
+        8,
+        8.25
+      ],
+      "stroke_width": 2
+    },
+    "health": {
+      "file": "lucide-heart-pulse.svg",
+      "sha256": "c8024e28211ba4b6222350c61fd3950476d1f52a1f6f4725566549ef8a6c81e0",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg",
+      "upstream_sha256": "b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed",
+      "scale": 0.5,
+      "translation": [
+        8.0,
+        8.0
+      ],
+      "stroke_width": 2
+    },
+    "smart_home": {
+      "file": "lucide-house.svg",
+      "sha256": "5719d4a66021ce7ffc954ca71db837941d07959d793aae0d1bfc779134c7ffc2",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/house.svg",
+      "upstream_sha256": "b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a",
+      "scale": 0.45,
+      "translation": [
+        8.0,
+        7.984375
+      ],
+      "stroke_width": 2.2222222222222223
+    },
+    "watch": {
+      "file": "lucide-watch.svg",
+      "sha256": "866b15431fccdc6dbed03356dd74d1c1bdab181ce875a14299c223296cf05993",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/watch.svg",
+      "upstream_sha256": "896fb08ab4056a89f174aec886d54fb9501aa157d998bc94069286a3717fe6ae",
+      "scale": 0.5,
+      "translation": [
+        8.0,
+        8.0
+      ],
+      "stroke_width": 2
+    },
+    "display": {
+      "file": "lucide-tv-minimal.svg",
+      "sha256": "f38f3b1158831766587e22df0a1700e0d397a5913d2914953fdbb7b94b73c4f2",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/tv-minimal.svg",
+      "upstream_sha256": "fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141",
+      "scale": 0.43,
+      "translation": [
+        8.0,
+        8.25
+      ],
+      "stroke_width": 2.3255813953488373
+    }
+  }
+}

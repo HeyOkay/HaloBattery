@@ -36,12 +36,14 @@ import tempfile
 import threading
 import time
 import uuid
-import zlib
 from dataclasses import replace
 from logging.handlers import RotatingFileHandler
 from typing import Callable, Dict, List, Optional, Set
 
 APP_NAME = "HaloBattery"
+# Stable registration label for the branded app preference. Explorer also
+# caches the initial tooltip; do not reuse the unbranded prototype's label.
+TRAY_APP_TIP = "HaloBattery - wireless device batteries"
 APP_TITLE = "Halo Battery"
 VERSION = "1.17.0"
 PRETEND_VERSION = ""             # --pretend-version 1.0.0: test the updater with a built copy
@@ -137,7 +139,7 @@ except ImportError:
 import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
-from halo import flyout, history, icons, updates, whatsnew, winevents  # noqa: E402
+from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
@@ -184,6 +186,9 @@ DEFAULTS = {
     "disabled_providers": [],     # provider names turned off in Preferences > Device types
     "time_left": True,      # "about N h of use left" in the tooltip (history.py)
     "percent_in_icon": False,  # the level as a number in the ring, instead of the pictogram
+    "custom_icons": {},   # device key -> verified locally cached Iconify asset ID
+    "ring_style": "thin",  # thin=1 logical px; classic restores the former 1.625 px
+    "filled_icons": False,  # global device pictogram style; outline remains the default
     "quiet_fullscreen": True,  # while a game is full screen: hold alerts, poll every 5 min
     "keep_disconnected": False,  # keep a gone device's icon, greyed with its last level, until restart (#151)
     "status_file": False,      # write status.json for Rainmeter, Stream Deck, scripts
@@ -295,6 +300,13 @@ _config_lock = threading.Lock()
 def _valid_setting(key: str, value) -> bool:
     """A value from the settings file has the type of its default (and a sane range)."""
     default = DEFAULTS[key]
+    if key == "custom_icons":
+        return (isinstance(value, dict) and len(value) <= 1024 and
+                all(isinstance(k, str) and 0 < len(k) <= 512 and isinstance(v, str) and
+                    len(v) == 64 and all(c in "0123456789abcdef" for c in v)
+                    for k, v in value.items()))
+    if key == "ring_style":
+        return isinstance(value, str) and value in ("thin", "classic")
     if key == "language":
         return isinstance(value, str) and value in i18n.LANGUAGES
     if isinstance(default, bool):
@@ -446,17 +458,8 @@ APP_ICON_PATH = os.path.join(DATA_DIR, "notification_icon.png")
 def app_icon_png(path: str) -> bool:
     """The app icon (the same drawing as halo.ico) as a PNG for the notification header."""
     try:
-        from PIL import Image, ImageDraw
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        size, ss = 64, 4
-        big = size * ss
-        img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-        ImageDraw.Draw(img).ellipse((0, 0, big - 1, big - 1), fill=(32, 32, 32, 255))
-        ring = icons.render(75, True, True, 20, light_taskbar=False, badge="")
-        ring = ring.resize((int(big * 0.84),) * 2, Image.LANCZOS)
-        off = (big - ring.width) // 2
-        img.alpha_composite(ring, (off, off))
-        img.resize((size, size), Image.LANCZOS).save(path)
+        app_icon.render(64).save(path)
         return True
     except Exception as e:
         log.warning("notification icon: %s", e)
@@ -629,6 +632,8 @@ def fullscreen_app_running() -> bool:
 
 # ------------------------------------------------------------- tray icons
 WM_RBUTTONUP = 0x0205
+WM_LBUTTONUP = 0x0202
+WM_LBUTTONDBLCLK = 0x0203
 WM_QUERYENDSESSION = 0x0011
 ICON_HANDLE_CACHE = 128    # bounded handles per tray icon; fits a full 90-frame charging cycle
 IDLE_KEY = "HaloBattery:idle"   # the "no devices found" icon's id
@@ -636,13 +641,15 @@ _tray_classes: Dict[type, type] = {}
 
 
 def icon_uid(key: str) -> int:
-    """A tray icon id that is the same on every start for the same device.
+    """One persistent Windows preference for this app's distinct owner windows.
 
-    Windows remembers where the user put a tray icon (on the taskbar or in the
-    hidden-icons flyout) by the program's path and this id. pystray uses the
-    Python object's id, which changes on every start, so Windows saw new icons
-    each time and forgot their place (#38)."""
-    return zlib.crc32(key.encode("utf-8")) & 0x7FFFFFFF
+    Shell_NotifyIcon identifies a live icon by (hWnd, uID). pystray gives every
+    device its own hWnd, so they can share uID without sharing callbacks or
+    images. Explorer remembers the executable path and uID; using one value
+    avoids another Windows Settings row for every device/reconnection.
+    https://learn.microsoft.com/windows/win32/api/shellapi/ns-shellapi-notifyicondataw
+    """
+    return tray_history.MASTER_UID
 
 
 def _destroy_handles(cache: dict) -> None:
@@ -658,10 +665,10 @@ def _destroy_handles(cache: dict) -> None:
 
 def _make_tray_class(base: type) -> type:
     class TrayIcon(base):
-        """pystray's icon with two changes, both in pystray's own private methods,
+        """pystray's icon with shared identity, branding and cached image handles,
         which are the same in pystray 0.19.0 - 0.19.5 (the Windows backend):
 
-        * the id Windows knows the icon by is icon_uid(key), not id(self);
+        * every owner window uses the stable app-wide icon_uid(key);
         * the icon handle of every image is kept. pystray writes each new image to a
           temporary .ico file and loads it back, so the charging animation wrote
           a file for every charging frame, which a disk and an antivirus notice
@@ -672,6 +679,8 @@ def _make_tray_class(base: type) -> type:
             # DPI swap. Keep handle loading, notification and disposal atomic.
             self._hb_handle_lock = threading.RLock()
             self._hb_handles_closed = False
+            self._hb_brand_icon_handle = None
+            self._hb_pending_brand_restore = False
             super().__init__(*args, **kwargs)
 
         def _update_icon(self):
@@ -707,6 +716,30 @@ def _make_tray_class(base: type) -> type:
                 return super()._message(code, flags, **kwargs)
             import ctypes
             from pystray._util import win32
+            if code == win32.NIM_ADD and self._hb_pending_brand_restore:
+                # A failed MODIFY and failed compensating DELETE can leave a
+                # registered icon that pystray still considers invisible. Repair
+                # it first, rather than retrying ADD forever against that HWND.
+                try:
+                    self._message(win32.NIM_MODIFY, flags, **kwargs)
+                except OSError:
+                    self._message(win32.NIM_DELETE, 0)
+                else:
+                    self._hb_pending_brand_restore = False
+                    return True
+            actual_tip = kwargs.get("szTip") if code == win32.NIM_ADD else None
+            registration_tip = TRAY_APP_TIP if getattr(self, "_hb_branding", False) else APP_NAME
+            actual_icon = None
+            if (code == win32.NIM_ADD and flags & win32.NIF_ICON
+                    and getattr(self, "_hb_branding", False)):
+                brand = self._brand_icon_handle()
+                if brand:
+                    actual_icon = kwargs.get("hIcon")
+                    kwargs["hIcon"] = brand
+            if actual_tip is not None:
+                # Keep the persisted preference app-wide; the live tooltip is
+                # restored immediately after ADD and remains device-specific.
+                kwargs["szTip"] = registration_tip
             succeeded = win32.Shell_NotifyIcon(code, win32.NOTIFYICONDATAW(
                 cbSize=ctypes.sizeof(win32.NOTIFYICONDATAW),
                 hWnd=self._hwnd,
@@ -718,6 +751,39 @@ def _make_tray_class(base: type) -> type:
                 # Keep pystray's best-effort tooltip/balloon updates. Only failed
                 # image swaps need retrying; GetLastError is not reliable here.
                 raise OSError(f"Shell_NotifyIcon failed (operation={code}, uid={uid})")
+            if succeeded and code == win32.NIM_DELETE:
+                self._hb_pending_brand_restore = False
+            if succeeded and code == win32.NIM_ADD:
+                self._hb_pending_brand_restore = actual_icon is not None
+                live_flags, live = 0, {}
+                if actual_icon is not None:
+                    live_flags |= win32.NIF_ICON
+                    live["hIcon"] = actual_icon
+                if actual_tip and actual_tip != registration_tip:
+                    live_flags |= win32.NIF_TIP
+                    live["szTip"] = actual_tip
+                if live_flags:
+                    try:
+                        self._message(win32.NIM_MODIFY, live_flags, **live)
+                    except OSError:
+                        # ADD was accepted but pystray has not marked it visible.
+                        # Roll it back so the next attempt can ADD cleanly.
+                        self._message(win32.NIM_DELETE, 0)
+                        raise
+                self._hb_pending_brand_restore = False
+            return succeeded
+
+        def _brand_icon_handle(self):
+            # Explorer caches the first registered artwork for this executable's
+            # shared Settings row. Device frames/animation stay separate and are
+            # restored immediately in the same native transaction.
+            if not self._hb_brand_icon_handle:
+                try:
+                    self._hb_brand_icon_handle = tray_dpi.load_icon_handle(app_icon.render(32))
+                except (OSError, ValueError) as error:
+                    log.warning("tray application logo: %s", error)
+                    self._hb_branding = False
+            return self._hb_brand_icon_handle
 
         def _assert_icon_handle(self):
             with self._hb_handle_lock:
@@ -775,6 +841,9 @@ def _make_tray_class(base: type) -> type:
                 cache = getattr(self, "_hb_handles", None)
                 if cache:
                     _destroy_handles(cache)
+                if self._hb_brand_icon_handle:
+                    tray_dpi.destroy_icon_handle(self._hb_brand_icon_handle)
+                    self._hb_brand_icon_handle = None
                 self._icon_handle = None
 
     return TrayIcon
@@ -801,6 +870,9 @@ def tray_icon(key: str, *args, **kwargs):
         cls = _tray_classes[base] = _make_tray_class(base)
     ic = cls(*args, **kwargs)
     ic._hb_uid = icon_uid(key)
+    # Branding belongs to this application's EXE, never to a shared Python
+    # interpreter used by developer scripts or unrelated programs.
+    ic._hb_branding = bool(getattr(sys, "frozen", False))
     ic._hb_handles = {}
     handlers = getattr(ic, "_message_handlers", None)
     if handlers is not None:
@@ -809,6 +881,51 @@ def tray_icon(key: str, *args, **kwargs):
         # shutdown, log-off and restart until Windows gave up on it (#242)
         handlers.setdefault(WM_QUERYENDSESSION, lambda wparam, lparam: 1)
     return ic
+
+
+def connect_settings_click(icon, callback) -> None:
+    """Add double-click activation without replacing pystray's menu handling.
+
+    The shell may report either DBLCLK or two button releases (pystray's hidden
+    window has class style 0). Consume single releases so Refresh is explicit.
+    """
+    handlers = getattr(icon, "_message_handlers", None)
+    if handlers is None or sys.platform != "win32":
+        return
+    try:
+        from pystray._util import win32
+        notify_message = win32.WM_NOTIFY
+    except (ImportError, AttributeError):
+        # A future backend can retain the menu's Settings default action.
+        return
+    original = handlers.get(notify_message)
+    if original is None:
+        return
+    last_up = None
+    suppress_up = False
+
+    def clicked(wparam, lparam):
+        nonlocal last_up, suppress_up
+        if lparam == WM_LBUTTONDBLCLK:
+            last_up, suppress_up = None, True
+            callback()
+            return None
+        if lparam == WM_LBUTTONUP:
+            if suppress_up:
+                suppress_up = False
+                return None
+            now = time.monotonic()
+            import ctypes
+            interval = ctypes.windll.user32.GetDoubleClickTime() / 1000.0
+            if last_up is not None and now - last_up <= interval:
+                last_up = None
+                callback()
+            else:
+                last_up = now
+            return None
+        return original(wparam, lparam)
+
+    handlers[notify_message] = clicked
 
 
 # ------------------------------------------------------------ formatting
@@ -1133,9 +1250,11 @@ class DeviceIcon:
         self._images: Dict[tuple, object] = {}  # state -> image or frames, per colour
         self.icon = tray_icon(key, f"{APP_NAME}_{abs(hash(key))}",
                               icons.render(None, False, False, light_taskbar=app.light_taskbar,
-                                           size=getattr(app, "tray_size", icons.SIZE)),
-                              APP_TITLE, app.build_menu(self))
+                                           size=getattr(app, "tray_size", icons.SIZE),
+                                           ring_style=app.cfg.get("ring_style", "thin")),
+                              APP_TITLE, app.build_tray_menu(self))
         self.icon._hb_flyout = getattr(app, "flyout", None)
+        connect_settings_click(self.icon, lambda: app.open_settings(self.key, page="devices"))
         # pystray calls the setup function once the icon's window exists. The app shows
         # the icon itself (in _update), after that, so a show is never lost.
         self.ready = threading.Event()
@@ -1150,16 +1269,8 @@ class DeviceIcon:
     def _update(self, st: DeviceStatus) -> None:
         paused_changed = bool(self.status and self.status.polling_paused) != st.polling_paused
         self.status = st
-        badge = self.app.pictogram(st) if self.app.cfg["badges"] else ""
-        animate = self.app.cfg["animation"] and st.charging and st.online
-        # the number replaces the pictogram; a device that only reports rough steps
-        # (st.approx) keeps its pictogram rather than showing a made-up exact number
-        text = (str(st.level) if self.app.cfg.get("percent_in_icon") and st.level is not None
-                and not st.approx else "")
-        brand, brand_color = self.app.controller_style(st)
-        state = (st.level, st.charging, st.online or st.polling_paused, self.app.low_for(st),
-                 self.app.light_taskbar, badge, animate, text, st.polling_paused,
-                 getattr(self.app, "tray_size", icons.SIZE), brand, brand_color)
+        state = App.icon_render_state(self.app, st)
+        animate = state[6]
         if state != self._state:
             art = self._art(state)
             if animate:
@@ -1196,19 +1307,24 @@ class DeviceIcon:
         draw anything again. The cache holds one state, in at most both colours."""
         art = self._images.get(state)
         if art is None:
-            level, charging, online, low, light, badge, animate, text, paused, size, brand, color = state
+            level, charging, online, low, light, badge, animate, text, paused, size, brand, color, filled = state[:13]
+            custom_id = state[13] if len(state) > 13 else None
+            asset = getattr(self.app, "_custom_assets", {}).get(custom_id) if custom_id else None
+            custom = {"custom_glyph": asset.glyph} if asset is not None else {}
+            if len(state) > 14:
+                custom["ring_style"] = state[14]
             other = (level, charging, online, low, not light, badge, animate, text, paused,
-                     size, brand, color)
+                     size, brand, color, filled) + state[13:]
             kept = self._images.get(other)
             self._images.clear()
             if kept is not None:
                 self._images[other] = kept      # the same state in the other colour
             if animate:
                 art = icons.charging_frames(level, online, low, light, badge, text=text,
-                                            size=size, brand=brand, brand_color=color)
+                                            size=size, brand=brand, brand_color=color, filled=filled, **custom)
             else:
                 art = icons.render(level, charging, online, low, light, badge, text=text,
-                                   force_active=paused, size=size, brand=brand, brand_color=color)
+                                   force_active=paused, size=size, brand=brand, brand_color=color, filled=filled, **custom)
             self._images[state] = art
         return art
 
@@ -1311,10 +1427,84 @@ class App:
         # the tray menu (flyout.py); None = pystray's classic menu
         self.flyout: Optional[flyout.FlyoutHost] = (
             flyout.FlyoutHost() if sys.platform == "win32" and self.cfg.get("fluent_menu", True) else None)
+        # Settings and What's new must also work with the classic tray menu.
+        self.ui_host = self.flyout or flyout.FlyoutHost()
+        from halo.settings_model import SettingsController
+        self.settings = SettingsController(self)
+        self.settings.load_custom_icons()  # immediately display verified local PNGs
+        self.settings.schedule_custom_icon_upgrade()  # one background upgrade for old masks
 
     # ---------------- menu
     def tr(self, key: str, **params) -> str:
         return i18n.translate(key, language=self.cfg.get("language", "en"), **params)
+
+    def settings_context(self) -> dict:
+        """Dependencies for the UI controller, without importing this entry module."""
+        return dict(defaults=DEFAULTS, valid_setting=_valid_setting, save_config=save_config,
+                    autostart_enabled=autostart_enabled, set_autostart=set_autostart,
+                    remove_status_file=remove_status_file, provider_labels=PROVIDER_LABELS,
+                    controller_brands=CONTROLLER_BRANDS, controller_pictograms=CONTROLLER_PICTOGRAMS,
+                    device_state=device_state, device_kind=badge_for, version=VERSION, data_dir=DATA_DIR, status_path=STATUS_PATH,
+                    repo=updates.REPO, has_translation=lambda key: key in i18n.LANGUAGES["en"].catalog)
+
+    def icon_render_state(self, st: DeviceStatus, *, size: Optional[int] = None) -> tuple:
+        """The shared tray/Settings render contract; size is physical pixels."""
+        badge = self.pictogram(st) if self.cfg["badges"] else ""
+        animate = self.cfg["animation"] and st.charging and st.online
+        text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
+        brand, color = self.controller_style(st)
+        state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+                self.light_taskbar, badge, animate, text, st.polling_paused,
+                size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
+                self.cfg.get("filled_icons", False))
+        saved = self.cfg.get("custom_icons", {})
+        custom_id = saved.get(st.key) if isinstance(saved, dict) else None
+        # Only an offline verified asset loaded before polling can enter the frame
+        # cache. Global percentage/ring-only modes retain their existing priority.
+        if not (self.cfg["badges"] and not text and isinstance(custom_id, str) and custom_id in getattr(self, "_custom_assets", {})):
+            custom_id = None
+        if self.cfg.get("ring_style", "thin") == "classic":
+            state += (custom_id, "classic")
+        elif custom_id is not None:
+            state += (custom_id,)
+        return state
+
+    def open_settings(self, device_key: Optional[str] = None, *, page: Optional[str] = None) -> None:
+        from halo.settings_host import SettingsHost
+        with self.lock:
+            if getattr(self, "_settings_host", None) is None:
+                self._settings_host = SettingsHost(self.settings)
+            settings_host = self._settings_host
+        settings_host.open(device_key, page=page)
+
+    def build_tray_menu(self, owner: Optional[DeviceIcon]) -> Menu:
+        """Quick actions only; all configuration lives in the Settings window."""
+        def clean(text):
+            text = text.strip()
+            while text.endswith(("…", "...")):
+                text = text[:-1 if text.endswith("…") else -3].rstrip()
+            return text
+
+        def label(key, **values):
+            return clean(self.tr(key, **values))
+
+        def title():
+            return self.display_name(owner.status) if owner and owner.status else self.tr("settings.header_app")
+
+        def detail():
+            return device_state(owner.status, self.time_left_text(owner.status), language=self.cfg["language"]) if owner and owner.status else ""
+
+        return Menu(
+            flyout.HeaderItem(title, detail),
+            Item(label("settings.open_app"), lambda i, it: self.open_settings(owner.key, page="devices")
+                 if owner is not None else self.open_settings(), default=True),
+            Item(label("menu.refresh"), lambda i, it: self.wake.set()),
+            Item(lambda it: clean(update_item_text(self.update.version, getattr(self, "install_ok", False),
+                                            getattr(self, "update_progress", None), language=self.cfg["language"]))
+                 if self.update else label("menu.download_update"),
+                 lambda i, it: self.start_update(), visible=lambda it: self.update is not None),
+            Item(label("menu.diagnostics"), lambda i, it: self.request_diag()),
+            Item(label("menu.exit", version=VERSION), lambda i, it: self.quit()))
 
     def set_language(self, language: str) -> None:
         """Refresh presentation under the same lock as polls, without polling hardware."""
@@ -1324,12 +1514,12 @@ class App:
             self.cfg["language"] = language
             save_config(self.cfg)
             for ic in list(self.icons.values()):
-                ic.icon.menu = self.build_menu(ic)
+                ic.icon.menu = self.build_tray_menu(ic)
                 if ic.status is not None:
                     ic.icon.title = i18n.tooltip(describe(ic.status, self.display_name(ic.status),
                                                          self.time_left_text(ic.status), language=language))
             if self.placeholder is not None:
-                self.placeholder.menu = self.build_menu(None)
+                self.placeholder.menu = self.build_tray_menu(None)
                 self.placeholder.title = i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE))
             self.refresh_menus()
 
@@ -1530,6 +1720,11 @@ class App:
                  checked=lambda it: self.cfg["badges"]),
             Item(tr("preferences.percent"), toggle("percent_in_icon"),
                  checked=lambda it: self.cfg.get("percent_in_icon", False)),
+            Item(tr("preferences.icon_style"), Menu(
+                Item(tr("icon_style.outline"), lambda i, it: self.set_icon_style(False),
+                     checked=lambda it: not self.cfg.get("filled_icons", False), radio=True),
+                Item(tr("icon_style.filled"), lambda i, it: self.set_icon_style(True),
+                     checked=lambda it: self.cfg.get("filled_icons", False), radio=True))),
             Item(tr("preferences.animation"), toggle("animation"),
                  checked=lambda it: self.cfg["animation"]),
             Item(tr("preferences.theme"), Menu(*[
@@ -1569,6 +1764,8 @@ class App:
         value = self.cfg.get(key)
         if not isinstance(value, dict):
             value = self.cfg[key] = {}
+        elif value is DEFAULTS.get(key):
+            value = self.cfg[key] = dict(value)  # mutable defaults belong to one app
         return value
 
     def display_name(self, st: DeviceStatus) -> str:
@@ -1661,6 +1858,21 @@ class App:
             save_config(self.cfg)
         log.info("icon of [%s]: %s", owner.status.key, value or "automatic")
         owner.update(owner.status)            # redraw at once
+        self.refresh_menus()
+
+    def set_icon_style(self, filled: bool) -> None:
+        """Persist the global pictogram style and redraw every current device."""
+        if not isinstance(filled, bool):
+            return
+        with self.lock:
+            self.cfg["filled_icons"] = filled
+            save_config(self.cfg)
+            for owner in list(self.icons.values()):
+                if owner.status is not None:
+                    try:
+                        owner.update(owner.status)
+                    except Exception:
+                        log.warning("icon style redraw failed for [%s]", owner.key, exc_info=True)
         self.refresh_menus()
 
     def controller_color(self, key: str) -> bool:
@@ -1819,7 +2031,8 @@ class App:
                             if discard is not None:
                                 discard()
                 if self.placeholder is not None:
-                    self.placeholder.icon = icons.render(None, False, False, light_taskbar=light, size=size)
+                    self.placeholder.icon = icons.render(None, False, False, light_taskbar=light, size=size,
+                                                         ring_style=self.cfg.get("ring_style", "thin"))
                     if resized:
                         discard = getattr(self.placeholder, "discard_cached_handles", None)
                         if discard is not None:
@@ -2130,10 +2343,12 @@ class App:
             ready = threading.Event()
             self.placeholder = tray_icon(IDLE_KEY, f"{APP_NAME}_idle",
                                          icons.render(None, False, False, light_taskbar=self.light_taskbar,
-                                                      size=getattr(self, "tray_size", icons.SIZE)),
+                                                      size=getattr(self, "tray_size", icons.SIZE),
+                                                      ring_style=self.cfg.get("ring_style", "thin")),
                                          i18n.tooltip(self.tr("tooltip.no_devices", app=APP_TITLE)),
-                                         self.build_menu(None))
+                                         self.build_tray_menu(None))
             self.placeholder._hb_flyout = getattr(self, "flyout", None)
+            connect_settings_click(self.placeholder, self.open_settings)
             self.placeholder_ready = ready
             threading.Thread(target=self.placeholder.run, args=(lambda icon: ready.set(),),
                              daemon=True).start()
@@ -2597,7 +2812,10 @@ class App:
             self.show_whats_new(from_version or prev or "")
 
     def show_whats_new(self, from_version: str = "") -> None:
-        notes = self.cfg.pop("whats_new_notes", None)
+        with self.lock:
+            notes = self.cfg.pop("whats_new_notes", None)
+            language = self.cfg.get("language", "en")
+            save_config(self.cfg)
         if not isinstance(notes, dict) or notes.get("version") != VERSION or not notes.get("notes"):
             try:
                 rel = updates.fetch_release(VERSION, VERSION)
@@ -2606,13 +2824,10 @@ class App:
             except Exception as e:
                 log.info("what's new: release notes not available (%s)", e)
                 notes = {"version": VERSION, "notes": "", "url": updates.RELEASES_URL, "date": ""}
-        save_config(self.cfg)
-        host = self.flyout
-        if host is None:
-            host = self.flyout_dialogs = flyout.FlyoutHost()
+        host = self.ui_host
         whatsnew.show(host, VERSION, notes.get("notes", ""), notes.get("url") or updates.RELEASES_URL,
                       from_version=from_version, date=notes.get("date", ""), open_url=self.open_url,
-                      language=self.cfg.get("language", "en"))
+                      language=language)
 
     def open_url(self, url: str) -> None:
         try:
@@ -2622,6 +2837,9 @@ class App:
             log.warning("open %s: %s", url, e)
 
     def quit(self):
+        settings_host = getattr(self, "_settings_host", None)
+        if settings_host is not None:
+            settings_host.close()
         self.stop_evt.set()
         for provider in self.providers:
             if isinstance(provider, AtkKeyboardProvider):
@@ -2648,17 +2866,59 @@ class App:
         host = getattr(self, "flyout", None)
         if host is not None:
             host.stop()
+        ui_host = getattr(self, "ui_host", None)
+        if ui_host is not None and ui_host is not host:
+            ui_host.stop()
+
+    def start_tray_history_cleanup(self):
+        """Only the normal frozen app owns this executable's shell preferences."""
+        if sys.platform != "win32" or not getattr(sys, "frozen", False) or not _pystray_known():
+            return
+        try:
+            # run() calls this before launching the first polling/icon worker.
+            # Capture the old visibility now; preparing in the cleanup thread
+            # can lose that preference if Explorer registers the new row first.
+            prepared = tray_history.prepare(sys.executable)
+            threading.Thread(target=self.cleanup_tray_history, args=(prepared,),
+                             name="tray-history-cleanup", daemon=True).start()
+        except Exception:
+            log.warning("tray history: unable to start migration", exc_info=True)
+
+    def cleanup_tray_history(self, prepared=None):
+        if prepared is None:
+            try:
+                # Usually precedes the first ADD. If Explorer wins the race,
+                # prepare preserves its existing master preference instead.
+                prepared = tray_history.prepare(sys.executable)
+            except Exception:
+                log.warning("tray history: unable to prepare migration", exc_info=True)
+                return
+        # Explorer creates its cache asynchronously. Keep registry/disk work off
+        # icon, animation and Settings threads, and stop promptly with the app.
+        for _ in range(30):
+            if self.stop_evt.wait(1):
+                return
+            result = tray_history.reconcile(sys.executable, DATA_DIR, prepared)
+            if result.status == "pending":
+                continue
+            if result.status == "error":
+                log.warning("tray history: %s", result.error)
+            elif result.removed or result.visibility_migrated:
+                log.info("tray history: removed %d old records (visibility migrated: %s)",
+                         result.removed, result.visibility_migrated)
+            return
+        log.info("tray history: shell preference not ready; migration deferred")
 
     def run(self):
         log.info("start v%s", VERSION)
+        self.start_tray_history_cleanup()
         worker = threading.Thread(target=self.loop, daemon=True)
         worker.start()
         threading.Thread(target=self.theme_loop, daemon=True).start()
         threading.Thread(target=self.anim_loop, daemon=True).start()
         threading.Thread(target=self.bt_loop, daemon=True).start()
         threading.Thread(target=self.update_loop, daemon=True).start()
-        if self.flyout is not None:
-            self.flyout.start()                  # tkinter is ready by the first right-click
+        self.ui_host.start()                    # tkinter is ready by the first activation
         try:
             while not self.stop_evt.is_set():
                 self.stop_evt.wait(1)

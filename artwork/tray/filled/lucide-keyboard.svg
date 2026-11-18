@@ -1,0 +1,12 @@
+<!-- Fill-only variation of the pinned Lucide source. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-keyboard" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <defs><mask id="fill-keyboard" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24" style="mask-type:luminance"><rect width="24" height="24" fill="black" stroke="none" /><rect width="20" height="16" x="2" y="4" rx="2" data-source-index="8" stroke="white" fill="white" />
+<path d="M10 8h.01" data-source-index="0" stroke="black" />
+  <path d="M12 12h.01" data-source-index="1" stroke="black" />
+  <path d="M14 8h.01" data-source-index="2" stroke="black" />
+  <path d="M16 12h.01" data-source-index="3" stroke="black" />
+  <path d="M18 8h.01" data-source-index="4" stroke="black" />
+  <path d="M6 8h.01" data-source-index="5" stroke="black" />
+  <path d="M7 16h10" data-source-index="6" stroke="black" />
+  <path d="M8 12h.01" data-source-index="7" stroke="black" />
+  </mask></defs><rect width="24" height="24" fill="currentColor" stroke="none" mask="url(#fill-keyboard)" /></svg>

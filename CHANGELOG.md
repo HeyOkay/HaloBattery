@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Match What's new branding to Settings, with Outfit lettering, closer icon
+  spacing and a brighter accent. Soften inactive navigation labels and glyphs,
+  and fade the header wordmark on hover. Share Close
+  and Exit HaloBattery hover colors, with themed pressed feedback.
+
 ### Added
 
 - **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
@@ -16,6 +22,125 @@ and the project follows [Semantic Versioning](https://semver.org/).
   matches Logitech G HUB, charging is reported, and the tray icon greys out
   when powered off and recovers on reconnect. The additional receiver/cable
   paths and low-battery notifications have not been verified on hardware.
+
+- A fading app splash with a soft icon shadow and theme-matched startup background
+  while the settings window loads and restores its saved view.
+- Open the existing What's new window from About, directly below the version.
+- Russian localization, including native settings, tray menus, notifications,
+  Windows language detection and Russian plural forms.
+- License-only Iconify eligibility without independent brand/logo/Bluetooth
+  name filters. Search all reviewed names with 50-candidate pages, round arrow
+  and number buttons, predecoded neighboring previews and bounded parallel
+  source downloads. Temporary gallery caches are cleared when Settings closes;
+  applied icons and attribution remain available offline.
+- A choice of thin or classic charge-ring thickness, shared by tray icons and
+  previews. Toggle thumbs have a subtle shadow, and neutral buttons use the
+  same opaque hover/pressed colors as dropdowns.
+- Per-device Iconify centre pictograms in the native settings window, with
+  paged search, actual-DPI ring previews, offline selections and accessible
+  author/license notices. Preserve fixed SVG colors and mixed `currentColor`
+  artwork; old selected mask caches upgrade in the background without dropping
+  offline selections. A mandatory reviewed commercial-use registry excludes
+  unverified sources; the existing battery ring and charging states are retained.
+
+- Use the matte glass application icon for executables and the settings header,
+  with less transparent padding in taskbar icons and theme-specific SVG artwork
+  placed close to, and vertically centered beside, HaloBattery in the header.
+- Native C# WinUI 3 settings companion, with the Mica backdrop, ThemeShadow,
+  cards and page transitions extracted from the Chrome Mica Patcher reference.
+  Python continues to own device polling, configuration and tray icons.
+  Release packaging now publishes the companion with both .NET and Windows App
+  SDK runtimes alongside the Python application; the resulting package is larger.
+  Clean-machine deployment and final package size still need verification.
+- A settings window with **General**, **Devices**, **Tray icons**,
+  **Notifications**, **Advanced** and **About** pages. Changes apply immediately;
+  the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
+  Double-clicking a device's tray icon opens settings for that exact device.
+  The compact right-click menu keeps device settings, refresh, app settings,
+  diagnostics, updates when available and exit within reach. All seven
+  interface languages remain available.
+- Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
+  navigation and control glyphs for the settings window.
+- Overscroll navigation between settings pages, with a neutral progress ring
+  that grows with its fill, native Composition animations and quick elastic
+  content return on cancellation. Pages switch after the ring finishes filling,
+  and ignore wheel input until the page entry animation ends.
+  Update controls and a fixed Exit button are
+  on the General page.
+
+- **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
+  immediately and keep the choice after restarting. Filled artwork uses lighter
+  body silhouettes and compensated small details while preserving the battery ring.
+
+### Fixed
+
+- Bring the existing Settings window to the foreground when a tray icon is
+  double-clicked, restoring it if minimized.
+
+- Use the current application logo in Windows tray preferences, notifications
+  and What's new. Repeated What's new requests reuse the existing window,
+  and consume cached release notes under the configuration lock.
+
+- Restore the Settings window position, size, monitor, navigation panel,
+  selected device, page and scroll position behind the startup splash.
+  Closing Settings releases its process memory while the tray app keeps running.
+
+- Keep the overscroll indicator centered between the page edge and nearby
+  content throughout elastic motion, with a slightly stronger ring stroke. On
+  General, use the full page edge and last card rather than the fixed Exit footer.
+
+- Share one Windows tray visibility preference across device icons and safely
+  migrate old records for the current executable, with a recoverable backup.
+
+- Simplify the tray menu to one Settings action, opening the selected device when
+  available. Remove trailing action-label ellipses while preserving progress text.
+
+- Avoid redundant page layout while moving the Settings window or animating
+  its navigation panel, preserving DPI updates and card-edge highlights.
+
+- Keep card-edge reveal responsive by combining pointer updates once per frame,
+  updating only nearby visible cards, and suspending it during scrollbar dragging.
+  Keep XAML's frame clock active only while dragging a native scrollbar thumb
+  to prevent intermittent stalls, and release it immediately when dragging ends.
+  Keep native Windows mouse-wheel scrolling, including its system step and inertia,
+  while consuming only boundary gestures for overscroll navigation. Install the
+  native wheel filter only during page entry and its fixed cooldown, leaving
+  ordinary input outside the hook.
+
+- Use consistent scrollbars throughout settings, including lists, dropdowns and
+  dialogs: immediate hover animations, inset ends and centered arrows matching
+  the expanded thumb width, including fractional-DPI alignment. Fall back to
+  native scrollbars if the optional shared style is unavailable.
+
+- Animate backward overscroll at the end of the previous settings page and keep
+  wheel input blocked until landing finishes. Slightly increase scroll resistance.
+  Intercept native page wheel input during entry and a fixed 450 ms cooldown,
+  without extending it when wheel input continues or blocking button clicks.
+  Recover page entry if the native scrolling completion event is missing.
+
+- Optically center asymmetric Iconify pictograms without changing their size
+  or source colors.
+
+- Show the closed-eye Lucide glyph when a device is hidden from the tray.
+
+- Use single-language Language card headings in English, French and Spanish.
+
+- Use the requested Lucide settings glyphs. The device summary shows the actual
+  device type as a basic outline glyph, independently of custom tray artwork.
+
+- Publish native settings into a clean staging directory and replace the previous
+  output only after success, preventing obsolete DLLs from entering local rebuilds.
+  Release symbols are archived separately instead of shipping in the app folder.
+
+- Reduce packaged settings dependencies with modular WinUI references, partial
+  .NET trimming that preserves application and WinUI reflection metadata, and
+  inclusion of the native publish tree without duplicate Python-side DLLs.
+  Both runtimes remain bundled; wallpaper formats, fonts and languages are retained.
+
+- Keep settings pages aligned after interrupted elastic scrolling and tab
+  transitions, and position backward navigation before the page settles.
+- Keep the colored Xbox logo centered inside the battery ring on both taskbar
+  themes, and refresh the icon and charging previews with the current renderer.
 
 ## [1.17.0] - 2026-11-12
 
