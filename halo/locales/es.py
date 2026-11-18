@@ -98,6 +98,7 @@ MESSAGES = {
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Ratones MCHOSE",
     "provider.nintendo": "Mandos Nintendo Switch",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Mandos PlayStation",
     "provider.plantronics": "Auriculares Plantronics (adaptador BT600)",
     "provider.pulsar": "Ratones Pulsar / ATK VXE / Redragon",

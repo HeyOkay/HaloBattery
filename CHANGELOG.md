@@ -13,6 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Battery and charging support for the Ninjutso Sora V3 on its 2.4 GHz receiver
+  (`093a:eb02`), using the current NinjaForce feature-report protocol (battery
+  command `0x12`, charging `0x11`). Test build 1, unverified on hardware.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.

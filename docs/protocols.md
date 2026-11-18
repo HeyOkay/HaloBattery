@@ -369,6 +369,24 @@ The same feature-report exchange as the Beast X Max (`00 00 02 02 00 83` out, `a
 
 Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon. A receiver whose mouse is switched off is walked only every fifth poll once nothing is shown (each walk refuses on every vendor collection, ~0.75 s apiece, then listens ~2 s), and at once when the receiver's device set changes (#62 item 5)
 
+### Ninjutso Sora V3 (093a:eb02)
+
+**Connection:** 2.4 GHz receiver `093a:eb02`; the vendor collections are on
+usage page `0xFF01` (main) and `0xFF00` (secure).
+
+The Sora V3 uses the current NinjaForce WebHID protocol, not the Sora V2
+report-5 protocol. Battery and charging are two separate read commands on
+feature report 6, with a 15-byte packet:
+
+    request  12 00 00 01 00 00 00 ...   battery
+    request  11 00 00 01 00 00 00 ...   charging
+    reply    06 <cmd> 00 00 01 00 01 00 <value> ...
+
+The first data byte is the level (0-100) or the charging flag. The source is
+OpenMouse-Project/mouse-protocol's Ninjutso codecs and driver, derived from the
+NinjaForce client; it is not marked hardware-verified there, so this build is
+test build 1 pending the reporter's result.
+
 ### NZXT Lift Elite Wireless (1e71:2101)
 
 **Connection:** 2.4 GHz receiver (enumerates as "NZXT Lift Elite Dongle"); the

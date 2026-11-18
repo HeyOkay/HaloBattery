@@ -88,6 +88,7 @@ MESSAGES = {
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Мыши MCHOSE",
     "provider.nintendo": "Контроллеры Nintendo Switch",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Контроллеры PlayStation",
     "provider.plantronics": "Гарнитуры Plantronics (адаптер BT600)",
     "provider.pulsar": "Мыши Pulsar / ATK VXE / Redragon",
