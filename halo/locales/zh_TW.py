@@ -89,6 +89,7 @@ MESSAGES = {
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "MCHOSE 滑鼠",
+    "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.nintendo": "Nintendo Switch 控制器",
     "provider.playstation": "PlayStation 控制器",
     "provider.plantronics": "Plantronics 耳機（BT600 轉接器）",

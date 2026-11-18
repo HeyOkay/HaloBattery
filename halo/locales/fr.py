@@ -88,6 +88,7 @@ MESSAGES = {
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Souris MCHOSE",
+    "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.nintendo": "Manettes Nintendo Switch",
     "provider.playstation": "Manettes PlayStation",
     "provider.plantronics": "Casques Plantronics (adaptateur BT600)",
