@@ -94,7 +94,10 @@ class BarracudaXCableTest(unittest.TestCase):
             with self.subTest(product=product):
                 p = razer.RazerProvider()
                 with patch("providers.razer.hidlist.enumerate",
-                           return_value=[self.info(product)]),                         patch.object(p, "_poll_pa") as pa,                         patch.object(p, "_poll_group") as generic,                         patch("providers.razer.hid.device") as opened:
+                           return_value=[self.info(product)]), \
+                        patch.object(p, "_poll_pa") as pa, \
+                        patch.object(p, "_poll_group") as generic, \
+                        patch("providers.razer.hid.device") as opened:
                     out = p.poll()
                 self.assertEqual(out, [])
                 pa.assert_not_called()
