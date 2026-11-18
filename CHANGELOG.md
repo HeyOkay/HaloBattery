@@ -14,8 +14,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Percentage in the icon: devices that only report coarse battery steps now
-  show `~NN` instead of no number, so the approximation is not mistaken for
-  an exact percentage. The tooltip and status file still say "about NN%".
+  show the same `NN` number as exact devices, without a `~` marker. The tooltip
+  and status file still say "about NN%".
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.

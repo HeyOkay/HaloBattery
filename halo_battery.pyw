@@ -1451,10 +1451,11 @@ class App:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
         animate = self.cfg["animation"] and st.charging and st.online
-        # a coarse level keeps a tilde so the approximation is not mistaken for exact
+        # Coarse levels show the same number; the tooltip and status file keep
+        # the "about" wording rather than putting a marker in the tray icon.
         text = ""
         if self.cfg.get("percent_in_icon") and st.level is not None:
-            text = f"~{st.level}" if st.approx else str(st.level)
+            text = str(st.level)
         brand, color = self.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,
