@@ -52,6 +52,12 @@ public sealed partial class MainWindow
                 var customChrome=!nativePresenter.HasTitleBar && nativePresenter.HasBorder;
                 checks.Add(new { name="native caption is hidden and resize border retained",passed=customChrome });
                 if(!customChrome)throw new InvalidOperationException("Fixture custom chrome is unavailable.");
+                if (Arg("--verify-scope") == "expander")
+                {
+                    await VerifyProviderExpander(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "expander", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "window-activation")
                 {
                     await VerifySettingsActivation(checks);
@@ -92,6 +98,8 @@ public sealed partial class MainWindow
                 if (Arg("--verify-scope") == "spotlight")
                 {
                     await VerifyCardSpotlights(checks);
+                    await VerifyControlSpotlights(checks);
+                    await VerifyPopupBottomInset(checks);
                     WriteVerificationReport(destination, new { complete = true, scope = "spotlight", checks });
                     return;
                 }
