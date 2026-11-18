@@ -12,6 +12,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent framing: Solaar e7304c4 lib/logitech_receiver/base.py L101-108,418-432.
+# Fixed legacy request: HeadsetControl25dadae logitech_gpro_x2_lightspeed.hpp.
 import os
 import sys
 import types
@@ -35,7 +38,7 @@ class Clock:
 
 
 def out_frame(payload):
-    return L.frame(list(payload))
+    return [0x51, len(payload) + 1, 0x00] + list(payload) + [0] * (61 - len(payload))
 
 
 class Receiver:
@@ -55,12 +58,12 @@ class Receiver:
     def write(self, data):
         data = list(data)
         self.writes.append(data)
-        if data[:10] == L.LEGACY_REQUEST:
+        if data[:10] == [0x51, 0x08, 0x00, 0x03, 0x1A, 0x00, 0x03, 0x00, 0x04, 0x0A]:
             self.queue += [[0x51, 0x03] + [0] * 62,
                            [0x51, 0x0B, 0, 0, 0, 0, 0, 0, 0x04, 0, self.level, 0,
                             0x02 if self.state else 0] + [0] * 51]
             return len(data)
-        p = L.payload_of(data)
+        p = data[3:2 + data[1]]
         if p[0] == 3 and p[1] == 0x11:                        # bridge
             sub = p[4:4 + (p[2] << 8 | p[3])]
             self.queue.append(out_frame([3, 0x11]))           # the receiver's ack
@@ -294,14 +297,23 @@ class CenturionTest(unittest.TestCase):
         self.assertEqual(self.poll(rx), [])
         self.assertIn("error", " ".join(self.provider.diagnostics()))
 
-    # Retain the hypothetical protocol fixture independently of stable policy.
-    @mock.patch.object(L, "ENABLED_PIDS", frozenset(L.PIDS))
-    def test_the_pro_x_3_is_read_the_same_way(self):
+    # HeadsetControl PR618's captured X3 traffic supersedes the old X2 analogy.
+    # The independent 50/23 wire fixtures live in test_logitech_pro_x3.py.
+    def test_pro_x_3_dispatch_never_enters_the_pro_x_2_exchange(self):
         rx = Receiver(self.clock, level=64, state=2)
-        res = self.poll(rx, issue_103_entries(0x0B45))
-        self.assertEqual([(r.name, r.key, r.level, r.charging, r.online, r.kind) for r in res],
-                         [("Logitech PRO X 3 LIGHTSPEED", "logitech-centurion:0b45",
-                           64, True, True, "headset")])
+        entries = [dict(d, vendor_id=0x046D) for d in issue_103_entries(0x0B45)]
+        with mock.patch.object(self.provider, "_read", side_effect=AssertionError("X2 exchange")) as x2, \
+                mock.patch.object(self.provider, "_read_x3", return_value=(64, True, True)) as x3:
+            [status] = self.poll(rx, entries)
+            self.assertEqual((status.name, status.level, status.charging, status.online, status.kind),
+                             ("Logitech PRO X 3 LIGHTSPEED", 64, True, True, "headset"))
+            x3.assert_called_once_with(b"ffa0")
+            x2.assert_not_called()
+            x3.reset_mock()
+            self.assertEqual(self.poll(rx, [dict(entries[1], interface_number=2),
+                                           dict(entries[1], vendor_id=0x1234)]), [])
+            x3.assert_not_called()
+            x2.assert_not_called()
 
     def test_only_the_ffa0_collection_of_0af7_is_opened(self):
         rx = Receiver(self.clock)

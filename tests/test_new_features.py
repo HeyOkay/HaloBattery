@@ -88,13 +88,13 @@ class DeviceTypeTests(HideRenameTestCase):
                 app.poll_once()
                 self.assertEqual(app.razer.polls, 1)
 
-    def test_menu_lists_every_type_and_toggles(self):
+    def test_menu_lists_available_types_and_toggles(self):
         app = poll_app()
         prefs = item(app.build_menu(None), "Preferences").submenu
         types = item(prefs, "Device types").submenu
         labels = [i.text for i in types.items]
-        for label in hb.PROVIDER_LABELS.values():
-            self.assertIn(label, labels)
+        self.assertEqual(set(labels), {label for name, label in hb.PROVIDER_LABELS.items()
+                                     if name not in {"endgame_4k", "lamzu_sw"}})
         razer = item(types, "Razer mice and headsets")
         self.assertTrue(razer.checked)
         razer(FakeTrayIcon())

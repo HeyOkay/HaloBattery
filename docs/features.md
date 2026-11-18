@@ -148,6 +148,33 @@ back, while the ring fades, slides and scales through native Composition animati
   and `updated_unix`. Turning the option off deletes the file.
 - **About**: version, diagnostics, the data folder, project page and issue reporting.
 
+## Opt-in device diagnostics
+
+The packaged EXE can run the [Endgame 4K](protocols.md#endgame-gear-xm2w-4k-op1w-4k-4k-dongle)
+and [Lamzu Tachi](protocols.md#lamzu-tachi-explicit-aurora-diagnostic) testers
+without Python. These checks require `--acknowledge-experimental` and an explicit
+new `--diagnostic-output` JSON file. They do not load the normal app or modify its
+profile, and they do not enable those devices in normal polling. Protocol notes
+include commands and the remaining hardware/freshness limits.
+
+AJ159, INZONE H9 II and PRO X3 also have one-device receiver checks. They reuse
+the existing sourced readers without querying other models in the same family.
+Close HaloBattery and the manufacturer's software first; these three checks
+refuse to run while another HaloBattery instance is active. Connect only one
+matching receiver and use a new report filename for each run:
+
+```powershell
+.\HaloBattery.exe --diagnose-device aj159 --acknowledge-experimental --diagnostic-output .\aj159-test.json
+.\HaloBattery.exe --diagnose-device inzone-h9ii --acknowledge-experimental --diagnostic-output .\h9ii-test.json
+.\HaloBattery.exe --diagnose-device logitech-pro-x3 --acknowledge-experimental --diagnostic-output .\pro-x3-test.json
+```
+
+The JSON distinguishes an accepted percentage, unknown charging and failed
+native cleanup. It does not establish reply freshness or confirm hardware
+compatibility. AJ179, H9 and PRO X2 are not queried by these targeted checks.
+Kysona Uranus and Stealth 600X remain excluded until their exact exchanges
+are supported by evidence.
+
 ## Updates
 
 The app checks for a new release once a day (or at once with **Settings → General → Check for updates now**) and adds **Update to vX.Y.Z** to the menu when there is one. One click downloads it, checks it, closes the app, replaces the program files and starts the new version, which then shows what is new in a small window. Settings, the battery history and `portable.txt` are kept. From version 1.14.0 or older, or when the app sits in a folder it cannot write to (e.g. Program Files), update by hand: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.

@@ -1,6 +1,23 @@
-"""AJAZZ AJ179 V2 MAX over its 2.4 GHz receiver (249a:5c2f), without AJAZZ's software.
+"""AJAZZ AJ179 V2 MAX and AJ159 PRO receivers, without AJAZZ's software.
 
-The receiver carries the level two ways, both recorded from the vendor's own
+AJ159 PRO (3151:402d), interface 2 / FFFF:0002: SET_FEATURE report 0,
+opcode F7 and zero payload, wait 30 ms, GET_FEATURE 05; Windows level byte 3.
+Independent source: Aiacos/ajazz-control-center at
+03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3, src/devices/mouse/src/aj_series.cpp
+L225-264, L290-312 and docs/research/reverse-engineering/capture-evidence.md
+L54-91 (captured on 3151:5007):
+https://github.com/Aiacos/ajazz-control-center/blob/03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3/src/devices/mouse/src/aj_series.cpp#L225-L312
+Same-target confirmation: #289, test4 at commit
+95ac6df038f1ec3d27653c89be0d2fdfc43d5253; the owner's diagnostics L46-50
+records 05 00 00 46 01 00 01 02 (70%), GET05/33 refused then GET05/65 accepted:
+https://github.com/HeyOkay/HaloBattery/issues/289#issuecomment-6899703056
+https://github.com/user-attachments/files/34882030/diagnostics.txt
+Zero means unknown (source L245-248), not an empty battery; charging is unknown.
+Feature sizes come from opened collection caps. Legacy HIDAPI uses 65 bytes;
+its short SET padding is documented in hidapi73d292a windows/hid.c L1189-1213.
+No AJ179 output query or GET_FEATURE F7 is used for this target. Kysona remains held.
+
+The AJ179 receiver carries the level two ways, both recorded from the vendor's own
 app (AJAZZ Driver 1.0.7.3) in the reporter's USBPcap captures in #74:
 
   * the app's very first startup read - command 0x10 - is answered by an info
@@ -95,21 +112,15 @@ WIRED_PID = 0x5D2E
 NAME = "AJAZZ AJ179 V2 MAX"
 KEY = f"ajazz:{PID:04x}"
 
-# The AJ159 PRO's 8K receiver (#289): a different vendor id and product string
-# ("AJAZZ 2.4G 8K"), with the vendor channel on usage page FFFF instead of the
-# AJ179's unlabelled mi_02. The AJ179 reverse-engineering notes say the AJ159
-# family speaks the same CompX protocol, so the same frames are tried.
-# The 3151 receivers: the AJ159 PRO's 8K dongle and the Kysona Uranus (#251). Both
-# publish ffff:0001 / ffff:0002 (no ff02:0002), and the AJ179 notes say the AJ159
-# family speaks the same CompX protocol, so the same frames are tried on both.
+# AJ159's F7/05 exchange and exact collection are confirmed in #289 above.
+# Kysona's matching collection shape (#251) does not establish its protocol.
 ALT_TARGETS = (
     (0x3151, 0x402D, "AJAZZ AJ159 PRO"),
     (0x3151, 0x5031, "Kysona Uranus"),
 )
 
-# Stable release hold: #289/#251 have no confirmed exchange on these receivers.
-# Keep the protocol fixtures, but never open an alternate target until reviewed.
-ENABLED_ALT_TARGETS = frozenset()
+# Only AJ159's level is confirmed. Kysona has no confirmed request/reply.
+ENABLED_ALT_TARGETS = frozenset(((0x3151, 0x402D),))
 
 REPORT_SIZE = 32                 # both directions; hidapi adds the report id on Windows
 OUTPUT_LEN = REPORT_SIZE + 1     # what OutputReportByteLength reports for the vendor
@@ -178,6 +189,18 @@ def parse_reply(frame) -> Optional[Tuple[int, str, Optional[bool]]]:
     return None
 
 
+def parse_aj159_status(frame) -> Optional[int]:
+    """The confirmed numbered Windows report: 05 00 00 <level> ... ."""
+    if not isinstance(frame, (bytes, bytearray, memoryview, list, tuple)) or len(frame) < 4:
+        return None
+    if any(type(value) is not int or not 0 <= value <= 255 for value in frame):
+        return None
+    if tuple(frame[:3]) != (0x05, 0x00, 0x00):
+        return None
+    level = frame[3]
+    return level if 1 <= level <= 100 else None
+
+
 def candidates(ifaces: List[dict]) -> List[dict]:
     """The collections to try, best first.
 
@@ -223,6 +246,47 @@ class AjazzProvider(Provider):
         self._wired_chosen: Optional[bytes] = None
         # the AJ159 PRO target keeps its own state (#289)
         self._alt: Dict[int, dict] = {}   # pid -> chosen path / last / charging
+
+    def _ask_aj159(self, d: dict) -> Tuple[Optional[int], bool]:
+        """One sourced F7/05 exchange on AJ159's confirmed control collection."""
+        if (d.get("vendor_id", 0x3151) != 0x3151 or d.get("product_id") != 0x402D
+                or d.get("interface_number") != 2
+                or (d.get("usage_page"), d.get("usage")) != (0xFFFF, 0x0002)):
+            return None, False
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+            metadata = getattr(dev, "get_report_lengths", None)
+            length = 65  # Windows GET05/65 succeeded in the owner's test4 diagnostics.
+            if callable(metadata):
+                caps = metadata()
+                length = caps.get("feature") if isinstance(caps, dict) else None
+            if type(length) is not int or not 4 <= length <= 32768:
+                self._diag.append("    AJ159: no usable feature report size")
+                return None, False
+            poll = bytes((0x00, 0xF7)) + bytes(length - 2)
+            wrote = dev.send_feature_report(poll)
+            if type(wrote) is not int or wrote != length:
+                self._diag.append(f"    AJ159: incomplete feature poll ({wrote!r}/{length})")
+                return None, False
+            time.sleep(0.03)
+            reply = dev.get_feature_report(0x05, length)
+            level = parse_aj159_status(reply)
+            try:
+                preview = hexdump(reply, 12)
+            except (TypeError, ValueError):
+                preview = "invalid feature reply"
+            self._diag.append(f"    AJ159 report 05 len={length}: {preview}"
+                              + (f" -> {level}%" if level is not None else " (no current level)"))
+            return level, True
+        except (OSError, ValueError) as error:
+            self._diag.append(f"    AJ159 feature exchange: {error}")
+            return None, False
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
 
     def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.
@@ -328,7 +392,7 @@ class AjazzProvider(Provider):
         out: List[DeviceStatus] = []
         cache: Dict[int, List[dict]] = {}
         for vid, pid, name in ALT_TARGETS:
-            if (vid, pid) not in ENABLED_ALT_TARGETS:
+            if (vid, pid) != (0x3151, 0x402D) or (vid, pid) not in ENABLED_ALT_TARGETS:
                 continue
             if vid not in cache:
                 try:
@@ -343,33 +407,33 @@ class AjazzProvider(Provider):
             if mine:
                 self._diag.append(f"[AJAZZ] pid={pid:04x} '{name}' "
                                   f"product='{(mine[0].get('product_string') or '').strip()}'")
-                order = candidates(mine)
+                order = [d for d in mine if d.get("interface_number") == 2
+                         and (d.get("usage_page"), d.get("usage")) == (0xFFFF, 0x0002)
+                         and d.get("vendor_id", vid) == vid]
                 if state["chosen"] is not None:
                     order = sorted(order, key=lambda d: d["path"] != state["chosen"])
-                for d in order[:MAX_CANDIDATES]:
+                for d in order[:1]:
                     self._diag.append(f"  asking iface={d.get('interface_number')} "
                                       f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                    got, accepted = self._ask(d)
+                    got, accepted = self._ask_aj159(d)
                     if accepted:
                         state["chosen"] = d["path"]
                         break
                     if got is not None:
                         break
             if got is not None:
-                level, _kind, charging = got
-                if charging is None:
-                    charging = state["charging"]
-                else:
-                    state["charging"] = charging
+                level, charging = got, False
                 state["last"] = (level, time.time())
-                out.append(DeviceStatus(key, name, level, charging, True, "ajazz", kind="mouse"))
+                out.append(DeviceStatus(key, name, level, charging, True, "ajazz", kind="mouse",
+                                        charging_known=False))
             elif mine:
                 last = state["last"]
                 if last and time.time() - last[1] < ASLEEP_KEEP:
-                    out.append(DeviceStatus(key, name, last[0], state["charging"], False,
-                                            "ajazz", kind="mouse"))
+                    out.append(DeviceStatus(key, name, last[0], False, False,
+                                            "ajazz", kind="mouse", charging_known=False))
                 else:
-                    out.append(DeviceStatus(key, name, None, False, False, "ajazz", kind="mouse"))
+                    out.append(DeviceStatus(key, name, None, False, False, "ajazz", kind="mouse",
+                                            charging_known=False))
         return out
 
     def _poll_primary(self) -> List[DeviceStatus]:

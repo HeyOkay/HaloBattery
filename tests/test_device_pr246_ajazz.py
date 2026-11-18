@@ -37,6 +37,10 @@ CAPTURED56_CHARGING = ([0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x
                         0x11, 0x01, 0x00, 0x38, 0x00] + [0x00] * 16 + [0x35])
 ANNOUNCED75 = [0xC0, 0x01, 0x4B] + [0x00] * 29
 ANNOUNCED74 = [0xC0, 0x01, 0x4A] + [0x00] * 29
+# Protocol correction for #289/PR427: owner's test4 diagnostic L50, GET05 =70%.
+# https://github.com/user-attachments/files/34882030/diagnostics.txt
+# The old AJ179 command10 fixtures were not this receiver's protocol.
+AJ159_CAPTURE70 = bytes.fromhex("05 00 00 46 01 00 01 02 00 00 00 00") + bytes(53)
 
 
 def info(level, flag=0x01):
@@ -52,10 +56,12 @@ class FakeCollection:
     """replies: frames the collection answers with, in order; accept_write:
     False means the collection has no output report (hidapi returns -1)."""
 
-    def __init__(self, replies=(), accept_write=True):
+    def __init__(self, replies=(), accept_write=True, feature_reply=None):
         self.replies = list(replies)
         self.accept_write = accept_write
         self.sent = []
+        self.feature_sent = []
+        self.feature_reply = feature_reply
         self.opened = 0
         self.reads = 0
 
@@ -77,6 +83,13 @@ def fake_device_class(cols, order_log):
         def write(self, data):
             self.c.sent.append(list(data))
             return len(data) if self.c.accept_write else -1
+
+        def send_feature_report(self, data):
+            self.c.feature_sent.append(bytes(data))
+            return len(data)
+
+        def get_feature_report(self, report, length):
+            return self.c.feature_reply if report == 0x05 else []
 
         def read(self, n, timeout):
             return self.c.read()
@@ -202,40 +215,43 @@ class PollTest(unittest.TestCase):
         self.assertEqual(list(A.make_request())[:2], [0x00, 0x10])   # report id + the app's read
         self.assertEqual(len(A.make_request()), A.REPORT_SIZE + 1)
 
-    def alt(self, index, product, reply_frame=CAPTURED75):
+    def alt(self, index, product, reply_frame=AJ159_CAPTURE70):
         vid, pid, name = A.ALT_TARGETS[index]
         entries = [{"path": b"alt-vendor", "interface_number": 2,
                     "usage_page": 0xFFFF, "usage": 0x0002,
                     "product_id": pid, "product_string": product}]
-        cols = {b"alt-vendor": FakeCollection((reply_frame,))}
+        cols = {b"alt-vendor": FakeCollection(feature_reply=reply_frame)}
         A.hid = types.SimpleNamespace(device=fake_device_class(cols, self.order))
         A.hidlist = types.SimpleNamespace(
             enumerate=lambda v=0: entries if v == vid else [])
         A.output_length = lambda path: None
+        self.last_cols = cols
         return A.AjazzProvider().poll()
 
-    # Exercise the retained experimental protocol independently of release policy.
+    # Check the confirmed protocol independently of the release allowlist.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_aj159_pros_8k_receiver_is_read(self):
-        # #289: 3151:402d 'AJAZZ 2.4G 8K' - the vendor channel sits on usage page
-        # FFFF instead of the AJ179's unlabelled mi_02; the AJ179 notes say the
-        # AJ159 family speaks the same CompX protocol, so the same read is sent
+        # #289 test4 confirms F7/GET05 on FFFF:0002; not AJ179 command10.
         out = self.alt(0, "AJAZZ 2.4G 8K")
         self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
-                         [("ajazz:402d", "AJAZZ AJ159 PRO", 75, "mouse")])
+                         [("ajazz:402d", "AJAZZ AJ159 PRO", 70, "mouse")])
+        collection = self.last_cols[b"alt-vendor"]
+        self.assertEqual(collection.feature_sent, [bytes.fromhex("00 f7") + bytes(63)])
+        self.assertEqual(collection.sent, [])
+        self.assertEqual(collection.reads, 0)
 
-    # Exercise the retained experimental protocol independently of release policy.
+    # Widening an allowlist cannot create an unverified Kysona protocol.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
-    def test_the_kysona_uranus_is_read_on_the_same_family(self):
-        # #251: 3151:5031 '2.4G Wireless Mouse' publishes the same ffff:0001/0002
-        # collections as the AJ159's receiver
+    def test_kysona_shape_does_not_authorize_an_unsourced_protocol(self):
+        # #251 has no confirmed request/reply, even if a caller widens an allowlist.
         out = self.alt(1, "2.4G Wireless Mouse")
-        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
-                         [("ajazz:5031", "Kysona Uranus", 75, "mouse")])
+        self.assertEqual(out, [])
+        self.assertEqual(self.order, [])
+        self.assertEqual(self.last_cols[b"alt-vendor"].feature_sent, [])
 
-    # Exercise the retained experimental protocol independently of release policy.
+    # Check the confirmed collection independently of the release allowlist.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_fifth_collection_is_reached_on_the_8k_receiver(self):
@@ -250,11 +266,13 @@ class PollTest(unittest.TestCase):
                     "product_string": "AJAZZ 2.4G 8K"}
                    for i, p, u in shape]
         cols = self.cols(entries, answer=entries[4]["path"])
-        # every collection reports some output length, so none of them is preferred:
-        # the answer channel is simply last in the dump order, as on the reporter's unit
+        cols[entries[4]["path"]].feature_reply = AJ159_CAPTURE70
         out = self.poll(entries, cols, lengths={e["path"]: 64 for e in entries})
-        self.assertEqual([(s.key, s.level) for s in out], [("ajazz:402d", 75)])
-        self.assertEqual(5, len(self.order))      # every collection got a turn
+        self.assertEqual([(s.key, s.level) for s in out], [("ajazz:402d", 70)])
+        self.assertEqual(self.order, [entries[4]["path"]])
+        self.assertTrue(all(not c.sent and not c.reads for c in cols.values()))
+        self.assertEqual(cols[entries[4]["path"]].feature_sent,
+                         [bytes.fromhex("00 f7") + bytes(63)])
 
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()

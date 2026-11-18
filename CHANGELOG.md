@@ -63,6 +63,23 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Add isolated JSON receiver checks for AJ159, INZONE H9 II and PRO X3,
+  reusing their sourced readers and refusing concurrent HaloBattery access.
+- Explicit Endgame 4K and Lamzu Tachi diagnostics in the packaged EXE, using the
+  existing native transport and a new JSON report file. These opt-in checks do
+  not enable either device in normal polling.
+- Name both Logitech PRO X 2 and PRO X 3 in their shared device-family
+  setting in every language (#413).
+- Restore AJ159 PRO with its sourced F7/05 feature exchange; keep Kysona held.
+  Read INZONE H9 II through its own HID status exchange, without H9 serial setup.
+- Read PRO X 3 with its separately sourced 50/23 Root/bridge/battery exchange,
+  resolving feature indices per receiver without applying the X2 fallback.
+- Provide an explicitly acknowledged, exact-target Aurora diagnostic for Tachi;
+  normal polling stays held pending receiver verification.
+- Keep the corrected Endgame 4K A1 exchange behind an explicit local tester;
+  unresolved reply freshness and status-08 recovery still prevent tray enablement.
+- Hide device-type switches whose entire protocol family is held, while retaining
+  saved preferences and useful switches for supported sibling devices.
 - Keep Lofree Flow queries on the verified receiver control collection, preventing
   fallback writes to AULA F108 and other devices sharing its USB ID (#413).
 - Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,

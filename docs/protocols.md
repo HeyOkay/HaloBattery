@@ -41,16 +41,41 @@ The routed exchange the Dark Core row describes, framed on report `0x02`: the re
 
 ### Endgame Gear XM2w 4K, OP1w 4K (4K dongle)
 
-**Disabled in 1.17.0:** the provider does not open the 4K dongle. Owner tests in
-[#321](https://github.com/HeyOkay/HaloBattery/issues/321) and
-[#324](https://github.com/HeyOkay/HaloBattery/issues/324) reject the historical
-XM2we-derived exchange below with `short send (-1)`. The separate correction has a
-later detection-loss report ([public status](https://github.com/nqble/HaloBattery/blob/main/docs/endgame/4k-status.md));
-it is not included here. Confirmed XM2we support uses its separate provider.
+**Held in normal polling:** the original 17-byte XM2we exchange was wrong for
+the `3367:1970` 4K receiver. The confirmed XM2we provider is separate and unchanged.
+The corrected A1 implementation is available only through the explicit local
+tester, not the tray application or generic `--probe`.
 
-**Connection:** the 4K dongle, "Endgame Gear HS Dongle" (`3367:1970`)
+Sources: [Vole protocol sections 1-3](https://github.com/johanneszab/vole/blob/4ba29dea54b4628df03cfe2f94f4576c124afd80/re/PROTOCOL.md)
+and [mouse-battery-monitor](https://github.com/stuffz/mouse-battery-monitor/blob/25871cce3a8266d8d2bc05b0ca81fbb74b3a38b4/docs/ENDGAME.md).
+The control collection is `FF01:0002`. Send 64-byte A1 feature frames with command
+`0E`, then `B4` only after a supported mouse identity is returned. The known
+identities are `3367:1968` (XM2w 4K) and `3367:1982` (XM2w 4K v2). Receiver and
+cable transports are selected separately; multiple matching endpoints are refused.
+Only successful status `01` supplies payload; busy status `03` has bounded retries.
+No reset, pairing, command `0F`, guessed drain or recovery sequence is sent.
 
-One dongle id serves several mice - the XM2w 4K, the OP1w 4K and their v2 revisions - and the adapter itself stays neutral; the vendor software resolves which mouse is behind it. The exchange is the family's 17-byte frame, documented for the XM2we by okms/xm2we-linux and by Janlhin/Endgame_Gear_Web_Configurator: a feature report `0x08` carrying `<opcode> 00 ...` with a `0x55 - sum` checksum, answered by an input report `0x09` whose data starts at byte 6 and whose bytes sum to `0x55`. Battery is opcode `0x04` - `data[0]` the percentage, `data[1]` the charging flag - and it is read before the link state because plugging the cable drops the link for a moment while the level stays valid. The dongle's two collections are paired by the receiver part of their HID paths: the feature collection is `ff02:0002`, the replies arrive on an `ff01` collection. Only the two documented status reads are built; nothing is written to the mouse. **Unverified** on this dongle - the frame is the XM2we's, and a test build is out for [#324](https://github.com/HeyOkay/HaloBattery/issues/324).
+Success has no sourced command/target correlation. Two equal samples are only a
+noise filter and **do not prove freshness**. The persistent status-08 and later
+detection-loss reports in [PR #428](https://github.com/HeyOkay/HaloBattery/pull/428)
+still prevent release enablement. Wireless charging is unknown; cable charging
+is only a connection inference and the tester does not publish a wired percentage.
+Previous positive owner tests do not verify this new integration.
+
+For an explicit local diagnostic, select one connected transport. A packaged
+build can run the same tester without installing Python:
+
+```powershell
+.\HaloBattery.exe --diagnose-device endgame-4k --transport receiver --acknowledge-experimental --diagnostic-output endgame-report.json
+```
+
+Use `--transport wired` only to select the separate cable path. The output path
+must name a new file; existing files are never overwritten. The tester exits
+after saving JSON, without launching Settings, an editor or the tray app.
+Source runs retain `python tools/probe_endgame_4k.py --help`.
+Both entry points use the same bounded in-process native HID runtime and exact
+target restrictions. Invalid or incomplete diagnostic arguments exit before
+loading HID. Normal polling and generic `--probe` retain the release hold.
 
 ### HyperX Cloud Alpha 2
 
@@ -94,11 +119,10 @@ The receiver exposes one vendor collection, `ff13:0001` (interface 5 on a real u
 
 Not HID++ on ff43: Logitech's "Centurion" transport on the vendor collection `ffa0:0001`, report 0x51. The app lists the receiver's features, reaches the headset through the receiver's bridge feature (0x0003), lists the headset's features and reads its battery feature 0x0104 (percent, charging state), all with read-only functions. From Solaar (tested on this headset) and HeadsetControl; firmware without 0x0104 gets HeadsetControl's fixed request. Confirmed on hardware in #103 (75 %, level and charging equal to G HUB)
 
-The PRO X 3 LIGHTSPEED (`046D:0B45`) was tried with the PRO X 2 exchange because
-its collections match. Hardware tests in [#343](https://github.com/HeyOkay/HaloBattery/issues/343)
-report no reply even to discovery, so collection layout does not establish compatibility.
-**Disabled in 1.17.0:** this PID is excluded before opening HID, pending a receiver
-protocol source/capture. Confirmed PRO X 2 (`046D:0AF7`) remains enabled.
+The earlier PRO X 3 attempt borrowed this X2 transport and did not answer in
+[#343](https://github.com/HeyOkay/HaloBattery/issues/343). A separate sourced
+X3 implementation is now documented below; X2 framing and behavior are unchanged.
+
 ### Plantronics Voyager 8200 UC (BT600 adapter)
 
 **Connection:** the headset's Bluetooth link through the BT600 USB adapter (`047f:02ee`, `047f:02f7`)
@@ -655,29 +679,54 @@ been tested with this provider.
 
 ## 1.17.0 release exclusions and confirmations
 
-The AJAZZ alternate targets `3151:402d` (AJ159 PRO) and `3151:5031` (Kysona Uranus)
-are disabled by the provider's release allowlist before opening a HID device. The
-AJ179-derived command `0x10` is retained only for protocol tests and further review:
-[#289](https://github.com/HeyOkay/HaloBattery/issues/289) still reports no link,
-and [#251](https://github.com/HeyOkay/HaloBattery/issues/251) has no confirmation.
-The captured, confirmed AJ179 V2 MAX exchange is unchanged.
+AJ159 PRO and INZONE H9 II were held in the published 1.17.0. Their separate,
+newly sourced implementations are described below; neither borrows its sibling's
+query. Kysona Uranus (`3151:5031`) remains unopened: AJ159 evidence does not
+authorize its protocol. The captured AJ179 V2 MAX exchange is unchanged.
 
 Turtle Beach Stealth 600X Gen 3 (`10f5:2232`, [#239](https://github.com/HeyOkay/HaloBattery/issues/239))
 is excluded from the enabled PID allowlist until its exchange is confirmed. The
 SInf/GSI and CoAP protocol tests remain; they do not establish that this model accepts
-either exchange. Stealth Pro II and Stealth 700 Gen 3 remain enabled. Atlas Air
+either exchange. Stealth Pro II and Stealth 700 Gen 3 remain enabled. The additional Stealth Pro II receiver `10f5:2285` uses the existing Swarm II `FF13:0001` path and family key; the reporter confirmed discovery and level in [#401](https://github.com/HeyOkay/HaloBattery/issues/401), implemented by [#423](https://github.com/HeyOkay/HaloBattery/pull/423). Its charging transition was not confirmed locally. Atlas Air
 (`10f5:225e`) also remains enabled: [Vetrices confirmed](https://github.com/HeyOkay/HaloBattery/issues/310#issuecomment-6741190943)
 the test build's level matches Swarm II, charging follows the cable, and the level
 updates after unplugging. This confirmation applies to Atlas Air, not Stealth 600X.
+Atlas Air uses the SInf/GSI exchange only: a silent receiver does not fall back to
+the Stealth 700 CoAP client-enable command. In the
+[confirmed test build](https://github.com/casparas123/HaloBattery/blob/e5a43e046662599c610e67f7800967e881c4ee99/providers/turtlebeach.py#L324-L342),
+SInf is attempted first and supplies charging; its CoAP fallback cannot supply
+charging. The reported cable transitions therefore support retaining SInf/GSI,
+not treating the Stealth 700 initialization as confirmed for Atlas Air.
 
-Sony INZONE H9 II (`054c:0fa8`, [#294](https://github.com/HeyOkay/HaloBattery/issues/294))
-is excluded before opening its serial port: compatibility with the H9 initialization
-frames has not been confirmed. The sourced H9 (`054c:0e53`) exchange remains enabled.
-Lamzu Tachi (`37b0:000c`, [#262](https://github.com/HeyOkay/HaloBattery/issues/262))
-is excluded before opening HID: collection layout alone was the evidence for trying
-the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
-providers are unchanged. These two exclusions resolve the historical fork #30 and
-Lamzu half of #34 release holds; their protocol tests remain for further development.
+Sony INZONE H9 II (`054c:0fa8`) remains excluded from the **serial** H9 provider:
+the H9 initialization frames are not authorized for it. Its separate sourced HID
+status reader is documented below. The H9 (`054c:0e53`) serial exchange is unchanged.
+Lamzu Tachi (`37b0:000c`) remains excluded from normal polling. Its explicit
+diagnostic now uses the independently sourced Aurora battery command on one exact
+collection, with no Glorious fallback. Receiver transport and physical charging
+still need verification. The captured Glorious exchange and other Lamzu providers
+are unchanged.
+
+### AJAZZ AJ179 V2 MAX: retained capture-derived request
+
+**Targets:** `249a:5c2f` receiver and `248a:5d2e` cable. The
+[original PR #246 record at `62ae2ea`](https://github.com/casparas123/HaloBattery/blob/62ae2ea6f0e67947aee3337db0f59945999a5774/docs/protocols.md#L135-L139)
+retains the literal request from AJAZZ Driver 1.0.7.3's #74 captures:
+32 payload bytes `10 00 00 ...`, report ID `00`; hidapi receives
+`00 10` followed by 31 zeros, 33 bytes total. Its info reply carries percentage
+at byte 13, cable flag at byte 14, and the sum of bytes 4-30 at byte 31.
+Unsolicited `c0 01 <level>` frames supply percentage only.
+
+The owner's [descriptor dump](https://github.com/user-attachments/files/32691669/diagnostics.txt)
+identifies the receiver's `mi_02` channel with 33-byte input/output reports;
+the [cable diagnostics](https://github.com/user-attachments/files/32985688/diagnostics.txt)
+identify `248a:5d2e`, interface 2. The request record and owner runs establish
+the named targets without borrowing another AJAZZ product's command. They do
+not establish that other collections accept it. The original captures were
+shared through temporary WeTransfer links and were not recovered here; this
+is the retained capture-derived report, not a claim that the packet captures
+were independently replayed or newly collected.
+
 ## Guarded integrations from pending device pull requests
 
 These are local integrations into the current native transport. The upstream
@@ -751,3 +800,99 @@ documented under ATK V75X. No generic brand match or new command is added.
 Changing between VGN receiver and ATK wired identities resets the label and
 cached value; the same ATK model retains cable/receiver continuity. PR evidence
 confirms level observations, not a new charging transition test.
+
+### AJAZZ AJ159 PRO
+
+**Target:** `3151:402d`, interface 2 `FFFF:0002`. The independent
+[Aiacos driver](https://github.com/Aiacos/ajazz-control-center/blob/03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3/src/devices/mouse/src/aj_series.cpp#L225-L312)
+and its [captured exchange](https://github.com/Aiacos/ajazz-control-center/blob/03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3/docs/research/reverse-engineering/capture-evidence.md#L54-L91)
+source SET feature report 0/opcode `F7`, zero payload, a 30 ms settle, then GET
+feature `05`. The [same-target owner diagnostics](https://github.com/user-attachments/files/34882030/diagnostics.txt)
+from test4 in [#289](https://github.com/HeyOkay/HaloBattery/issues/289#issuecomment-6899703056)
+record GET05/33 refused and GET05/65 returning `05 00 00 46 01 00 01 02 ...` (70%).
+The native path uses the opened collection's feature length for one SET/GET;
+legacy HIDAPI uses only the sourced 65-byte read, not a trial-size matrix.
+Require the complete SET, report ID 05, zero bytes 1-2 and level 1-100 at byte 3.
+Zero is unknown per the source; charging stays unknown. There is no GET-F7,
+input fallback or AJ179 command `10`. Kysona `3151:5031` remains unopened.
+
+### Sony INZONE H9 II
+
+**Target:** `054c:0fa8`, interface 5 `FF04:0001`. Separate HID provider;
+the older H9 serial initialization is never sent. Source:
+[zoneout device.py](https://github.com/marcinjakubowski/zoneout/blob/49ebedb178f10c84c7e42e0e946c0ac971d08376/src/zoneout/device.py#L139-L167)
+uses **output write/input read**, despite a conflicting feature-report label in
+its prose. Send its 64-byte `02 0c 01 00 fc 08 96 c3 41 06 01 01 00 a2 ...`
+audio-status request. `A2` is the sourced checksum; the PR's `9C` docstring was wrong.
+Check report ID 2, `96 c3 41 06`, level byte 15 and charge byte 14 (0/1); other
+charge values remain unknown. No unsupported response sequence/checksum is invented.
+Cached caps must carry at least the canonical 64 bytes (they describe each
+collection's largest report); native padding is checked against the complete
+output size. Bounded drain/listen and rotating receiver order keep work bounded,
+and independent path keys keep receivers separate.
+
+The owner in [#387](https://github.com/HeyOkay/HaloBattery/issues/387) confirmed a
+previous Windows test build's level. That does not verify this hardened native
+integration or charging transitions. No feature fallback, serial initialization,
+settings command or alternate-size trial is added.
+
+### Logitech PRO X 3 LIGHTSPEED
+
+**Target:** receiver `046d:0b45`, interface 3 `FFA0:0001`. Source:
+[HeadsetControl device](https://github.com/Sapd/HeadsetControl/blob/1d2ccd1412246d85b2f8733d739cc865ba466aab/lib/devices/logitech_gpro_x3_lightspeed.hpp)
+and its [Centurion protocol](https://github.com/Sapd/HeadsetControl/blob/1d2ccd1412246d85b2f8733d739cc865ba466aab/lib/devices/protocols/logitech_centurion_protocol.hpp),
+with exact `0b45` capture fixtures in
+[test_protocols.cpp](https://github.com/Sapd/HeadsetControl/blob/1d2ccd1412246d85b2f8733d739cc865ba466aab/tests/test_protocols.cpp#L1643-L1666).
+The upstream author tested Ubuntu receiver revision 1.02; Windows and charging
+transitions are not newly verified here.
+
+Unlike X2, X3 uses `50 23` framing. Each poll sends at most three read-only
+64-byte output requests: receiver Root.getFeature(`0003`), bridged
+Root.getFeature(`0104`), then the resolved battery feature's function 0.
+Captured indices 3/5 are fixtures, never assumed indices. Discover again every
+poll so receiver re-pairing does not reuse a headset's feature index. Check full
+native padded writes, complete header/flags/inner lengths, command/target echo,
+ACK versus actual headset response and level 0-100. Unknown/missing charging
+stays unknown. Physical receiver-path keys keep two X3 units separate.
+No X2 `51`, FeatureSet scan, fixed legacy request, mode/timer/setup write or
+feature-report fallback runs on X3. Existing X2 behavior is unchanged.
+
+### Lamzu Tachi: explicit Aurora diagnostic
+
+**Diagnostic target only:** `37b0:000c` 8K receiver, interface 2 `FFFF:0000` from
+the owner's [#262](https://github.com/HeyOkay/HaloBattery/issues/262) diagnostics.
+Normal polling returns before enumeration; wired `0005` and other receivers are
+not enabled. The tester requires acknowledgement and exactly one matching endpoint.
+
+Independent primary sources are the official
+[LAMZU model configuration](https://www.xvalleyinno.top/LAMZU/Config/env-models.json)
+and the text-only archived
+[Aurora bundle](https://www.xvalleyinno.top/LAMZU/static/js/index-4fe8914c.js)
+(SHA-256 `5895a882e4e3570131044fa610a6e300ee835446c9909721f73b1e09951dd354`).
+The model entry identifies Tachi as the new non-Compx protocol; the selected
+driver's `getBatPer`/`setReport`/`getReport` sends 64 payload bytes with
+`[2]=2, [3]=2, [5]=83`, waits 100 ms, then reads feature report 0.
+HIDAPI includes ID zero, so the canonical frame is 65 bytes:
+`00 | 00 00 02 02 00 83 | 00 ...`.
+Validate A1, payload-length tag 2, echoed 83, complete byte/range fields;
+charging is true only for the sourced flag 1. No Glorious/Sinowealth fallback,
+alternate-size probing, configuration or recovery command is used.
+
+[Dorsal at 55f702f](https://github.com/Zelozzzz/dorsal/tree/55f702fc70ce852228cf2c7d20173541e4f17420)
+independently documents the same command. Its virtual tests boot the actual
+Tachi 0.0.0.15 mouse firmware, rather than fabricating the handler response;
+they bypass the receiver's USB/radio path. Static inspection of that firmware's
+descriptor confirms mouse `FFFF:0000` feature payload64, not a captured receiver
+descriptor. Neither these tests nor the vendor script prove that this integration
+works on a physical receiver. No firmware or JavaScript was executed for this review.
+The packaged executable exposes the same acknowledged local diagnostic:
+
+```powershell
+.\HaloBattery.exe --diagnose-device lamzu-tachi --acknowledge-experimental --diagnostic-output tachi-report.json
+```
+
+Choose a new output file; the tester never overwrites an existing report or
+opens an editor. It uses one existing native runtime and exits without loading
+the normal app, settings, profile or tray. Source runs retain
+`python tools/probe_lamzu_tachi.py --help`. Neither entry point lifts the release
+hold or establishes hardware confirmation.
