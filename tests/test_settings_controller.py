@@ -222,6 +222,132 @@ class CompactTrayTests(HideRenameTestCase):
         with mock.patch.object(settings_host, "SettingsHost") as manager:
             app.open_settings("mouse:1", page="devices")
             app.open_settings(page="general")
-        manager.assert_called_once_with(app.settings)
+        manager.assert_called_once_with(
+            app.settings, on_failure=app._settings_unavailable, on_ready=app._settings_available)
         self.assertEqual(manager.return_value.open.call_args_list,
                          [mock.call("mouse:1", page="devices"), mock.call(None, page="general")])
+
+
+class SettingsFailureFallbackTests(HideRenameTestCase):
+    def setup_app(self, language="en"):
+        app = make_app({"language": language})
+        app.stop_evt = threading.Event()
+        app.apply([dev()])
+        return app
+
+    def preferences(self, menu, app):
+        return next(item for item in menu.items if item.text == app.tr("menu.preferences"))
+
+    def test_companion_launch_failures_show_error_and_leave_preferences_usable(self):
+        from halo.settings_host import SettingsHost
+        errors = (FileNotFoundError("missing companion"), PermissionError("blocked companion"),
+                  OSError(193, "incompatible executable"), OSError(216, "incompatible architecture"),
+                  OSError(1150, "unsupported Windows version"))
+        for error in errors:
+            with self.subTest(error=error):
+                app = self.setup_app()
+                menu = app.build_tray_menu(None)
+                manager = SettingsHost(object(), popen=mock.Mock(side_effect=error),
+                                       on_failure=app._settings_unavailable, on_ready=app._settings_available)
+                # Launch arguments are unrelated to this simulated OS failure.
+                with mock.patch.object(manager, "_launch_args", return_value=["settings.exe"]), \
+                        mock.patch.object(manager, "_thread"), \
+                        mock.patch.object(hb, "show_settings_error") as show:
+                    manager.open()
+                    with self.assertLogs("halo_battery", level="ERROR"):
+                        manager._launch(manager._session)
+                    manager._dispatch_notifications()
+                show.assert_called_once_with(app.tr("settings.open_failed", preferences=app.tr("menu.preferences")))
+                prefs = self.preferences(menu, app)
+                self.assertTrue(prefs.visible)
+                sound = next(item for item in prefs.submenu.items if item.text == app.tr("preferences.low_sound"))
+                before = app.cfg["low_sound"]
+                sound(None)
+                self.assertEqual(app.cfg["low_sound"], not before)
+                self.assertIsNone(manager._session)
+
+    def test_existing_device_and_placeholder_menus_gain_preferences_then_recover(self):
+        app = self.setup_app()
+        owner = next(iter(app.icons.values()))
+        menus = [app.build_tray_menu(owner), app.build_tray_menu(None)]
+        with mock.patch.object(hb, "show_settings_error") as show, mock.patch.object(app, "refresh_menus") as refresh:
+            for menu in menus:
+                self.assertFalse(self.preferences(menu, app).visible)
+            app._settings_unavailable("launch")
+            refresh.assert_called_once_with()
+            show.assert_called_once_with(app.tr("settings.open_failed", preferences=app.tr("menu.preferences")))
+            for menu in menus:
+                prefs = self.preferences(menu, app)
+                self.assertTrue(prefs.visible)
+                sound = next(item for item in prefs.submenu.items if item.text == app.tr("preferences.low_sound"))
+                before = app.cfg["low_sound"]
+                sound(None)
+                self.assertEqual(app.cfg["low_sound"], not before)
+            # Merely opening Settings again keeps the fallback until visible is acknowledged.
+            app.settings = object()
+            with mock.patch("halo.settings_host.SettingsHost"):
+                app.open_settings()
+            self.assertTrue(self.preferences(menus[0], app).visible)
+            app._settings_available()
+            self.assertEqual(refresh.call_count, 2)
+            app._settings_available()
+            self.assertEqual(refresh.call_count, 2)
+            for menu in menus:
+                self.assertFalse(self.preferences(menu, app).visible)
+
+    def test_rapid_retry_does_not_stack_error_dialogs(self):
+        app = self.setup_app()
+        with mock.patch.object(hb, "show_settings_error", side_effect=lambda text: app._settings_unavailable("connection")) as show:
+            app._settings_unavailable("launch")
+        show.assert_called_once()
+        self.assertFalse(app._settings_error_pending)
+        with mock.patch.object(hb, "show_settings_error") as retry:
+            app._settings_unavailable("startup")
+        retry.assert_called_once()
+
+    def test_queued_dialog_is_suppressed_after_recovery_or_shutdown(self):
+        for shutdown in (False, True):
+            with self.subTest(shutdown=shutdown):
+                app = self.setup_app()
+                pending = []
+                with mock.patch.object(hb.threading, "Thread", side_effect=lambda target, **kw:
+                                       types.SimpleNamespace(start=lambda: pending.append(target))), \
+                        mock.patch.object(hb, "show_settings_error") as show:
+                    app._settings_unavailable("launch")
+                    self.assertEqual(len(pending), 1)
+                    if shutdown:
+                        app.stop_evt.set()
+                    else:
+                        app._settings_available()
+                    pending[0]()
+                show.assert_not_called()
+                self.assertFalse(app._settings_error_pending)
+
+    def test_shutdown_does_not_add_fallback_or_schedule_dialog(self):
+        app = self.setup_app()
+        app.stop_evt.set()
+        with mock.patch.object(hb.threading, "Thread") as thread:
+            app._settings_unavailable("connection")
+        thread.assert_not_called()
+        self.assertFalse(getattr(app, "_settings_fallback", False))
+
+    def test_message_and_fallback_are_localized_in_all_catalogs(self):
+        for language in hb.i18n.LANGUAGES:
+            with self.subTest(language=language):
+                app = self.setup_app(language)
+                with mock.patch.object(hb, "show_settings_error") as show:
+                    app._settings_unavailable("launch")
+                text = show.call_args.args[0]
+                self.assertIn(app.tr("menu.preferences"), text)
+                self.assertNotIn("{", text)
+                self.assertNotIn("settings.open_failed", text)
+                menu = app.build_tray_menu(None)
+                self.assertTrue(self.preferences(menu, app).visible)
+
+    def test_dialog_error_releases_the_retry_guard(self):
+        app = self.setup_app()
+        app._settings_fallback = app._settings_error_pending = True
+        with mock.patch.object(hb, "show_settings_error", side_effect=OSError("blocked")):
+            with self.assertRaises(OSError):
+                app._show_settings_error()
+        self.assertFalse(app._settings_error_pending)
