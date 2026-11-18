@@ -15,6 +15,14 @@ glorious-indicator and OpenRGB's SinowealthGMOWController:
         [2..5] echo, [6] 0x83, [7] charging (0 = no, non-zero = on the charger),
         [8] level %
 
+Response validation is cross-checked against korkje/mxw commit
+5b517db12b48dcbeaac9588dea73797c12bdf02b, src/report/battery.rs:26-50:
+only status A1 is a live percentage. A4 is asleep; provisional/unknown statuses
+must be retried, not recorded as zero. Offsets are also documented in
+Rodrigo-200/GloriousBatteryMonitor-Go commit
+4271ea7acee99d2569a1b97b27272fb8510e6f55,
+src/GBM.Core/Services/HidDeviceService.cs:278-302.
+
 The receiver needs ~100 ms between the write and the read: the query goes over the 2.4 GHz
 link to the mouse and back. Report id 0x00 is the one all known Glorious wireless mice
 answer on; other ids are only tried if Windows says the collection takes a different
@@ -70,9 +78,11 @@ def parse_reply(r) -> Optional[Tuple[int, bool]]:
     """(level, charging) from the receiver's answer, or None when it is not one."""
     if not r or len(r) <= LEVEL_INDEX:
         return None
-    if r[FUNC_INDEX] != 0x83:
+    if r[0] != 0x00 or r[FUNC_INDEX] != 0x83:
         return None
-    if r[1] == STATUS_ASLEEP:
+    # The outgoing request also has 0x83 at byte 6 and zero at byte 8.
+    # Require the positive awake status, rather than guessing from the level.
+    if r[1] != STATUS_AWAKE:
         return None
     level = r[LEVEL_INDEX]
     if not 0 <= level <= 100:
@@ -147,9 +157,10 @@ class GloriousProvider(Provider):
             return None
         try:
             for _ in range(READ_ATTEMPTS):
-                sent = dev.send_feature_report(bytes(make_request(length)))
-                if sent is not None and sent < 0:
-                    self._diag.append(f"    feature write refused ({sent})")
+                request = bytes(make_request(length))
+                sent = dev.send_feature_report(request)
+                if sent is not None and sent != len(request):
+                    self._diag.append(f"    feature write incomplete/refused ({sent})")
                     return None
                 time.sleep(RF_DELAY_S)
                 r = dev.get_feature_report(0x00, length)

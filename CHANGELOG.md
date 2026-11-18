@@ -63,6 +63,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Query MCHOSE V9 Pro only through its sourced output-report transport instead
+  of retrying a refused request as an unconfirmed feature report.
+- Keep Atlas Air on its confirmed SInf/GSI exchange when the headset is silent,
+  without sending the Stealth 700 CoAP initialization command.
+- Reject malformed SteelSeries percentages and discrete battery codes before
+  conversion, retaining documented raw-scale and overreporting corrections.
+- Require fresh Skullcandy input instead of presenting an unchanged old snapshot
+  as a new battery reading, while accepting a steady level in a fresh packet.
+- Add the confirmed Turtle Beach Stealth Pro II receiver `10f5:2285`.
+- Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
+  original exchange receives no answer; mark its coarse levels and unknown charging.
+- Refuse Glorious query echoes and provisional replies without suppressing real 0%.
+- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
+  or disconnected-keyboard status as a current keyboard reading.
+- Refuse malformed percentages in AM Infinity, BlackShark PA, MCHOSE A5 and
+  SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 
