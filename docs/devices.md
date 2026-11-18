@@ -15,15 +15,18 @@
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
 | [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
+| [CHERRY MX 3.0S Wireless](protocols.md#cherry-mx-30s-wireless) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
 | [Corsair Virtuoso RGB Wireless SE / XT](protocols.md#corsair-virtuoso-rgb-wireless-se--xt) | Slipstream receiver or USB cable | yes for the SE on the Multi-Device receiver; XT untried |
 | [Corsair Void Elite Wireless](protocols.md#corsair-void-elite-wireless) | 2.4 GHz receiver | likely |
 | [Corsair HS80 RGB Wireless (original)](protocols.md#corsair-hs80-rgb-wireless-original) | Direct USB cable or 2.4 GHz receiver | yes (charging inferred when connected by USB) |
 | [Corsair Void v2 Wireless, Virtuoso Max Wireless, HS80 Max Wireless](protocols.md#corsair-void-v2-wireless-virtuoso-max-wireless-hs80-max-wireless) | Wireless receiver | no |
+| [Cooler Master MM712 / MM731](protocols.md#cooler-master-mm712-mm731) | 2.4 GHz receiver or USB cable | unverified |
 | [Endgame Gear XM2w 4K, OP1w 4K (4K dongle)](protocols.md#endgame-gear-xm2w-4k-op1w-4k-4k-dongle) | 4K dongle; disabled in 1.17.0 | no; correction pending |
 | [DJI Mic Mini 2](protocols.md#dji-mic-mini-2) | USB receiver, interface 6 with WinUSB | yes |
 | [G-Wolves HSK Pro ACE and the other models with a receiver of their own](protocols.md#g-wolves-hsk-pro-ace-and-the-other-models-with-a-receiver-of-their-own) | The model's own receiver or USB cable | no |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
+| [Fractal Design Scape](protocols.md#fractal-design-scape) | 2.4 GHz dongle or USB-C cable | unverified |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
@@ -33,6 +36,7 @@
 | [HyperX Cloud III S Wireless](protocols.md#hyperx-cloud-iii-s-wireless) | 2.4 GHz dongle | yes |
 | [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
+| [JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)](protocols.md#jbl-quantum-hidv3-520-650-850-950) | 2.4 GHz receiver or USB cable | unverified in the app (WDBM tested a 650) |
 | [Keychron Ultra-Link 8K, Keychron M5](protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
 | [Lofree Hyzen](protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
@@ -48,6 +52,7 @@
 | [NZXT Lift Elite Wireless](protocols.md#nzxt-lift-elite-wireless-1e712101) | 2.4 GHz receiver and USB cable | yes |
 | [Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz dongle and USB cable | yes |
 | [Plantronics Voyager 8200 UC (BT600 adapter)](protocols.md#plantronics-voyager-8200-uc-bt600-adapter) | Bluetooth headset through the BT600 USB adapter | confirmed |
+| [Royal Kludge MG6 Pro](protocols.md#royal-kludge-mg6-pro) | 2.4 GHz receiver or USB cable | unverified |
 | [Razer Barracuda Pro (2.4 GHz)](protocols.md#razer-barracuda-pro-24-ghz) | 2.4 GHz dongle | yes |
 | [Razer Basilisk V3 Pro, Razer Basilisk Ultimate (tested by users)](protocols.md#razer-basilisk-v3-pro-razer-basilisk-ultimate) | 2.4 GHz receiver | yes |
 | [Razer BlackShark V2 Pro (2020)](protocols.md#razer-blackshark-v2-pro-2020) | 2.4 GHz receiver | yes |
@@ -56,6 +61,7 @@
 | [Razer DeathAdder V4 Pro](protocols.md#razer-deathadder-v4-pro) | 2.4 GHz receiver | yes |
 | [Razer DeathStalker V2 Pro TKL](protocols.md#razer-deathstalker-v2-pro-tkl) | HyperSpeed receiver or USB cable | yes |
 | [Razer DeathStalker V2 Pro, BlackWidow V3 Mini, V4 Mini and V4 Tenkeyless HyperSpeed](protocols.md#razer-deathstalker-v2-pro-blackwidow-v3-mini-v4-mini-and-v4-tenkeyless-hyperspeed) | HyperSpeed receiver or USB cable | no |
+| [ZOWIE EC-CW, DW series and U2](protocols.md#zowie-ec-cw-dw-series-and-u2) | 2.4 GHz receiver or USB cable | unverified |
 | [Razer wireless mice (other OpenRazer models)](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | likely |
 | [Sony DualSense (PS5)](protocols.md#sony-dualsense-ps5) | USB or Bluetooth | yes |
 | [Sony DualShock 4 (PS4)](protocols.md#sony-dualshock-4-ps4) | USB cable and Bluetooth | yes |

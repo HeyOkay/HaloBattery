@@ -62,6 +62,28 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
+- **JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)** on their 2.4 GHz
+  receiver or USB cable: HIDV3 device-info feature report `0x88`, battery feature
+  `0x000D`, level and charging in the reply. Unverified in the app; the reference
+  implementation tested a Quantum 650.
+
+- **Cooler Master MM712 / MM731** on the shared 2.4 GHz receiver or their USB
+  cables: read-only vendor status request, level and charging. Unverified in the
+  app; the MM712 was tested by the reference project, the MM731 path was not.
+
+- **Royal Kludge MG6 Pro** on its 2.4 GHz receiver or USB cable: QiWang
+  `GET_BATTER_VOL` read, percentage and charging. Unverified in the app.
+
+- **ZOWIE EC-CW, DW series and U2** wireless mice: read-only EC-CW and
+  DW/U2 battery queries, percentage and voltage-trend charging. Unverified in
+  the app.
+
+- **Fractal Design Scape** on its 2.4 GHz dongle or USB-C cable: read-only
+  `GET_DEVICE_STATE` query, percentage and cable charging. Unverified in the app.
+
+- **CHERRY MX 3.0S Wireless** on its 2.4 GHz receiver or USB cable: read-only
+  status query, percentage and USB-powered charging. Unverified in the app.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is

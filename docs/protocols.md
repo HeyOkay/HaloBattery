@@ -18,6 +18,12 @@ The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte 
 
 The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, whose answer carries the battery as attribute 0x0CD6 (`05 5D <len> 00 D6 0C <percent>`). One packet is enough — the query for that attribute is answered with the marker on its own (0.19 s against 1.48 s for the whole sequence) — with the full sequence as the fallback. Dongle and cable are one headset and share one icon; charging is inferred from the cable answering, so the icon breathes while it sits on USB-C. With the headset switched off the dongle keeps answering with the last value it held, so the provider goes by the dongle's own product string — `"Audeze Maxwell Dongle"` with no headset linked, `"Audeze Maxwell HID"` with one — and reports nothing: the icon leaves the tray the way any switched-off device does
 
+### Cooler Master MM712 / MM731
+
+**Connection:** 2.4 GHz receiver (`2516:01B7`) or USB cable (MM712 `2516:0169`, MM731 `2516:0167`).
+
+The receiver and both cables expose a vendor collection on interface 3, usage page `FF0A`. Sending the 4-byte output request `00 46 81 00` produces a `47 81 <model> ...` status report: byte 10 is the level (1-100), byte 11 charging, byte 12 the transport (0 cable, 1 receiver). On the shared dongle model byte 50 is the MM712 and 70 the MM731. Only the status request is sent. Protocol from syntactic-spice/coolermaster-usb-protocol and riVFerd/MM731-Controller; the MM712 was tested there, the MM731 path and its model byte are not. **Unverified in this app.**
+
 ### Corsair Void Elite Wireless
 
 **Connection:** 2.4 GHz receiver (1b1c:0a55)
@@ -82,6 +88,17 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+### JBL Quantum HIDV3 (520 / 650 / 850 / 950)
+
+**Connection:** 2.4 GHz receiver or USB cable. PIDs: 520 `218D`/`218E`, 520X `21A7`/`21A9`, 650 `2125`/`2126`, 650X `213B`/`213D`, 850 `219A`/`219B`, 950 `2127`/`2128`, 950X `213E`/`2140`.
+
+The newer Quantum models expose a vendor collection on usage page `0xFF12` (`featLen` at least 11, input report at least 16 bytes). A feature report `0x88` asks for the two-byte feature id `0x000D` (battery):
+
+    request  88 00 DD 01 00 01 00 02 00 0D 00
+    reply    86 00 DD 01 00 01 ... 0D 00 <size> <value...>
+
+The reply's status bit 15 rejects an error; the feature id must match; an empty feature is refused. The value byte has bit 7 charging and bits 0-6 the level. Only the read-only device-info query is sent. The protocol comes from JBL QuantumENGINE 2.9.4 as implemented by krisgfx9/Wireless-Device-Battery-Monitor, which tested a Quantum 650; this app has **not** run it on hardware yet.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)
@@ -104,6 +121,22 @@ protocol source/capture. Confirmed PRO X 2 (`046D:0AF7`) remains enabled.
 **Connection:** the headset's Bluetooth link through the BT600 USB adapter (`047f:02ee`, `047f:02f7`)
 
 The adapter is a Bluetooth relay rather than a vendor dongle, and its settings live on the vendor collection `ffa2:0003` (interface 3), tunnelled in HID report `0x07`: `07 01 01 10 <len> <addr> 00 00 <op> <grp> <item> ...`, where `0x00` addresses the adapter and `0x20` the headset, and replies carry `0x00` or `0x02`. Nothing answers before the attach sequence - a two-byte output report `06 01`, a HELLO to the adapter, then a HELLO to the headset (`op 0x01`, group/item `01/02`, acked with `op 0x08`); it is idempotent, so it is replayed before every read, and the catalogue frames that follow each ack are skipped by the reply matcher. The battery is `GET 0A 1A`, answered by `op 0x03 0A 1A <level> <count> <charging> <minutes hi> <minutes lo> 01`; the percentage is Poly's own `level / (count - 1) * 100` (the count includes 0, so `0x0B` is ten steps), and the minutes are the remaining talk time, not the level. Only the battery is read - no setting is written. From HeadsetControl's `plantronics_bt600.hpp`. **Confirmed on hardware by @DindonOz** (#328): the level agreed with Poly's own app and the charging state was correct.
+
+### Royal Kludge MG6 Pro
+
+**Connection:** 2.4 GHz receiver (`2E3C:00A6` / `00E6`) or USB cable (`2E3C:00A5` / `00E5`).
+
+The vendor collection is `FF00:0001` on the receiver and `FFF2:0001` on the cable, with 65-byte input/output reports. RK's web driver sends a QiWang configuration frame as output report 0:
+
+    01 01 02 01 00 ...        GET_BATTER_VOL
+
+The reply keeps the first three bytes and sets access_res in bit 4 of byte 3; bytes 4-5 are millivolts, 6-7 the percentage, and byte 10 the USB-plugged flag. A zero access_res means the receiver answered for a mouse that did not, so it is not shown as a level. Only the read-only query is sent. **Unverified in this app.**
+
+### ZOWIE EC-CW, DW series and U2
+
+**Connection:** EC-CW receiver `04A5:8006` or cable `04A5:8005`; DW receiver `04A5:800A`; U2 receiver `04A5:8008`.
+
+Two read-only battery protocols. The EC-CW receiver/cable takes an unnumbered 3-byte request `00 A5 03`; the reply is millivolts (little endian) then the percentage, and zero volts means the mouse is not linked. The DW/U2 path uses command report `0x08 B4 15` on usage page `FF03` and reply report `0x09` on `FF04`, with millivolts in bytes 1-2 times 10 and byte 4 `0xC8`. Charging is inferred from the voltage trend, as in the MIT zowie-battery-tray; ZOWIE has no charging contact over USB. From yleshchuk/zowie-battery and IgnacioBarb/zowie-battery-tray. **Unverified in this app.**
 
 ### Razer Barracuda Pro (2.4 GHz)
 
@@ -213,6 +246,16 @@ test build in #340 on 2026-11-05; the separate Maono microphone request remains 
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
 
 Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile, and on a Keris II Ace and an Azoth by @comipa in [#231](https://github.com/HeyOkay/HaloBattery/issues/231).
+
+### CHERRY MX 3.0S Wireless
+
+**Connection:** 2.4 GHz receiver (`046A:00EA`) or USB cable (`046A:00E3`).
+
+A 64-byte vendor channel on `FF1C:0092`. The frame is report id `0x04`, a
+little-endian checksum of bytes 3-63, type `0x1A`, then payload `03 00 00 55`.
+The reply keeps report id and type; byte 8 is the percentage and byte 9 is
+non-zero while USB powered. From B1Chat/BatteryWatch (MIT), verified on a real
+MX 3.0S through the dongle; the cable path is assumed. **Unverified in this app.**
 
 ### Corsair Dark Core RGB Pro SE
 
@@ -461,6 +504,12 @@ The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfa
 **Connection:** Bluetooth (2DC8:6006 and the other ids in `providers/eightbitdo.py`) or USB
 
 Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. The Pro 3 (2DC8:6009) is the exception: its descriptor declares one input report, 0x04, on both transports, and it carries the level in byte 14 at all times, so the Pro 3 shows its level without Steam - **confirmed on a real Pro 3 over Bluetooth**, with Steam closed and the controller freshly turned on. In XInput mode these controllers are read as Xbox controllers. The other models are **unverified**, so a level of 0 or above 100 is refused rather than shown
+
+### Fractal Design Scape
+
+**Connection:** 2.4 GHz dongle (`36BC:0001`) or the headset on its USB-C cable (`36BC:2001`).
+
+Both expose a 64-byte vendor collection on usage page `FF00` / usage `0001`. Output report `0x02` carries the device type and command; input report `0x02` echoes them. `GET_DEVICE_STATE` (`0x21`) is sent to the dongle type `0x11` and then the headset type `0xF1`: dongle payload byte 4 is 1 when the headset is linked, headset byte 15 is the percentage and byte 23 is 1 on the cable. From Fractal's Adjust Pro WebHID configurator. Only the state query is sent. **Unverified in this app.**
 
 ### GameSir G7 Pro; FlyDigi Vader Pro
 

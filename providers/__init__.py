@@ -15,6 +15,7 @@ from .logitech_centurion import LogitechCenturionProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
 from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
+from .jbl_hidv3 import JblHidV3Provider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
 from .dareu import DareuProvider  # noqa: F401
@@ -33,6 +34,10 @@ from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
+from .cherry import CherryProvider  # noqa: F401
+from .coolermaster import CoolerMasterProvider  # noqa: F401
+from .royal_kludge import RoyalKludgeProvider  # noqa: F401
+from .zowie import ZowieProvider  # noqa: F401
 from .dji import DjiProvider  # noqa: F401
 from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
 from .vaxee import VaxeeProvider  # noqa: F401
@@ -49,6 +54,7 @@ from .ajazz import AjazzProvider  # noqa: F401
 from .sony_inzone import SonyInzoneProvider  # noqa: F401
 from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
 from .finalmouse import FinalmouseProvider  # noqa: F401
+from .fractal import FractalProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
 from .hyperx_alpha_wireless import HyperXAlphaWirelessProvider  # noqa: F401
 from .jabra import JabraProvider  # noqa: F401
