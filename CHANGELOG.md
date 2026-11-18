@@ -62,6 +62,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
+- **Arbiter Akitsu, Areson/Redragon M915/M913, Machenike L7, MOONDROP GM01 Pro,
+  Ninjutso Sora V2 and Sprime PM1**: read-only battery protocols from the vendor
+  tools and community references. Unverified in the app; no hardware was available.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is

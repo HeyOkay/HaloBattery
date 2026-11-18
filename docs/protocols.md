@@ -462,6 +462,36 @@ The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfa
 
 Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. The Pro 3 (2DC8:6009) is the exception: its descriptor declares one input report, 0x04, on both transports, and it carries the level in byte 14 at all times, so the Pro 3 shows its level without Steam - **confirmed on a real Pro 3 over Bluetooth**, with Steam closed and the controller freshly turned on. In XInput mode these controllers are read as Xbox controllers. The other models are **unverified**, so a level of 0 or above 100 is refused rather than shown
 
+### Arbiter Studio Akitsu
+
+**Connection:** 8K receiver or USB cable, vendor 373E: Akitsu `000A`/`0009`, Akitsu 3950 `0039`/`0038`, Akitsu Medium `0067`/`0066` (receiver/cable).
+
+Vendor collection `FFFF:0000`, 65-byte feature report 0. A feature report with bytes 3=02, 4=02, 6=83 is followed by a feature read; status A1/A2 means answered, A0 means the mouse is asleep. Byte 7 is charging and byte 8 the percentage (both shifted when the report id is present). Read-only; no mode writes. **Unverified in this app.**
+
+### Areson / Redragon M915, M913
+
+**Connection:** 2.4 GHz receiver `25A7:FA07` / `FA08`.
+
+GetPower feature request on `FF02:0002` (interface 1), 17 bytes, checksum `0x55 - sum(bytes 0..15)`. The reply arrives on `FF01:0000`, starts `09 04 00`, carries a 0-10 level in byte 6 and charging in byte 7, and the whole frame sums to `0x55`. Level maps to 10 % steps. The FA7B/FA7C family uses another scale and is not claimed. **Unverified in this app.**
+
+### Machenike L7
+
+**Connection:** 2.4 GHz receiver `248A:FF4C` or USB cable `248A:FF4E`; product string must be an L7.
+
+Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24 4E FF` at bytes 4-7, link bits in byte 10, level in byte 11 and charging in byte 12. Only this read is sent; the shared 248A vendor id is why the product string is required. **Unverified in this app.**
+
+### MOONDROP GM01 Pro
+
+**Connection:** 2.4 GHz dongle `35D8:0133`, interface 3 consumer collection; on its USB cable the headset has no control channel.
+
+Report `0x4B`, read `0x80`: command `0x27` returns link in byte 8 and percentage in byte 9; command `0x31` is answered by the dongle with link in byte 4. On the cable the last level is kept and charging is shown, because the headset drops the radio link. **Unverified in this app.**
+
+### Ninjutso Sora V2; Sprime PM1
+
+**Connection:** Sora V2 receiver `1915:AE1C` / cable `AE11`; Sprime PM1 receiver `AC1C` / `AD8C`, cable `AC11` / `AC12` / `AC13`.
+
+Collection `FFA0:0001`, feature report `0x05`, command `0x15`, 32-byte request. Reply byte 9 is the level (0 means 100), byte 10 charging, byte 11 full (Sprime), byte 12 online. Only this read is sent. **Unverified in this app.**
+
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)

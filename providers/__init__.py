@@ -1,5 +1,10 @@
 from .base import DeviceStatus, Provider  # noqa: F401
 from .aula import AulaProvider  # noqa: F401
+from .ninjutso_sprime import NinjutsoSprimeProvider  # noqa: F401
+from .moondrop import MoondropProvider  # noqa: F401
+from .machenike import MachenikeProvider  # noqa: F401
+from .arbiter import ArbiterProvider  # noqa: F401
+from .areson import AresonProvider  # noqa: F401
 from .alienware import AlienwareProvider  # noqa: F401
 from .barracuda import BarracudaProvider  # noqa: F401
 from .barracuda_x import BarracudaXProvider  # noqa: F401
