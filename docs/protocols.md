@@ -386,9 +386,9 @@ The first data byte is the level (0-100) or the charging flag. The cable is
 queried first when both connections are present, so charging follows the
 cable; the receiver reports the same level wirelessly. The source is
 OpenMouse-Project/mouse-protocol's Ninjutso codecs and driver, derived from the
-NinjaForce client; it is not marked hardware-verified there. Test build 1
-confirmed the wireless level; test build 2 adds the cable path and its
-charging state.
+NinjaForce client; it is not marked hardware-verified there. Tested by
+@Cynersi on both connections: the wireless level and the cable level matched
+NinjaForce, and the cable showed charging.
 
 ### NZXT Lift Elite Wireless (1e71:2101)
 
