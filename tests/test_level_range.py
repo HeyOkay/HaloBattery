@@ -115,6 +115,21 @@ class RefuseBadLevelsTests(unittest.TestCase):
     def test_an_empty_poll_is_fine(self):
         self.assertEqual(hb.refuse_bad_levels([]), [])
 
+    def test_a_fraction_inside_the_range_is_rounded_to_a_whole_percent(self):
+        for level, shown in ((50.4, 50), (50.6, 51), (0.2, 0), (99.7, 100), (100.0, 100)):
+            with self.subTest(level=level):
+                st = hb.refuse_bad_levels([mouse(level, charging=True)])[0]
+                self.assertEqual(st.level, shown)
+                self.assertIs(type(st.level), int)
+                self.assertEqual((st.key, st.name, st.charging), ("fake:1", "Fake Mouse", True))
+
+    def test_a_fraction_outside_the_range_is_still_refused(self):
+        for level in (-0.5, 100.5):
+            with self.subTest(level=level):
+                hb._refused_levels.clear()
+                with self.assertLogs(hb.log, "WARNING"):
+                    self.assertIsNone(hb.refuse_bad_levels([mouse(level)])[0].level)
+
 
 class PollPathTests(HideRenameTestCase):
     def setUp(self):
@@ -153,6 +168,33 @@ class PollPathTests(HideRenameTestCase):
         with self.assertLogs(hb.log, "WARNING"):
             app._bt_update([buds])
         self.assertEqual([(s.key, s.level) for s in app.bt_cache], [("bt:AABBCCDDEEFF", None)])
+
+    def test_the_one_shot_bluetooth_fallback_is_checked_too(self):
+        # no watcher: bt_loop polls once itself and must hand the result to the same check
+        app = self.app([], bluetooth=True)
+        buds = DeviceStatus("bt:AABBCCDDEEFF", "Buds", 200, False, True, "bluetooth",
+                            kind="headset")
+
+        class OneShot:
+            def poll(self):
+                return [buds]
+
+        class StopAfterFirstWait:                    # bt_loop waits here after each round
+            def wait(self, timeout=None):
+                app.stop_evt.set()
+
+            def clear(self):
+                pass
+
+        app.bt = OneShot()
+        app.bt_watch = None
+        app.bt_watch_failed = True                   # the watcher could not run
+        app.stop_evt = threading.Event()
+        app.bt_wake = StopAfterFirstWait()
+        with self.assertLogs(hb.log, "WARNING"):
+            app.bt_loop()
+        self.assertEqual([(s.key, s.level) for s in app.bt_cache], [("bt:AABBCCDDEEFF", None)])
+        self.assertTrue(app.bt_fresh.is_set())
 
 
 if __name__ == "__main__":

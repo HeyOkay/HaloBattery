@@ -1033,11 +1033,16 @@ def refuse_bad_levels(results: List[DeviceStatus]) -> List[DeviceStatus]:
     percentage as if it were real. A level that is not a number from 0 to 100 is
     refused here for every provider: the device keeps its icon with the level unknown,
     which is what a provider reports when it has no reading. Logged once per device and
-    value, not on every poll."""
+    value, not on every poll.
+
+    DeviceStatus.level is a whole number. A fraction inside the range is a real reading,
+    so it is rounded to the nearest percent instead of refused."""
     out: List[DeviceStatus] = []
     for st in results:
         if st.level is None or level_in_range(st.level):
             _refused_levels.pop(st.key, None)
+            if isinstance(st.level, float):
+                st = replace(st, level=int(round(st.level)))
             out.append(st)
             continue
         if _refused_levels.get(st.key) != repr(st.level):   # repr: NaN is not equal to itself
@@ -2283,10 +2288,7 @@ class App:
                     log.exception("bluetooth")
                     res = []
                 log.info("bluetooth: %d device(s) in %.1f s", len(res), time.time() - t0)
-                if self.cfg["bluetooth"]:
-                    self.bt_cache = refuse_bad_levels(res)
-                self.bt_fresh.set()
-                self.wake.bluetooth()           # show the result right away
+                self._bt_update(res)            # same path as the watcher: checked, then shown
             else:
                 self.bt_cache = []
                 self.bt_fresh.set()
