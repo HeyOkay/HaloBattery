@@ -15,7 +15,7 @@ from PIL import Image
 
 from . import svg_glyph as _svg
 
-PREVIEW_VERSION = 'iconify-small-preview-v1'
+PREVIEW_VERSION = 'iconify-small-preview-v2'
 RASTER_SIZES = frozenset((128,256,512))
 
 
@@ -67,7 +67,7 @@ class PreviewGlyph:
 
 
 def _sized(raw,raster_size,size,mode):
-    image=Image.frombytes(mode,(raster_size,raster_size),raw)
+    image=_svg.align_glyph(Image.frombytes(mode,(raster_size,raster_size),raw))
     image=image.resize((size,size),Image.Resampling.BOX if size<raster_size else Image.Resampling.LANCZOS)
     coverage=image.getchannel('A') if mode=='RGBA' else image
     pixels=coverage.load()
@@ -120,7 +120,7 @@ def prepare_preview(svg,*,raster_size=128,rasterizer=None):
         raw=coverage.tobytes()
         rgba=master.tobytes() if colored else None
         light_raw=light.tobytes() if light is not None else None
-        identity='\0'.join((PREVIEW_VERSION,_svg.RENDERER_VERSION,str(raster_size),mode)).encode('ascii')
+        identity='\0'.join((PREVIEW_VERSION,_svg.RENDERER_VERSION,_svg.PLACEMENT_VERSION,str(raster_size),mode)).encode('ascii')
         digest=hashlib.sha256(identity+b'\0'+(rgba if colored else raw)+(light_raw or b'')).hexdigest()
         return PreviewGlyph(raster_size,digest,raw,rgba,light_raw)
     except _svg.SvgGlyphError:

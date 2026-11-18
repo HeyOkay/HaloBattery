@@ -13,7 +13,9 @@ internal sealed class CardView : UserControl
     private readonly Border frame = new();
     // Подсветка рамки под курсором (как Reveal в Windows 10): отдельный слой поверх рамки, ничего не меняет в раскладке
     // и не мешает эффекту наведения - это прозрачная рамка той же формы с радиальным градиентом вокруг курсора.
-    private readonly RadialGradientBrush spot = new() { MappingMode = BrushMappingMode.Absolute, RadiusX = 93, RadiusY = 93, Center = new Windows.Foundation.Point(-1000, -1000), GradientOrigin = new Windows.Foundation.Point(-1000, -1000) };
+    internal const double SpotlightRadius = 93;
+    internal Windows.Foundation.Point? SpotlightPosition { get; private set; }
+    private readonly RadialGradientBrush spot = new() { MappingMode = BrushMappingMode.Absolute, RadiusX = SpotlightRadius, RadiusY = SpotlightRadius, Center = new Windows.Foundation.Point(-1000, -1000), GradientOrigin = new Windows.Foundation.Point(-1000, -1000) };
     private readonly Border glow = new() { CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), IsHitTestVisible = false };
     internal const double ChevronSpace = 40; // стрелка 32 + отступ 8 - столько резервируют карточки без раскрытия
     private const double Duration = 300;
@@ -112,7 +114,11 @@ internal sealed class CardView : UserControl
         bodyCanvas.Children.Add(divider);
         bodyHost.Children.Add(bodyCanvas);
         bodyHost.Clip = clip;
-        SizeChanged += (_, e) => divider.Width = Math.Max(0, e.NewSize.Width - 2);
+        SizeChanged += (_, e) =>
+        {
+            divider.Width = Math.Max(0, e.NewSize.Width - 2);
+            ui.InvalidateCardSpotlightGeometry();
+        };
         divider.SizeChanged += (_, _) => { if (expanded && tick is null) SetBodyHeight(FullHeight); };
         var stack = new StackPanel();
         stack.Children.Add(head);
@@ -135,11 +141,14 @@ internal sealed class CardView : UserControl
     }
 
     // Позиция курсора относительно карточки; null - курсор ушёл из окна.
-    public void SetSpotlight(Windows.Foundation.Point? at)
+    public bool SetSpotlight(Windows.Foundation.Point? at)
     {
+        if (SpotlightPosition == at) return false;
+        SpotlightPosition = at;
         var p = at ?? new Windows.Foundation.Point(-1000, -1000);
         spot.Center = p;
         spot.GradientOrigin = p;
+        return true;
     }
 
     // Строка под заголовком на всю ширину текста и действия (например, полоса занятого места до правого края «N ГБ из 40»).

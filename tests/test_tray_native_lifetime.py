@@ -296,8 +296,13 @@ class NativeTrayLifetimeTests(unittest.TestCase):
         self.assertEqual(owner._state[9], 24)
         self.assertTrue(self.icon._icon_valid)
         self.assertEqual(len(self.icon._hb_handles), 1)
-        self.assertEqual(self.notify.call_args.args[0],
+        image_calls = [call for call in self.notify.call_args_list
+                       if call.args[1].uFlags & self.win32.NIF_ICON]
+        self.assertEqual(image_calls[-1].args[0],
                          self.win32.NIM_MODIFY if visible else self.win32.NIM_ADD)
+        if not visible:
+            self.assertEqual(self.notify.call_args.args[1].uFlags, self.win32.NIF_TIP)
+            self.assertEqual(self.notify.call_args.args[1].szTip, self.icon.title)
         self.assertTrue({h for _, h in old_handles.values()} <= self.destroyed)
         self.assertNotIn(self.icon._icon_handle, self.destroyed)
 

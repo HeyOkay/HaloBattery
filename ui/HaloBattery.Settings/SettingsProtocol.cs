@@ -98,30 +98,105 @@ public sealed class SettingsBridge : IDisposable
     private string session="";
     private bool disposed;
     private bool fixture;
+    internal bool FixtureMode=>fixture;
     public List<string> FixtureCommands { get; } = new();
 
-    public void Attach(MainWindow owner)
+    private string? fixturePath;
+    private bool initialized;
+    private sealed record FlushBarrier(TaskCompletionSource<bool> Completion);
+
+    // The splash can be shown while the real model arrives over this handshake.
+    public async Task<UiState> InitializeAsync()
     {
-        window=owner;
-        owner.Closed+=(_,_)=>Dispose();
+        if(initialized) throw new InvalidOperationException("Settings bridge already initialized.");
         var args=Environment.GetCommandLineArgs();
         var at=Array.IndexOf(args,"--fixture-state");
         if(at>=0 && at+1<args.Length)
         {
             fixture=true;
-            var path=Path.GetFullPath(args[at+1]);
-            if(new FileInfo(path).Length>1024*1024) throw new InvalidDataException("Fixture exceeds protocol limit");
-            var state=JsonSerializer.Deserialize<UiState>(File.ReadAllText(path,Encoding.UTF8),Json)
-                ?? throw new InvalidDataException("Invalid fixture state");
-            owner.ApplyState(state);
-            owner.StartFixtureVerification(path);
-            return;
+            fixturePath=Path.GetFullPath(args[at+1]);
+            var state=await Task.Run(()=>
+            {
+                if(new FileInfo(fixturePath).Length>1024*1024) throw new InvalidDataException("Fixture exceeds protocol limit");
+                return JsonSerializer.Deserialize<UiState>(File.ReadAllText(fixturePath,Encoding.UTF8),Json)
+                    ?? throw new InvalidDataException("Invalid fixture state");
+            });
+            initialized=true;
+            return state;
         }
         input=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false,true));
         output=new StreamWriter(Console.OpenStandardOutput(),new UTF8Encoding(false)) { AutoFlush=false };
         _=Task.Run(WriteLoop);
-        _=Task.Run(ReadLoop);
         Enqueue(new { type="hello",protocol=1,uiVersion="1" });
+        using var startup=CancellationTokenSource.CreateLinkedTokenSource(cancel.Token);
+        startup.CancelAfter(TimeSpan.FromSeconds(12));
+        while(true)
+        {
+            var line=await input.ReadLineAsync(startup.Token);
+            if(line is null) throw new EndOfStreamException("Settings backend closed before initial state.");
+            if(Encoding.UTF8.GetByteCount(line)>4*1024*1024) throw new InvalidDataException("Oversized settings message");
+            using var document=JsonDocument.Parse(line,new JsonDocumentOptions {MaxDepth=32});
+            var message=document.RootElement;
+            switch(message.GetProperty("type").GetString())
+            {
+                case "welcome":
+                    if(message.GetProperty("protocol").GetInt32()!=1) throw new InvalidDataException("Incompatible settings protocol");
+                    session=message.GetProperty("sessionId").GetString()??"";
+                    break;
+                case "state":
+                    var state=message.Deserialize<UiState>(Json)??throw new InvalidDataException("Missing initial state");
+                    if(state.Protocol!=1 || session.Length==0 || state.SessionId!=session) throw new InvalidDataException("Settings session mismatch");
+                    lastRevision=state.Revision;
+                    initialized=true;
+                    return state;
+                case "shutdown": throw new EndOfStreamException("Settings backend shut down during initialization.");
+                default: throw new InvalidDataException("Unexpected initial settings message");
+            }
+        }
+    }
+
+    public void Attach(MainWindow owner)
+    {
+        if(!initialized || window is not null) throw new InvalidOperationException("Invalid settings bridge attachment.");
+        window=owner;
+        owner.Closed+=(_,_)=>Dispose();
+        if(fixture)
+        {
+            owner.StartFixtureVerification(fixturePath!);
+            return;
+        }
+        _=Task.Run(ReadLoop);
+    }
+
+    internal void SendVisibility(bool visible,long? requestId=null)
+    {
+        if(!fixture)
+        {
+            if(requestId is {} id)Enqueue(new {type="visibility",visible,requestId=id});
+            else Enqueue(new {type="visibility",visible});
+        }
+    }
+
+    internal void SendClosing()
+    {
+        if(!fixture)Enqueue(new {type="closing"});
+    }
+
+    internal async Task FlushAsync()
+    {
+        if(fixture || disposed)return;
+        var drained=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancel.Token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(2));
+        try
+        {
+            // A barrier in the same queue proves every earlier edit reached the
+            // pipe before Dispose cancels the writer on native Window.Closed.
+            await outgoing.Writer.WriteAsync(new FlushBarrier(drained),deadline.Token);
+            await drained.Task.WaitAsync(deadline.Token);
+        }
+        catch(Exception error) when(error is OperationCanceledException or ChannelClosedException)
+        { System.Diagnostics.Debug.WriteLine(error); }
     }
 
     public long SendCommand(string name,object args)
@@ -164,6 +239,12 @@ public sealed class SettingsBridge : IDisposable
         {
             await foreach(var message in outgoing.Reader.ReadAllAsync(cancel.Token))
             {
+                if(message is FlushBarrier barrier)
+                {
+                    await output!.FlushAsync(cancel.Token);
+                    barrier.Completion.TrySetResult(true);
+                    continue;
+                }
                 await output!.WriteLineAsync(JsonSerializer.Serialize(message,Json));
                 await output.FlushAsync(cancel.Token);
             }
@@ -210,6 +291,12 @@ public sealed class SettingsBridge : IDisposable
                     lastRevision=state.Revision;
                     window.ApplyState(state);
                     break;
+                case "show":
+                    var restore=message.TryGetProperty("restoreView",out var restoreView) && restoreView.ValueKind==JsonValueKind.True;
+                    window.ShowSettingsWindow(restore?null:message.GetProperty("page").GetString(),
+                        !restore && message.TryGetProperty("deviceKey",out var showKey) && showKey.ValueKind==JsonValueKind.String?showKey.GetString():null,
+                        message.TryGetProperty("requestId",out var requestId) && requestId.ValueKind==JsonValueKind.Number && requestId.TryGetInt64(out var showId)?showId:null);
+                    break;
                 case "navigate":
                     window.NavigateFromBackend(message.GetProperty("page").GetString() ?? "general",
                         message.TryGetProperty("deviceKey",out var key) && key.ValueKind==JsonValueKind.String?key.GetString():null);
@@ -229,7 +316,7 @@ public sealed class SettingsBridge : IDisposable
                     if(!message.GetProperty("ok").GetBoolean())
                         window.ShowError(message.TryGetProperty("message",out var error)?error.GetString() ?? "": "Could not apply settings");
                     break;
-                case "shutdown": window.Close(); break;
+                case "shutdown": _=window.ShutdownSettingsWindowAsync(); break;
                 default: throw new InvalidDataException("Unknown settings message");
             }
         }
@@ -240,7 +327,7 @@ public sealed class SettingsBridge : IDisposable
     private void Disconnect()
     {
         if(disposed) return;
-        window?.DispatcherQueue.TryEnqueue(()=> { if(!disposed) window.Close(); });
+        window?.DispatcherQueue.TryEnqueue(()=> { if(!disposed) _=window.ShutdownSettingsWindowAsync(); });
     }
 
     public void Dispose()

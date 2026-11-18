@@ -18,8 +18,8 @@ The low battery notification fires once, and again only after the device has bee
 
 ## Tray menu
 
-Right-click a device icon for **Device settings…**, **Refresh now**, **Settings…**,
-**Diagnostics…** and **Exit**, plus an update action when a release is available.
+Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
+and **Exit**, plus an update action when a release is available.
 Double-click an icon to open settings for that exact device, even when several
 devices have the same name. Device customization and app preferences are in the
 settings window.
@@ -27,6 +27,21 @@ settings window.
 The menu follows the Windows light or dark app theme and display scale. If it
 does not work on your PC, set `"fluent_menu": false` in
 `%APPDATA%\HaloBattery\config.json` to use the classic Windows menu.
+
+## Windows tray visibility
+
+All device icons share one Windows visibility preference per executable path.
+Use the HaloBattery switch under **Taskbar → Other system tray icons** to choose
+the taskbar or hidden-icons flyout for the whole application. Per-device hiding
+remains available on the Devices page in HaloBattery.
+
+The packaged app migrates its old per-device Windows records after creating the
+shared entry. It backs up removed values to `tray-history-backup-*.json` in the
+app's data folder and preserves the existing shared preference. Cleanup matches
+only the current executable's exact path, so installed and portable copies remain
+separate. Source launches never clean shared Python executable records. Explorer
+can retain old rows in memory until the next Windows sign-in; the app does not
+restart Explorer or clear other applications' tray history.
 
 ## Settings
 
@@ -60,8 +75,12 @@ development on a machine with the matching shared runtimes already installed.
 `scripts/build_exe.bat` and both release workflows include this publish step
 before freezing Python. No SDK or shared runtime installer is run by the script.
 
-Open **Settings…** from the tray menu. Changes apply immediately and are saved;
-there is no separate Save button. Settings remain available when no devices are
+Open **Settings** from the tray menu. Changes apply immediately and are saved;
+there is no separate Save button. Position, size, monitor and the navigation
+panel state are restored before the window is shown. Closing Settings hides
+the ready window; reopening keeps its current page and scroll position.
+Window preferences are stored natively in `settings-window.json` inside the
+active installed or portable profile. Settings remain available when no devices are
 connected. The interface keeps seven languages: English, Spanish,
 French, Japanese, Russian, Simplified Chinese and Traditional Chinese.
 

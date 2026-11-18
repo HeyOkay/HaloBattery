@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using HaloBattery.Settings.Controls;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 namespace HaloBattery.Settings;
@@ -20,15 +21,52 @@ public partial class App : Application
   try{InitializeComponent();LogStartup("Initialized XAML resources");}
   catch(Exception error){LogStartup("InitializeComponent failed",error);throw;}
  }
- protected override void OnLaunched(LaunchActivatedEventArgs args)
+ protected override async void OnLaunched(LaunchActivatedEventArgs args)
  {
+  var bridge=new SettingsBridge();
   try
   {
-   LogStartup("Launching native window");
-   var bridge=new SettingsBridge();window=new MainWindow(bridge);bridge.Attach(window);window.Activate();
+   ScrollBarAppearance.Install(Resources);
+   // Restore geometry before showing the lightweight splash. Backend startup
+   // continues in parallel; the settings tree is built behind the same HWND.
+   var initialState=bridge.InitializeAsync();
+   var directory=InitialWindowStateDirectory();
+   UiState? state=null;
+   if(directory is null) { state=await initialState;directory=Path.GetFullPath(state.DataDir); }
+   var saved=await new WindowStateStore(directory).LoadAsync();
+   window=new MainWindow(bridge,UiState.Empty,directory,saved);
+   window.Closed+=(_,_)=>bridge.Dispose();
+   window.ShowStartupSplash();
+   state??=await initialState;
+   if(window.IsClosingSettings) return;
+   window.ApplyState(state);
+   bridge.Attach(window);
+   if(bridge.FixtureMode)window.ShowSettingsWindow(state.Page,state.SelectedDeviceKey);
+   await window.CompleteStartupAsync();
    LogStartup("Activated native window");
   }
-  catch(Exception error){LogStartup("Window launch failed",error);throw;}
+  catch(Exception error)
+  {
+   LogStartup("Window launch failed",error);
+   bridge.Dispose();
+   if(window is not null)await window.ShutdownSettingsWindowAsync();
+   Exit();
+  }
+ }
+ private static string? InitialWindowStateDirectory()
+ {
+  var args=Environment.GetCommandLineArgs();
+  string Value(string name){var at=Array.IndexOf(args,name);return at>=0&&at+1<args.Length?args[at+1]:"";}
+  var fixture=Value("--fixture-state");
+  if(fixture.Length>0)
+  {
+   // Fixture JSON contains illustrative paths; it must never touch a profile.
+   var output=Value("--verify-dir");
+   return output.Length>0?Path.GetFullPath(output):Path.Combine(
+    Path.GetDirectoryName(Path.GetFullPath(fixture))!,"native-window-state-"+Environment.ProcessId);
+  }
+  var profile=Value("--data-dir");
+  return profile.Length>0?Path.GetFullPath(profile):null;
  }
  private static void LogStartup(string stage,Exception? error=null)
  {

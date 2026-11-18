@@ -3,7 +3,7 @@ namespace HaloBattery.Settings;
 // Raw wheel units, independent of frame rate, pointer hardware and WinUI.
 internal sealed class OverscrollGesture
 {
-    internal const int Threshold = 600;
+    internal const int Threshold = 720;
     internal const int IdleMilliseconds = 375;
     internal const int LatchMilliseconds = 350;
     internal const int ResetMilliseconds = 90;
