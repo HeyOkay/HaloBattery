@@ -17,12 +17,19 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      signpath_test:
+        description: Build and sign TEST artifacts with the self-signed certificate
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || !inputs.signpath_test
     runs-on: windows-latest
     permissions:
       contents: read
@@ -162,6 +169,17 @@ jobs:
           path: release-assets/
           if-no-files-found: error
           retention-days: 7
+
+  signpath_test:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/signpath-test.yml
+    with:
+      confirm_test_signing: true
+    secrets:
+      SIGNPATH_TEST_API_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
 
   publish:
     # A fresh runner receives files only. No project checkout, install or build
