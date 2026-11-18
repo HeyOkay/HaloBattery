@@ -282,8 +282,6 @@ class _Receiver(threading.Thread):
                 kind = "other"
         self.counts[kind] = self.counts.get(kind, 0) + 1
         now = time.time()
-        if kind == "status":
-            self.settled.set()
         with self._lock:
             if kind == "status":
                 connected = frame[44] if len(frame) > 44 else 0
@@ -312,6 +310,9 @@ class _Receiver(threading.Thread):
                 # rather than resetting it on every status tick
                 for name, info in identity_records(frame).items():
                     self.info.setdefault(name, {}).update(info)
+        if kind == "status":
+            # only now: the poll that waits on this reads the state right after it wakes
+            self.settled.set()
 
     # --- api -------------------------------------------------------------------
     def snapshot(self):
@@ -351,8 +352,8 @@ class DjiProvider(Provider):
             return True
         if not receiver_present():
             return False
-        self._started = True
         self._receiver.start()
+        self._started = True            # after start(): if the thread cannot start, ask again
         # One time only: give the reader a moment to open the receiver and take its
         # first status push (~2 Hz), so the icon does not wait for the next poll.
         self._receiver.settled.wait(FIRST_PUSH_WAIT_SECONDS)

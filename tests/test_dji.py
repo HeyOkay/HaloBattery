@@ -258,6 +258,16 @@ class LazyStartTests(unittest.TestCase):
             provider.poll()
         self.start.assert_called_once()
 
+    def test_a_reader_that_could_not_start_is_tried_again(self):
+        provider = dji.DjiProvider()
+        self.start.side_effect = RuntimeError("can't start new thread")
+        with self.present(True):
+            with self.assertRaises(RuntimeError):
+                provider._start_if_present()
+            self.start.side_effect = None
+            self.assertTrue(provider._start_if_present())
+        self.assertEqual(2, self.start.call_count)
+
     def test_readings_flow_once_started(self):
         provider = dji.DjiProvider()
         provider._receiver._absorb(bytes.fromhex(IDENTITY))
@@ -291,6 +301,21 @@ class SettledTests(unittest.TestCase):
         self.assertFalse(rx.settled.is_set())
         rx._absorb(bytes.fromhex(STATUS))
         self.assertTrue(rx.settled.is_set())
+
+    def test_the_reading_is_already_there_when_it_settles(self):
+        # the poll that waits on `settled` takes a snapshot the moment it wakes, so the
+        # event may only be set once the first status is in the state
+        rx = dji._Receiver()
+        seen = []
+
+        class Recording(type(rx.settled)):
+            def set(self):
+                seen.append(sorted(rx.snapshot()[0]))
+                super().set()
+
+        rx.settled = Recording()
+        rx._absorb(bytes.fromhex(STATUS))
+        self.assertEqual([["tx1", "tx2"]], seen)
 
     def test_a_failed_open_settles(self):
         rx = dji._Receiver()
