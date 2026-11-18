@@ -1,6 +1,10 @@
 """Japanese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "startup.hid_unavailable": 'Windows が HID サポートを読み込めませんでした。USB と 2.4 GHz 接続のバッテリー残量を取得できません。Bluetooth と設定は引き続き利用できます。詳細は診断を開いて確認してください。',
+    "state.poll_unavailable": 'バッテリー情報を取得できません',
+    "state.poll_stale": '{level}%（前回の値・バッテリー情報を取得できません）',
+    "settings.open_failed": "設定を開けませんでした。基本設定はトレイアイコンのメニューの「{preferences}」から変更できます。",
     "preferences.icon_style": "アイコンのスタイル",
     "icon_style.outline": "輪郭",
     "icon_style.filled": "塗りつぶし",
@@ -287,7 +291,8 @@ MESSAGES = {
     'settings.ring_thin': '細い',
     'settings.ring_classic': '従来（太い）',
     "settings.iconify_title": "Iconify アイコンカタログ",
-    'settings.iconify_hint': '対応するコレクションからアイコンを選べます。ギャラリーのダウンロードは設定を閉じると消去されます。適用したアイコンはオフラインでも使えます。',
+    "settings.iconify_saved_unavailable": "保存済みアイコンを検証できませんでした。選択は保持されていますが、標準アイコンを表示しています。「設定 > デバイス」で再選択するか、標準に戻してください。",
+    "settings.iconify_hint": "検索時に api.iconify.design からアイコンをダウンロードします。設定を閉じるとギャラリーのキャッシュを消去します。適用したアイコンはオフラインでも使えます。",
     "settings.iconify_browse": "アイコンを探す",
     "settings.iconify_search": "アイコンを検索",
     "settings.iconify_search_button": "検索",

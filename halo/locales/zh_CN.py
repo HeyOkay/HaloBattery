@@ -1,6 +1,10 @@
 """Simplified Chinese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "startup.hid_unavailable": 'Windows 无法加载 HID 支持，无法读取通过 USB 和 2.4 GHz 连接的设备电量。蓝牙和设置仍然可用。请打开诊断查看详情。',
+    "state.poll_unavailable": '无法更新电量',
+    "state.poll_stale": '{level}%（上次读数；无法更新电量）',
+    "settings.open_failed": "无法打开设置。仍可通过托盘图标菜单中的“{preferences}”调整基本设置。",
     "preferences.icon_style": "图标样式",
     "icon_style.outline": "轮廓",
     "icon_style.filled": "填充",
@@ -287,7 +291,8 @@ MESSAGES = {
     'settings.ring_thin': '细',
     'settings.ring_classic': '经典（较粗）',
     "settings.iconify_title": "Iconify 图标目录",
-    'settings.iconify_hint': '从支持的图标集中选择图标。关闭设置后会清除图库下载缓存；已应用的图标仍可离线使用。',
+    "settings.iconify_saved_unavailable": "无法验证已保存的自定义图标。您的选择已保留，但暂时显示默认图标。请打开“设置 > 设备”重新选择，或恢复默认图标。",
+    "settings.iconify_hint": "搜索会从 api.iconify.design 下载图标。关闭设置后会清除图库缓存；已应用的图标可离线使用。",
     "settings.iconify_browse": "浏览图标",
     "settings.iconify_search": "搜索图标",
     "settings.iconify_search_button": "搜索",
