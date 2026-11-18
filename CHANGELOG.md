@@ -62,6 +62,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
+- **MCHOSE K99 V3** keyboard on its 2.4 GHz receiver (`3837:3033`), read with the
+  64-byte generic-desktop report (`55 03 00 38 38 ...` → `AA 03 00 38 ...`, level
+  at byte 8). On Windows the frame is sent behind hidapi's unnumbered-report `00`;
+  the first test build sent the bare 64-byte frame, so hidapi read `55` as a report
+  id and the keyboard never answered. Test build 2, unverified on hardware; the
+  charger byte is logged but its semantics are not documented.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is

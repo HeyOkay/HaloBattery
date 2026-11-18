@@ -50,10 +50,21 @@ KEY = "mchose_k99:3033"
 
 
 def make_request() -> bytes:
-    """The 64-byte K99 V3 battery query."""
+    """The 64-byte K99 V3 battery query, exactly as seen on the wire."""
     p = bytearray(REPORT_LEN)
     p[0:8] = bytes([REPORT_ID, CMD, 0x00, SUB, SUB, 0x00, 0x00, 0x00])
     return bytes(p)
+
+
+def wire_request() -> bytes:
+    """The same frame with hidapi's unnumbered-report id in front.
+
+    Windows hidapi interprets byte 0 as a report id; the K99 V3 frame's 0x55 is
+    the protocol magic, not a report id, so the frame must be sent behind a
+    leading 0x00.  The raw 64-byte form is kept as a fallback for hidapi builds
+    that write unnumbered reports directly.
+    """
+    return b"\x00" + make_request()
 
 
 def parse_reply(r) -> Optional[Tuple[int, int]]:
@@ -65,6 +76,8 @@ def parse_reply(r) -> Optional[Tuple[int, int]]:
     if not r or len(r) < LEVEL_AT + 1:
         return None
     b = bytes(r)
+    if len(b) >= REPORT_LEN + 1 and b[0] == 0x00 and b[1] == MAGIC:
+        b = b[1:]
     if b[0] != MAGIC or b[1] != CMD or b[2] != 0x00 or b[3] != SUB:
         return None
     level = b[LEVEL_AT]
@@ -134,15 +147,20 @@ class MchoseK99Provider(Provider):
                 dev.set_nonblocking(True)
             except Exception:
                 pass
-            for _ in range(ATTEMPTS):
+            for attempt in range(ATTEMPTS):
+                # The K99 V3 frame has no numbered report; Windows hidapi expects
+                # an unnumbered-report id (0x00) in front, while the raw 64-byte
+                # form is kept as a fallback for hidapi builds that write the
+                # report directly.
+                request = (wire_request(), make_request())[attempt % 2]
                 try:
-                    dev.write(make_request())
+                    dev.write(request)
                 except (OSError, ValueError) as e:
-                    self._diag.append(f"  write: {e}")
-                    return None
+                    self._diag.append(f"  write ({len(request)}B): {e}")
+                    continue
                 deadline = time.time() + ATTEMPT_GAP
                 while time.time() < deadline:
-                    r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
+                    r = dev.read(REPORT_LEN + 1, READ_TIMEOUT_MS)
                     if not r:
                         continue
                     self._diag.append(f"  reply: {hexdump(r, 16)}")

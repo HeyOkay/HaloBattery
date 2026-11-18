@@ -19,10 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import mchose_k99 as K  # noqa: E402
 
 
-def reply(level=83, status=0x00):
+def reply(level=83, status=0x00, report_id=False):
     r = [0x00] * 64
     r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[8] = 0xAA, 0x03, 0x00, 0x38, 0x00, 0x00, status, level
-    return r
+    return ([0x00] + r) if report_id else r
 
 
 def entries():
@@ -61,10 +61,15 @@ class ParseTests(unittest.TestCase):
         req = K.make_request()
         self.assertEqual(len(req), 64)
         self.assertEqual(list(req[:8]), [0x55, 0x03, 0x00, 0x38, 0x38, 0x00, 0x00, 0x00])
+        wire = K.wire_request()
+        self.assertEqual(len(wire), 65)
+        self.assertEqual(wire[0], 0x00)
+        self.assertEqual(wire[1:], req)
 
     def test_the_reply_echoes_the_command_and_reads_the_level(self):
         self.assertEqual(K.parse_reply(reply(83, 0x10)), (83, 0x10))
         self.assertEqual(K.parse_reply(reply(1, 0x00)), (1, 0x00))
+        self.assertEqual(K.parse_reply(reply(41, 0x10, report_id=True)), (41, 0x10))
 
     def test_a_foreign_reply_or_bad_level_is_refused(self):
         bad = reply()
@@ -94,13 +99,13 @@ class PollTests(unittest.TestCase):
         return p.poll(), p.diagnostics()
 
     def test_the_keyboard_is_read_and_the_charger_is_unknown(self):
-        fake = FakeDev([reply(83, 0x10)])
+        fake = FakeDev([reply(83, 0x10, report_id=True)])
         out, diag = self.poll(fake)
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.charging_known, s.kind)
                           for s in out],
                          [("mchose_k99:3033", "MCHOSE K99 V3", 83, False, False, "keyboard")])
         self.assertEqual(len(fake.sent), 1)
-        self.assertEqual(len(fake.sent[0]), 64)
+        self.assertEqual(len(fake.sent[0]), 65)
         self.assertTrue(any("status=0x10" in line for line in diag))
 
     def test_a_status_push_before_the_answer_is_skipped(self):
