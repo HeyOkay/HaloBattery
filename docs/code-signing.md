@@ -1,10 +1,10 @@
 # Code signing policy
 
-HaloBattery applied to the SignPath Foundation. On 17 November 2026 SignPath
-reported preliminary alignment with its general requirements and began security
-and reputation review. Final eligibility, an organization and a test certificate
-remain pending; there is no active signing integration or production certificate.
-This policy does not identify the current binaries as signed.
+SignPath Foundation approved HaloBattery on 18 November 2026 and created the
+project organization with a self-signed test certificate. Production signing
+is not enabled. TEST Actions integration is prepared in a separate follow-up;
+this policy does not claim a verified live signing run or identify any
+published binaries as signed.
 
 ## Responsibilities
 
