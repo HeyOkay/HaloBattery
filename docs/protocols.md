@@ -371,8 +371,8 @@ Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used
 
 ### Ninjutso Sora V3 (093a:eb02)
 
-**Connection:** 2.4 GHz receiver `093a:eb02`; the vendor collections are on
-usage page `0xFF01` (main) and `0xFF00` (secure).
+**Connection:** 2.4 GHz receiver `093a:eb02` or USB cable `093a:e010`; the
+vendor collections are on usage page `0xFF01` (main) and `0xFF00` (secure).
 
 The Sora V3 uses the current NinjaForce WebHID protocol, not the Sora V2
 report-5 protocol. Battery and charging are two separate read commands on
@@ -382,10 +382,13 @@ feature report 6, with a 15-byte packet:
     request  11 00 00 01 00 00 00 ...   charging
     reply    06 <cmd> 00 00 01 00 01 00 <value> ...
 
-The first data byte is the level (0-100) or the charging flag. The source is
+The first data byte is the level (0-100) or the charging flag. The cable is
+queried first when both connections are present, so charging follows the
+cable; the receiver reports the same level wirelessly. The source is
 OpenMouse-Project/mouse-protocol's Ninjutso codecs and driver, derived from the
-NinjaForce client; it is not marked hardware-verified there, so this build is
-test build 1 pending the reporter's result.
+NinjaForce client; it is not marked hardware-verified there. Test build 1
+confirmed the wireless level; test build 2 adds the cable path and its
+charging state.
 
 ### NZXT Lift Elite Wireless (1e71:2101)
 

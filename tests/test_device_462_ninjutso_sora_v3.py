@@ -120,6 +120,18 @@ class PollTests(unittest.TestCase):
         self.assertFalse(got.online)
         self.assertTrue(any("no answer" in line for line in self.diag))
 
+    def test_the_cable_is_tried_before_the_receiver_when_both_are_present(self):
+        N.hidlist.enumerate = lambda vid=0: (
+            [e for e in entries() if e["vendor_id"] == vid]
+            + [{"vendor_id": N.VID, "product_id": N.WIRED_PID, "interface_number": 2,
+                "usage_page": N.PAGE_MAIN, "usage": 1, "path": b"wired",
+                "product_string": "Ninjutso Sora V3"}])
+        got = self.poll({N.CMD_BATTERY: reply(N.CMD_BATTERY, 95),
+                         N.CMD_CHARGING: reply(N.CMD_CHARGING, 1)})
+        self.assertEqual((got.level, got.charging, got.charging_known), (95, True, True))
+        self.assertEqual(self.fake.path, b"wired")
+        self.assertTrue(any("e010" in line for line in self.diag))
+
     def test_the_main_collection_is_tried_first(self):
         got = self.poll({N.CMD_BATTERY: reply(N.CMD_BATTERY, 99),
                          N.CMD_CHARGING: reply(N.CMD_CHARGING, 0)})

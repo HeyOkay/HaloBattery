@@ -1,4 +1,4 @@
-"""Ninjutso Sora V3 on its 2.4 GHz receiver (093a:eb02), #462.
+"""Ninjutso Sora V3 on its receiver (093a:eb02) or cable (093a:e010), #462.
 
 The Sora V3 uses the current NinjaForce WebHID protocol, not the older Sora V2
 report-5 protocol.  OpenMouse's Ninjutso implementation (derived from the
@@ -10,13 +10,13 @@ NinjaForce client) documents the current frame:
 
 Battery level is command 0x12 and charging is a separate command 0x11; both
 return their value in the first data byte (reply byte 8).  The receiver is
-2dc8-free: 093a:eb02 with the vendor collection on usage page 0xFF01 (0xFF00
-is the secure/control collection).  This is a read-only query pair; nothing is
-written or saved.
+093a:eb02 and the cable is 093a:e010; both expose the vendor collection on
+usage page 0xFF01 (0xFF00 is the secure/control collection).  The cable is
+queried first so a plugged-in mouse reports its charging state.  This is a
+read-only query pair; nothing is written or saved.
 
 The source is OpenMouse-Project/mouse-protocol, src/ninjutso and
-src/drivers/ninjutso, which credits NinjaForce's shipped WebHID client.  It is
-not marked hardware-verified there, so this build is test build 1.
+src/drivers/ninjutso, which credits NinjaForce's shipped WebHID client.
 """
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x093A
 RECEIVER_PID = 0xEB02
+WIRED_PID = 0xE010
 PAGE_MAIN = 0xFF01
 PAGE_SECURE = 0xFF00
 REPORT_ID = 0x06
@@ -79,14 +80,19 @@ def parse_value(reply, command: int) -> Optional[int]:
 
 
 def _candidate_paths(infos: List[dict]) -> List[dict]:
-    """The receiver's main and secure collections, main first."""
+    """The cable first, then the receiver; main collection before secure."""
     out = []
-    for page in (PAGE_MAIN, PAGE_SECURE):
-        for d in infos:
-            if (d.get("product_id") == RECEIVER_PID
-                    and d.get("usage_page") == page
-                    and d.get("usage") == 0x0001):
-                out.append(d)
+    seen = set()
+    for pid in (WIRED_PID, RECEIVER_PID):
+        for page in (PAGE_MAIN, PAGE_SECURE):
+            for d in infos:
+                path = d.get("path")
+                if (d.get("product_id") == pid
+                        and d.get("usage_page") == page
+                        and d.get("usage") == 0x0001
+                        and path not in seen):
+                    seen.add(path)
+                    out.append(d)
     return out
 
 
