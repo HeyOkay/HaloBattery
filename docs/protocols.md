@@ -291,18 +291,12 @@ The vendor collection (usage page 0xFF01; the sibling 0xFF0B never answers): fea
 
 **Connection:** 2.4 GHz receiver (3837:3033, "MCHOSE K99 V3 2.4G"), generic-desktop HID collection `0x0001:0x0000` on interface 1.
 
-The K99 V3 is a different protocol from the K87/K99 legacy keyboard: a fixed 64-byte report on the generic-desktop collection, documented by arutkowski00/mchose-hid-bridge from the receiver and M HUB:
+The K99 V3 uses M HUB's **GLW func-config** read on the id-less 64-byte generic-desktop collection (usage `0x0001:0x0000`, with `0xFF31:0x0074` as the fallback that answers the same frames):
 
-    request  55 03 00 38 38 00 00 00 00 ...
-    reply    AA 03 00 38 ... <level at byte 8> ...
+    request  00 | 55 05 00 38 38 00 00 00 ...     read 56 bytes at offset 0
+    reply    AA 05 00 <checksum> 38 00 00 00 ...  payload starts at byte 8
 
-The reply echoes command `0x03` and sub-command `0x38`; there is no checksum, so that echo is the framing check. On Windows the bare 64-byte frame must be sent behind hidapi's unnumbered-report `00`; test build 1 sent the bare frame, so hidapi treated `55` as a report id and the keyboard never answered. Byte 6 is logged in Diagnostics, but its charge semantics are not documented, so the app reports the charger as unknown rather than inventing a state. **Test build 2 pending** on the reporter's K99 V3.
-
-### MCHOSE X9
-
-**Connection:** 2.4 GHz dongle (3837:6045, C-Media strings)
-
-MCHOSE's own web driver, M HUB (www.mchose.com.cn, `assets/main-DQZs6ZzX.js`, fetched 2026-11-17), lists the headset as `createAudioHidProduct({modelKey:"MCHOSE X9", vendorId:14391, productId:24645, protocolProfile:AUDIO_PROTOCOL_PROFILE.BLK})`. The only request sent is that BLK profile's `audio.blk.readBattery`: output report 0x55 with 63 data bytes, `65 01` and zeros. The reply on input report 0x55 carries the level in data byte 1 and the state in byte 2, decoded the way M HUB's `parseBatteryResponse` does it: 2 discharging, 3 charging, 4 full, 26 asleep (no level shown). Any other state, a level above 100 or a short reply is refused. The report lives on the vendor collection `ff90:0001`, the only one written to. Confirmed on an X9 on its dongle: `55 65 28 02`, which is 40 % and discharging, within 30 ms. On its cable the headset drops its radio link and the dongle stops answering. The headset then shows up as a second USB device, 3837:6044 "MCHOSE X9 HEADSET", which M HUB does not list, so nothing is written to it: a charging X9 keeps its last level greyed out for five minutes, like the other MCHOSE devices, and no charging state is shown.
+The request header is flag `0x55`, command `0x05`, reserved, checksum, size and little-endian offset; for a read with no payload the checksum is size + offset = `0x38`. The reply carries the same fields and its checksum covers size + offset + payload. The battery byte is **payload offset 32**: bit 7 is charging, bits 0-6 are the percentage. The earlier `55 03 00 38 38` query returned a different info frame (52 % in the reporter's diagnostics while M HUB showed 90 %), so it is not used. Protocol from [krisgfx9/Wireless-Device-Battery-Monitor PR #1957](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/pull/1957), recovered from M HUB's own web driver and confirmed on a G75 V2 on the same `3837:3033` receiver. **Test build 3 pending** on the reporter's K99 V3.
 
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 

@@ -1,9 +1,7 @@
-"""Tests for the MCHOSE K99 V3 reader, #458; no hardware needed.
+"""Tests for the MCHOSE K99 V3 GLW reader, #458; no hardware needed.
 
-The K99 V3 uses the 64-byte generic-desktop HID report on 3837:3033:
-request ``55 03 00 38 38 ...``; reply ``AA 03 00 38 ...`` with the level at
-byte 8.  The byte-6 status is logged but its charge semantics are not
-documented, so the reader reports the charger as unknown.
+Request ``00 | 55 05 00 38 38 ...``; reply ``AA 05 00 <checksum> 38 ...``
+with the battery byte at payload offset 32 (bit 7 charging, bits 0..6 level).
 
 Run from the repository root:
 
@@ -19,9 +17,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import mchose_k99 as K  # noqa: E402
 
 
-def reply(level=83, status=0x00, report_id=False):
+def reply(level=83, charging=False, report_id=False, size=56):
+    payload = [0x00] * size
+    if size > K.BATTERY_AT:
+        payload[K.BATTERY_AT] = (level | 0x80) if charging else level
     r = [0x00] * 64
-    r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[8] = 0xAA, 0x03, 0x00, 0x38, 0x00, 0x00, status, level
+    checksum = (size + 0 + 0 + 0 + sum(payload)) & 0xFF
+    r[0:8] = [0xAA, 0x05, 0x00, checksum, size, 0x00, 0x00, 0x00]
+    r[8:8 + size] = payload
     return ([0x00] + r) if report_id else r
 
 
@@ -51,36 +54,34 @@ class FakeDev:
         return len(data)
 
     def read(self, size, timeout_ms=0):
-        if not self.sent:
-            return []
         return self.replies.pop(0) if self.replies else []
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_request_is_the_k99_v3_battery_query(self):
+    def test_the_request_is_the_glw_func_config_read(self):
         req = K.make_request()
         self.assertEqual(len(req), 64)
-        self.assertEqual(list(req[:8]), [0x55, 0x03, 0x00, 0x38, 0x38, 0x00, 0x00, 0x00])
+        self.assertEqual(list(req[:8]), [0x55, 0x05, 0x00, 0x38, 0x38, 0x00, 0x00, 0x00])
         wire = K.wire_request()
         self.assertEqual(len(wire), 65)
         self.assertEqual(wire[0], 0x00)
         self.assertEqual(wire[1:], req)
 
-    def test_the_reply_echoes_the_command_and_reads_the_level(self):
-        self.assertEqual(K.parse_reply(reply(83, 0x10)), (83, 0x10))
-        self.assertEqual(K.parse_reply(reply(1, 0x00)), (1, 0x00))
-        self.assertEqual(K.parse_reply(reply(41, 0x10, report_id=True)), (41, 0x10))
+    def test_the_reply_checksum_and_battery_byte_are_read(self):
+        self.assertEqual(K.parse_reply(reply(90, False)), (90, False, 90))
+        self.assertEqual(K.parse_reply(reply(52, True)), (52, True, 0xB4))
+        self.assertEqual(K.parse_reply(reply(41, False, report_id=True)), (41, False, 41))
 
-    def test_a_foreign_reply_or_bad_level_is_refused(self):
+    def test_a_foreign_reply_bad_checksum_or_bad_level_is_refused(self):
         bad = reply()
         bad[0] = 0x55
         self.assertIsNone(K.parse_reply(bad))
         bad = reply()
-        bad[3] = 0x39
+        bad[3] ^= 0xFF
         self.assertIsNone(K.parse_reply(bad))
-        self.assertIsNone(K.parse_reply(reply(0)))
         self.assertIsNone(K.parse_reply(reply(101)))
         self.assertIsNone(K.parse_reply([]))
+        self.assertIsNone(K.parse_reply(reply(83, size=32)))
 
 
 class PollTests(unittest.TestCase):
@@ -98,18 +99,18 @@ class PollTests(unittest.TestCase):
         p = K.MchoseK99Provider()
         return p.poll(), p.diagnostics()
 
-    def test_the_keyboard_is_read_and_the_charger_is_unknown(self):
-        fake = FakeDev([reply(83, 0x10, report_id=True)])
+    def test_the_keyboard_is_read_with_charging(self):
+        fake = FakeDev([reply(90, charging=True, report_id=True)])
         out, diag = self.poll(fake)
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.charging_known, s.kind)
                           for s in out],
-                         [("mchose_k99:3033", "MCHOSE K99 V3", 83, False, False, "keyboard")])
+                         [("mchose_k99:3033", "MCHOSE K99 V3", 90, True, True, "keyboard")])
         self.assertEqual(len(fake.sent), 1)
         self.assertEqual(len(fake.sent[0]), 65)
-        self.assertTrue(any("status=0x10" in line for line in diag))
+        self.assertTrue(any("raw=da" in line for line in diag))
 
-    def test_a_status_push_before_the_answer_is_skipped(self):
-        fake = FakeDev([[0x55, 0x03, 0x00, 0x00], reply(77)])
+    def test_a_short_push_before_the_answer_is_skipped(self):
+        fake = FakeDev([[0x55, 0x05, 0x00, 0x00], reply(77)])
         out, _ = self.poll(fake)
         self.assertEqual(out[0].level, 77)
 

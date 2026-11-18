@@ -1,20 +1,23 @@
 """MCHOSE K99 V3 on its 2.4 GHz receiver (3837:3033), #458.
 
-The V3 does not use the 20-byte M HUB keyboard frame of the K87/K99 legacy.
-Its battery channel is the generic-desktop HID collection on interface 1
-(usage page 0x0001, usage 0x0000), with a fixed 64-byte report:
+The V3 uses M HUB's "GLW" func-config exchange on the id-less 64-byte
+generic-desktop collection (usage 0x0001:0x0000, with 0xFF31:0x0074 as the
+fallback collection that answers the same frames):
 
-    request  55 03 00 38 38 00 00 00 00 ...
-    reply    AA 03 00 38 ... <level at byte 8> ...
+    request  00 | 55 05 00 38 38 00 00 00 ...     read 56 bytes at offset 0
+    reply    AA 05 00 <checksum> 38 00 00 00 ...  payload starts at byte 8
 
-Protocol from arutkowski00/mchose-hid-bridge (MIT), recovered from the K99 V3
-receiver and its M HUB behaviour.  The reply echoes command 0x03 and sub-command
-0x38; a reply without that echo is not ours.  Byte 6 is recorded in diagnostics
-but its charge semantics are not documented, so the charger is reported as
-unknown rather than guessed.
+The request header is flag 0x55, command 0x05, reserved 0, checksum, size,
+offset (little endian), reserved.  For a read with no payload the checksum is
+size + offset = 0x38.  The reply header carries the same fields; its checksum
+covers size + offset + payload.  The battery byte is payload offset 32: bit 7
+is charging, bits 0..6 are the percentage.
 
-Only this one collection is opened, and only the read-only battery request is
-sent.
+This is the protocol from krisgfx9/Wireless-Device-Battery-Monitor PR #1957,
+recovered from M HUB's own web driver and confirmed on a G75 V2 on the same
+3837:3033 receiver.  It replaces the earlier 55 03 00 38 38 request, which
+returned a different info frame (52% in the reporter's diagnostics while M HUB
+showed 90% and no charging state).  Only read-only frames are sent.
 """
 from __future__ import annotations
 
@@ -32,13 +35,17 @@ from .base import DeviceStatus, Provider, hexdump, log
 VID = 0x3837
 PID = 0x3033
 PAGE, USAGE = 0x0001, 0x0000
-REPORT_ID = 0x55
+ALT_PAGE, ALT_USAGE = 0xFF31, 0x0074
+
+REPORT_ID = 0x00
 REPORT_LEN = 64
+FLAG = 0x55
 MAGIC = 0xAA
-CMD = 0x03
-SUB = 0x38
-LEVEL_AT = 8
-STATUS_AT = 6
+CMD = 0x05
+SIZE = 56
+PAYLOAD_AT = 8
+BATTERY_AT = 32
+CHECKSUM_AT = 3
 
 ATTEMPTS = 3
 READ_TIMEOUT_MS = 250
@@ -49,41 +56,44 @@ NAME = "MCHOSE K99 V3"
 KEY = "mchose_k99:3033"
 
 
-def make_request() -> bytes:
-    """The 64-byte K99 V3 battery query, exactly as seen on the wire."""
+def _body() -> bytes:
+    """The 64-byte GLW frame without hidapi's report id byte."""
     p = bytearray(REPORT_LEN)
-    p[0:8] = bytes([REPORT_ID, CMD, 0x00, SUB, SUB, 0x00, 0x00, 0x00])
+    p[0:8] = bytes([FLAG, CMD, 0x00, SIZE, SIZE, 0x00, 0x00, 0x00])
     return bytes(p)
 
 
+def make_request() -> bytes:
+    """The 64-byte GLW request body."""
+    return _body()
+
+
 def wire_request() -> bytes:
-    """The same frame with hidapi's unnumbered-report id in front.
-
-    Windows hidapi interprets byte 0 as a report id; the K99 V3 frame's 0x55 is
-    the protocol magic, not a report id, so the frame must be sent behind a
-    leading 0x00.  The raw 64-byte form is kept as a fallback for hidapi builds
-    that write unnumbered reports directly.
-    """
-    return b"\x00" + make_request()
+    """The frame as hidapi expects it: report id 0, then the 64-byte body."""
+    return bytes([REPORT_ID]) + _body()
 
 
-def parse_reply(r) -> Optional[Tuple[int, int]]:
-    """(level, status byte) from a K99 V3 battery reply, or None.
-
-    The response has no checksum; the echoed command/sub-command pair is the
-    framing check.  A level outside 1..100 is refused rather than shown.
-    """
-    if not r or len(r) < LEVEL_AT + 1:
+def parse_reply(r) -> Optional[Tuple[int, bool, int]]:
+    """(level, charging, raw battery byte) from a GLW func-config reply."""
+    if not r:
         return None
     b = bytes(r)
-    if len(b) >= REPORT_LEN + 1 and b[0] == 0x00 and b[1] == MAGIC:
+    if len(b) >= REPORT_LEN + 1 and b[0] == REPORT_ID and b[1] == MAGIC:
         b = b[1:]
-    if b[0] != MAGIC or b[1] != CMD or b[2] != 0x00 or b[3] != SUB:
+    if len(b) < PAYLOAD_AT + SIZE or b[0] != MAGIC or b[1] != CMD:
         return None
-    level = b[LEVEL_AT]
-    if not 1 <= level <= 100:
+    size = b[4]
+    offset = b[5] | (b[6] << 8)
+    if size < BATTERY_AT + 1 or offset != 0 or PAYLOAD_AT + size > len(b):
         return None
-    return level, b[STATUS_AT]
+    checksum = (b[4] + b[5] + b[6] + b[7] + sum(b[PAYLOAD_AT:PAYLOAD_AT + size])) & 0xFF
+    if checksum != b[CHECKSUM_AT]:
+        return None
+    raw = b[PAYLOAD_AT + BATTERY_AT]
+    level = raw & 0x7F
+    if level > 100:
+        return None
+    return level, bool(raw & 0x80), raw
 
 
 class MchoseK99Provider(Provider):
@@ -91,7 +101,7 @@ class MchoseK99Provider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[int, float]] = None
+        self._last: Optional[Tuple[int, bool, float]] = None
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
@@ -109,33 +119,35 @@ class MchoseK99Provider(Provider):
         self._diag.append(f"[MCHOSE K99 V3] pid=3837:{PID:04x} "
                           f"'{d.get('product_string') or ''}' "
                           f"iface={d.get('interface_number')} "
-                          f"{PAGE:04x}:{USAGE:04x}")
+                          f"{d.get('usage_page'):04x}:{d.get('usage'):04x}")
         got = self._read(d["path"])
         if got is None:
             self._diag.append("  no answer (keyboard asleep or off)")
-            if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
-                return [DeviceStatus(KEY, NAME, self._last[0], False, False,
+            if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
+                level, charging, _ = self._last
+                return [DeviceStatus(KEY, NAME, level, charging, False,
                                      "mchose_k99", kind="keyboard",
                                      wake_on_input=True, charging_known=False)]
             return [DeviceStatus(KEY, NAME, None, False, False, "mchose_k99",
                                  kind="keyboard", wake_on_input=True,
                                  charging_known=False)]
 
-        level, status = got
-        self._diag.append(f"  -> {level}% raw status=0x{status:02x} "
-                          f"(charge semantics undocumented)")
-        self._last = (level, time.time())
-        return [DeviceStatus(KEY, NAME, level, False, True, "mchose_k99",
+        level, charging, raw = got
+        self._diag.append(f"  -> {level}% charging={charging} raw={raw:02x}")
+        self._last = (level, charging, time.time())
+        return [DeviceStatus(KEY, NAME, level, charging, True, "mchose_k99",
                              kind="keyboard", wake_on_input=True,
-                             charging_known=False)]
+                             charging_known=True)]
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
-        for d in infos:
-            if d.get("product_id") == PID and (d.get("usage_page"), d.get("usage")) == (PAGE, USAGE):
-                return d
+        for page, usage in ((PAGE, USAGE), (ALT_PAGE, ALT_USAGE)):
+            for d in infos:
+                if (d.get("product_id") == PID
+                        and (d.get("usage_page"), d.get("usage")) == (page, usage)):
+                    return d
         return None
 
-    def _read(self, path) -> Optional[Tuple[int, int]]:
+    def _read(self, path) -> Optional[Tuple[int, bool, int]]:
         dev = hid.device()  # type: ignore[union-attr]
         try:
             dev.open_path(path)
@@ -148,11 +160,7 @@ class MchoseK99Provider(Provider):
             except Exception:
                 pass
             for attempt in range(ATTEMPTS):
-                # The K99 V3 frame has no numbered report; Windows hidapi expects
-                # an unnumbered-report id (0x00) in front, while the raw 64-byte
-                # form is kept as a fallback for hidapi builds that write the
-                # report directly.
-                request = (wire_request(), make_request())[attempt % 2]
+                request = wire_request()
                 try:
                     dev.write(request)
                 except (OSError, ValueError) as e:
