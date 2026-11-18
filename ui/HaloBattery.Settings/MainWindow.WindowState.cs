@@ -53,8 +53,8 @@ public sealed partial class MainWindow
             var scale=dpi/96.0;
             var bounds=ConstrainWindowBounds(state,work,scale,MinimumWindowWidthDip,AppWindow.Position);
             AppWindow.MoveAndResize(bounds);
-            normalWindowState=new((int)Math.Round(bounds.Width/scale),(int)Math.Round(bounds.Height/scale),expanded,
-                bounds.X,bounds.Y,dpi,monitor.Name,state.Maximized);
+            normalWindowState=state with { Width=(int)Math.Round(bounds.Width/scale),Height=(int)Math.Round(bounds.Height/scale),
+                RailExpanded=expanded,X=bounds.X,Y=bounds.Y,Dpi=dpi,Monitor=monitor.Name };
             savedWindowState=state;
             windowStateRestored=true;
         }
@@ -69,7 +69,7 @@ public sealed partial class MainWindow
             Math.Clamp(state.Y??fallback.Y,work.Y,work.Y+work.Height-height),width,height);
     }
 
-    // Called only after the initial content is ready, immediately before show.
+    // Called after the splash tree is attached, immediately before first show.
     // Maximize may show an HWND, so it must never run in the constructor.
     internal void PrepareSettingsWindowForShow()
     {
@@ -95,6 +95,7 @@ public sealed partial class MainWindow
     private void CaptureWindowState()
     {
         if(!windowStateRestored || applyingWindowState || IsSettingsWindowHidden || closing || closingWindowState || quittingApplication) return;
+        CaptureSettingsViewState();
         var next=normalWindowState with { RailExpanded=expanded };
         if(AppWindow.Presenter is OverlappedPresenter presenter)
         {
@@ -121,7 +122,7 @@ public sealed partial class MainWindow
                     var position=AppWindow.Position;
                     if(width>=320 && height>=240 && width<=16384 && height<=16384 &&
                        position.X is >= -1000000 and <= 1000000 && position.Y is >= -1000000 and <= 1000000)
-                        next=new(width,height,expanded,position.X,position.Y,dpi,CurrentWindowMonitor().Name,false);
+                        next=next with { Width=width,Height=height,RailExpanded=expanded,X=position.X,Y=position.Y,Dpi=dpi,Monitor=CurrentWindowMonitor().Name,Maximized=false };
                 }
             }
         }
@@ -195,9 +196,9 @@ public sealed partial class MainWindow
         Close();
     }
 
-    // A user close keeps the live XAML tree and its current page/scroll state.
-    // Fixtures terminate so their command-line verification process can finish.
-    public new void Close()=>_=(Bridge.FixtureMode?ShutdownSettingsWindowAsync():HideSettingsWindowAsync());
+    // Closing releases the companion process. Its native view state is restored
+    // after the next launch's splash, independently of Python's configuration.
+    public new void Close()=>_=ShutdownSettingsWindowAsync();
 
     internal async Task HideSettingsWindowAsync()
     {
@@ -219,6 +220,8 @@ public sealed partial class MainWindow
         try
         {
             await Task.Yield(); // Return from a canceled native Closing event first.
+            await PrepareSettingsExitAsync();
+            CaptureSettingsViewState();
             await FlushWindowStateAsync();
         }
         finally { allowWindowClose=true;if(!closing) base.Close(); }

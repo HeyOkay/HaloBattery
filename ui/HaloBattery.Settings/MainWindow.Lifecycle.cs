@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using System.Runtime.InteropServices;
 
 namespace HaloBattery.Settings;
 
@@ -8,9 +9,30 @@ public sealed partial class MainWindow
     private PreparedWindowView? firstPreparedView;
     private sealed record PreparedWindowView(int X,int Y,int Width,int Height,bool RailExpanded,double RailWidth,string Page,bool PageReady,int LabelCount,bool VisibleBeforeShow);
 
-    internal void ShowSettingsWindow(string? page,string? deviceKey)
+    internal void ShowSettingsWindow(string? page,string? deviceKey,long? requestId=null)
     {
-        if(closing || !pagesInitialized) return;
+        if(IsClosingSettings) return;
+        if(pagesInitializing)
+        {
+            ActivateSettingsWindow();
+            if(startupRevealing)
+            {
+                showAfterStartup=new(page,deviceKey,requestId);
+                return;
+            }
+            pendingStartupPage=page;pendingStartupDeviceKey=deviceKey;
+            startupNavigationVersion++;
+            if(pagesInitialized && page is not null)
+            {
+                if(deviceKey is not null)selectedDeviceKey=deviceKey;
+                Navigate(page,false);
+            }
+            // Acknowledge this show request even while loading. Python can
+            // distinguish an accepted show from a request racing with close.
+            Bridge.SendVisibility(true,requestId);
+            return;
+        }
+        if(!pagesInitialized)return;
         page??=current;
         var selectionChanged=deviceKey is not null && selectedDeviceKey!=deviceKey;
         if(deviceKey is not null) selectedDeviceKey=deviceKey;
@@ -20,14 +42,29 @@ public sealed partial class MainWindow
             Navigate(page,!IsSettingsWindowHidden);
         firstPreparedView??=new(AppWindow.Position.X,AppWindow.Position.Y,AppWindow.Size.Width,AppWindow.Size.Height,
             expanded,rail.Width.Value,current,frame.Content is not null,State.Labels.Count,AppWindow.IsVisible);
-        PrepareSettingsWindowForShow();
         RefreshBindings();
-        AppWindow.Show();
-        Activate();
+        ActivateSettingsWindow();
         windowShowCount++;
         if(previewImage is not null) StartPreview();
-        Bridge.SendVisibility(true);
+        Bridge.SendVisibility(true,requestId);
     }
+
+    private void ActivateSettingsWindow()
+    {
+        if(IsClosingSettings)return;
+        PrepareSettingsWindowForShow();
+        AppWindow.Show();
+        Activate();
+        // The tray process transfers foreground permission on the user click.
+        // Window.Activate alone is not a foreground request for background apps.
+        // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setforegroundwindow
+        SetForegroundWindow(hwnd);
+    }
+
+    [DllImport("user32.dll")][return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint window);
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
 
     private void OnSettingsWindowHidden()
     {

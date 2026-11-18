@@ -27,24 +27,29 @@ public partial class App : Application
   try
   {
    ScrollBarAppearance.Install(Resources);
-   // Await the real backend model before creating any HWND/XAML content.
-   // Profile IO runs alongside the handshake, never after a visible layout.
+   // Restore geometry before showing the lightweight splash. Backend startup
+   // continues in parallel; the settings tree is built behind the same HWND.
    var initialState=bridge.InitializeAsync();
    var directory=InitialWindowStateDirectory();
-   var preferences=directory is null?null:new WindowStateStore(directory).LoadAsync();
-   var state=await initialState;
-   directory??=Path.GetFullPath(state.DataDir);
-   var saved=await (preferences??new WindowStateStore(directory).LoadAsync());
-   LogStartup("Launching prepared native window");
-   window=new MainWindow(bridge,state,directory,saved);
+   UiState? state=null;
+   if(directory is null) { state=await initialState;directory=Path.GetFullPath(state.DataDir); }
+   var saved=await new WindowStateStore(directory).LoadAsync();
+   window=new MainWindow(bridge,UiState.Empty,directory,saved);
+   window.Closed+=(_,_)=>bridge.Dispose();
+   window.ShowStartupSplash();
+   state??=await initialState;
+   if(window.IsClosingSettings) return;
+   window.ApplyState(state);
    bridge.Attach(window);
    if(bridge.FixtureMode)window.ShowSettingsWindow(state.Page,state.SelectedDeviceKey);
+   await window.CompleteStartupAsync();
    LogStartup("Activated native window");
   }
   catch(Exception error)
   {
    LogStartup("Window launch failed",error);
    bridge.Dispose();
+   if(window is not null)await window.ShutdownSettingsWindowAsync();
    Exit();
   }
  }

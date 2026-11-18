@@ -15,7 +15,7 @@ public sealed partial class MainWindow
             checks.Add(new {name,passed});
             if(!passed)throw new InvalidOperationException("Fixture check failed: "+name);
         }
-        Check("real model and selected page prepared before first show",firstPreparedView is {PageReady:true,LabelCount:>0,VisibleBeforeShow:false} && firstPreparedView.Page==State.Page);
+        Check("splash precedes prepared real model in same window",startupCompleted && splashFrameRendered && firstPreparedView is {PageReady:true,LabelCount:>0,VisibleBeforeShow:true} && firstPreparedView.Page==State.Page);
         Check("saved rail was applied before first visible layout",firstPreparedView!.RailExpanded==initialWindowState.RailExpanded && firstPreparedView.RailWidth==(initialWindowState.RailExpanded?228:64));
         Check("normal window was sized before first show",firstPreparedView!.Width>0 && firstPreparedView.Height>0);
         if(initialWindowState.X is not null && !initialWindowState.Maximized)
