@@ -82,6 +82,17 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+### JBL Quantum 350 Wireless
+
+**Connection:** 2.4 GHz receiver (0ECB:206B), generic-desktop HID collection `0x0001:0x0000` on interface 3 with a 2-byte feature report.
+
+The receiver has no vendor collection. It answers two numbered one-byte feature reports, documented by [krisgfx9/Wireless-Device-Battery-Monitor's JBL driver](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/blob/main/src/drivers/jbl.cpp) and matching the `#454` diagnostics:
+
+    0x68  link: 1 = headset on, 0 = headset off
+    0x49  battery percentage in 5 % steps; the dongle keeps the last value while the headset is off
+
+Only read-only feature reads are sent. There is no charging byte in this protocol and no wired device is documented for the 350, so the app shows the level with the charging state unknown rather than guessing. **Test build pending** on the reporter's receiver.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)

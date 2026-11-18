@@ -62,6 +62,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
 
+- **JBL Quantum 350 Wireless** on its 2.4 GHz receiver (`0ecb:206b`): read with the
+  receiver's HIDV1 feature reports (`0x68` link, `0x49` level in 5 % steps), the
+  same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
+  exposed by this protocol, so the level is shown with the charger unknown.
+  Test build pending on the reporter's unit.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is

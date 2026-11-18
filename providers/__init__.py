@@ -15,6 +15,7 @@ from .logitech_centurion import LogitechCenturionProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
 from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
+from .jbl_quantum350 import JblQuantum350Provider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
 from .dareu import DareuProvider  # noqa: F401
