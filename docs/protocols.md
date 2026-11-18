@@ -480,6 +480,12 @@ GetPower feature request on `FF02:0002` (interface 1), 17 bytes, checksum `0x55 
 
 Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24 4E FF` at bytes 4-7, link bits in byte 10, level in byte 11 and charging in byte 12. Only this read is sent; the shared 248A vendor id is why the product string is required. **Unverified in this app.**
 
+### MSI VERSA 300 ELITE, Clutch GM31 / GM41
+
+**Connection:** VERSA `0DB0:9E22`; GM31 receiver `0D3C` / cable `0D3B`; GM41 receiver `0D4C` / cable `0D4B`.
+
+VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
+
 ### MOONDROP GM01 Pro
 
 **Connection:** 2.4 GHz dongle `35D8:0133`, interface 3 consumer collection; on its USB cable the headset has no control channel.

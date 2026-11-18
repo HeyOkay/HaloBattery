@@ -18,6 +18,7 @@
 | [Arbiter Studio Akitsu / 3950 / Medium](protocols.md#arbiter-studio-akitsu) | 8K receiver or USB cable | unverified |
 | [Areson/Redragon M915RGB-WL, M913](protocols.md#areson-redragon-m915-m913) | 2.4 GHz receiver | unverified |
 | [Machenike L7 Arctic / L7 Mix](protocols.md#machenike-l7) | 2.4 GHz receiver or USB cable | unverified |
+| [MSI VERSA 300 ELITE, Clutch GM31 / GM41](protocols.md#msi-versa-300-elite-clutch-gm31-gm41) | 2.4 GHz receiver or USB cable | unverified |
 | [MOONDROP GM01 Pro](protocols.md#moondrop-gm01-pro) | 2.4 GHz dongle or USB cable | unverified |
 | [Ninjutso Sora V2; Sprime PM1](protocols.md#ninjutso-sora-v2-sprime-pm1) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
@@ -29,6 +30,7 @@
 | [DJI Mic Mini 2](protocols.md#dji-mic-mini-2) | USB receiver, interface 6 with WinUSB | yes |
 | [G-Wolves HSK Pro ACE and the other models with a receiver of their own](protocols.md#g-wolves-hsk-pro-ace-and-the-other-models-with-a-receiver-of-their-own) | The model's own receiver or USB cable | no |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
+| [Fantech Helios Go XD5; Redragon Invader Pro](protocols.md#fantech-helios-go-xd5-redragon-invader-pro) | 2.4 GHz receiver or USB cable | unverified |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |

@@ -142,7 +142,7 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
-from providers import (AmInfinityProvider, AresonProvider, ArbiterProvider, AstroProvider, AsusProvider,  # noqa: E402
+from providers import (AmInfinityProvider, AresonProvider, FantechProvider, MsiProvider, ArbiterProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider,
                        EightBitDoProvider,
@@ -219,6 +219,7 @@ PROVIDER_LABELS = {
     "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
+    "fantech": "Fantech Helios Go XD5",
     "finalmouse": "Finalmouse UltralightX",
     "glorious": "Glorious Model O Wireless",
     "gwolves": "G-Wolves mice",
@@ -244,6 +245,7 @@ PROVIDER_LABELS = {
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
+    "msi": "MSI mice",
     "nintendo": "Nintendo Switch controllers",
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
@@ -270,7 +272,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
     return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            AresonProvider(), ArbiterProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(), JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(), JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),

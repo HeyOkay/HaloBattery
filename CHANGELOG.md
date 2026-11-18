@@ -66,6 +66,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Ninjutso Sora V2 and Sprime PM1**: read-only battery protocols from the vendor
   tools and community references. Unverified in the app; no hardware was available.
 
+- **Fantech Helios Go XD5 and Redragon Invader Pro** on their 2.4 GHz dongle
+  or cable: 17-byte feature request, level and charging. Unverified in the app.
+
+- **MSI VERSA 300 ELITE and Clutch GM31 / GM41** on their receivers or cables:
+  read-only status query, plus the GM41's passive raw report. Unverified in the app.
+
 ### Fixed
 
 - Bring the existing Settings window to the foreground when a tray icon is
