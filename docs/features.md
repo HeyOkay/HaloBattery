@@ -147,7 +147,7 @@ To keep the settings, the log and the battery history next to the app instead of
 
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
 2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
-3. Install .NET SDK 10.0.401 for the native settings window. From the repository
+3. Install .NET SDK 10.0.404 for the native settings window. From the repository
    root, run `python -m pip install -r requirements.txt`,
    `python tools/make_icon.py halo.ico`, then `./scripts/build_settings.ps1`
    in PowerShell. Keep its `.build/settings-ui` output in place.
