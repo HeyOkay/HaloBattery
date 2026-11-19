@@ -83,15 +83,16 @@ RECEIVERS = {
     0xC52F, 0xC518, 0xC51A, 0xC51B, 0xC521, 0xC525, 0xC526,  # Nano
     0xC52E, 0xC531, 0xC534, 0xC535, 0xC537,
     0xC539, 0xC53A, 0xC53D, 0xC53F, 0xC541, 0xC545, 0xC547,  # Lightspeed
-    0xC54D, 0xC54F,                                      # PRO X3 SUPERSTRIKE receiver
+    0xC54D,                                              # PRO X SUPERLIGHT 2 / PRO X2 SUPERSTRIKE
+    0xC54F,                                              # PRO X3 SUPERSTRIKE receiver
 }
 
 # The PRO X3 SUPERSTRIKE's HID++ endpoint may be on Logitech's newer vendor
 # usage page FF43, with short (0301) and long (0302) report collections.
-# The C54F / C54D PIDs are wireless receivers; C0A9 is the wired mouse.
+# C54F is the wireless receiver; C0A9 is the wired mouse.
 # Restrict this alternative route to these specific Logitech devices so other
 # products' vendor collections never receive HID++ requests accidentally.
-PRO_X3_HIDPP_PIDS = {0xC54D, 0xC54F, 0xC0A9}
+PRO_X3_HIDPP_PIDS = {0xC54F, 0xC0A9}
 
 # headsets with HID++ battery (feature 0x1F20), from HeadsetControl's device list.
 # The value is the name to show when the headset does not report one.

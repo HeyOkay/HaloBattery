@@ -438,13 +438,13 @@ HID++ 2.0 on the receiver's vendor interface: the device name (feature 0x0005) a
 
 ### Logitech G PRO X3 SUPERSTRIKE
 
-**Connection:** LIGHTSPEED receiver (`046d:c54f`); additional recognized receiver
-`046d:c54d` and wired mouse `046d:c0a9` (these two paths are unverified on hardware).
+**Connection:** LIGHTSPEED receiver (`046d:c54f`); wired mouse
+`046d:c0a9` (unverified on hardware).
 This is the **mouse**, not the PRO X 3 LIGHTSPEED headset.
 
 The mouse exposes HID++ on Logitech's alternate vendor collections
 `ff43:0301` (short, seven-byte reports) and `ff43:0302` (long, 20-byte reports).
-For these three product IDs only, the Logitech provider treats them as the
+For these two product IDs only, the Logitech provider treats them as the
 usual short/long HID++ paths, keeping the original `ff00:0001` / `ff00:0002`
 paths preferred wherever both exist. The receiver is queried through the
 usual paired-device slots (1-6), while the wired mouse uses slot `0xff`.
@@ -462,8 +462,7 @@ read-only HID++ battery requests in `providers/logitech.py`.
 **Confirmed on a physical PRO X3 SUPERSTRIKE under Windows:** the reported
 battery percentage matched Logitech G HUB; charging was detected; the tray
 icon greyed out after powering the mouse off and returned on reconnect.
-**Not tested:** low-battery notifications, the `c54d` receiver variant or the
-`c0a9` wired path. Automated tests cover collection routing and legacy
+**Not tested:** low-battery notifications or the `c0a9` wired path. Automated tests cover collection routing and legacy
 `ff00` precedence without claiming those additional paths work on hardware.
 
 ### Razer BlackWidow V3 Pro

@@ -4,8 +4,8 @@ from test_logitech import L, FakeHidpp, LogitechTestCase, entry
 
 class PROX3Tests(LogitechTestCase):
     @staticmethod
-    def _mouse():
-        return FakeHidpp({L.F_UNIFIED: (6, {1: [73, 0, 0]}),
+    def _mouse(charging_status=0):
+        return FakeHidpp({L.F_UNIFIED: (6, {1: [73, 0, charging_status]}),
                           L.F_NAME: (3, {2: [3]})}, name="PRO X3 SUPERSTRIKE")
 
     def test_c54f_receiver_on_ff43(self):
@@ -18,11 +18,19 @@ class PROX3Tests(LogitechTestCase):
         self.assertTrue(any(path == b"long" and packet[1] == 1
                             for path, packet in self.bus.writes))
 
-    def test_c54d_receiver_on_ff43(self):
-        infos = [entry(0xC54D, 0xFF43, 0x0302, b"long", "LIGHTSPEED")]
-        self.use(infos, {b"long": ({1: self._mouse()}, None)})
+    def test_c54f_charging_on_ff43(self):
+        infos = [entry(0xC54F, 0xFF43, 0x0302, b"long", "LIGHTSPEED")]
+        self.use(infos, {b"long": ({1: self._mouse(charging_status=1)}, None)})
         [state] = L.LogitechProvider().poll()
         self.assertEqual(state.level, 73)
+        self.assertTrue(state.charging)
+
+    def test_c54f_charge_complete_on_ff43(self):
+        infos = [entry(0xC54F, 0xFF43, 0x0302, b"long", "LIGHTSPEED")]
+        self.use(infos, {b"long": ({1: self._mouse(charging_status=3)}, None)})
+        [state] = L.LogitechProvider().poll()
+        self.assertEqual(state.level, 73)
+        self.assertTrue(state.charging)
 
     def test_c0a9_wired_mouse(self):
         infos = [entry(0xC0A9, 0xFF43, 0x0302, b"wired", "PRO X3")]
