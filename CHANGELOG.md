@@ -43,6 +43,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the charging ring followed the cable.
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
+- GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
+  `AA 10 18` query (#379); level and charging measured by the reporter. Byte
+  26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth

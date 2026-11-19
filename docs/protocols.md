@@ -347,6 +347,21 @@ The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 
 
 The Compx 17-byte power query used by the Pulsar / ATK family: the receiver publishes `ff02:0002` and answers level byte 6, on-cable byte 7 and millivolts in bytes 8-9. The cable id `3554:F50F` is shared with the LAMZU Thorn; Windows exposes the product string, so only a cable whose product string contains "ATLANTIS" is treated as the Atlantis Pro, and it shares the `pulsar:3554f50d` icon with the receiver. Confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408): receiver 70% matching the Lamzu driver, cable 95% while charging. The Atlantis cable is shown as "LAMZU Atlantis Pro (wired)" because that is the name Windows reports.
 
+### GANSS GS3075T
+
+The 2.4 GHz receiver (`0C45:FEFE`) exposes the Sonix vendor collection
+`FF60:0061` on interface 3. The 32-byte query `AA 10 18 00 ...` is answered by
+`55 10 18 ...` with the level at byte 25; byte 26 is `0x02` while charging,
+`0x01` when the cable is in and the battery is full, and `0x00` on battery.
+Both cable states are shown as charging, meaning on external power. On Windows, hidapi treats the first byte passed to `write()`
+as the report id, so the query is sent as `00 AA 10 18 ...` (33 bytes to hidapi,
+32 on the wire); without the leading zero the receiver answers only a short
+`55 18` acknowledgement and no level arrives. The first request after the link
+wakes up can be lost, and the receiver answers more readily while the 2.4 GHz
+link is active; up to four attempts are made. Measured on a GS3075T by the
+reporter of #379; other GANSS T-series boards use the same receiver but are not
+claimed.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
