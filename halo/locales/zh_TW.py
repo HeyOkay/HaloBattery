@@ -9,6 +9,7 @@ MESSAGES = {
     "startup.hid_unavailable": 'Windows 無法載入 HID 支援，無法讀取透過 USB 和 2.4 GHz 連線的裝置電量。藍牙與設定仍可使用。請開啟診斷查看詳細資訊。',
     "state.poll_unavailable": '無法更新電量',
     "state.poll_stale": '{level}%（上次讀數；無法更新電量）',
+    "notification.update_not_completed": "未能完成至 v{target} 的更新。HaloBattery 仍在執行 v{version}。請重試或手動下載該版本。",
     "settings.open_failed": "無法開啟設定。仍可透過系統匣圖示選單中的「{preferences}」調整基本設定。",
     "preferences.icon_style": "圖示樣式",
     "icon_style.outline": "輪廓",

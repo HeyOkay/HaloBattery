@@ -9,6 +9,7 @@ MESSAGES = {
     "startup.hid_unavailable": 'Windows が HID サポートを読み込めませんでした。USB と 2.4 GHz 接続のバッテリー残量を取得できません。Bluetooth と設定は引き続き利用できます。詳細は診断を開いて確認してください。',
     "state.poll_unavailable": 'バッテリー情報を取得できません',
     "state.poll_stale": '{level}%（前回の値・バッテリー情報を取得できません）',
+    "notification.update_not_completed": "v{target} への更新が完了しませんでした。HaloBattery は引き続き v{version} で動作しています。再試行するか、リリースを手動でダウンロードしてください。",
     "settings.open_failed": "設定を開けませんでした。基本設定はトレイアイコンのメニューの「{preferences}」から変更できます。",
     "preferences.icon_style": "アイコンのスタイル",
     "icon_style.outline": "輪郭",

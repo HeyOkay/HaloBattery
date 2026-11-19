@@ -2719,6 +2719,7 @@ class App:
 
         self.show_placeholder(not self.icons)
         self.history.save()
+        self.deliver_update_failure()
 
     def show_placeholder(self, show: bool, *, ensure_owner=False) -> None:
         """The "no devices" icon. It is made once and after that only shown or hidden.
@@ -3126,9 +3127,20 @@ class App:
         self.after_update()
         if self.stop_evt.wait(30):               # let the icons come up first
             return
-        staging = self.cfg.pop("update_staging", None)
-        if getattr(sys, "frozen", False):            # never in a source folder
-            updates.cleanup(BASE_DIR, staging)
+        # Serialize with a user-triggered installation: cleanup must not consume
+        # the staging path of a new attempt while its download/runner is starting.
+        if getattr(sys, "frozen", False) and self.update_lock.acquire(blocking=False):
+            try:                                    # never in a source folder
+                with self.lock:
+                    staging = self.cfg.get("update_staging")
+                if updates.cleanup(BASE_DIR, staging):
+                    install_ok, install_why = updates.can_install(True, BASE_DIR)
+                    with self.lock:
+                        self.cfg.pop("update_staging", None)
+                        self.install_ok, self.install_why = install_ok, install_why
+                        save_config(self.cfg)
+            finally:
+                self.update_lock.release()
         while not self.stop_evt.is_set():
             # cleared before the check: a click on "Check for updates now" during the
             # check wakes the next round instead of being lost
@@ -3205,16 +3217,26 @@ class App:
                 self.notify_update("notification.update_downloading", version=rel.version)
                 staging = updates.staging_dir()
                 new_app = updates.download(rel, staging, VERSION, progress=self._update_progress)
-                self.cfg.update(update_from=VERSION, update_staging=staging,
-                                whats_new_notes={"version": rel.version, "notes": rel.notes,
-                                                 "url": rel.url, "date": rel.published})
-                save_config(self.cfg)
+                with self.lock:
+                    self.cfg.update(update_from=VERSION, update_target=rel.version, update_staging=staging,
+                                    whats_new_notes={"version": rel.version, "notes": rel.notes,
+                                                     "url": rel.url, "date": rel.published})
+                    save_config(self.cfg)
                 log.info("update: v%s downloaded, restarting to install it", rel.version)
                 runner = updates.prepare_runner(BASE_DIR, staging)
+                creation_time = updates.current_process_creation_time()
                 updates.start_detached(
-                    updates.finish_command(runner, new_app, BASE_DIR, os.getpid()), cwd=runner)
+                    updates.finish_command(runner, new_app, BASE_DIR, os.getpid(),
+                                           expected_creation_time=creation_time), cwd=runner)
         except Exception as e:
             log.warning("update failed: %s", e)
+            # The runner did not start, so this is already reported here. Do not
+            # report a second failed attempt at the next application startup.
+            with self.lock:
+                if self.cfg.pop("update_target", None) is not None:
+                    self.cfg.pop("update_from", None)
+                    self.cfg.pop("whats_new_notes", None)
+                    save_config(self.cfg)
             self.update_progress = None
             self.refresh_menus()
             self.notify_update("notification.update_failed", error=str(e))
@@ -3231,11 +3253,26 @@ class App:
         show the "What's new" window once."""
         if PRETEND_VERSION:
             return
-        prev = self.cfg.get("last_version")
-        from_version = self.cfg.pop("update_from", None)
-        if prev != VERSION or from_version:
-            self.cfg["last_version"] = VERSION
-            save_config(self.cfg)
+        with self.lock:
+            prev = self.cfg.get("last_version")
+            had_attempt = "update_from" in self.cfg or "update_target" in self.cfg
+            from_version = self.cfg.pop("update_from", None)
+            target = self.cfg.pop("update_target", None)
+            # Older installers stored the target only alongside cached notes.
+            notes = self.cfg.get("whats_new_notes")
+            if target is None and from_version is not None and isinstance(notes, dict):
+                target = notes.get("version")
+            failed = isinstance(target, str) and len(target) <= 64 and updates.is_newer(target, VERSION)
+            if failed:
+                self.cfg.pop("whats_new_notes", None)
+                self._pending_update_failure = dict(target=target, version=VERSION)
+                log.warning("update: v%s was requested, but v%s is still running", target, VERSION)
+            if prev != VERSION or had_attempt:
+                self.cfg["last_version"] = VERSION
+                save_config(self.cfg)
+        if failed:
+            self.deliver_update_failure()
+            return
         if prev is None:
             # settings from a version before 1.15.0, which did not note its version
             upgraded = bool(getattr(self, "config_existed", False))
@@ -3243,6 +3280,18 @@ class App:
             upgraded = updates.is_newer(VERSION, prev)
         if upgraded and self.cfg.get("whats_new", True):
             self.show_whats_new(from_version or prev or "")
+
+    def deliver_update_failure(self) -> None:
+        # Startup may reach update handling before the first poll creates a tray
+        # icon. Keep the message until there is a notification target.
+        with self.lock:
+            pending = getattr(self, "_pending_update_failure", None)
+            ready = any(bool(getattr(owner.icon, "visible", False)) for owner in self.icons.values())
+            ready = ready or bool(self.placeholder is not None and self.placeholder.visible)
+            if self.stopping() or pending is None or not ready:
+                return
+            self._pending_update_failure = None
+        self.notify_update("notification.update_not_completed", **pending)
 
     def show_whats_new(self, from_version: str = "") -> None:
         with self.lock:
@@ -3540,6 +3589,7 @@ def main():
         return
     try:
         finish = updates.parse_finish_args(sys.argv)
+        creation_time = updates.parse_finish_creation_time(sys.argv)
     except ValueError as e:
         log.error("update: %s", e)
         return
@@ -3547,7 +3597,7 @@ def main():
         # a copy of this app in %TEMP%: put the downloaded version in place and start it
         app_dir, new_app, pid = finish
         log.info("update: installing %s into %s (old pid %d)", new_app, app_dir, pid)
-        updates.finish_update(app_dir, pid, new_app)
+        updates.finish_update(app_dir, pid, new_app, expected_creation_time=creation_time)
         return
     if "--pretend-version" in sys.argv:
         i = sys.argv.index("--pretend-version")
