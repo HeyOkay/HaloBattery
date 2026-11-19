@@ -130,6 +130,15 @@ class PollTest(unittest.TestCase):
         self.assertEqual([], out)
         self.assertEqual([], dev.opened)
 
+    def test_a_3002_receiver_without_a_product_string_gets_no_query(self):
+        for product in ("", None):
+            with self.subTest(product=product):
+                infos = [{"path": b"via", "interface_number": 1, "usage_page": 0xFF60,
+                          "usage": 0x0061, "product_id": U.PID, "product_string": product}]
+                out, dev = self.poll([CAPTURED_76], infos=infos)
+                self.assertEqual([], out)
+                self.assertEqual([], dev.opened)
+
     def test_no_receiver_reports_nothing(self):
         out, _dev = self.poll([], infos=[])
         self.assertEqual([], out)
