@@ -115,6 +115,35 @@ class KeyboardTests(unittest.TestCase):
         self.provider.poll()
         self.activity.configure.assert_called_once_with([b"vgn-keys"])
 
+    def test_brand_keys_are_distinct_and_failed_switches_cannot_reuse_cached_level(self):
+        for first, second in ((VGN_PRODUCT, A.PRODUCT), (A.PRODUCT, VGN_PRODUCT)):
+            self.provider = A.AtkKeyboardProvider(activity=self.activity)
+            self.entries = [keyboard_entry(product_string=first)]
+            self.answer = VGN_REPLY
+            old = self.provider.poll()[0]
+            self.entries = [keyboard_entry(product_string=second)]
+            self.answer = b""
+            current = self.provider.poll()[0]
+            self.assertNotEqual(current.key, old.key)
+            self.assertIsNone(current.level)
+            self.assertFalse(current.online)
+            self.assertEqual({old.key, current.key},
+                             {"atk_keyboard:320f:5088", "atk_keyboard:320f:5088:vgn-n75-pro"})
+
+    def test_atk_receiver_and_cable_keep_existing_key_and_single_selection(self):
+        receiver = keyboard_entry(product_string=A.PRODUCT, path=b"receiver")
+        cable = keyboard_entry(product_id=0x5055, product_string="ATK V75X", path=b"cable")
+        self.entries = [receiver]
+        first = self.provider.poll()[0]
+        self.assertEqual(first.key, "atk_keyboard:320f:5088")
+        self.entries = [keyboard_entry(), receiver, cable]
+        self.answer = b""
+        result = self.provider.poll()
+        self.assertEqual(len(result), 1)
+        self.assertEqual((result[0].key, result[0].level, result[0].name),
+                         (first.key, 59, "ATK V75X"))
+        self.dev.open_path.assert_called_with(b"cable")
+
 
 def mouse_entry(pid=0xFA65, **changes):
     return {"vendor_id": 0x1D57, "product_id": pid, "interface_number": 2,

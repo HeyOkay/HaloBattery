@@ -118,3 +118,7 @@ on these devices by us.
 | [EWEADN X23 Pro](protocols.md#eweadn-x23-pro) | `04f3:026f`, YDX receiver | Vendor source and PR #406; no new hardware test |
 | [Delux M900 Pro](protocols.md#delux-m900-pro-and-vgn-n75-pro) | `1d57:fa65`, passive receiver | Owner 74% report in #407; charging not newly verified |
 | [VGN N75 PRO](protocols.md#delux-m900-pro-and-vgn-n75-pro) | `320f:5088`, exact VGN product | Owner level in #407; charging not newly verified |
+
+ATK V75X / VGN N75 PRO polling selects one active keyboard at a time: an ATK
+cable first, otherwise the first eligible receiver. Their saved settings/history
+keys are separate; ATK cable and receiver retain the same existing ATK key.

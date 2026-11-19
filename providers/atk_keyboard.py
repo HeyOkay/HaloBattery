@@ -30,6 +30,8 @@ PRODUCT = "ATK V75X 2.4G Dongle"
 # same ATK HUB Evision battery command, on 320F:5088 FF1C:0092.
 # The cable identity below remains ATK-only; shared USB ids are not enough.
 PRODUCT_NAMES = {PRODUCT: "ATK V75X", "VGN N75 PRO 2.4G Dongle": "VGN N75 PRO"}
+PRODUCT_KEYS = {"ATK V75X": "atk_keyboard:320f:5088",
+                "VGN N75 PRO": "atk_keyboard:320f:5088:vgn-n75-pro"}
 WIRED_PID, WIRED_PRODUCT = 0x5055, "ATK V75X"
 REPORT_ID, CMD_BATTERY = 0x04, 0x1A
 TIMEOUT, READ_MS = 1.0, 100
@@ -104,7 +106,9 @@ class AtkKeyboardProvider(Provider):
                     and (e.get("usage_page"), e.get("usage")) == usage
                     and isinstance(e.get("product_string"), str)
                     and e["product_string"].strip().casefold() in allowed]
-        # The cable wins when both are connected: it answers while charging.
+        # One active keyboard at a time: the ATK cable wins, otherwise the first
+        # eligible receiver. This activity listener does not manage multiple keyboards.
+        # Product-specific keys prevent cross-brand preferences/history reuse.
         for d in found(WIRED_PID, WIRED_PRODUCT):
             self._select_label("ATK V75X")
             self._diag.append(f"[ATK V75X] {VID:04x}:{WIRED_PID:04x} USB cable")
@@ -180,14 +184,14 @@ class AtkKeyboardProvider(Provider):
 
     def _status(self):
         level, charging = self._cached
-        return DeviceStatus("atk_keyboard:320f:5088", self._label, level, charging, True,
+        return DeviceStatus(PRODUCT_KEYS[self._label], self._label, level, charging, True,
                             self.name, kind="keyboard")
 
     def _idle_status(self, paused=True):
         level = self._cached[0] if self._cached else None
         text = "" if paused else (f"{level}% (last known; no fresh reply)" if level is not None
                                   else "battery not reported yet")
-        return DeviceStatus("atk_keyboard:320f:5088", self._label, level, False, False,
+        return DeviceStatus(PRODUCT_KEYS[self._label], self._label, level, False, False,
                             self.name, approx=text, kind="keyboard", polling_paused=paused)
 
     def close(self):

@@ -751,3 +751,10 @@ documented under ATK V75X. No generic brand match or new command is added.
 Changing between VGN receiver and ATK wired identities resets the label and
 cached value; the same ATK model retains cable/receiver continuity. PR evidence
 confirms level observations, not a new charging transition test.
+The provider supports one active keyboard at a time: an ATK cable takes
+priority, otherwise the first eligible receiver in Windows enumeration is
+selected. Other receivers are not queried in that poll. VGN uses the separate
+`atk_keyboard:320f:5088:vgn-n75-pro` key, while ATK keeps its existing
+`atk_keyboard:320f:5088` key for both cable and receiver. Shared legacy settings
+are left with ATK because their former owner cannot be proved; they are not
+guessed onto VGN. Separate simultaneous-keyboard polling is not provided here.
