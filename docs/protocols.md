@@ -541,7 +541,8 @@ Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used
 ### Ninjutso Sora V3 (093a:eb02)
 
 **Connection:** 2.4 GHz receiver `093a:eb02` or USB cable `093a:e010`; the
-vendor collections are on usage page `0xFF01` (main) and `0xFF00` (secure).
+vendor collections are on usage page `0xFF01` (main) and `0xFF00` (secure); only
+`0xFF01` is asked, because no source or capture shows report 6 on `0xFF00`.
 
 The Sora V3 uses the current NinjaForce WebHID protocol, not the Sora V2
 report-5 protocol. Battery and charging are two separate read commands on

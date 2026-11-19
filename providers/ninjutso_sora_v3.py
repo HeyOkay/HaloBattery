@@ -11,7 +11,7 @@ NinjaForce client) documents the current frame:
 Battery level is command 0x12 and charging is a separate command 0x11; both
 return their value in the first data byte (reply byte 8).  The receiver is
 093a:eb02 and the cable is 093a:e010; both expose the vendor collection on
-usage page 0xFF01 (0xFF00 is the secure/control collection).  The cable is
+usage page 0xFF01 (0xFF00 is the secure/control collection, never asked).  The cable is
 queried first so a plugged-in mouse reports its charging state.  This is a
 read-only query pair; nothing is written or saved.
 
@@ -80,19 +80,23 @@ def parse_value(reply, command: int) -> Optional[int]:
 
 
 def _candidate_paths(infos: List[dict]) -> List[dict]:
-    """The cable first, then the receiver; main collection before secure."""
+    """The cable first, then the receiver; the main FF01 collection only.
+
+    The secure/control FF00 collection is never asked: no source or capture
+    shows feature report 6 there, and in #462 the answer always came from an
+    FF01 collection.
+    """
     out = []
     seen = set()
     for pid in (WIRED_PID, RECEIVER_PID):
-        for page in (PAGE_MAIN, PAGE_SECURE):
-            for d in infos:
-                path = d.get("path")
-                if (d.get("product_id") == pid
-                        and d.get("usage_page") == page
-                        and d.get("usage") == 0x0001
-                        and path not in seen):
-                    seen.add(path)
-                    out.append(d)
+        for d in infos:
+            path = d.get("path")
+            if (d.get("product_id") == pid
+                    and d.get("usage_page") == PAGE_MAIN
+                    and d.get("usage") == 0x0001
+                    and path not in seen):
+                seen.add(path)
+                out.append(d)
     return out
 
 

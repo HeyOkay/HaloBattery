@@ -138,6 +138,33 @@ class PollTests(unittest.TestCase):
         self.assertEqual(got.level, 99)
         self.assertEqual(self.fake.path, b"main")
 
+    def test_the_secure_ff00_collection_is_never_asked(self):
+        # #463 review: no source shows report 6 on FF00. With the mouse asleep
+        # (no answer anywhere) only the FF01 collections are opened and written,
+        # on the receiver and on the cable.
+        N.hidlist.enumerate = lambda vid=0: (
+            [e for e in entries() if e["vendor_id"] == vid]
+            + [{"vendor_id": N.VID, "product_id": N.WIRED_PID, "interface_number": 2,
+                "usage_page": pid_page, "usage": 1, "path": path,
+                "product_string": "Ninjutso Sora V3"}
+               for pid_page, path in ((N.PAGE_SECURE, b"wired-secure"),
+                                      (N.PAGE_MAIN, b"wired-main"))])
+        opened = []
+
+        class Recording(FakeDev):
+            def open_path(self, path):
+                opened.append(path)
+                super().open_path(path)
+
+        fake = Recording({})
+        N.hid = types.SimpleNamespace(device=lambda: fake)
+        got = N.NinjutsoSoraV3Provider().poll()
+        self.assertEqual([(s.level, s.online) for s in got], [(None, False)])
+        self.assertTrue(opened)
+        self.assertEqual(sorted(set(opened)), [b"main", b"wired-main"])
+        self.assertNotIn(b"secure", opened)
+        self.assertNotIn(b"wired-secure", opened)
+
 
 if __name__ == "__main__":
     unittest.main()
