@@ -114,6 +114,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.metadata.features[-1], b'\0\7' + bytes(63))
         self.assertEqual(self.device.write([]), -1)
         self.assertEqual(self.device.send_feature_report([]), -1)
+        self.assertEqual(self.device.error(), 'feature write data is empty')
     def test_feature_and_input_report_zero_id_count(self):
         self.assertEqual(self.device.get_feature_report(0, 4), [0, 97, 98, 99])
         self.assertEqual(self.api.ioctls[-1][1]['input_data'], b'\0'*4)
@@ -179,8 +180,144 @@ class AdapterTests(unittest.TestCase):
         self.metadata.fail_feature = True
         with self.runtime.provider_scope('test') as scope:
             self.assertEqual(self.device.send_feature_report([0, 7]), -1)
+        self.assertEqual(self.device.error(), 'feature write failed')
         self.assertTrue(scope.failed)
         self.assertFalse(scope.unsafe)
+        self.metadata.fail_feature = False
+        self.assertEqual(self.device.send_feature_report([0, 7]), 2)
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_string_error_is_cached_and_success_clears_it(self):
+        original = self.metadata.string
+        fault = OSError(31, 'product string unavailable')
+        def fail_string(*args):
+            raise fault
+        self.metadata.string = fail_string
+        with self.assertRaises(OSError) as raised:
+            self.device.get_product_string()
+        self.assertIs(raised.exception, fault)
+        self.assertEqual(self.device.error(), str(fault))
+        self.metadata.string = original
+        self.assertEqual(self.device.get_product_string(), 'Product test')
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_error_is_cached_and_safe_before_open_and_after_close(self):
+        from unittest.mock import patch
+        unopened = HidDevice(self.runtime, metadata=Metadata())
+        self.assertEqual(self.device.write([]), -1)
+        with patch.object(self.runtime, 'invoke', side_effect=AssertionError('error performed I/O')):
+            self.assertEqual(unopened.error(), 'Success')
+            self.assertEqual(self.device.error(), 'write data is empty')
+            self.assertEqual(self.device.error(), 'write data is empty')
+        self.device.close()
+        self.assertEqual(self.device.error(), 'Success')
+        with patch.object(self.runtime, 'invoke', side_effect=AssertionError('closed error performed I/O')):
+            self.device.close()
+            self.assertEqual(self.device.error(), 'Success')
+
+    def test_failed_write_diagnostic_is_text_and_success_clears_it(self):
+        original = self.api.create_write
+        fault = OSError(31, 'driver refused the output report')
+        def fail_write(*args, **kwargs):
+            raise fault
+        self.api.create_write = fail_write
+        with self.runtime.provider_scope('failed-write') as scope:
+            self.assertEqual(self.device.write([0, 7]), -1)
+        self.assertTrue(scope.failed)
+        self.assertEqual(self.device.error(), str(fault))
+        self.assertIsInstance(self.device._last_error, str)
+        self.assertFalse(any(isinstance(value, BaseException) for value in vars(self.device).values()))
+        self.api.create_write = original
+        self.assertEqual(self.device.write([0, 7]), 64)
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_feature_exception_keeps_identity_and_diagnostic(self):
+        original = self.metadata.send_feature
+        fault = OSError(5, 'feature collection access denied')
+        def fail_feature(*args):
+            raise fault
+        self.metadata.send_feature = fail_feature
+        with self.assertRaises(OSError) as raised:
+            self.device.send_feature_report([0, 7])
+        self.assertIs(raised.exception, fault)
+        self.assertEqual(self.device.error(), str(fault))
+        self.metadata.send_feature = original
+        self.assertEqual(self.device.send_feature_report([0, 7]), 2)
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_report_error_retains_context_and_original_cause(self):
+        original = self.api.create_ioctl
+        for method, kind in [(self.device.get_feature_report, 'feature'),
+                             (self.device.get_input_report, 'input')]:
+            with self.subTest(report=kind):
+                fault = OSError(31, 'collection report unavailable')
+                def fail_report(*args, **kwargs):
+                    raise fault
+                self.api.create_ioctl = fail_report
+                with self.assertRaises(OSError) as raised:
+                    method(0, 4)
+                self.assertIs(raised.exception.__cause__, fault)
+                self.assertEqual(self.device.error(), str(raised.exception))
+                self.assertIn('HID ' + kind + ' read', self.device.error())
+                self.assertIn('collection report unavailable', self.device.error())
+                self.api.create_ioctl = original
+                self.assertEqual(method(0, 4), [0, 97, 98, 99])
+                self.assertEqual(self.device.error(), 'Success')
+
+    def test_read_error_is_cached_and_next_fresh_read_clears_it(self):
+        request = Request()
+        request.completion = Completion(False, 31, 0, b'', False)
+        self.api.next_read = request
+        with self.assertRaises(OSError) as raised:
+            self.device.read(64)
+        self.assertEqual(self.device.error(), str(raised.exception))
+        self.assertTrue(request.disposed)
+        self.api.next_read = Request(b'\0ok')
+        self.assertEqual(self.device.read(64), [111, 107])
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_open_error_keeps_native_cause_and_retry_clears_it(self):
+        self.device.close()
+        original = self.api.open_path
+        fault = OSError(5, 'collection is unavailable')
+        def fail_open(*args, **kwargs):
+            raise fault
+        self.api.open_path = fail_open
+        with self.assertRaisesRegex(OSError, 'open failed') as raised:
+            self.device.open_path(b'unavailable-collection')
+        self.assertIs(raised.exception.__cause__, fault)
+        self.assertEqual(self.device.error(), str(fault))
+        self.api.open_path = original
+        self.device.open_path(b'recovered-collection')
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_feature_deadline_still_raises_and_retains_owner_until_completion(self):
+        entered, release = threading.Event(), threading.Event()
+        def blocked_feature(*args):
+            entered.set()
+            release.wait(1)
+            return True
+        self.metadata.send_feature = blocked_feature
+        self.runtime.timeout = .03
+        owner = self.api.owners[-1]
+        try:
+            with self.runtime.provider_scope('feature-deadline') as scope:
+                with self.assertRaises(TimeoutError) as raised:
+                    self.device.send_feature_report([0, 7])
+                self.assertTrue(entered.is_set())
+                self.assertEqual(self.device.error(), str(raised.exception))
+                self.device.close()
+            self.assertTrue(scope.failed)
+            self.assertTrue(scope.unsafe)
+            self.assertFalse(owner.closed)
+            self.assertFalse(self.runtime.transport_idle('feature-deadline'))
+        finally:
+            release.set()
+        deadline = time.monotonic() + 1
+        while not self.runtime.transport_idle('feature-deadline') and time.monotonic() < deadline:
+            time.sleep(.005)
+        self.assertTrue(owner.closed)
+        self.assertTrue(self.runtime.transport_idle('feature-deadline'))
     def test_closed_shape_and_limits(self):
         with self.assertRaises(ValueError):
             self.device.write(bytes(32769))
@@ -238,6 +375,7 @@ class AdapterTests(unittest.TestCase):
         with self.runtime.provider_scope('closing'):
             with self.assertRaises(TimeoutError):
                 self.device.close()
+        self.assertIn('native invocation', self.device.error())
         self.assertFalse(self.runtime.transport_idle('closing'))
         self.assertFalse(owner.closed)
         release.set()
