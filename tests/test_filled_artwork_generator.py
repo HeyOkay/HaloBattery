@@ -14,7 +14,7 @@ from tools import make_filled_artwork as generator
 
 class FilledArtworkGeneratorTests(unittest.TestCase):
     def setUp(self):
-        self.kinds = tuple(f"glyph{index}" for index in range(11))
+        self.kinds = tuple(f"glyph{index}" for index in range(12))
         self.masks = {}
         for kind in self.kinds:
             for size in generator.SIZES:
@@ -53,7 +53,7 @@ class FilledArtworkGeneratorTests(unittest.TestCase):
     def test_missing_keys_and_metadata_drift_are_rejected(self):
         pngs = self.pngs()
         pngs.pop(next(iter(pngs)))
-        cases = ((self.source(pngs), "77 reviewed"),
+        cases = ((self.source(pngs), "84 reviewed"),
                  (self.source(kinds=self.kinds[:-1]), "KINDS"),
                  (self.source(profiles={}), "OPTICAL_PROFILE"))
         for source, message in cases:

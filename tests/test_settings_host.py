@@ -147,6 +147,29 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(self.drain(), [])
         self.controller.preview.assert_not_called()
 
+    def test_unknown_charge_remains_nullable_in_device_wire_state(self):
+        status = self.controller.snapshot.return_value["devices"][0]["status"]
+        for known, charging, expected in ((False, False, None), (False, True, None),
+                                           (True, False, False), (True, True, True)):
+            with self.subTest(known=known, charging=charging):
+                status.charging_known = known
+                status.charging = charging
+                state = self.manager._state(self.session)
+                self.assertIs(state["devices"][0]["charging"], expected)
+
+    def test_last_reported_phone_exports_retained_level_with_offline_unknown_charging(self):
+        from providers.base import DeviceStatus
+        phone=DeviceStatus('phone_link:test','Phone',46,False,False,'phone_link',kind='phone',
+            charging_known=False,ui_message='state.phone_link_last_reported',ui_params={'level':46})
+        self.controller.snapshot.return_value['devices']=[dict(key=phone.key,name=phone.name,kind='phone',
+            status=phone,state='46% (last reported by Phone Link)')]
+        item=self.manager._state(self.session)['devices'][0]
+        self.assertEqual(item['level'],46)
+        self.assertFalse(item['online'])
+        self.assertFalse(item['paused'])
+        self.assertIsNone(item['charging'])
+        self.assertIn('last reported',item['description'])
+
     def test_unavailable_saved_icon_is_explained_for_only_its_device_and_clears(self):
         model = self.controller.snapshot.return_value
         model["devices"][0].update(custom_icon_id="a" * 64, custom_icon_name="")

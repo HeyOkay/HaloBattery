@@ -649,3 +649,84 @@ is excluded before opening HID: collection layout alone was the evidence for try
 the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
 providers are unchanged. These two exclusions resolve the historical fork #30 and
 Lamzu half of #34 release holds; their protocol tests remain for further development.
+
+### Phone Link selected cache
+
+**Source:** the Windows 11 Phone Link Start-menu companion's existing local
+cache; no Bluetooth, HID, GATT, network, phone command or app/service activation
+is performed. The provider does not require Bluetooth and can reflect status
+which Phone Link already obtained over Wi-Fi. This is not a real-time API.
+
+File-format evidence is pinned to
+[PaulBayfield/devices.bayfield.dev at 4cd6e3c](https://github.com/PaulBayfield/devices.bayfield.dev/blob/4cd6e3c4fc3b7d61837e60b933318e51b620d253/agent/src/devices/phonelink/__init__.py#L47)
+and [Wireless-Device-Battery-Monitor at bbc2030](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/blob/bbc203045b185ce3f0b1fe66597830515822e849/src/drivers/phonelink.cpp#L79).
+HaloBattery independently implements these file-format facts; no upstream
+provider code is copied. Microsoft documents the companion's
+[battery/connectivity display](https://support.microsoft.com/en-us/windows/apps/phonelink/mobile-device-in-start-menu),
+not this private file format.
+
+Two exact files under `%LOCALAPPDATA%\Packages\Microsoft.YourPhone_8wekyb3d8bbwe`
+are read, with size/structure limits and at most one retry for a concurrent update:
+
+- `LocalState\StartMenu\StartMenuCompanion.json`: root `speak` identifies the
+  selected device. The observed 1.26092.119.0 profile accepts the exact English
+  suffix ` - Connected to your PC`. Only the header battery row is examined:
+  `body[5].columns[4].items[0].tooltip` (Image) and
+  `body[5].columns[6].items[0].tooltip` (Container). Both must agree on the
+  complete `Battery <0..100>% remaining` phrase, optionally followed by
+  `, charging`. Other text, notification sections and media are not used.
+- `LocalCache\DeviceMetadataStorage.json`: the selected name must uniquely
+  match a linked Android/iOS entry's nested `Metadata.Metadata.DisplayName`.
+  `Metadata.Id` is its per-device UUID; the outer `DeviceMetadatas` group key
+  is shared and is never used as device identity. Windows/unknown platforms,
+  duplicate names with different UUIDs and missing identity are refused.
+
+The key is `phone_link:<canonical UUID>`. Switching selected devices never
+transfers levels or preferences. The same UUID survives a display-name change;
+a re-link that changes UUID is a new identity. No fuzzy Bluetooth/name merge is
+performed. The companion exposes one selected battery, not all linked batteries.
+
+File mtime is not a battery measurement timestamp or periodic heartbeat, and
+metadata `LastSeenTime` is not one either. On the owner's connected phone the
+file remained unchanged for about 17 minutes, so five-minute deletion was wrong.
+After five minutes an accepted level is kept explicitly **last reported**,
+offline/unconfirmed, with charging disabled. Only the ring's display projection
+preserves that known percentage; the renderer and device connectivity are not
+changed. It cannot trigger alerts or extend use-time history.
+
+An unseen cache may seed a level only within three hours, an engineering
+admission policy rather than a freshness guarantee. Beyond that, only the exact
+previously admitted (UUID key, file mtime, percentage, charger) tuple survives.
+Polling never refreshes that timestamp. Missing/invalid data, unlinking,
+ambiguous identity or selection changes clear prior admission. Ancient or
+future-dated cold caches still yield **no percentage** and an explanation.
+A bare remaining-percent phrase
+does not prove charger state: charging stays unknown and alerts/use-time
+estimates are suppressed. Only explicit charging is accepted as known by this
+initial profile. Unsupported status text is not guessed or scanned for arbitrary
+percentages elsewhere in the card.
+
+**Local field checks:** a powered-off tablet still had an old connected/46% card;
+that percentage was correctly withheld. After the user connected an S24+, its
+companion file was 51 seconds old, both battery fields said 42%, and the unique
+matched Android UUID differed from the tablet. In the earlier composed Desktop
+build, the owner also confirmed its percentage and phone glyph in the tray and
+Settings with phone Bluetooth disabled and Wi-Fi available. These checks used
+the same cache reader; they are not direct phone queries or a hardware test of
+every prerequisite branch separately. iPhone behavior remains unverified.
+
+Updates depend on Phone Link continuing to synchronize in the background.
+During another local observation, the phone and HaloBattery both showed 93%,
+but the companion cache and Start menu omitted charging status. HaloBattery
+continued polling and correctly kept charging unknown. Earlier explicit charging
+reports were observed, so this is not a claim that Phone Link never supports
+charging. Cache polling cannot fix upstream synchronization or invent a missing
+charger flag. Temporary poll-counter logging used for that check is not shipped.
+
+Newer Windows CrossDevice can hold status only in memory. Its internal Settings
+interface has a Microsoft Settings caller restriction; HaloBattery does not
+activate/bypass it, scrape UI, or substitute older cached percentages. If that
+is the only available source, battery status remains unavailable until a supported
+companion cache is produced. Other localized card formats and iPhone charging/
+disconnect behavior still need field confirmation; UI translations do not make
+an unsupported cache format supported.

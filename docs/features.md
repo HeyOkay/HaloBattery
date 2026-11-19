@@ -179,3 +179,30 @@ To keep the settings, the log and the battery history next to the app instead of
 4. Run `scripts\install_and_run.bat`, then right-click the tray icon → **Settings… → General → Start with Windows**.
 
 `scripts\probe.bat` polls once and prints what was found in a console window. `scripts\build_exe.bat` builds the app yourself into `dist\HaloBattery`. Releases are built automatically: pushing a tag like `v1.8.0` makes GitHub Actions build the app and attach the zip (`.github/workflows/release.yml`).
+
+## Phone Link mobile battery
+
+Phone Link appears under Device types. Its selected mobile device appears in
+the tray and Devices with a phone pictogram when its identity can be proved.
+This source is independent of Windows Bluetooth battery reporting: no Bluetooth
+connection is required by HaloBattery, and Phone Link may obtain status over Wi-Fi.
+
+It reads the Windows 11 Phone Link Start-menu companion cache, not the phone.
+Only the selected companion device's battery is available; this does not provide
+real-time telemetry or every linked phone's level. An unchanged, previously
+accepted level remains visible as **last reported**, rather than disappearing
+after five minutes. The ring and percentage stay visible; the source is marked
+offline/unconfirmed and old charging animation, alerts and use-time estimates
+are disabled. On a cold start, a cache older than three hours cannot seed a
+reading. This is an admission policy, not a measurement or heartbeat guarantee.
+Missing/unsupported cache or ambiguous identity clears admission. HaloBattery
+will not launch Phone Link or change device settings.
+
+The initial card parser recognizes the observed English status format even
+when HaloBattery uses another UI language. Other card formats are refused.
+Unknown charger state is shown as unknown and cannot trigger battery alerts or
+use-time estimates. See [source and verification limits](protocols.md#phone-link-selected-cache).
+
+Ongoing updates depend on Phone Link's background synchronization. HaloBattery
+does not keep it alive or refresh it by opening its window. If Phone Link omits
+charging status, HaloBattery cannot reconstruct it from the battery percentage.

@@ -40,7 +40,7 @@ KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "k
          "C": "microphone",
          "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
          "keyboard": "keyboard", "microphone": "microphone", "mic": "microphone",
-         "speaker": "speaker", "webcam": "webcam", "health": "health",
+         "speaker": "speaker", "webcam": "webcam", "health": "health", "phone": "phone",
          "smart_home": "smart_home",
          "watch": "watch", "display": "display", "tracker": "tracker",
          "dualshock": "dualshock", "dualsense": "dualsense",
