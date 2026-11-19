@@ -79,9 +79,9 @@ def parse_charge(frame) -> Optional[int]:
         if frame[i] != 0:
             return None
     charge = frame[charge_index]
-    if charge == 0:
+    if not 0 < charge <= 100:
         return None
-    return min(charge, 100)
+    return charge
 
 
 class AmInfinityProvider(Provider):

@@ -35,9 +35,9 @@ def _native_error(code):
     """OSError for a failed native request, worded like hidapi's Windows text.
 
     hidapi reports e.g. "WriteFile: (0x00000001) Incorrect function." through
-    device.error(). hyperx_cloud3 and mchose_v9 look for "0x00000001" or
-    "incorrect function" there to retry an output report as a feature report,
-    so the code and the system message must both be in the text.
+    device.error(). hyperx_cloud3 looks for "0x00000001" or "incorrect
+    function" there to retry an output report as a feature report, so the
+    code and the system message must both be in the text.
     """
     code = int(code) & 0xFFFFFFFF
     try:

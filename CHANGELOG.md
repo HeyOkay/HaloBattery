@@ -16,6 +16,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and packaging jobs do not receive or forward it.
 
 - Add isolated, opt-in SignPath test signing for application and installer builds.
+- MCHOSE V9 no longer retries a refused output report as a feature report;
+  Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
+  can show no reading until that connection's protocol is verified. Malformed
+  battery values are refused rather than clamped to a plausible percentage.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
@@ -85,7 +89,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
   block Windows session-end cleanup after tray icons disappear.
 - Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the
-  HyperX Cloud III and MCHOSE V9 feature-report fallback works again; let a read with its
+  HyperX Cloud III feature-report fallback works again; let a read with its
   own longer timeout (HyperX Cloud Flight, 2 s) end empty instead of failing; close the
   Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
 - Keep cached HID transport error diagnostics available without new native calls;
@@ -94,6 +98,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Prevent native dropdown containers from clipping Settings highlights without enlarging menus.
 - Match light-theme hover backgrounds on the hamburger and neutral title-bar
   buttons to the active navigation background.
+- Query MCHOSE V9 Pro only through its sourced output-report transport instead
+  of retrying a refused request as an unconfirmed feature report.
+- Keep Atlas Air on its confirmed SInf/GSI exchange when the headset is silent,
+  without sending the Stealth 700 CoAP initialization command.
+- Reject malformed SteelSeries percentages and discrete battery codes before
+  conversion, retaining documented raw-scale and overreporting corrections.
+- Require fresh Skullcandy input instead of presenting an unchanged old snapshot
+  as a new battery reading, while accepting a steady level in a fresh packet.
+- Add the confirmed Turtle Beach Stealth Pro II receiver `10f5:2285`.
+- Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
+  original exchange receives no answer; mark its coarse levels and unknown charging.
+- Refuse Glorious query echoes and provisional replies without suppressing real 0%.
+- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
+  or disconnected-keyboard status as a current keyboard reading.
+- Refuse malformed percentages in AM Infinity and
+  SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 

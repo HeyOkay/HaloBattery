@@ -110,11 +110,34 @@ class PollTest(unittest.TestCase):
         res = self.poll(entries, self.cols(entries, replies=(UNNUM100,)))
         self.assertEqual([(r.level, r.online) for r in res], [(100, True)])
 
-    def test_charge_is_clamped_to_100(self):
+    def test_out_of_range_charge_is_refused(self):
         entries = infinity_entries()
-        frame = [0x05, 0x00, 0x00, 0xFA, 0x01, 0x01, 0x01, 0x02]   # 250, the reference clamps
-        res = self.poll(entries, self.cols(entries, replies=(frame,)))
-        self.assertEqual([r.level for r in res], [100])
+        for frame in (bytes.fromhex("05 00 00 65 01 01 01 02"),
+                      bytes.fromhex("05 00 00 ff 01 01 01 02")):
+            with self.subTest(frame=frame):
+                self.assertIsNone(A.parse_charge(frame))
+                self.assertEqual(self.poll(entries, self.cols(entries, replies=(frame, frame))), [])
+                self.assertIsNone(self.provider._last)
+
+    def test_literal_percentage_boundaries_preserve_zero_as_unknown(self):
+        for frame, expected in (
+                (bytes.fromhex("05 00 00 00 01 01 01 02"), None),
+                (bytes.fromhex("05 00 00 64 01 01 01 02"), 100),
+                (bytes.fromhex("00 00 65 01 01 01 02"), None),
+                (bytes.fromhex("00 00 ff 01 01 01 02"), None),
+                (bytes.fromhex("00 00 64 01 01 01 02"), 100)):
+            with self.subTest(frame=frame):
+                self.assertEqual(A.parse_charge(frame), expected)
+
+    def test_invalid_charge_does_not_replace_or_refresh_last_good_value(self):
+        entries = infinity_entries()
+        good = bytes.fromhex("05 00 00 37 01 01 01 02")
+        bad = bytes.fromhex("05 00 00 ff 01 01 01 02")
+        self.poll(entries, self.cols(entries, replies=(good,)))
+        before = self.provider._last
+        res = self.poll(entries, self.cols(entries, replies=(bad, bad)))
+        self.assertEqual([(s.level, s.online) for s in res], [(55, False)])
+        self.assertEqual(self.provider._last, before)
 
     def test_zero_charge_is_unknown_not_0(self):
         entries = infinity_entries()

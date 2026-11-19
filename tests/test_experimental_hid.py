@@ -232,9 +232,9 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.device.error(), 'Success')
 
     def test_write_refused_with_incorrect_function_is_recognisable(self):
-        """hyperx_cloud3 and mchose_v9 retry a refused write as a feature report only
-        when error() names Windows error 1 the way hidapi does."""
-        from providers import hyperx_cloud3, mchose_v9
+        """hyperx_cloud3 retries a refused write as a feature report only when
+        error() names Windows error 1 the way hidapi does."""
+        from providers import hyperx_cloud3
         original = self.api.create_write
         def refused(owner, data):
             request = original(owner, data)
@@ -247,8 +247,7 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(scope.unsafe)
         text = self.device.error().lower()
         self.assertIn('0x00000001', text)
-        for markers in (hyperx_cloud3._FEATURE_ONLY, mchose_v9._FEATURE_ONLY):
-            self.assertTrue(any(marker in text for marker in markers), text)
+        self.assertTrue(any(marker in text for marker in hyperx_cloud3._FEATURE_ONLY), text)
         self.api.create_write = original
         self.assertEqual(self.device.write([0, 7]), 64)
         self.assertEqual(self.device.error(), 'Success')
