@@ -7,6 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- MCHOSE V9 no longer retries a refused output report as a feature report;
+  Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
+  can show no reading until that connection's protocol is verified. Malformed
+  battery values are refused rather than clamped to a plausible percentage.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
