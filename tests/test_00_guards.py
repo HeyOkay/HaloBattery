@@ -5,8 +5,11 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+import json
 import os
+import subprocess
 import sys
+import textwrap
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
@@ -17,6 +20,11 @@ _sandbox.install_guards()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from test_hide_rename import hb  # noqa: E402
+
+try:
+    import serial
+except ImportError:
+    serial = None
 
 
 class GuardTests(unittest.TestCase):
@@ -34,14 +42,15 @@ class GuardTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             hid.device()
 
+    @unittest.skipIf(serial is None, "pyserial is not installed")
     def test_real_serial_ports_are_blocked(self):
-        import serial
         from serial.tools import list_ports
         with self.assertRaises(AssertionError):
             list_ports.comports()
         with self.assertRaises(AssertionError):
             serial.Serial("COM1", 115200)
 
+    @unittest.skipIf(serial is None, "pyserial is not installed")
     def test_serial_aliases_and_subclasses_cannot_open_a_port(self):
         import importlib
         native = importlib.import_module(
@@ -73,6 +82,7 @@ class GuardTests(unittest.TestCase):
                 dji._Receiver()._session()
         find.assert_not_called()
 
+    @unittest.skipIf(serial is None, "pyserial is not installed")
     def test_the_sony_provider_cannot_reach_a_port_through_the_guard(self):
         # the provider calls these by attribute, so the guard covers the provider itself
         from providers import sony_inzone
@@ -88,6 +98,37 @@ class GuardTests(unittest.TestCase):
                     self.assertFalse(path.startswith(os.path.normcase(os.path.join(real, "HaloBattery"))),
                                      path)
                 self.assertTrue(path.startswith(os.path.normcase(os.path.abspath(_sandbox.root()))), path)
+
+    def test_absent_optional_serial_skips_only_serial_checks(self):
+        script = textwrap.dedent('''
+            import builtins, io, json, sys, unittest
+            sys.path[:0] = ["tests", "."]
+            original = builtins.__import__
+            def without_serial(name, *args, **kwargs):
+                if name == "serial" or name.startswith("serial."):
+                    raise ImportError("optional pyserial unavailable for this fixture")
+                return original(name, *args, **kwargs)
+            builtins.__import__ = without_serial
+            names = [
+                "test_real_serial_ports_are_blocked",
+                "test_serial_aliases_and_subclasses_cannot_open_a_port",
+                "test_the_sony_provider_cannot_reach_a_port_through_the_guard",
+                "test_network_is_blocked", "test_real_hid_is_blocked",
+            ]
+            suite = unittest.defaultTestLoader.loadTestsFromNames([
+                "test_00_guards.GuardTests." + name for name in names])
+            output = io.StringIO()
+            result = unittest.TextTestRunner(stream=output).run(suite)
+            if not result.wasSuccessful():
+                raise AssertionError(output.getvalue())
+            print(json.dumps({"run": result.testsRun, "skipped": len(result.skipped)}))
+        ''')
+        result = subprocess.run([sys.executable, "-B", "-c", script],
+                                cwd=os.path.dirname(os.path.dirname(__file__)),
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout.strip().splitlines()[-1]),
+                         {"run": 5, "skipped": 3})
 
 
 if __name__ == "__main__":
