@@ -47,7 +47,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   read first because the dongle goes quiet while it is plugged in. Protocol from
   justik13/razer-blackshark-v2-hyperspeed-webhid, with read-only implementations in
   blackshark-battery and openrazer PR #2974. **Confirmed on hardware** in #86: level
-  and charging, on both the receiver and the USB-C cable.
+  and charging (the receiver and cable paths were not reported separately).
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix

@@ -22,8 +22,9 @@ the domain, an acknowledgement byte 0x01, a payload count and then the value:
 the percent for 0x21, the charging flag for 0x2A. Both are GET requests and
 nothing else is ever sent.
 
-**Confirmed on hardware** in #86: the receiver and the USB-C cable both
-reported the level and the charging state. The reference implementations
+**Confirmed on hardware** in #86: the reporter saw the level and the charging
+state ("it shows the current battery level and charging status"); he did not
+report the receiver and the cable paths separately, and no raw reply was posted. The reference implementations
 were also validated on this hardware.
 """
 from __future__ import annotations
