@@ -182,13 +182,13 @@ class LoadConfigTests(ConfigFileTestCase):
 class SaveConfigTests(ConfigFileTestCase):
     def test_unwritable_folder_does_not_raise(self):
         with mock.patch.object(hb, "CONFIG_PATH", os.path.join(self.dir, "missing", "config.json")):
-            hb.save_config(dict(hb.DEFAULTS))                    # no exception, nothing created
+            self.assertIs(hb.save_config(dict(hb.DEFAULTS)), False)
             self.assertFalse(os.path.exists(os.path.join(self.dir, "missing")))
 
     def test_values_json_cannot_hold_keep_the_old_file(self):
-        hb.save_config(dict(hb.DEFAULTS, low=33))
+        self.assertIs(hb.save_config(dict(hb.DEFAULTS, low=33)), True)
         for bad in (object(), {1, 2}, b"bytes"):
-            hb.save_config(dict(hb.DEFAULTS, low=bad))
+            self.assertIs(hb.save_config(dict(hb.DEFAULTS, low=bad)), False)
         self.assertEqual(hb.load_config()["low"], 33)
         self.assertFalse(os.path.exists(self.path + ".tmp"))
 

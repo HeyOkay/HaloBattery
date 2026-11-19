@@ -40,6 +40,7 @@ RAM_CACHE_BYTES = 64 * 1024 * 1024
 RAW_CACHE_BYTES = 8 * 1024 * 1024
 NEGATIVE_CACHE_LIMIT = 512
 ASSET_REVISION = "iconify-source-v1"
+SELECTED_REVISION = "iconify-selection-v2"
 _NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,127}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -70,6 +71,14 @@ def _json_bytes(value):
 
 def _hash(value):
     return hashlib.sha256(_json_bytes(value)).hexdigest()
+
+
+def _selection_id(metadata):
+    # The configured ID is the local selection trust anchor. Bind its reviewed
+    # evidence AND pixels, rather than trusting a mutable checksum beside PNGs.
+    # Acquisition time is informational and does not change the selected work.
+    return _hash([SELECTED_REVISION, {key: value for key, value in metadata.items()
+                                    if key not in ("asset_id", "acquired_utc")}])
 
 
 def _cancel(cancel):
@@ -810,25 +819,58 @@ class IconifyCatalog:
                 raise CatalogError("Collection license metadata changed; review required", "license_unverified")
             self._infos[prefix] = (self._clock(), info)
 
-    def _asset_id(self, icon_id):
+    def _selection_key(self, icon_id, version):
         _, name, entry = self._entry(icon_id)
-        from . import svg_glyph
-        return _hash([ASSET_REVISION, icon_id, entry["icons"][name],
-                      svg_glyph.RENDERER_VERSION])
+        return _hash([SELECTED_REVISION, icon_id, version, entry["icons"][name],
+                      entry["name"], entry["author"], entry["license"],
+                      entry["license_text"], entry.get("notices", []),
+                      entry.get("provenance", {}), entry.get("current_policy", {})])
+
+    @staticmethod
+    def _reviewed_evidence(entry, name, metadata):
+        return (metadata.get("source_hash") == entry["icons"][name]
+                and metadata.get("collection") == entry["name"]
+                and all(metadata.get(field) == entry[field]
+                        for field in ("author", "license", "license_text"))
+                and metadata.get("notices") == entry.get("notices", [])
+                and metadata.get("provenance") == entry.get("provenance", {})
+                and (metadata.get("asset_revision") != SELECTED_REVISION or
+                     metadata.get("current_policy", {}) == entry.get("current_policy", {})))
+
+    def _cached_ids(self, icon_id, version):
+        """Disposable lookup for browsing; direct selected-ID loads need none."""
+        key = self._selection_key(icon_id, version)
+        _, name, entry = self._entry(icon_id)
+        with self._lock:
+            assets = tuple(self._assets.values())
+        for asset in reversed(assets):
+            if (asset.icon_id == icon_id and asset.metadata.get("renderer_revision") == version
+                    and asset.metadata.get("selection_key") == key
+                    and self._reviewed_evidence(entry, name, asset.metadata)):
+                yield asset.id
+        try:
+            saved = _read_json(self.root / "lookups" / (key + ".json"), maximum=1024)
+            value = saved.get("asset_id")
+            if isinstance(value, str) and _DIGEST.fullmatch(value):
+                asset = self.load(value)
+                if (asset is not None and asset.icon_id == icon_id
+                        and asset.metadata.get("renderer_revision") == version
+                        and asset.metadata.get("selection_key") == key
+                        and self._reviewed_evidence(entry, name, asset.metadata)):
+                    yield value
+        except (OSError, ValueError, UnicodeError, RecursionError):
+            pass
+        yield _hash([ASSET_REVISION, icon_id, entry["icons"][name], version])
 
     def cached(self, icon_id):
         """Read current pixels or a validated older fallback; never use network."""
         try:
-            current = self.load(self._asset_id(icon_id))
-            if current is not None:
-                return current
-            _, name, entry = self._entry(icon_id)
-            from .svg_glyph import LEGACY_RENDERER_VERSION, PREVIOUS_RENDERER_VERSION
-            for version in (PREVIOUS_RENDERER_VERSION, LEGACY_RENDERER_VERSION):
-                asset_id = _hash([ASSET_REVISION, icon_id, entry["icons"][name], version])
-                asset = self.load(asset_id)
-                if asset is not None:
-                    return asset
+            from .svg_glyph import RENDERER_VERSION, LEGACY_RENDERER_VERSION, PREVIOUS_RENDERER_VERSION
+            for version in (RENDERER_VERSION, PREVIOUS_RENDERER_VERSION, LEGACY_RENDERER_VERSION):
+                for asset_id in self._cached_ids(icon_id, version):
+                    asset = self.load(asset_id)
+                    if asset is not None:
+                        return asset
         except CatalogError:
             pass
         return None
@@ -844,13 +886,13 @@ class IconifyCatalog:
         _, name, entry = self._entry(icon_id)
         from .svg_glyph import RENDERER_VERSION, PREVIOUS_RENDERER_VERSION, LEGACY_RENDERER_VERSION
         for version in (RENDERER_VERSION, PREVIOUS_RENDERER_VERSION, LEGACY_RENDERER_VERSION):
-            asset_id = _hash([ASSET_REVISION, icon_id, entry["icons"][name], version])
-            try:
-                source = _read_json(self.root / "assets" / asset_id / "source.json")
-                if isinstance(source, dict) and _hash(source) == entry["icons"][name]:
-                    return source
-            except (OSError, ValueError, UnicodeError, RecursionError):
-                continue
+            for asset_id in self._cached_ids(icon_id, version):
+                try:
+                    source = _read_json(self.root / "assets" / asset_id / "source.json")
+                    if isinstance(source, dict) and _hash(source) == entry["icons"][name]:
+                        return source
+                except (OSError, ValueError, UnicodeError, RecursionError):
+                    continue
         return None
 
     def pin(self, asset_id):
@@ -903,14 +945,14 @@ class IconifyCatalog:
         except OSError:
             pass
 
-    def prepare(self, icon_id, cancel=None):
+    def prepare(self, icon_id, cancel=None, *, offline=False):
         prefix, name, entry = self._entry(icon_id)
         _cancel(cancel)
         previous = self.cached(icon_id)
         if previous is not None and not self.needs_upgrade(previous):
             return previous
         try:
-            return self._prepare_current(icon_id, prefix, name, entry, cancel)
+            return self._prepare_current(icon_id, prefix, name, entry, cancel, offline=offline)
         except CatalogCancelled:
             raise
         except CatalogError as exc:
@@ -921,13 +963,14 @@ class IconifyCatalog:
                 return previous
             raise
 
-    def _prepare_current(self, icon_id, prefix, name, entry, cancel):
+    def _prepare_current(self, icon_id, prefix, name, entry, cancel, *, offline=False):
         from . import svg_glyph
         renderer_revision = svg_glyph.RENDERER_VERSION
-        asset_id = self._asset_id(icon_id)
         self._check_source_failure(icon_id)
         icon = self._local_source(icon_id)
         if icon is None:
+            if offline:
+                raise CatalogError("Icon source is not cached", "offline")
             self._collection_info(prefix, cancel)
             data = self._raw_icons.get(icon_id)
             if data is None:
@@ -946,7 +989,7 @@ class IconifyCatalog:
             raise CatalogError("Icon cannot be used by the tray renderer", "unsupported_svg") from exc
         from .custom_icon_profile import with_builtin_profile
         glyph = with_builtin_profile(icon_id, glyph)
-        metadata = {"asset_id": asset_id, "icon_id": icon_id,
+        metadata = {"icon_id": icon_id,
                     "collection": entry["name"], "collection_id": prefix,
                     "author": dict(entry["author"]), "license": dict(entry["license"]),
                     "license_text": entry["license_text"], "notices": entry.get("notices", []),
@@ -967,6 +1010,9 @@ class IconifyCatalog:
         if not isinstance(png, bytes) or len(png) > MAX_RESPONSE:
             raise CatalogError("Invalid rendered glyph")
         metadata["png_sha256"] = hashlib.sha256(png).hexdigest()
+        metadata["asset_revision"] = SELECTED_REVISION
+        metadata["selection_key"] = self._selection_key(icon_id, renderer_revision)
+        asset_id = metadata["asset_id"] = _selection_id(metadata)
         _cancel(cancel)
         asset = IconifyAsset(asset_id, icon_id, glyph, metadata)
         with self._lock:
@@ -982,8 +1028,10 @@ class IconifyCatalog:
             raise CatalogError("Invalid selected icon", "invalid_request")
         _, name, entry = self._entry(asset.icon_id)
         metadata = asset.metadata
-        expected = _hash([ASSET_REVISION, asset.icon_id, entry["icons"][name],
-                          metadata.get("renderer_revision")])
+        selected = metadata.get("asset_revision") == SELECTED_REVISION
+        expected = (_selection_id(metadata) if selected else
+                    _hash([ASSET_REVISION, asset.icon_id, entry["icons"][name],
+                           metadata.get("renderer_revision")]))
         if (asset.id != expected or metadata.get("asset_id") != asset.id or
                 metadata.get("icon_id") != asset.icon_id or
                 metadata.get("source_hash") != entry["icons"][name] or
@@ -991,7 +1039,10 @@ class IconifyCatalog:
                     ("author", "license", "license_text")) or
                 metadata.get("collection") != entry["name"] or
                 metadata.get("notices") != entry.get("notices", []) or
-                metadata.get("provenance") != entry.get("provenance", {})):
+                metadata.get("provenance") != entry.get("provenance", {}) or
+                selected and (metadata.get("current_policy", {}) != entry.get("current_policy", {}) or
+                              metadata.get("selection_key") != self._selection_key(
+                                  asset.icon_id, metadata.get("renderer_revision")))):
             raise CatalogError("Selected icon evidence changed", "license_unverified")
         png = asset.glyph.png_bytes
         if (not isinstance(png, bytes) or len(png) > MAX_RESPONSE or
@@ -1006,16 +1057,71 @@ class IconifyCatalog:
         if source is not None and _hash(source) != entry["icons"][name]:
             raise CatalogError("Selected icon source changed", "license_unverified")
         _cancel(cancel)
+        self._write_selection(asset, png, source)
+        return asset.id
+
+    def _write_selection(self, asset, png, source):
         with self._lock:
             folder = self.root / "assets" / asset.id
             try:
                 if source is not None:
                     _atomic(folder / "source.json", _json_bytes(source))
                 _atomic(folder / "glyph.png", png)
-                _atomic(folder / "metadata.json", _json_bytes(metadata))
+                _atomic(folder / "metadata.json", _json_bytes(asset.metadata))
             except OSError as exc:
                 raise CatalogError("Selected icon could not be saved", "cache_error") from exc
-        return asset.id
+            key = asset.metadata.get("selection_key")
+            if isinstance(key, str) and _DIGEST.fullmatch(key):
+                # A missing lookup only costs a browse cache hit. Never make a
+                # valid selected master depend on writing disposable indexes.
+                try:
+                    lookups = self.root / "lookups"
+                    _atomic(lookups / (key + ".json"), _json_bytes({"asset_id": asset.id}))
+                    files = sorted(lookups.glob("*.json"), key=lambda path: path.stat().st_mtime)
+                    for path in files[:-ASSET_CACHE_LIMIT]:
+                        path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def seal_selection(self, asset):
+        """Bind a still-verifiable legacy choice to its original evidence/PNG.
+
+        Future app registries may change or remove an icon. Once configured,
+        the immutable ID preserves the selection-time proof independently.
+        This is not protection against someone replacing both config and data.
+        """
+        if asset.metadata.get("asset_revision") == SELECTED_REVISION:
+            return asset
+        # Re-read rather than approving a caller-supplied legacy object.
+        with self._lock:
+            self._assets.pop(asset.id, None)
+            verified = self.load(asset.id)
+            if verified is None:
+                raise CatalogError("Saved icon evidence cannot be verified", "license_unverified")
+            folder = self.root / "assets" / asset.id
+            with (folder / "glyph.png").open("rb") as stream:
+                png = stream.read(MAX_RESPONSE + 1)
+            if len(png) > MAX_RESPONSE or hashlib.sha256(png).hexdigest() != verified.metadata["png_sha256"]:
+                raise CatalogError("Saved icon pixels changed", "cache_error")
+            metadata = dict(verified.metadata, asset_revision=SELECTED_REVISION,
+                            selection_key=self._selection_key(verified.icon_id,
+                                                             verified.metadata.get("renderer_revision")))
+            # Older masters predate the descriptive selection policy field.
+            # Their source/legal record was just rechecked against this review.
+            _, _, entry = self._entry(verified.icon_id)
+            metadata.setdefault("current_policy", entry.get("current_policy", {}))
+            metadata["asset_id"] = _selection_id(metadata)
+            sealed = IconifyAsset(metadata["asset_id"], verified.icon_id, verified.glyph, metadata)
+            source = None
+            try:
+                saved = _read_json(folder / "source.json")
+                if _hash(saved) == metadata["source_hash"]:
+                    source = saved
+            except (OSError, ValueError, UnicodeError, RecursionError):
+                pass
+            self._write_selection(sealed, png, source)
+            self._remember(sealed)
+            return sealed
 
     def load(self, asset_id):
         """Load a selected asset with local integrity checks; never use network."""
@@ -1029,20 +1135,29 @@ class IconifyCatalog:
                 folder = self.root / "assets" / asset_id
                 metadata = _read_json(folder / "metadata.json")
                 icon_id = metadata.get("icon_id")
-                _, name, entry = self._entry(icon_id)
-                if (metadata.get("asset_id") != asset_id
-                        or metadata.get("source_hash") != entry["icons"][name]
-                        or metadata.get("license_text") != entry["license_text"]
-                        or metadata.get("author") != entry["author"]
-                        or metadata.get("license") != entry["license"]
-                        or metadata.get("notices") != entry.get("notices", [])
-                        or metadata.get("provenance") != entry.get("provenance", {})
-                        or metadata.get("collection") != entry["name"]):
-                    return None
-                expected = _hash([ASSET_REVISION, icon_id, metadata["source_hash"],
-                                  metadata.get("renderer_revision")])
-                if expected != asset_id:
-                    return None
+                _icon_parts(icon_id)
+                if metadata.get("asset_revision") == SELECTED_REVISION:
+                    # Evidence was checked against the reviewed registry when
+                    # selected. A newer registry governs NEW selections only.
+                    # Hashing the full record also binds the persisted PNG hash.
+                    expected = _selection_id(metadata)
+                    if metadata.get("asset_id") != asset_id or expected != asset_id:
+                        return None
+                else:
+                    _, name, entry = self._entry(icon_id)
+                    if (metadata.get("asset_id") != asset_id
+                            or metadata.get("source_hash") != entry["icons"][name]
+                            or metadata.get("license_text") != entry["license_text"]
+                            or metadata.get("author") != entry["author"]
+                            or metadata.get("license") != entry["license"]
+                            or metadata.get("notices") != entry.get("notices", [])
+                            or metadata.get("provenance") != entry.get("provenance", {})
+                            or metadata.get("collection") != entry["name"]):
+                        return None
+                    expected = _hash([ASSET_REVISION, icon_id, metadata["source_hash"],
+                                      metadata.get("renderer_revision")])
+                    if expected != asset_id:
+                        return None
                 with (folder / "glyph.png").open("rb") as stream:
                     png = stream.read(MAX_RESPONSE + 1)
                 if len(png) > MAX_RESPONSE or hashlib.sha256(png).hexdigest() != metadata.get("png_sha256"):
@@ -1086,6 +1201,11 @@ class IconifyCatalog:
         except OSError:
             pass
 
+    def close_transport(self):
+        """Interrupt owned HTTP work without discarding assets in use."""
+        if self._http_transport is not None:
+            self._http_transport.close()
+
     def clear_browse_cache(self, keep_ids):
         """Release a stopped window's RAM and legacy browse/source disk caches.
 
@@ -1095,8 +1215,7 @@ class IconifyCatalog:
         if not isinstance(keep_ids, (list, tuple, set, frozenset)) or len(keep_ids) > 20000:
             raise CatalogError("Invalid selected icon list", "invalid_request")
         keep = {value for value in keep_ids if isinstance(value, str) and _DIGEST.fullmatch(value)}
-        if self._http_transport is not None:
-            self._http_transport.close()
+        self.close_transport()
         with self._search_lock, self._lock:
             self._searches.clear()
             self._name_blob = None
@@ -1110,7 +1229,7 @@ class IconifyCatalog:
             self._index_names = 0
             self._assets = OrderedDict((key, value) for key, value in self._assets.items() if key in keep)
             self._pinned = keep
-            for name in ("browse", "sources", "preview-pages"):
+            for name in ("browse", "sources", "preview-pages", "lookups"):
                 self._remove_cache_folder(self.root / name)
 
     def attributions(self, asset_ids):

@@ -16,6 +16,31 @@
 
 The low battery notification fires once, and again only after the device has been charged.
 
+## Reading failures
+
+Windows HID reads use bounded in-process transport workers. A failed or timed-out
+query keeps any previous result marked unavailable rather than replaying it as a
+new measurement. Refresh retries a paused provider. No process is started for
+each device or protocol. Drivers that refuse cancellation can still occupy the
+fixed worker budget; Diagnostics distinguishes unavailable readings from an
+ordinary sleeping device.
+
+The native HID adapter keeps the last transport diagnostic as text for
+`device.error()`. Reading it performs no native call, including before opening
+or after closing a device; a successful transport operation clears it to
+`Success`. The bounded adapter deliberately lets a `send_feature_report()`
+deadline raise `TimeoutError` (an `OSError`) instead of returning HIDAPI's `-1`.
+Callers keep that failure distinct from a valid reply while cancellation and
+native handle cleanup continue under the existing owner.
+
+If the native HID module is missing or blocked, HaloBattery explains the failure
+and keeps Settings and Windows Bluetooth support available. USB/2.4 GHz support
+is not emulated; Diagnostics includes the native loader error.
+
+Full-charge notifications cannot cross a disconnect or an unavailable transport
+reading. Reconnecting at 100% is not a newly completed charge. Temporary unknown
+values from a still-connected device wait for confirmation without firing an alert.
+
 ## Tray menu
 
 Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
@@ -82,8 +107,8 @@ before freezing Python. No SDK or shared runtime installer is run by the script.
 
 Open **Settings** from the tray menu. Changes apply immediately and are saved;
 there is no separate Save button. Position, size, monitor and the navigation
-panel state are restored before the window is shown. Closing Settings hides
-the ready window; reopening keeps its current page and scroll position.
+panel state are restored before the window is shown. Closing Settings releases its companion process and memory. Reopening restores
+the saved page and scroll position while the app splash covers loading.
 Window preferences are stored natively in `settings-window.json` inside the
 active installed or portable profile. Settings remain available when no devices are
 connected. The interface keeps seven languages: English, Spanish,

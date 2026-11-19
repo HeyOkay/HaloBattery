@@ -55,6 +55,7 @@ class SettingsController:
             disabled = app.disabled_providers()
             release = getattr(app, "update", None)
             result = dict(cfg=cfg, devices=devices, version=ctx["version"], data_dir=ctx["data_dir"],
+                          custom_icon_errors=list(getattr(app, "_custom_icon_errors", [])),
                           status_path=ctx["status_path"], update=dict(version=release.version, url=release.url) if release else None,
                           update_progress=getattr(app, "update_progress", None), install_ok=getattr(app, "install_ok", False),
                           icon_light_taskbar=bool(app.light_taskbar))
@@ -85,7 +86,7 @@ class SettingsController:
         app.wake.set()
 
     def _save(self):
-        self.context["save_config"](self.app.cfg)
+        return self.context["save_config"](self.app.cfg)
 
     def _redraw(self):
         app = self.app
@@ -119,6 +120,8 @@ class SettingsController:
             return
         with app.lock:
             app.cfg[key] = value
+            if key == "playstation_full_mode":
+                getattr(app, "configure_polling", lambda: None)()
             if key == "bluetooth":
                 app.bt_cache = []
                 app.bt_wake.set()
@@ -255,6 +258,7 @@ class SettingsController:
 
     def load_custom_icons(self):
         self.app._custom_assets = {}
+        self.app._custom_icon_errors = []
         ids = self.custom_icon_ids()
         if not ids and not (Path(self.context["data_dir"]) / "iconify").exists():
             return
@@ -262,16 +266,49 @@ class SettingsController:
             catalog = self.icon_catalog()
         except (OSError, ValueError):
             log.warning("settings: custom icon registry could not be loaded", exc_info=True)
+            self.app._custom_icon_errors = list(ids)
             return
+        from .iconify_catalog import IconifyAsset, SELECTED_REVISION
+        migrations = {}
         for asset_id in ids:
             asset = catalog.load(asset_id)
             if asset is not None:
                 self.app._custom_assets[asset.id] = asset
                 try:
                     catalog.pin(asset.id)
+                    if (isinstance(asset, IconifyAsset)
+                            and asset.metadata.get("asset_revision") != SELECTED_REVISION):
+                        sealed = catalog.seal_selection(asset)
+                        catalog.pin(sealed.id)
+                        migrations[asset.id] = sealed
                 except (OSError, ValueError):
                     # A read-only portable profile can still display valid PNGs.
                     log.warning("settings: could not refresh custom icon retention", exc_info=True)
+            else:
+                # Keep the configured ID for recovery, but make the failed
+                # selection visible to startup/settings presentation code.
+                self.app._custom_icon_errors.append(asset_id)
+                log.warning("settings: saved custom icon could not be loaded: %s", asset_id)
+
+        if migrations:
+            with self.app.lock:
+                target = self.app._settings_map("custom_icons")
+                previous = dict(target)
+                for key, old_id in list(target.items()):
+                    if old_id in migrations:
+                        target[key] = migrations[old_id].id
+                try:
+                    if self._save() is False:
+                        raise OSError("Custom icon evidence migration config was not saved")
+                except (OSError, ValueError):
+                    target.clear()
+                    target.update(previous)
+                    log.warning("settings: custom icon evidence migration could not be saved", exc_info=True)
+                else:
+                    for asset in migrations.values():
+                        self.app._custom_assets[asset.id] = asset
+                    self._prune_custom_assets()
+            ids = self.custom_icon_ids()
 
         # Migrate caches left by earlier builds before any window or upgrade
         # worker starts. Applied masters have already been loaded and retained.
@@ -295,6 +332,8 @@ class SettingsController:
         used = set(saved.values()) if isinstance(saved, dict) else set()
         assets = getattr(self.app, "_custom_assets", {})
         self.app._custom_assets = {key: asset for key, asset in assets.items() if key in used}
+        self.app._custom_icon_errors = [asset_id for asset_id in getattr(self.app, "_custom_icon_errors", [])
+                                        if asset_id in used and asset_id not in self.app._custom_assets]
 
     def apply_custom_icon(self, key, asset, *, revision=None):
         app = self.app
@@ -358,7 +397,7 @@ class SettingsController:
         return changed
 
     def schedule_custom_icon_upgrade(self):
-        """One background migration for old masks; ordinary startup stays local."""
+        """Migrate old masks from verified cached sources, without startup network."""
         if self._icon_upgrade_started:
             return
         self._icon_upgrade_started = True
@@ -381,7 +420,7 @@ class SettingsController:
                 if cancel is not None and cancel.is_set():
                     return
                 try:
-                    prepared = catalog.prepare(asset.icon_id, cancel=cancel)
+                    prepared = catalog.prepare(asset.icon_id, cancel=cancel, offline=True)
                     self.adopt_custom_icon_upgrade(prepared, expected=bindings)
                 except (OSError, ValueError):
                     log.warning("settings: deferred custom icon upgrade unavailable", exc_info=True)
@@ -396,7 +435,7 @@ class SettingsController:
 
     def action(self, name):
         app = self.app
-        actions = dict(refresh=app.wake.set, diagnostics=app.request_diag, check_update=app.check_update_now,
+        actions = dict(refresh=getattr(app, "request_refresh", app.wake.set), diagnostics=app.request_diag, check_update=app.check_update_now,
                        start_update=app.start_update, quit=app.quit, show_whats_new=app.show_whats_new,
                        open_data=lambda: os.startfile(self.context["data_dir"]),
                        open_project=lambda: app.open_url("https://github.com/" + self.context["repo"]),
