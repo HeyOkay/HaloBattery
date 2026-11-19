@@ -422,6 +422,18 @@ Packets are paced at least 10 ms apart, as NGENUITY does. A full battery on the 
 
 Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collection list - `03F0:0D97` publishes exactly `ff00:0001` on interface 2 - and the reference project's dongle is `03F0:0F98`, while `0x0D97` appears in the device-information reply of that hardware. **Unverified on this app's side** until the reporter runs the test build.
 
+### IO Aurora
+
+**Connection:** the receiver `3554:fb08` (product `IO Aurora Receiver`), or the mouse on its charging cable as `3554:fb09` (product `IO Aurora`, without "Receiver").
+
+The receiver exposes the CompX control collection `ff02:0002` on interface 1. Its battery query is the shared CompX report-8 protocol: a 17-byte output report `08 04 ... <checksum>` with the level at byte 6 and the power/cable flag at byte 7, read back as a 17-byte input report (with a feature-report fallback). The request is read-only; settings and firmware commands are never sent.
+
+The protocol is shared with the Lamzu Thorn/Atlantis family and is taken from the open-source `lavandiI/lamzu-battery` implementation.
+
+While the mouse charges from a PC USB port it leaves the receiver and comes back as `3554:fb09`; the same query there carries the charging flag, and that is what draws the charging ring. A wall adapter never shows a state, because the mouse has no USB link to read then.
+
+**Confirmed on hardware** ([#493](https://github.com/HeyOkay/HaloBattery/issues/493)): the reporter compared the level against IO Hub (the vendor app) and confirmed that the charging ring appears while the mouse is on the PC cable and clears when it is unplugged.
+
 ### MonsGeek FUN60 Pro
 
 **Connection:** `3151:5026` receiver, interface 2, `FFFF:0002`.

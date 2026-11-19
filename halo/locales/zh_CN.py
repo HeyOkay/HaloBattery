@@ -93,6 +93,7 @@ MESSAGES = {
     "provider.dji": "DJI Mic Mini 2",
     "provider.darmoshark": "Darmoshark N5",
     "provider.gwolves": "G-Wolves 鼠标",
+    "provider.io_aurora": "IO Aurora",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.gs3075t": "GANSS GS3075T 键盘",
     "provider.hyperx": "HyperX Cloud II Wireless",

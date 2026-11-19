@@ -56,6 +56,7 @@ from .zowie import ZowieProvider  # noqa: F401
 from .dji import DjiProvider  # noqa: F401
 from .darmoshark import DarmosharkProvider  # noqa: F401
 from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
+from .io_aurora import IoAuroraProvider  # noqa: F401
 from .vaxee import VaxeeProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
 from .blackshark_mtk import BlackSharkMtkProvider  # noqa: F401
