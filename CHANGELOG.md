@@ -15,7 +15,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
   the mouse pictogram; the existing charge-register reader already returned
-  75% on the reporter's receiver.
+  75% on the reporter's receiver. Confirmed on hardware by @breezywine in
+  [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
