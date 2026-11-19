@@ -142,6 +142,16 @@ class ProviderTests(unittest.TestCase):
 
 
 class TesterTests(unittest.TestCase):
+    def setUp(self):
+        from halo import device_diagnostics
+        self.diagnostics = device_diagnostics
+        self.guard = Mock()
+        self.guard.acquire.return_value = self.guard.close.return_value = True
+        for context in (patch.object(device_diagnostics, "_create_instance_guard", return_value=self.guard),
+                        patch.object(device_diagnostics, "_retained_guard", None)):
+            context.start()
+            self.addCleanup(context.stop)
+
     def test_no_acknowledgement_help_or_wrong_platform_never_loads_backend(self):
         with patch.object(T, "_load_backend") as backend, patch.object(T, "_create_runtime") as factory, \
                 redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
@@ -168,7 +178,8 @@ class TesterTests(unittest.TestCase):
         provider.probe_experimental.return_value = {"percentage": 75, "freshness": "unverified"}
         provider.probe_experimental.side_effect = error
         provider.diagnostics.return_value = ["real receiver behavior unverified"]
-        with patch.object(T, "_load_backend", return_value=object()), \
+        with patch.object(self.diagnostics, "_retained_guard", None), \
+                patch.object(T, "_load_backend", return_value=object()), \
                 patch.object(T, "_create_runtime", return_value=runtime) as factory, \
                 patch.object(T, "_create_provider", return_value=provider), \
                 patch.object(T.sys, "platform", "win32"), redirect_stdout(io.StringIO()) as output:

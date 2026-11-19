@@ -418,6 +418,55 @@ class DiagnosticGuardTests(unittest.TestCase):
         retention_patch.start()
         self.addCleanup(retention_patch.stop)
 
+    def test_every_diagnostic_rejects_existing_instance_before_backend_or_target_creation(self):
+        for device in D._DEVICES:
+            transport = "receiver" if device == "endgame-4k" else None
+            guard = Mock()
+            guard.acquire.return_value = False
+            guard.close.return_value = True
+            backend, runtime, provider = Mock(), Mock(), Mock()
+            result, code = D.run(device, transport=transport, acknowledged=True,
+                                 create_guard=lambda: guard, load_backend=backend,
+                                 create_runtime=runtime, create_provider=provider)
+            with self.subTest(device=device):
+                self.assertEqual(code, 1)
+                self.assertIsNone(result["reading"])
+                guard.acquire.assert_called_once_with()
+                guard.close.assert_called_once_with()
+                backend.assert_not_called()
+                runtime.assert_not_called()
+                provider.assert_not_called()
+
+    def test_held_diagnostic_pending_cleanup_blocks_another_diagnostic(self):
+        for device in ("endgame-4k", "lamzu-tachi"):
+            D._retained_guard = None
+            kernel = FakeKernel()
+            guard = guard_for(kernel)
+            runtime, provider = Mock(), Mock()
+            @contextmanager
+            def scope(owner):
+                yield SimpleNamespace(failed=False)
+            runtime.provider_scope.side_effect = scope
+            runtime.close.return_value = False
+            provider.probe_experimental.return_value = {"percentage": 75}
+            provider.diagnostics.return_value = []
+            result, code = D.run(device, transport="receiver" if device == "endgame-4k" else None,
+                                 acknowledged=True, create_guard=lambda: guard,
+                                 load_backend=lambda: object(), create_runtime=lambda: runtime,
+                                 create_provider=lambda: provider)
+            with self.subTest(device=device):
+                self.assertEqual(code, 1)
+                self.assertIsNone(result["reading"])
+                self.assertIs(D._retained_guard, guard)
+                self.assertEqual(len(kernel.handles), 1)
+                backend, factory = Mock(), Mock()
+                other = "lamzu-tachi" if device == "endgame-4k" else "endgame-4k"
+                _, repeated_code = D.run(other, transport="wired" if other == "endgame-4k" else None,
+                                         acknowledged=True, load_backend=backend, create_guard=factory)
+                self.assertEqual(repeated_code, 1)
+                backend.assert_not_called()
+                factory.assert_not_called()
+
     def test_pointer_sized_signatures_and_exact_existing_instance_name(self):
         kernel = FakeKernel()
         guard = guard_for(kernel)

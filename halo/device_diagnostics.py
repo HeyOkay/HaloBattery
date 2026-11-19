@@ -64,17 +64,16 @@ def run(device, *, transport=None, acknowledged=False, load_backend=None,
     runtime = guard = None
     code = 1
     try:
-        if device in _TARGETED_DEVICES:
-            # Ordinary startup creates this same name before device polling.
-            # Hold it through native cleanup so neither app nor another new
-            # targeted diagnostic can query the same receiver concurrently.
-            if _retained_guard is not None:
-                result["diagnostics"].append("prior native ownership pending; exit this diagnostic process first")
-                return result, code
-            guard = (create_guard or _create_instance_guard)()
-            if not guard.acquire():
-                result["diagnostics"].append("Halo Battery or another diagnostic is running; close it first")
-                return result, code
+        # Ordinary startup and EVERY diagnostic share this name, including held
+        # Endgame/Tachi modes. Hold it through native cleanup so two diagnostic
+        # processes cannot query the same receiver concurrently.
+        if _retained_guard is not None:
+            result["diagnostics"].append("prior native ownership pending; exit this diagnostic process first")
+            return result, code
+        guard = (create_guard or _create_instance_guard)()
+        if not guard.acquire():
+            result["diagnostics"].append("Halo Battery or another diagnostic is running; close it first")
+            return result, code
         backend = (load_backend or _load_backend)()
         if backend is None:
             result["diagnostics"].append("HID backend unavailable")

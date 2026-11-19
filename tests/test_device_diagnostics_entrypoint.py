@@ -39,6 +39,14 @@ class DiagnosticEntryPointTests(unittest.TestCase):
         self.provider.probe_experimental.return_value = {"percentage": 75, "freshness": "unverified"}
         self.provider.diagnostics.return_value = ["experimental; freshness unverified"]
         self.provider_factory = Mock(return_value=self.provider)
+        self.guard = Mock()
+        self.guard.acquire.return_value = self.guard.close.return_value = True
+        retention_patch = patch.object(D, "_retained_guard", None)
+        retention_patch.start()
+        self.addCleanup(retention_patch.stop)
+        guard_patch = patch.object(D, "_create_instance_guard", return_value=self.guard)
+        self.guard_factory = guard_patch.start()
+        self.addCleanup(guard_patch.stop)
 
     def execute(self, args, *, stdout=None, mkdir_error=None):
         real_import = __import__
@@ -189,6 +197,7 @@ class DiagnosticEntryPointTests(unittest.TestCase):
                     self.assertEqual(code, 1)
                     self.assertIsNone(result["reading"])
         self.assert_no_backend()
+        self.guard_factory.assert_not_called()
 
     def test_standard_build_does_not_install_a_diagnostic_qa_hook(self):
         recipe = (ROOT / "tools" / "build_exe.py").read_text(encoding="utf-8")

@@ -156,11 +156,15 @@ without Python. These checks require `--acknowledge-experimental` and an explici
 new `--diagnostic-output` JSON file. They do not load the normal app or modify its
 profile, and they do not enable those devices in normal polling. Protocol notes
 include commands and the remaining hardware/freshness limits.
+All device diagnostics, including Endgame and Tachi, acquire the same instance
+guard as ordinary startup before loading HID or constructing a target reader.
+They refuse another running HaloBattery or diagnostic, and retain the guard
+until process exit if native cleanup cannot be confirmed.
 
 AJ159, INZONE H9 II and PRO X3 also have one-device receiver checks. They reuse
 the existing sourced readers without querying other models in the same family.
-Close HaloBattery and the manufacturer's software first; these three checks
-refuse to run while another HaloBattery instance is active. Connect only one
+Close HaloBattery and the manufacturer's software first; all diagnostics
+refuse to run while another HaloBattery or diagnostic instance is active. Connect only one
 matching receiver and use a new report filename for each run:
 
 ```powershell

@@ -10,12 +10,21 @@ from unittest.mock import Mock, patch
 
 import test_experimental_hid as native
 from test_endgame_4k import ORIGINAL_ID, LEVEL75, entry
+from halo import device_diagnostics as D
 from halo.hid_transport import HidDevice, ReportCaps, TransportRuntime
 from providers import endgame_4k as E, endgame4k_protocol as P
 from tools import probe_endgame_4k as T
 
 
 class TesterTests(unittest.TestCase):
+    def setUp(self):
+        self.guard = Mock()
+        self.guard.acquire.return_value = self.guard.close.return_value = True
+        for context in (patch.object(D, "_create_instance_guard", return_value=self.guard),
+                        patch.object(D, "_retained_guard", None)):
+            context.start()
+            self.addCleanup(context.stop)
+
     def test_missing_acknowledgement_transport_or_help_never_loads_native_backend(self):
         with patch.object(T, "_load_backend") as backend, \
                 patch.object(T, "_create_runtime") as factory, redirect_stderr(io.StringIO()), \
@@ -49,7 +58,8 @@ class TesterTests(unittest.TestCase):
         self.provider.diagnostics.return_value = ["experimental; reply freshness unverified"]
         if error is not None:
             self.provider.probe_experimental.side_effect = error
-        with patch.object(T, "_load_backend", return_value=object()), \
+        with patch.object(D, "_retained_guard", None), \
+                patch.object(T, "_load_backend", return_value=object()), \
                 patch.object(T, "_create_runtime", return_value=self.runtime) as factory, \
                 patch.object(T, "_create_provider", return_value=self.provider), \
                 patch.object(T.sys, "platform", "win32"), redirect_stdout(io.StringIO()) as out:

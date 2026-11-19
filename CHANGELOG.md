@@ -63,6 +63,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Hold the shared app-instance guard for Endgame 4K and Tachi diagnostics as
+  well as targeted receiver checks, including while native cleanup is pending.
 - Restrict the URX Core75 query to its confirmed product and collection, so an
   EVO75 sharing the USB IDs is not queried or shown as Core75. Require complete
   raw-HID reports and accept the maker-defined 0-100% battery range.
