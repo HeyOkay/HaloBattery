@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Solaar e7304c4 lib/logitech_receiver/hidpp20_constants.py L37-55,90; hidpp10_constants.py L130-138,188-190.
+# Keep protocol selectors independent of the provider constants under test.
 import os
 import sys
 import types
@@ -129,7 +132,7 @@ class FakeBus:
             idx, reg = data[1], data[3]
             dev = self.slots[owner].get(idx)
             if dev is None:
-                return self._register_error(owner, idx, reg, L.ERR_EMPTY_SLOT)
+                return self._register_error(owner, idx, reg, 0x08)
             if dev.silent:
                 return
             if dev.register_noise:
@@ -145,7 +148,7 @@ class FakeBus:
             self._reply(path, idx, 0, prev, [9])     # "feature index 9": wrong for this request
         dev = self.slots[path].get(idx)
         if dev is None:
-            return self._error(path, idx, feat, fn, L.ERR_EMPTY_SLOT)
+            return self._error(path, idx, feat, fn, 0x08)
         if dev.silent:
             return
         if dev.error is not None:
@@ -159,7 +162,7 @@ class FakeBus:
         for fid, (index, fns) in dev.features.items():
             if index != feat:
                 continue
-            if fid == L.F_NAME and func in (0, 1) and dev.name is not None:
+            if fid == 0x0005 and func in (0, 1) and dev.name is not None:
                 raw = dev.name.encode()
                 return self._reply(path, idx, feat, fn,
                                    [len(raw)] if func == 0 else list(raw[params[0]:params[0] + 16]))
@@ -179,13 +182,13 @@ def receiver(pid=0xC539, product="USB Receiver"):
     return [entry(pid, 0xFF00, 1, b"short", product), entry(pid, 0xFF00, 2, b"long", product)]
 
 
-VOLTAGE_76 = {L.F_VOLTAGE: (6, {0: [0x0F, 0x7B, 0x00]})}           # 3963 mV -> 76 %
-CHARGING_100 = {L.F_VOLTAGE: (6, {0: [0x10, 0x6C, 0x80]})}         # G502 on its cable
+VOLTAGE_76 = {0x1001: (6, {0: [0x0F, 0x7B, 0x00]})}           # 3963 mV -> 76 %
+CHARGING_100 = {0x1001: (6, {0: [0x10, 0x6C, 0x80]})}         # G502 on its cable
 
 
 def g502(battery=VOLTAGE_76, unit=(0xC1, 0x5E, 0x09, 0xCD)):
-    return FakeHidpp({**battery, L.F_NAME: (3, {2: [3]}),
-                      L.F_INFO: (2, {0: [3, *unit]})}, name="G502 LIGHTSPEED")
+    return FakeHidpp({**battery, 0x0005: (3, {2: [3]}),
+                      0x0003: (2, {0: [3, *unit]})}, name="G502 LIGHTSPEED")
 
 
 def slots(keys):
@@ -194,7 +197,7 @@ def slots(keys):
 
 
 def adc(params, index=8):
-    return {L.F_ADC: (index, {0: params})}
+    return {0x1F20: (index, {0: params})}
 
 
 class LogitechTestCase(unittest.TestCase):
@@ -232,7 +235,7 @@ class ReceiverTests(LogitechTestCase):
         bus = self.use(receiver(), {b"long": ({1: g502()}, b"short")})
         p = L.LogitechProvider()
         p.poll()
-        bus.slots[b"long"][1] = FakeHidpp(error=L.ERR_UNREACHABLE)
+        bus.slots[b"long"][1] = FakeHidpp(error=0x09)
         [st] = p.poll()
         self.assertFalse(st.online)
         self.assertEqual(slots(p._asleep), set())
@@ -254,7 +257,7 @@ class ReceiverTests(LogitechTestCase):
         self.assertNotIn((0xC539, 1), slots(p._ids))
 
     def test_hidpp10_device_is_noted(self):
-        self.use(receiver(0xC52B), {b"long": ({1: FakeHidpp(error=L.ERR_OLD_PROTOCOL)}, b"short")})
+        self.use(receiver(0xC52B), {b"long": ({1: FakeHidpp(error=0x01)}, b"short")})
         p = L.LogitechProvider()
         self.assertEqual(p.poll(), [])
         self.assertTrue(any("HID++ 1.0" in line for line in p.diagnostics()))
@@ -282,7 +285,7 @@ class ReceiverTests(LogitechTestCase):
         self.assertEqual((st.level, st.approx, st.charging), (87, "", True))
 
     def test_registers_are_read_even_when_the_ping_errors(self):
-        dev = FakeHidpp(error=L.ERR_OLD_PROTOCOL, registers={0x07: [3, 0x00, 0x00, 0x00]})
+        dev = FakeHidpp(error=0x01, registers={0x07: [3, 0x00, 0x00, 0x00]})
         self.use(receiver(0xC52B), {b"long": ({3: dev}, b"short")})
         p = L.LogitechProvider()
         [st] = p.poll()
@@ -305,7 +308,7 @@ class ReceiverTests(LogitechTestCase):
         # timeout for each register, about 1.2 s per poll (review by
         # @ahmedkhursheed23)
         import time as _time
-        dev = FakeHidpp({L.F_NAME: (3, {2: [3]})}, name="G502 X",
+        dev = FakeHidpp({0x0005: (3, {2: [3]})}, name="G502 X",
                         register_error_form=0xFF)
         self.use(receiver(), {b"long": ({1: dev}, b"short")})
         p = L.LogitechProvider()
@@ -355,7 +358,7 @@ class ReceiverTests(LogitechTestCase):
         self.assertEqual((st.name, st.key), ("G502 LIGHTSPEED", "logitech:C15E09CD"))
 
     def test_unified_battery_without_percentage(self):
-        dev = FakeHidpp({L.F_UNIFIED: (5, {1: [0, 4, 0, 0]})})
+        dev = FakeHidpp({0x1004: (5, {1: [0, 4, 0, 0]})})
         self.use(receiver(), {b"long": ({1: dev}, b"short")})
         [st] = L.LogitechProvider().poll()
         self.assertEqual((st.level, st.approx), (50, "about 50% (good)"))
@@ -423,7 +426,7 @@ class VoltageChargingTests(LogitechTestCase):
              entry(0xC08D, 0xFF00, 2, b"clong", "G502 LIGHTSPEED")]
 
     def cable(self, params):
-        self.use(self.CABLE, {b"clong": ({0xFF: g502({L.F_VOLTAGE: (6, {0: params})})}, b"cshort")})
+        self.use(self.CABLE, {b"clong": ({0xFF: g502({0x1001: (6, {0: params})})}, b"cshort")})
 
     def test_keeps_level_from_before_charging(self):
         p = L.LogitechProvider()
@@ -458,9 +461,9 @@ class VoltageChargingTests(LogitechTestCase):
         self.assertEqual((st.level, st.charging), (76, True))
 
     def test_charge_complete_helper(self):
-        self.assertTrue(L.charge_complete(L.F_VOLTAGE, [0x10, 0x6A, 0x81]))
-        self.assertFalse(L.charge_complete(L.F_VOLTAGE, [0x10, 0x6A, 0x80]))
-        self.assertFalse(L.charge_complete(L.F_ADC, [0x10, 0x6A, 0x81]))
+        self.assertTrue(L.charge_complete(0x1001, [0x10, 0x6A, 0x81]))
+        self.assertFalse(L.charge_complete(0x1001, [0x10, 0x6A, 0x80]))
+        self.assertFalse(L.charge_complete(0x1F20, [0x10, 0x6A, 0x81]))
 
 
 # ------------------------------------------------------------------ headsets
@@ -478,7 +481,7 @@ class HeadsetTests(LogitechTestCase):
 
     def test_headset_inactive_error(self):
         self.use([entry(0x0ABA, 0xFF43, 0x0202, b"hs")],
-                 {b"hs": ({0xFF: FakeHidpp({L.F_ADC: (6, {0: "error"})})}, None)})
+                 {b"hs": ({0xFF: FakeHidpp({0x1F20: (6, {0: "error"})})}, None)})
         p = L.LogitechProvider()
         self.assertEqual(p.poll(), [])
         self.assertTrue(any("inactive" in line for line in p.diagnostics()))
@@ -519,7 +522,7 @@ class SafetyTests(LogitechTestCase):
     def test_ff43_is_used_only_for_known_headsets(self):
         """A device with a long ff43:0202 collection and no ff00 one, that is not in
         HEADSETS, gets no request: main never wrote there for such a device."""
-        dev = FakeHidpp({L.F_ADC: (6, {0: [0x0F, 0x02, 0x01]})})
+        dev = FakeHidpp({0x1F20: (6, {0: [0x0F, 0x02, 0x01]})})
         bus = self.use([entry(0x0B99, 0xFF43, 0x0202, b"hs")], {b"hs": ({0xFF: dev}, None)})
         self.assertEqual(L.LogitechProvider().poll(), [])
         self.assertEqual(bus.writes, [])
@@ -544,23 +547,23 @@ class SafetyTests(LogitechTestCase):
 class ParseTests(unittest.TestCase):
     CASES = [
         # feature, params, (level, charging, approximate text)
-        (L.F_UNIFIED, [55, 4, 0], (55, False, "")),       # discharging
-        (L.F_UNIFIED, [55, 4, 1], (55, True, "")),        # charging
-        (L.F_UNIFIED, [95, 8, 2], (95, True, "")),        # almost full
-        (L.F_UNIFIED, [100, 8, 3], (100, True, "")),      # full, on the charger
-        (L.F_UNIFIED, [40, 4, 4], (40, True, "")),        # slow charging
-        (L.F_UNIFIED, [40, 4, 5], (40, False, "")),       # invalid battery
-        (L.F_STATUS, [40, 30, 4], (40, True, "")),
-        (L.F_STATUS, [0, 0, 0], (None, False, "")),       # no level
-        (L.F_VOLTAGE, [0x10, 0x6C, 0x80], (100, True, "")),   # G502 on its cable (hardware)
-        (L.F_VOLTAGE, [0x0F, 0x7B, 0x02], (76, False, "")),   # low bits alone: not charging
-        (L.F_ADC, [0x0F, 0x7B, 0x01], (76, False, "")),
-        (L.F_ADC, [0x0F, 0x7B, 0x03], (76, True, "")),
-        (L.F_ADC, [0x0F, 0x7B, 0x02], (None, False, "")),     # bit 0 clear: headset off
-        (L.F_ADC, [0x00, 0x00, 0x01], (None, False, "")),     # no real voltage
-        (L.F_UNIFIED, [0, 8, 3], (90, True, "about 90% (full)")),   # no percentage
-        (L.F_UNIFIED, [0, 1, 0], (5, False, "about 5% (critical)")),
-        (L.F_UNIFIED, [0, 0, 0], (None, False, "")),                 # nothing reported
+        (0x1004, [55, 4, 0], (55, False, "")),       # discharging
+        (0x1004, [55, 4, 1], (55, True, "")),        # charging
+        (0x1004, [95, 8, 2], (95, True, "")),        # almost full
+        (0x1004, [100, 8, 3], (100, True, "")),      # full, on the charger
+        (0x1004, [40, 4, 4], (40, True, "")),        # slow charging
+        (0x1004, [40, 4, 5], (40, False, "")),       # invalid battery
+        (0x1000, [40, 30, 4], (40, True, "")),
+        (0x1000, [0, 0, 0], (None, False, "")),       # no level
+        (0x1001, [0x10, 0x6C, 0x80], (100, True, "")),   # G502 on its cable (hardware)
+        (0x1001, [0x0F, 0x7B, 0x02], (76, False, "")),   # low bits alone: not charging
+        (0x1F20, [0x0F, 0x7B, 0x01], (76, False, "")),
+        (0x1F20, [0x0F, 0x7B, 0x03], (76, True, "")),
+        (0x1F20, [0x0F, 0x7B, 0x02], (None, False, "")),     # bit 0 clear: headset off
+        (0x1F20, [0x00, 0x00, 0x01], (None, False, "")),     # no real voltage
+        (0x1004, [0, 8, 3], (90, True, "about 90% (full)")),   # no percentage
+        (0x1004, [0, 1, 0], (5, False, "about 5% (critical)")),
+        (0x1004, [0, 0, 0], (None, False, "")),                 # nothing reported
     ]
 
     def test_parse_battery(self):
@@ -570,17 +573,17 @@ class ParseTests(unittest.TestCase):
 
     REG_CASES = [
         # register, params, (level, charging, approximate text)
-        (L.REG_BATTERY_STATUS, [7, 0x00, 0, 0], (90, False, "about 90% (full)")),
-        (L.REG_BATTERY_STATUS, [5, 0x21, 0, 0], (50, True, "about 50% (good)")),
-        (L.REG_BATTERY_STATUS, [3, 0x22, 0, 0], (20, True, "about 20% (low)")),
-        (L.REG_BATTERY_STATUS, [1, 0x00, 0, 0], (5, False, "about 5% (critical)")),
-        (L.REG_BATTERY_STATUS, [0, 0x21, 0, 0], (None, True, "")),   # no level in the reply
-        (L.REG_BATTERY_STATUS, [4, 0x00, 0, 0], (None, False, "")),  # not a known level
-        (L.REG_BATTERY_CHARGE, [87, 0, 0x50, 0], (87, True, "")),    # recharging
-        (L.REG_BATTERY_CHARGE, [87, 0, 0x30, 0], (87, False, "")),   # discharging
-        (L.REG_BATTERY_CHARGE, [100, 0, 0x90, 0], (100, True, "")),  # full, on the charger
-        (L.REG_BATTERY_CHARGE, [0, 0, 0x30, 0], (None, False, "")),  # not a percentage
-        (L.REG_BATTERY_CHARGE, [200, 0, 0x50, 0], (None, False, "")),
+        (0x07, [7, 0x00, 0, 0], (90, False, "about 90% (full)")),
+        (0x07, [5, 0x21, 0, 0], (50, True, "about 50% (good)")),
+        (0x07, [3, 0x22, 0, 0], (20, True, "about 20% (low)")),
+        (0x07, [1, 0x00, 0, 0], (5, False, "about 5% (critical)")),
+        (0x07, [0, 0x21, 0, 0], (None, True, "")),   # no level in the reply
+        (0x07, [4, 0x00, 0, 0], (None, False, "")),  # not a known level
+        (0x0D, [87, 0, 0x50, 0], (87, True, "")),    # recharging
+        (0x0D, [87, 0, 0x30, 0], (87, False, "")),   # discharging
+        (0x0D, [100, 0, 0x90, 0], (100, True, "")),  # full, on the charger
+        (0x0D, [0, 0, 0x30, 0], (None, False, "")),  # not a percentage
+        (0x0D, [200, 0, 0x50, 0], (None, False, "")),
     ]
 
     def test_parse_register_battery(self):

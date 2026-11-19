@@ -1,6 +1,11 @@
 """Simplified Chinese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "provider.phone_link": "手机连接",
+    "icon.phone": "手机",
+    "state.phone_link_stale": "手机连接的状态已过期；请打开手机连接刷新",
+    "state.phone_link_unavailable": "手机连接的电池状态不可用",
+    "state.phone_link_last_reported": "{level}%（手机连接上次报告）",
     "startup.hid_unavailable": 'Windows 无法加载 HID 支持，无法读取通过 USB 和 2.4 GHz 连接的设备电量。蓝牙和设置仍然可用。请打开诊断查看详情。',
     "state.poll_unavailable": '无法更新电量',
     "state.poll_stale": '{level}%（上次读数；无法更新电量）',

@@ -105,6 +105,31 @@ Devices added by integrating the open upstream pull requests; details and author
 | Headsets | Logitech G535, Turtle Beach Stealth Pro II / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Controllers | NVIDIA SHIELD (2017), FlyDigi Vader 5 Pro |
 
+## Phone Link selected mobile device
+
+The selected phone or tablet can appear in the tray and Devices with a phone
+pictogram using the [Phone Link companion cache](protocols.md#phone-link-selected-cache).
+HaloBattery does not require Bluetooth for this source: Phone Link may already
+be receiving the phone's status over Wi-Fi. It does not connect to the phone or
+enable Bluetooth itself.
+
+Only the selected companion device has a battery value in this cache. A previously
+accepted value remains visible as **last reported** if the file stops changing,
+with connectivity and charging unconfirmed. A cold-start cache older than three
+hours cannot seed a percentage. Unknown layouts/languages, ambiguous identity or
+missing files are unavailable; the initial parser recognizes the observed English
+format only.
+
+An earlier local Desktop build with this reader was checked on an S24+ over Wi-Fi
+with phone Bluetooth disabled: the percentage and phone glyph were confirmed in
+the tray and Settings. Phone Link must continue synchronizing in the background.
+Its cache can omit charging even while the phone is charging; HaloBattery keeps
+that state unknown, matching the available source. iPhone cache behavior has not
+been field-verified. No direct phone request was made.
+
+If Windows Bluetooth also reports that phone, the two independent sources may
+appear separately. HaloBattery does not merge devices by their names or assign
+a Phone Link percentage to a guessed Bluetooth address.
 ### Local guarded device integrations
 
 These changes are not in the published 1.17.0. Owner confirmations below apply

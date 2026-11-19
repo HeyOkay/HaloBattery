@@ -161,7 +161,7 @@ def parse_headset_voltage(r) -> Tuple[Optional[int], bool]:
     byte 6: 0x01 discharging, 0x03 charging (HeadsetControl). A voltage outside a
     single Li-ion cell is no reading, not a percentage.
     """
-    if len(r) < 7:
+    if r is None or len(r) < 7:
         return None, False
     mv = (r[4] << 8) | r[5]
     if not 2500 <= mv <= MAX_BATTERY_MV:
@@ -172,7 +172,8 @@ def parse_headset_voltage(r) -> Tuple[Optional[int], bool]:
 def charge_complete(feature: int, p) -> bool:
     """True when a voltage-only reply says the charger finished (Solaar's ChargeStatus
     FULL: flags bit 7 charging, low bits 1). Only 0x1001 carries it."""
-    return feature == F_VOLTAGE and bool(p[2] & 0x80) and (p[2] & 0x03) == 1
+    return (feature == F_VOLTAGE and p is not None and len(p) >= 3
+            and bool(p[2] & 0x80) and (p[2] & 0x03) == 1)
 
 
 def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
@@ -180,6 +181,8 @@ def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
     A full battery that is still on the charger counts as charging.
     Level None: no valid reading (for 0x1F20 also: the headset is off).
     The text is set only when the device gives an approximate level, not a percentage."""
+    if p is None or len(p) < 3:
+        return None, False, ""
     if feature == F_UNIFIED:
         charging = p[2] in ON_CHARGER
         if 0 < p[0] <= 100:
@@ -209,12 +212,18 @@ def parse_register_battery(reg: int, p) -> Tuple[Optional[int], bool, str]:
     0x0D a percentage and a status whose top nibble is 30 discharging, 50
     recharging, 90 full. Nothing is claimed when the bytes do not fit.
     """
+    if p is None:
+        return None, False, ""
     if reg == REG_BATTERY_CHARGE:
+        if len(p) < 3:
+            return None, False, ""
         charge = p[0]
         if not 0 < charge <= 100:
             return None, False, ""
         return charge, p[2] & 0xF0 in (0x50, 0x90), ""
     if reg == REG_BATTERY_STATUS:
+        if len(p) < 2:
+            return None, False, ""
         status_byte, charging_byte = p[0], p[1]
         charging = charging_byte & 0x21 == 0x21 or charging_byte & 0x22 == 0x22
         if status_byte in STATUS_LEVELS:
@@ -259,7 +268,11 @@ class _Channel:
 
     def request(self, idx: int, feat: int, func: int, params=(),
                 timeout: float = TIMEOUT) -> Optional[List[int]]:
-        """Params of the reply, or None on an error reply (self.error set) or timeout."""
+        """Received params, or None on an error reply (self.error set) or timeout.
+
+        Require the three parameters of a short reply; consumers validate any
+        additional fields they need. Do not infer missing padding from the report id.
+        """
         self.error, self.error_code = False, 0
         self._swid = (self._swid + 1) % len(SWIDS)
         fn = (func << 4) | SWIDS[self._swid]
@@ -276,8 +289,9 @@ class _Channel:
                 if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == feat and r[4] == fn:
                     self.error, self.error_code = True, r[5]
                     return None
-                if r[2] == feat and r[3] == fn:
-                    return list(r[4:]) + [0] * 16
+                if r[2] == feat and r[3] == fn and len(r) >= 7:
+                    # Three parameters fit in a short report. Missing bytes are not zeros.
+                    return list(r[4:])
             time.sleep(0.005)
         return None
 
@@ -317,7 +331,7 @@ class _Channel:
                     # one collection may refuse; the other can still answer
                     self.error, self.error_code = True, r[5] if len(r) > 5 else 0
                     continue
-                if r[2] == HEADSET_REG_SUBID and r[3] == reg:
+                if r[2] == HEADSET_REG_SUBID and r[3] == reg and len(r) >= 7:
                     return list(r)
             time.sleep(0.005)
         return None
@@ -332,7 +346,8 @@ class _Channel:
         recognised at once (review by @ahmedkhursheed23: a 2.0 device without a
         battery feature answers every register read with the 2.0 error, and
         without this it cost the full timeout per register). Registers are only
-        ever read.
+        ever read. Successful replies need three received parameters; consumers
+        validate their own fields without requiring unused long-report padding.
         """
         if len(self.devs) < 2:        # register reads go on the short collection
             return None
@@ -347,15 +362,15 @@ class _Channel:
                 if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == 0x81 and r[4] == reg:
                     self.error, self.error_code = True, r[5]
                     return None
-                if r[2] == 0x81 and r[3] == reg:
-                    return list(r[4:]) + [0] * 16
+                if r[2] == 0x81 and r[3] == reg and len(r) >= 7:
+                    return list(r[4:])
             time.sleep(0.005)
         return None
 
     def feature_index(self, idx: int, feature_id: int) -> int:
         """Index of a feature on the device; 0 if the device does not have it."""
         r = self.request(idx, 0, 0, [feature_id >> 8, feature_id & 0xFF])
-        return r[0] if r else 0
+        return r[0] if r is not None and len(r) >= 3 else 0
 
     def identity(self, idx: int) -> Tuple[str, str, str]:
         """(name, kind, unit id) of the device at idx; parts it cannot read are empty."""
@@ -363,20 +378,22 @@ class _Channel:
         fi = self.feature_index(idx, F_NAME)
         if fi:
             r = self.request(idx, fi, 0)
-            length = r[0] if r else 0
+            length = r[0] if r is not None and len(r) >= 3 else 0
             raw = b""
             while len(raw) < length:
                 r = self.request(idx, fi, 1, [len(raw)])
-                if not r:
+                need = min(16, length - len(raw))
+                if r is None or len(r) < 3:
                     break
-                raw += bytes(r[:16])
-            name = raw[:length].decode("utf-8", "replace").strip()
+                raw += bytes(r[:need])
+            if len(raw) == length:
+                name = raw.decode("utf-8", "replace").strip()
             r = self.request(idx, fi, 2)
-            kind = KINDS.get(r[0], "") if r else ""
+            kind = KINDS.get(r[0], "") if r is not None and len(r) >= 3 else ""
         fi = self.feature_index(idx, F_INFO)
         if fi:
             r = self.request(idx, fi, 0)
-            if r and any(r[1:5]):
+            if r is not None and len(r) >= 5 and any(r[1:5]):
                 unit = bytes(r[1:5]).hex().upper()
         return name, kind, unit
 
@@ -429,7 +446,8 @@ class LogitechProvider(Provider):
         # ping timeout. Thus a slot that went silent gets the short timeout until it
         # answers again.
         timeout = TIMEOUT if slot in self._asleep else PING_TIMEOUT
-        if ch.request(idx, F_ROOT, 1, timeout=timeout) is not None:
+        reply = ch.request(idx, F_ROOT, 1, timeout=timeout)
+        if reply is not None and len(reply) >= 3:
             self._asleep.discard(slot)
             return True
         name = self._ids.get(slot, ("",))[0] or "paired device"

@@ -12,6 +12,23 @@ what comes back, and where each protocol was taken from.
 
 The station's own vendor collection (usage page 0xFF32 / usage 0x0074): 64-byte reports, report id 0x02, `02 0c <len> 00 <cmd> <handle>`. Battery command 0x06 answers with the level in byte 6 and byte 8 set while the headset sits on the dock (charging). The protocol is HeadsetControl's, reverse-engineered from G HUB captures and verified on this USB id; it is neither HID++ nor the A50 X's Centurion protocol. **Unverified** - no A50 was on hand, so a level out of 0..100 is refused rather than shown
 
+### Skullcandy PLYR / Crusher PLYR 720
+
+**Connection:** `34F0:3210` / `34F0:5310` dongle, vendor page `FF13`.
+
+The exact existing RACE battery request uses output report 6, recipient `80`,
+opcode `0cd6`, role zero. Source:
+[Headroom at commit 87a9892](https://github.com/patalbansishashank/Headroom/blob/87a9892/bin/headroom_race.py),
+`read_battery`, `drain`, `poll`. Old input is drained with a bounded loop before
+asking. A post-query interrupt packet proves new delivery even when its bytes and
+percentage are unchanged. A GET_REPORT fallback must differ from a known
+pre-query snapshot; an unchanged or unknown-baseline snapshot is not fresh.
+Replies must stay inside the declared headset report and match recipient,
+opcode, role, successful status and range. The outbound command is unchanged.
+The prior PLYR reading was confirmed in [#104](https://github.com/HeyOkay/HaloBattery/issues/104);
+these freshness changes were tested with fake interrupts/snapshots only and need
+Windows hardware confirmation.
+
 ### Audeze Maxwell
 
 **Connection:** 2.4 GHz dongle (3329:4B19) and USB-C cable (3329:4B1A)
@@ -151,7 +168,16 @@ The frame sequence and the reply signature come from [janit88/InZoneH9Tray](http
 
 **Connection:** wireless base station or dongle
 
-The same `b0` exchanges as the Nova 7 above, applied to the other Arctis Nova 7 and Nova 5 family models; and the older Arctis 1, 7, 9, Pro Wireless, the Arctis 7+ (nine-step level) and the GameBuds (lower earbud level) exactly as HeadsetControl documents their requests. The Nova Pro Wireless stations (`1038:12E0`, `1038:12E5`) are handled too. The models in the support table above are the confirmed ones. The Nova 3P Wireless joined them in [#149](https://github.com/HeyOkay/HaloBattery/issues/149): 58 % on @Pekish992's unit, read with this same exchange
+The same `b0` exchanges as the Nova 7 above, applied to the other Arctis Nova 7 and Nova 5 family models; and the older Arctis 1, 7, 9, Pro Wireless, the Arctis 7+ (five-step level) and the GameBuds (lower earbud level) exactly as HeadsetControl documents their requests. The Nova Pro Wireless stations (`1038:12E0`, `1038:12E5`) are handled too. The models in the support table above are the confirmed ones. The Nova 3P Wireless joined them in [#149](https://github.com/HeyOkay/HaloBattery/issues/149): 58 % on @Pekish992's unit, read with this same exchange
+
+Direct percentages must be integer bytes in `0..100`; five-step codes must be in
+`0..4`. Both active GameBuds are validated before selecting the lower level.
+Out-of-range fields give no reading instead of being clamped to 100%, following
+the [pinned HeadsetControl layouts](https://github.com/Sapd/HeadsetControl/tree/62e361b085d7716805a3bf524bc9cca3761e0e15/lib/devices).
+Two documented conversions remain: Arctis 7 (2018) can overreport, and Arctis 9
+uses a raw scale with saturated endpoints. These follow the
+[Linux driver](https://github.com/torvalds/linux/blob/fe2ec83746e501645709761605c2464a44fd2929/drivers/hid/hid-steelseries-arctis.c#L144-L198);
+they are not treated as invalid direct percentages.
 
 ### SteelSeries Arctis Nova 7
 
@@ -257,6 +283,20 @@ Packets are paced at least 10 ms apart, as NGENUITY does. A full battery on the 
 
 Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collection list - `03F0:0D97` publishes exactly `ff00:0001` on interface 2 - and the reference project's dongle is `03F0:0F98`, while `0x0D97` appears in the device-information reply of that hardware. **Unverified on this app's side** until the reporter runs the test build.
 
+### MonsGeek FUN60 Pro
+
+**Connection:** `3151:5026` receiver, interface 2, `FFFF:0002`.
+
+MonsGeek Driver v4's `resources/app/dist/js/index.bc699543.js`,
+`___dongleCheck24GStatusByF7`, defines feature report ID zero plus payload `f7`
+and zero padding. Payload byte 1 is the keyboard level; payload byte 3 is its
+online flag; payload byte 6 distinguishes keyboard (`1`), mouse (`2`) and both
+(`3`). Only online keyboard-containing replies may publish a current keyboard
+level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
+the last confirmed value is retained greyed for the existing cache interval.
+The original reading was confirmed by the reporter; this flag correction uses
+literal fake replies, with no new hardware commands.
+
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)
@@ -343,11 +383,25 @@ The same exchange as the Razer mice above: the 90-byte feature report, command c
 
 **Connection:** 2.4 GHz receiver (258A:2022)
 
-Sinowealth's framed battery query, documented and confirmed on hardware by Rodrigo-200/GloriousBatteryMonitor-Go (crediting AwesomeTy18/GloriousBatteryMonitor, glorious-mouse-battery-system-tray, glorious-indicator and OpenRGB's SinowealthGMOWController): a **feature report**, report id 0, of 65 bytes (id + 64) shaped `00 | 00 00 02 02 00 83 | 00 ...` - DevSel `0x02` wireless, CmdType `0x02` battery, Func `0x83` - then a ~100 ms wait for the RF round trip and a GetFeature of the same report. The answer carries `0x83` at byte 6, the charging byte at 7 (0 = no, non-zero = on the charger) and the level at 8; status byte 1 is `A1` awake, `A2` waking, `A4` asleep. The receiver publishes vendor collections on `ffa0` and `ffff`; the one whose feature report is 65 bytes is tried first.
+Sinowealth's framed battery query, documented and confirmed on hardware by Rodrigo-200/GloriousBatteryMonitor-Go (crediting AwesomeTy18/GloriousBatteryMonitor, glorious-mouse-battery-system-tray, glorious-indicator and OpenRGB's SinowealthGMOWController): a **feature report**, report id 0, of 65 bytes (id + 64) shaped `00 | 00 00 02 02 00 83 | 00 ...` - DevSel `0x02` wireless, CmdType `0x02` battery, Func `0x83` - then a ~100 ms wait for the RF round trip and a GetFeature of the same report. The answer carries `0x83` at byte 6, the charging byte at 7 (0 = no, non-zero = on the charger) and the level at 8; status byte 1 is `A1` awake, `A2` waking, `A4` asleep. Only positively awake `A1` replies publish a percentage; request echoes and provisional statuses cannot become a false 0%, while genuine awake 0% and 100% remain valid. The receiver publishes vendor collections on `ffa0` and `ffff`; the one whose feature report is 65 bytes is tried first.
 
 The level is **confirmed in this app on hardware by @gumocska** (#281): the icon appeared and the percentage matched Glorious Core. Charging over a cable is read the way GloriousBatteryMonitor-Go reads it - from the **wired id appearing** (`258a:2011` for the Model O, `DeviceDatabase.cs`), not from the reply: while the mouse charges over USB it leaves the 2.4 GHz link, so the receiver goes quiet and the provider reports the wired id as charging, keeping the last level. Charging from a wall adapter gives no signal at all - the mouse is not talking to the receiver, so there is nothing to read and the icon keeps its last value.
 
-The **Lamzu Tachi** (`37B0:000C`, 8K receiver, #262) publishes the same collection layout (`ffa0:0001`, `ffff:0001/0000`), so the same query is tried on it - that layout is the only evidence, and the test build decides whether the Tachi is another Sinowealth device. **Unverified** on hardware; a test build is with the reporter of #262.
+Lamzu Tachi no longer borrows this provider or chooses arbitrary vendor
+collections. Its separately sourced Aurora diagnostic tester is documented below;
+normal Tachi polling remains held.
+
+### SteelSeries Arctis Pro Wireless
+
+**Connection:** `1038:1290` base station.
+
+Preserve the existing `41 aa` status and `40 aa` battery exchange first. Only if
+it receives no accepted answer is the sourced report-ID-zero form tried. A valid
+off reply or a partially accepted exchange prevents that fallback, following the
+review of [#389](https://github.com/HeyOkay/HaloBattery/pull/389). Levels are five
+coarse steps (`0/25/50/75/100`); the protocol does not supply charging state.
+The PR author observed 75% on hardware. Local validation uses fake HID, including
+no reply, refused writes, valid off status and partial/malformed battery replies.
 
 ### SteelSeries Aerox 3 Wireless
 
@@ -678,6 +732,101 @@ is excluded before opening HID: collection layout alone was the evidence for try
 the Glorious Sinowealth query. The captured Glorious exchange and the other Lamzu
 providers are unchanged. These two exclusions resolve the historical fork #30 and
 Lamzu half of #34 release holds; their protocol tests remain for further development.
+
+### Phone Link selected cache
+
+**Source:** the Windows 11 Phone Link Start-menu companion's existing local
+cache; no Bluetooth, HID, GATT, network, phone command or app/service activation
+is performed. The provider does not require Bluetooth and can reflect status
+which Phone Link already obtained over Wi-Fi. This is not a real-time API.
+
+File-format evidence is pinned to
+[PaulBayfield/devices.bayfield.dev at 4cd6e3c](https://github.com/PaulBayfield/devices.bayfield.dev/blob/4cd6e3c4fc3b7d61837e60b933318e51b620d253/agent/src/devices/phonelink/__init__.py#L47)
+and [Wireless-Device-Battery-Monitor at bbc2030](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/blob/bbc203045b185ce3f0b1fe66597830515822e849/src/drivers/phonelink.cpp#L79).
+HaloBattery independently implements these file-format facts; no upstream
+provider code is copied. Microsoft documents the companion's
+[battery/connectivity display](https://support.microsoft.com/en-us/windows/apps/phonelink/mobile-device-in-start-menu),
+not this private file format.
+
+Two exact files under `%LOCALAPPDATA%\Packages\Microsoft.YourPhone_8wekyb3d8bbwe`
+are read, with size/structure limits and at most one retry for a concurrent update:
+
+- `LocalState\StartMenu\StartMenuCompanion.json`: root `speak` identifies the
+  selected device. The observed 1.26092.119.0 profile accepts the exact English
+  suffix ` - Connected to your PC`. Only the header battery row is examined:
+  `body[5].columns[4].items[0].tooltip` (Image) and
+  `body[5].columns[6].items[0].tooltip` (Container). Both must agree on the
+  complete `Battery <0..100>% remaining` phrase, optionally followed by
+  `, charging`. Other text, notification sections and media are not used.
+- `LocalCache\DeviceMetadataStorage.json`: the selected name must uniquely
+  match a linked Android/iOS entry's nested `Metadata.Metadata.DisplayName`.
+  `Metadata.Id` is its per-device UUID; the outer `DeviceMetadatas` group key
+  is shared and is never used as device identity. Windows/unknown platforms,
+  duplicate names with different UUIDs and missing identity are refused.
+
+The key is `phone_link:<canonical UUID>`. Switching selected devices never
+transfers levels or preferences. The same UUID survives a display-name change;
+a re-link that changes UUID is a new identity. No fuzzy Bluetooth/name merge is
+performed. The companion exposes one selected battery, not all linked batteries.
+
+File mtime is not a battery measurement timestamp or periodic heartbeat, and
+metadata `LastSeenTime` is not one either. On the owner's connected phone the
+file remained unchanged for about 17 minutes, so five-minute deletion was wrong.
+After five minutes an accepted level is kept explicitly **last reported**,
+offline/unconfirmed, with charging disabled. Only the ring's display projection
+preserves that known percentage; the renderer and device connectivity are not
+changed. It cannot trigger alerts or extend use-time history.
+
+An unseen cache may seed a level only within three hours, an engineering
+admission policy rather than a freshness guarantee. Beyond that, only the exact
+previously admitted (UUID key, file mtime, percentage, charger) tuple survives.
+Polling never refreshes that timestamp. Missing/invalid data, unlinking,
+ambiguous identity or selection changes clear prior admission. Ancient or
+future-dated cold caches still yield **no percentage** and an explanation.
+A bare remaining-percent phrase
+does not prove charger state: charging stays unknown and alerts/use-time
+estimates are suppressed. Only explicit charging is accepted as known by this
+initial profile. Unsupported status text is not guessed or scanned for arbitrary
+percentages elsewhere in the card.
+
+**Local field checks:** a powered-off tablet still had an old connected/46% card;
+that percentage was correctly withheld. After the user connected an S24+, its
+companion file was 51 seconds old, both battery fields said 42%, and the unique
+matched Android UUID differed from the tablet. In the earlier composed Desktop
+build, the owner also confirmed its percentage and phone glyph in the tray and
+Settings with phone Bluetooth disabled and Wi-Fi available. These checks used
+the same cache reader; they are not direct phone queries or a hardware test of
+every prerequisite branch separately. iPhone behavior remains unverified.
+
+Updates depend on Phone Link continuing to synchronize in the background.
+During another local observation, the phone and HaloBattery both showed 93%,
+but the companion cache and Start menu omitted charging status. HaloBattery
+continued polling and correctly kept charging unknown. Earlier explicit charging
+reports were observed, so this is not a claim that Phone Link never supports
+charging. Cache polling cannot fix upstream synchronization or invent a missing
+charger flag. Temporary poll-counter logging used for that check is not shipped.
+
+Newer Windows CrossDevice can hold status only in memory. Its internal Settings
+interface has a Microsoft Settings caller restriction; HaloBattery does not
+activate/bypass it, scrape UI, or substitute older cached percentages. If that
+is the only available source, battery status remains unavailable until a supported
+companion cache is produced. Other localized card formats and iPhone charging/
+disconnect behavior still need field confirmation; UI translations do not make
+an unsupported cache format supported.
+### MCHOSE V9 Pro
+
+**Target:** `291d:385d`; Halo writes only vendor-page collections.
+[JoaoKSS's controller at `79724bf`](https://github.com/JoaoKSS/MCHOSE_v9_PRO_Controller/blob/79724bf9c9f4405bbf08d5522f6006f5a044b257/mchose_qt.py#L146-L165)
+opens that exact VID/PID, sends a 64-byte output report `55 65 01 00 ...`,
+and accepts `55 65 <percentage> <status>`. Halo does not send the reference's
+separate EQ query. [PR #248](https://github.com/HeyOkay/HaloBattery/pull/248)
+records the level rising from 20% to 60% and charging following the cable;
+the `00` charging / `02` battery status interpretation comes from that run,
+not the reference's UI.
+Only the reference's `hid_write` output-report transport is used. A refused
+write, including "Incorrect function", ends the read without a feature-report
+retry. The former retry was based on another HyperX protocol; neither the
+reference nor PR #248's discussion/reviews establishes it on this target.
 ## Guarded integrations from pending device pull requests
 
 These are local integrations into the current native transport. The upstream

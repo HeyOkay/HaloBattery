@@ -2,6 +2,13 @@
 over USB/HID, without SteelSeries GG. Works alongside GG.
 
 Protocol (model list and reply layouts as documented by Sapd/HeadsetControl):
+  Range references pinned at 62e361b085d7716805a3bf524bc9cca3761e0e15:
+  lib/devices/steelseries_arctis_nova_7.hpp:139-166 (0..100 or 0..4),
+  steelseries_arctis_nova_5.hpp:219 (percent), steelseries_arctis_7_plus.hpp:121
+  (0..4), steelseries_arctis_gamebuds.hpp:80-95 (active bud percentages), and
+  steelseries_arctis_1.hpp:63-72 and steelseries_arctis_7.hpp:69-78 (percent).
+  Reject values outside those ranges before converting, rather than turning
+  malformed replies into 100%.
   * output report 00 b0 on interface 3 (usage page 0xFFC0) of the dongle
   * Nova 7 reply:  b0 <link> <battery> <status> ...
       link 03 = headset connected, 02 = not connected (Linux driver; seen on a 22A1:
@@ -47,6 +54,13 @@ same HeadsetControl source:
 
 Older Arctis headsets (Arctis 1, 7, 9, Pro Wireless) use other requests on other
 interfaces: see CLASSIC_MODELS further down.
+Arctis Pro Wireless (1038:1290), from Sapd/HeadsetControl's
+lib/devices/steelseries_arctis_pro_wireless.hpp, asks 41 aa for state and 40 aa
+for the five-step battery level. HIDAPI requires a leading zero for an unnumbered
+output report (hid_write API contract). PR #389 confirms that framing on hardware;
+retain the original framing first for the units already working in #56. Retry with
+the zero report ID only if no reply was accepted. Charging is not established by
+this exchange and is reported as unknown, not as a confirmed on-battery state.
 
 Aerox 3 Wireless (and the CS2 Dragon Lore edition, which shares the protocol) from
 alloyctl's reverse engineering of 1038:1838 on real hardware, cross-checked against
@@ -85,30 +99,38 @@ TIMEOUT = 1.0
 Reading = Tuple[Optional[int], bool, bool]   # level, charging, online
 
 
+def _valid_level(level, maximum=100) -> bool:
+    """HID battery fields are integer bytes, with a model-specific upper bound."""
+    return type(level) is int and 0 <= level <= maximum
+
+
 def parse_nova7(r) -> Reading:
     # the link byte must say "connected": the battery byte keeps its old value while
     # the headset is off, so without this check an old level shows as a live one
-    if len(r) < 4 or r[0] != 0xB0 or r[1] != 0x03 or r[3] == 0x00:
+    if (len(r) < 4 or r[0] != 0xB0 or r[1] != 0x03 or r[3] == 0x00
+            or not _valid_level(r[2])):
         return None, False, False
-    return min(r[2], 100), r[3] in (0x01, 0x02), True
+    return r[2], r[3] in (0x01, 0x02), True
 
 
 def parse_nova7_discrete(r) -> Reading:
     level, chg, online = parse_nova7(r)
-    return (None if level is None else min(level, 4) * 25), chg, online
+    if not _valid_level(level, 4):
+        return None, False, False
+    return level * 25, chg, online
 
 
 def parse_nova5(r) -> Reading:
-    if len(r) < 5 or r[0] != 0xB0 or r[1] == 0x02:
+    if len(r) < 5 or r[0] != 0xB0 or r[1] == 0x02 or not _valid_level(r[3]):
         return None, False, False
-    return min(r[3], 100), r[4] == 0x01, True
+    return r[3], r[4] == 0x01, True
 
 
 def parse_arctis7_plus(r) -> Reading:
     """Arctis 7+: b0 <status> <level 0..4> <charging>. Status 01 = headset off."""
-    if len(r) < 4 or r[0] != 0xB0 or r[1] == 0x01:
+    if len(r) < 4 or r[0] != 0xB0 or r[1] == 0x01 or not _valid_level(r[2], 4):
         return None, False, False
-    return min(r[2], 4) * 25, r[3] == 0x01, True
+    return r[2] * 25, r[3] == 0x01, True
 
 
 def parse_gamebuds(r) -> Reading:
@@ -118,7 +140,9 @@ def parse_gamebuds(r) -> Reading:
     levels = [r[5 + i] for i in (0, 1) if r[3 + i] == 0x03]
     if not levels:                        # both buds are in the case (or off)
         return None, False, False
-    return min(min(levels), 100), False, True
+    if not all(_valid_level(level) for level in levels):
+        return None, False, False
+    return min(levels), False, True
 
 
 # tested on hardware: 22A1. The others follow HeadsetControl's device list.
@@ -192,12 +216,12 @@ def parse_rival3(r) -> Reading:
     m = 1 if r[0] == 0x00 and len(r) > 1 else 0
     if len(r) >= m + 4 and r[m] == MOUSE_ECHO:
         level = r[m + 1]
-        if not 0 <= level <= 100:
+        if not _valid_level(level):
             return None, False, False
         return level, r[m + 3] != 0, True
     if len(r) >= m + 3:
         level, charging = r[m], r[m + 2]
-        if 0 <= level <= 100 and charging in (0, 1):
+        if _valid_level(level) and charging in (0, 1):
             return level, charging == 1, True
     return None, False, False
 
@@ -217,10 +241,12 @@ def parse_aerox3(r) -> Reading:
     if len(r) < m + 2 or r[m] != AEROX_ECHO:
         return None, False, False
     b = r[m + 1]
-    v = b & ~AEROX_CHARGING
-    if v == 0:
+    if not _valid_level(b, 255):
         return None, False, False
-    level = min(v, 100) if v > AEROX_STEPS else (v - 1) * 5
+    v = b & ~AEROX_CHARGING
+    if not 0 < v <= 100:
+        return None, False, False
+    level = v if v > AEROX_STEPS else (v - 1) * 5
     return level, bool(b & AEROX_CHARGING), True
 
 
@@ -278,9 +304,9 @@ def _echo(a: int, b: int) -> Callable[[List[int]], bool]:
 def exchange_arctis1(ask: Ask) -> Reading:
     """06 12 -> 06 12 <status> <level>. Status 01 = headset off. No charging flag."""
     r = ask([0x06, 0x12], _echo(0x06, 0x12))
-    if r is None or r[2] == 0x01:
+    if r is None or r[2] == 0x01 or not _valid_level(r[3]):
         return None, False, False
-    return min(r[3], 100), False, True
+    return r[3], False, True
 
 
 def exchange_arctis7_2018(ask: Ask) -> Reading:
@@ -289,26 +315,30 @@ def exchange_arctis7_2018(ask: Ask) -> Reading:
     if r is None or r[2] != 0x03:
         return None, False, False
     r = ask([0x06, 0x18], _echo(0x06, 0x18))
-    if r is None:
+    if r is None or not _valid_level(r[2], 255):
         return None, False, False
-    return min(r[2], 100), False, True       # "sometimes overreports": capped (Linux)
+    # Linux fe2ec83746e501645709761605c2464a44fd2929,
+    # drivers/hid/hid-steelseries-arctis.c:183-184 explicitly caps overreports.
+    return min(r[2], 100), False, True
 
 
 def exchange_arctis7(ask: Ask) -> Reading:
     """06 18 -> 06 18 <level>. No connection query is documented for these models;
     the level reads 0 while the headset is off (Linux), so 0 means no reading."""
     r = ask([0x06, 0x18], _echo(0x06, 0x18))
-    if r is None or r[2] == 0:
+    if r is None or r[2] == 0 or not _valid_level(r[2]):
         return None, False, False
-    return min(r[2], 100), False, True
+    return r[2], False, True
 
 
 def exchange_arctis9(ask: Ask) -> Reading:
     """00 20 -> aa 01 <?> <raw level> <charging>. Any other reply = headset off
     (Linux: 55 = no status, 03 = old status). Raw level 0x64..0x9A -> 0..100 %."""
     r = ask([0x00, 0x20], lambda r: len(r) >= 5 and r[0] in (0xAA, 0x55))
-    if r is None or r[0] != 0xAA or r[1] != 0x01:
+    if r is None or r[0] != 0xAA or r[1] != 0x01 or not _valid_level(r[3], 255):
         return None, False, False
+    # This is a raw-scale conversion, not a percentage. Preserve Linux's
+    # endpoint saturation (same pinned driver, lines 144-150 and 195-198).
     raw = min(max(r[3], 0x64), 0x9A)
     return (raw - 0x64) * 100 // (0x9A - 0x64), r[4] == 0x01, True
 
@@ -319,7 +349,8 @@ def exchange_pro_wireless(ask: Ask) -> Reading:
     r = ask([0x41, 0xAA] + [0x00] * 29, lambda r: len(r) >= 1 and r[0] in (0x02, 0x04))
     if r is None or r[0] == 0x02:
         return None, False, False
-    r = ask([0x40, 0xAA] + [0x00] * 29, lambda r: len(r) >= 1 and r[0] <= 4)
+    r = ask([0x40, 0xAA] + [0x00] * 29,
+            lambda r: len(r) >= 1 and _valid_level(r[0], 4))
     if r is None:
         return None, False, False
     return r[0] * 25, False, True
@@ -334,7 +365,7 @@ NOVA_PRO_CHARGING = 0x02             # charging on the cable
 NOVA_PRO_ONLINE = 0x08               # on battery
 NOVA_PRO_STATES = (NOVA_PRO_OFF, NOVA_PRO_CHARGING, NOVA_PRO_ONLINE)
 NOVA_PRO_INTERFACES = (3, 4)
-COARSE_MODELS = frozenset({0x12E0, 0x12E5})   # nine-step level, so shown as "about NN%"
+COARSE_MODELS = frozenset({0x12E0, 0x12E5, 0x1290})  # nine/five-step, shown as "about NN%"
 
 
 def exchange_nova_pro(ask: Ask) -> Reading:
@@ -346,7 +377,7 @@ def exchange_nova_pro(ask: Ask) -> Reading:
     reporting itself off or out of range, so it gives no reading at all rather than 0 %.
     """
     r = ask(NOVA_PRO_REQUEST, lambda r: len(r) >= 16 and r[15] in NOVA_PRO_STATES)
-    if r is None or r[15] == NOVA_PRO_OFF or not 0 <= r[6] <= 8:
+    if r is None or r[15] == NOVA_PRO_OFF or not _valid_level(r[6], 8):
         return None, False, False
     return r[6] * 100 // 8, r[15] == NOVA_PRO_CHARGING, True
 
@@ -519,7 +550,8 @@ class SteelSeriesProvider(Provider):
         out += self._poll_classic(infos)
         return out
 
-    def _run_exchange(self, path: bytes, exchange: Callable[[Ask], Reading]):
+    def _run_exchange(self, path: bytes, exchange: Callable[[Ask], Reading],
+                      report_id_zero: bool = False):
         """Open one collection and run an exchange on it.
         -> (reading, answered): answered is True if any request got an accepted reply."""
         dev = hid.device()
@@ -531,6 +563,8 @@ class SteelSeriesProvider(Provider):
         answered = []
 
         def ask(request, accept):
+            if report_id_zero:
+                request = [0x00] + request
             dev.write(request)
             end = time.time() + TIMEOUT
             while time.time() < end:
@@ -568,12 +602,19 @@ class SteelSeriesProvider(Provider):
             known = self._classic_path.get(pid)
             for path in ([known] if known in paths else paths):
                 (level, chg, online), answered = self._run_exchange(path, exchange)
+                if pid == 0x1290 and not answered:
+                    # An accepted status (including off, or on with no battery
+                    # reply) proves the original framing; do not retry that case.
+                    self._diag.append("  retry with HIDAPI report ID 0")
+                    (level, chg, online), answered = self._run_exchange(
+                        path, exchange, report_id_zero=True)
                 if answered:
                     self._classic_path[pid] = path
                     if online and level is not None:
                         approx = f"about {level}%" if pid in COARSE_MODELS else ""
                         out.append(DeviceStatus(f"steelseries:{pid:04x}", name, level, chg, True,
                                                 "steelseries", approx=approx, kind="headset",
+                                                charging_known=pid != 0x1290,
                                                 ui_message="state.approx" if approx else "",
                                                 ui_params={"level": level} if approx else {}))
                     else:
