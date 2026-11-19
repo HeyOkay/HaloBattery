@@ -33,7 +33,7 @@ VSVersionInfo(
         StringStruct('InternalName', 'HaloBattery'),
         StringStruct('LegalCopyright', 'MIT License, https://github.com/HeyOkay/HaloBattery'),
         StringStruct('OriginalFilename', 'HaloBattery.exe'),
-        StringStruct('ProductName', 'Halo Battery'),
+        StringStruct('ProductName', 'HaloBattery'),
         StringStruct('ProductVersion', '{v}')
       ])
     ]),

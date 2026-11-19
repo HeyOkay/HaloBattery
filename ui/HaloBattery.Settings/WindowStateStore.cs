@@ -88,9 +88,7 @@ internal sealed class WindowStateStore
 
     internal async Task SaveAsync(SettingsWindowState state)
     {
-        var json=JsonSerializer.Serialize(new { width=state.Width,height=state.Height,railExpanded=state.RailExpanded,
-            x=state.X,y=state.Y,dpi=state.Dpi,monitor=state.Monitor,maximized=state.Maximized,
-            page=state.Page,selectedDeviceKey=state.SelectedDeviceKey,scrollOffset=state.ScrollOffset,expandedCards=state.ExpandedCards });
+        var json=SettingsJson.WindowState(state);
         if(!TryParse(json,out _)) throw new ArgumentOutOfRangeException(nameof(state));
         await writer.WaitAsync().ConfigureAwait(false);
         try

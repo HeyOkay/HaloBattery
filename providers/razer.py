@@ -37,7 +37,6 @@ RAZER_VID = 0x1532
 # copy of that OpenRazer list and checks this table against it.
 KNOWN = {
     0x0528: ("Razer BlackShark V2 Pro (2020)", 0x3F),
-    0x0536: ("Razer Barracuda X (2022)", 0x1F),
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
@@ -160,6 +159,22 @@ TRANSACTION_IDS = (0x1F, 0x3F, 0xFF, 0x9F, 0x08)
 # battery command too, with a meaningless value.
 WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
                   "blackshark", "barracuda", "nari")
+
+
+# 1532:0536 is the Barracuda X (2022) on its USB cable, not a receiver. Its ff00:0001
+# interface has no output endpoint, so Windows refuses every write with error 0x57
+# (the reporter's log in #256). Nothing is sent to it; the 2.4 GHz dongle 1532:0552 is
+# read by providers/barracuda_x.py.
+BARRACUDA_X_CABLE_PID = 0x0536
+
+# 0557 keeps its existing BlackShark compatibility path. The 0550 whole-build
+# confirmation does not identify a successful PA exchange or charging transition:
+# https://github.com/HeyOkay/HaloBattery/issues/332#issuecomment-6638842380
+# The later YS-Tech test offer has no owner result and uses separate framing:
+# https://github.com/HeyOkay/HaloBattery/issues/264#issuecomment-6878550754
+# Hold PA on 0550; its unchanged generic path may produce no battery reading.
+# Product names alone do not authorize PA writes.
+PA_FALLBACK_PIDS = frozenset({0x0557})
 
 
 def maybe_wireless(pid: int, name: str) -> bool:
@@ -387,6 +402,10 @@ class RazerProvider(Provider):
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
                 continue
+            if pid == BARRACUDA_X_CABLE_PID:
+                self._diag.append("  skipped: Barracuda X (2022) on its cable; "
+                                  "battery is read from receiver 0552")
+                continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
                 continue
@@ -402,9 +421,8 @@ class RazerProvider(Provider):
                 # providers/barracuda.py reads.
                 self._diag.append("  skipped: read by the barracuda provider (own PA protocol)")
                 continue
-            # A Barracuda receiver that is not in PA_PIDS (the Barracuda X 2.4, 1532:0550) shows
-            # the same collections and the same failed mouse request as the receivers that
-            # speak PA (#332, #264), so it gets the PA fallback a BlackShark gets.
+            # Presentation classification is separate from permission to send PA
+            # commands: a product name alone does not establish its protocol.
             is_headset = (pid in blackshark.PA_PIDS or "blackshark" in name.lower()
                           or "barracuda" in name.lower())
             if pid == blackshark2020.PID:
@@ -421,8 +439,12 @@ class RazerProvider(Provider):
                 if st is None:
                     st = self._poll_group((pid, serial), ifaces, pref_tid)
             else:
+                if pid == 0x0550:
+                    self._cache.pop(("pa", pid, serial), None)
+                    self._diag.append("  PA release hold: no confirmed 0550 exchange; generic read only")
                 st = self._poll_group((pid, serial), ifaces, pref_tid)
-                if is_headset and (st is None or st[0] != STATUS_OK):
+                can_poll_pa = pid in PA_FALLBACK_PIDS
+                if can_poll_pa and (st is None or st[0] != STATUS_OK):
                     pa = self._poll_pa((pid, serial), ifaces)
                     if pa is not None and (st is None or pa[0] == STATUS_OK):
                         st = pa
@@ -589,9 +611,16 @@ class RazerProvider(Provider):
 
     def _poll_pa(self, gkey, ifaces):
         """BlackShark V2 Pro 2023: the "PA" protocol over output/input reports."""
+        pid = gkey[0] if gkey else None
+        if pid == 0x0550:
+            self._cache.pop(("pa",) + tuple(gkey), None)
+            self._diag.append("  PA release hold: no confirmed 0550 exchange; not querying")
+            return None
+        if pid not in blackshark.PA_PIDS and pid not in PA_FALLBACK_PIDS:
+            return None
         cache_key = ("pa",) + tuple(gkey)
         cached = self._cache.get(cache_key)
-        cands = [d for d in ifaces if blackshark.is_candidate(d)] or list(ifaces)
+        cands = [d for d in ifaces if blackshark.is_candidate(d)]
         if cached:
             cands.sort(key=lambda d: 0 if d["path"] == cached.path else 1)
         offline = None

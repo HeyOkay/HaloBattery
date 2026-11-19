@@ -183,6 +183,17 @@ class IconCatalogJobs:
 
     def _dispose(self):
         try:
+            # Cancel owned HTTP reads before joining their workers. A
+            # catalogue may still be initializing when close() runs.
+            # Keep shared catalogues and in-flight selection assets intact.
+            if self._owns_catalog:
+                with self._catalog_lock:
+                    catalog = self._catalog_instance
+                if catalog is not None:
+                    try:
+                        catalog.close_transport()
+                    except (OSError, ValueError):
+                        log.warning("settings: icon HTTP cancellation failed", exc_info=True)
             for worker in (self._thread, self._warm_thread, self._index_thread):
                 if worker is not None and worker is not threading.current_thread():
                     worker.join()

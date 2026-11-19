@@ -1,0 +1,2 @@
+# Developer/CI tool only; never bundled with HaloBattery.
+ruff==0.17.5 --hash=sha256:aa415d57c244299279901d776607fee3df7831c2a7435433fbfacde8632c6550

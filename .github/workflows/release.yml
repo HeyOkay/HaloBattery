@@ -35,12 +35,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.404"
 
       - name: Check that the tag matches VERSION
         if: github.ref_type == 'tag'
@@ -76,14 +76,14 @@ jobs:
         run: |
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
-          ./scripts/build_settings.ps1
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
           python tools/build_exe.py
 
       - name: Archive native settings symbols
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: HaloBattery-Settings-symbols-${{ github.sha }}
-          path: .build/settings-ui-obj/**/linked/HaloBattery.Settings.pdb
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
@@ -104,8 +104,7 @@ jobs:
         id: setup
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $iscc = ./scripts/get_inno.ps1
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss

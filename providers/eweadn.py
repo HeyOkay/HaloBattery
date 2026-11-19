@@ -22,7 +22,10 @@ hub.eweadn.cn, whose ``pq.json`` maps ``089D:062F`` (usage page 0xFF01, usage 0x
   * the receiver also pushes ``D1 01 <level> ...`` status reports on its own, which is where
     the vendor app gets live battery changes from.
 
-Only the 0xFF01 vendor collection is written to.
+Only the receiver's exact 0xFF01:0x0010 collection is written to, as mapped by
+hub.eweadn.cn/deviceJson/pq.json and documented in HeyOkay/HaloBattery PR #352.
+The wired 088D:062E path is held: the named source and confirmed S9 capture cover
+089D:062F, so they do not authorize sending that receiver query over the cable.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ WIRED_VID = 0x088D
 WIRED_PID = 0x062E
 
 USAGE_PAGE = 0xFF01
+USAGE = 0x0010
 REPORT_ID = 0x00
 CMD_DEVICE_INFO = 0x30
 DEVICE_IDS = {"M156": "EWEADN S9", "M302": "EWEADN H2"}
@@ -129,11 +133,18 @@ class EweadnProvider(Provider):
         targets = []
         try:
             for d in hidlist.enumerate(RECEIVER_VID):
-                if d.get("product_id") == RECEIVER_PID and (d.get("usage_page") or 0) == USAGE_PAGE:
+                if (d.get("vendor_id") != RECEIVER_VID
+                        or d.get("product_id") != RECEIVER_PID):
+                    continue
+                if d.get("usage_page") == USAGE_PAGE and d.get("usage") == USAGE:
                     targets.append((d, False))
+                else:
+                    self._diag.append("[EWEADN] receiver collection is not ff01:0010; "
+                                      "no battery request sent")
             for d in hidlist.enumerate(WIRED_VID):
-                if d.get("product_id") == WIRED_PID:
-                    targets.append((d, True))
+                if d.get("vendor_id") == WIRED_VID and d.get("product_id") == WIRED_PID:
+                    self._diag.append("[EWEADN] wired 088d:062e not queried: "
+                                      "no sourced battery exchange for this transport")
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(eweadn): %s", e)
             return []

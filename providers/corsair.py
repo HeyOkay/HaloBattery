@@ -4,8 +4,11 @@ without iCUE.
 Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
 
   * the vendor collection on the receiver, which HeadsetControl identifies by
-    interface 4 (it gives no usage page/usage for it, so the interface number is
-    the only handle on that collection; a probe logs whatever it actually finds).
+    interface 4. The Windows dumps in #28 and the independent confirmation in
+    PR #176 identify its control collection as ff42:0001; ff42:0002 is a notice
+    channel with no output report. No other collection receives these requests.
+    Sources: HeadsetControl lib/devices/corsair_void_v2w.hpp, lines 52-57;
+    https://github.com/HeyOkay/HaloBattery/pull/176#issuecomment-6031065546
   * commands are 64 bytes with no leading report id: [0] 0x02, [1] endpoint,
     [2] 0x02, [3] command. Endpoint 0x08 is the receiver itself, 0x09 the
     headset behind it. Replies are 64 bytes. HeadsetControl writes the same
@@ -45,7 +48,9 @@ property, so a second app on the same dongle (iCUE, SignalRGB) can put an
 answer for another property on the channel that parses as a level; the ask is
 therefore repeated and only two equal answers are taken, the wait is a time
 window (traffic frames end a 500 ms read early), and a per-dongle budget
-bounds the try-every-collection fallback (review by @ahmedkhursheed23). The
+bounds the read across matching control collections (review by @ahmedkhursheed23).
+Only ff42:0001 is used: #56's capture and #154's K65 dump identify it as the
+command/reply collection; the ff42:0002 notice channel is never written. The
 Virtuoso RGB Wireless SE receiver (1b1c:0a40) runs the same exchange with two
 measured differences (#204, jeffpeng3's Linux proof-of-concept and the Windows
 probe): Windows refuses every report-id-prefixed write on it and takes the bare
@@ -70,9 +75,10 @@ return value, every frame with the time it took to arrive, a listen-only pass
 before writing anything (with the vendor app open it catches the vendor's own
 exchange), and - when the usual sequence yields nothing - the vendor app's
 fuller software-mode path. It also prints every collection's declared report
-lengths and tries the battery frame in each framing on every collection,
-because a write Windows refuses locally looks exactly like a switched-off
-device. Normal polling keeps the short windows; a provider runs on the tray's
+lengths and tries the two sourced battery-frame shapes only on interface 4,
+ff42:0001. Report lengths are diagnostic metadata, not permission to construct
+another frame size or to write to another collection. A write Windows refuses
+locally looks exactly like a switched-off device. Normal polling keeps the short windows; a provider runs on the tray's
 timer and must never block it.
 
 The Dark Core / Ironclaw mice and their dongles speak a second, unrelated
@@ -108,9 +114,11 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 CORSAIR_VID = 0x1B1C
 
-USAGE_PAGE = 0
-USAGE = 0
-CONTROL_INTERFACE = 4           # the collection that carries the protocol
+# Windows collection from #28 and PR #176; HeadsetControl names interface 4.
+# https://github.com/HeyOkay/HaloBattery/issues/28#issuecomment-5857289829
+USAGE_PAGE = 0xFF42
+USAGE = 0x0001
+CONTROL_INTERFACE = 4
 
 RECEIVER_ENDPOINT = 0x08
 HEADSET_ENDPOINT = 0x09
@@ -497,29 +505,32 @@ class CorsairProvider(Provider):
                     pass
         return None
 
+    @staticmethod
+    def _control_collections(infos: List[dict]) -> List[dict]:
+        return [d for d in infos if d.get("interface_number") == CONTROL_INTERFACE
+                and (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE)]
+
     def _pick(self, infos: List[dict]) -> Optional[dict]:
-        for d in infos:
-            if d.get("interface_number") == CONTROL_INTERFACE:
-                return d
-        self._diag.append(f"  no interface {CONTROL_INTERFACE} collection; "
-                          f"falling back to the first of {len(infos)}")
-        return infos[0] if infos else None
+        collections = self._control_collections(infos)
+        if collections:
+            return collections[0]
+        self._diag.append(f"  no interface {CONTROL_INTERFACE} "
+                          f"{USAGE_PAGE:04x}:{USAGE:04x} collection; not opening HID")
+        return None
 
     def _pick_bragi(self, infos: List[dict]) -> List[dict]:
-        """The dongle's vendor collections, the one that answers first.
+        """Only the ff42:0001 command/reply collection from #56 and #154.
 
-        It has two (0xFF42:0x0001 and 0xFF42:0x0002, from the #56 dump): the
-        exchange answers on usage 0x0001, while 0x0002 is its notice channel and
-        is not asked. When 0xFF42 is missing, the remaining collections are tried,
-        which then costs one read window.
+        HeadsetControl's corsair_virtuoso_xt.hpp getCapabilityDetail(),
+        lines 97-102, identifies the same pair for the XT/SE devices:
+        https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/corsair_virtuoso_xt.hpp#L97-L102
         """
-        vend = [d for d in infos if d.get("usage_page") == BRAGI_VENDOR_PAGE]
+        vend = [d for d in infos
+                if (d.get("usage_page"), d.get("usage")) == (BRAGI_VENDOR_PAGE, BRAGI_USAGE)]
         if not vend:
-            self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x} collection; trying all "
-                              f"{len(infos)}")
-            vend = list(infos)
-        return sorted(vend, key=lambda d: (0 if d.get("usage") == BRAGI_USAGE else 1,
-                                           d.get("interface_number") or 99))
+            self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} collection; "
+                              "not opening HID")
+        return sorted(vend, key=lambda d: d.get("interface_number") or 99)
 
     def _ask_bragi(self, dev, window: float, parse=parse_bragi) -> Optional[int]:
         """One ask's answer within a time window; the parsed value, or None."""
@@ -787,28 +798,19 @@ class CorsairProvider(Provider):
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} {shown}")
         return caps_by_path
 
-    def _probe_matrix(self, infos: List[dict],
-                      caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]]) -> None:
-        """Probe only: try the battery frame in each framing, on every collection.
+    def _probe_matrix(self, infos: List[dict]) -> None:
+        """Probe the sourced 64/65-byte shapes on matching control collections.
 
-        The first collection that takes a write is reused for one more ask, so the
-        next build can start from it. A write Windows refuses never reaches the
-        dongle, which is the state #28's logs were stuck in.
+        #28 and PR #176 establish the two framing variants, not arbitrary
+        caps-sized reports or permission to write to sibling notice channels.
         """
-        self._diag.append("  probe: write shapes, collection by collection")
-        order = sorted(infos,
-                       key=lambda d: (0 if d.get("interface_number") == CONTROL_INTERFACE else 1,
-                                      0 if (d.get("usage_page") or 0) >= 0xFF00 else 1))
+        self._diag.append("  probe: write shapes on documented control collections")
+        order = self._control_collections(infos)
         frame = make_request(HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
         for d in order:
-            key = d.get("path")
-            key = bytes(key) if isinstance(key, (bytes, bytearray)) else None
-            caps = caps_by_path.get(key) if key is not None else None
             where = (f"iface={d.get('interface_number')} "
                      f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
             shapes = [("write65-rid0", frame), ("write64-norid", frame[1:])]
-            if caps and caps[1] and caps[1] != len(frame):
-                shapes.append((f"write{caps[1]}-rid0", (frame + [0x00] * caps[1])[:caps[1]]))
             dev = hid.device()
             try:
                 dev.open_path(d.get("path"))
@@ -1014,13 +1016,12 @@ class CorsairProvider(Provider):
             self._diag.append(f"[Corsair] pid={pid:04x} '{name}' "
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-            caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]] = {}
             if in_probe():
                 self._diag.append(f"  path: {d.get('path', b'')!r}")
-                caps_by_path = self._probe_caps(mine)
+                self._probe_caps(mine)
             reply = self._query(d["path"])
             if reply is None and in_probe():
-                self._probe_matrix(mine, caps_by_path)
+                self._probe_matrix(mine)
             level = parse_level(reply)
             if level is None:
                 continue
@@ -1060,12 +1061,15 @@ class CorsairProvider(Provider):
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
                 continue
-            vend = [d for d in mine if d.get("usage_page") == VOID_VENDOR_PAGE]
+            # HeadsetControl corsair_void_rich.hpp getCapabilityDetail(), lines
+            # 49-60: battery requests use ffc5:0001, never another vendor page.
+            # https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/corsair_void_rich.hpp#L49-L60
+            vend = [d for d in mine
+                    if (d.get("usage_page"), d.get("usage")) == (VOID_VENDOR_PAGE, VOID_USAGE)]
             self._diag.append(f"[Corsair void] pid={pid:04x} '{name}'"
-                              + ("" if vend else f" (no {VOID_VENDOR_PAGE:04x} collection)"))
-            for d in sorted(vend or mine,
-                            key=lambda x: (0 if x.get("usage") == VOID_USAGE else 1,
-                                           x.get("interface_number") or 0)):
+                              + ("" if vend else f" (no {VOID_VENDOR_PAGE:04x}:{VOID_USAGE:04x} "
+                                 "collection; not opening HID)"))
+            for d in sorted(vend, key=lambda x: x.get("interface_number") or 0):
                 self._diag.append(f"  iface={d.get('interface_number')} "
                                   f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 seen.add(d["path"])

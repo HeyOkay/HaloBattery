@@ -6,6 +6,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HeadsetControl lib/devices/audeze_maxwell.hpp, RACE battery marker d6 0c 00 00.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import unittest
@@ -21,12 +24,12 @@ PATH = b"\\\\?\\hid#vid_3329&pid_4b18&mi_00&col02#x"
 
 def echo(req):
     """What the stuck 4B18 dongle answered: 07 00 <byte 2 of the request> 00 ..."""
-    return [audeze.REPORT_ID_IN, 0x00, req[2]] + [0] * (audeze.MSG_SIZE - 3)
+    return [0x07, 0x00, req[2]] + [0] * (62 - 3)
 
 
 def battery(level):
-    return ([audeze.REPORT_ID_IN, 0x05, 0x5D, 0x07, 0x00] + list(audeze.BATTERY_MARKER)
-            + [level] + [0] * (audeze.MSG_SIZE - 10))
+    return ([0x07, 0x05, 0x5D, 0x07, 0x00] + list(bytes.fromhex("d6 0c 00 00"))
+            + [level] + [0] * (62 - 10))
 
 
 class FakeDongle:

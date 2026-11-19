@@ -1,23 +1,21 @@
 """MCHOSE K87 keyboards on the 2.4 GHz receiver (41E4:2001).
 
-Protocol taken from MCHOSE's own web driver (M HUB): the site www.mchose.com.cn ships the
-configurator as ``assets/purify.es-*.js``, whose command table has
+Protocol taken from MCHOSE's own web driver (M HUB):
+https://www.mchose.com.cn/assets/main-DQZs6ZzX.js
+SHA-256: 61588300659c7802018831d78a98af1dfd7967d70a8d286bfbd3e4d424173227
+The getBattery command table specifies 19 bytes: ``13 4a 01`` + 16 zero bytes.
+The wireless readCommand appends crcHandler16(command), which is the sum of
+those bytes (0x5e), and genCommandHandler removes the report ID before
+sendReport(reportId, payload). HIDAPI includes that ID: the complete output
+report is 20 bytes, ending in 0x5e. No device/configuration write is added.
 
-    ["getBattery", {default: {
-        wirelessCommand: "13 4a 01 00 00 ... 00",          # 19 bytes
-        wirelessParser: batteryLevel:u8, fullStatus:bit4, chargeStatus:bit4,
-        wiredCommand: "06 87 00 00 01 00 02 00 ..." }}]
-
-0x13 is the report id, so the wire frame is ``13 4a 01`` + zeros. On the hardware here
-(``41E4:2001``, vendor collection usage page 0xFF02, 20-byte in/out) the answer is
+On the captured K87 receiver (41E4:2001, interface 1, FF02:0002, 20-byte
+input/output), the full battery reply is:
 
     13 4A 01 00 02 64 01 00 00 ... 00 C5
-                     ^^  ^^           ^^ checksum = sum(bytes 0..18) & 0xFF
+                     ^^  ^^           ^^ sum(bytes 0..18) & 0xFF
 
-which decodes as: command echo, 0x02 (link/mode), **0x64 = 100 %**, 0x01 (full/charge
-nibble). The checksum matches the frame, so the layout is confirmed against the vendor
-parser: after the 5-byte header the payload is ``batteryLevel`` then the full/charge nibble.
-
+The level is byte 5 (0x64 = 100%); flags in byte 6 remain diagnostic only.
 The 8-byte feature report on the same interface (usage page 0xFF04, report id 6) is a second
 status channel; it reports the same 100 in its own layout, but the output channel above is
 the one the vendor driver reads the level from.
@@ -37,10 +35,15 @@ from .base import DeviceStatus, Provider, hexdump, log
 VENDOR = 0x41E4
 PRODUCTS = {0x2001: "MCHOSE K87"}
 USAGE_PAGE = 0xFF02
+USAGE = 0x0002
+INTERFACE = 1
+REPORT_SIZE = 20
 
 REPORT_ID = 0x13
 CMD = 0x4A
-REQUEST = bytes([REPORT_ID, CMD, 0x01, 0x00, 0x00, 0x02] + [0] * 13)
+# Exact manufacturer getBattery frame, including its additive checksum.
+_REQUEST_BODY = bytes([REPORT_ID, CMD, 0x01] + [0] * 16)
+REQUEST = _REQUEST_BODY + bytes([sum(_REQUEST_BODY) & 0xFF])
 
 ATTEMPTS = 3
 ATTEMPT_GAP = 0.15
@@ -58,10 +61,14 @@ def parse_reply(resp) -> Optional[Tuple[int, int]]:
     not "charging right now" - it reads 1 while the pack is full, and the tray must not show
     the breathing-charging animation for it. The flag is kept for diagnostics only.
     """
-    if not resp or len(resp) < 7:
+    if not isinstance(resp, (bytes, bytearray, list, tuple)):
         return None
-    r = bytes(resp)
-    if r[0] != REPORT_ID or r[1] != CMD:
+    try:
+        r = bytes(resp)
+    except (TypeError, ValueError):
+        return None
+    if (len(r) != REPORT_SIZE or r[:4] != bytes([REPORT_ID, CMD, 1, 0])
+            or r[-1] != (sum(r[:-1]) & 0xFF)):
         return None
     level = r[5]
     if level > 100:
@@ -91,7 +98,10 @@ class MchoseKbProvider(Provider):
                 pass
             for attempt in range(ATTEMPTS):
                 try:
-                    dev.write(REQUEST)
+                    sent = dev.write(REQUEST)
+                    if type(sent) is not int or sent < REPORT_SIZE:
+                        self._diag.append(f"    write refused/short ({sent})")
+                        return None
                 except (OSError, ValueError) as e:
                     self._diag.append(f"    write: {e}")
                     return None
@@ -128,7 +138,8 @@ class MchoseKbProvider(Provider):
             pid = d.get("product_id")
             if d.get("vendor_id") != VENDOR or pid not in PRODUCTS:
                 continue
-            if (d.get("usage_page") or 0) != USAGE_PAGE:
+            if ((d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE)
+                    or d.get("interface_number") != INTERFACE):
                 continue
             key = f"mchose_kb:{pid:04x}"
             if key in seen:

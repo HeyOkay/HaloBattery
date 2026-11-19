@@ -39,9 +39,10 @@ The pair list names the devices; a pid that is not known is skipped, as G-Helper
 The collections of one receiver are matched by the device instance in their path, so two
 OMNI receivers do not mix. Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile.
 
-The Harpe II Ace / Extreme use the same mouse battery command on the SPEEDNOVA
-receiver's mi_02&col03 with report id 3, or report id 0 on their cable, in 64 bytes.
-See the source comment at HARPE_II_RECEIVER below (upstream #364).
+The Harpe II cable uses report id 0 in 64 bytes. The shared SPEEDNOVA receiver
+identity does not establish a Harpe II: its mouse query is held until a sourced
+paired-model discriminator is available. The confirmed Azoth 96 HE on that
+receiver is read only when its pair list names 1C12 (upstream #238).
 
 Not included (they use a different collection, report id or byte position in
 G-Helper, and none was on hand to test): Keris II Ace / Origin and
@@ -215,6 +216,15 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
 # AsusMouse.cs: report 3 on mi_02&col03 of the 1ad0 SPEEDNOVA receiver,
 # report 0 on interface 0 over the 1c69 cable, both 64 bytes (upstream #364).
 HARPE_II_RECEIVER, HARPE_II_CABLE = 0x1AD0, 0x1C69
+
+# #238's Gear Link capture and reporter-confirmed azoth96he-test2 implementation:
+# https://github.com/HeyOkay/HaloBattery/issues/238#issuecomment-6876578460
+# https://github.com/casparas123/HaloBattery/blob/azoth96he-test2/providers/asus.py#L470-L499
+# Interface 2, FF02:0001 accepts the 64-byte 01 A0 00 00 pair-list request;
+# paired PID 1C12 accepts 02 12 01 on FF00:0001, level byte 6, charging byte 9.
+SPEEDNOVA_PID = HARPE_II_RECEIVER
+SPEEDNOVA_KEYBOARD_PID = 0x1C12
+SPEEDNOVA_KEYBOARD_NAME = "ROG Azoth 96 HE"
 
 Reading = Tuple[int, bool, str]     # level %, charging, approximate text ("" = exact)
 
@@ -461,6 +471,37 @@ class AsusProvider(Provider):
                     out.append((name, "keyboard", res))
         return out
 
+    def _poll_speednova_keyboard(self, infos: List[dict]) -> List[Tuple[str, str, Reading]]:
+        """Ask only the captured Azoth 96 HE identity on its own receiver channels."""
+        receivers: Dict[str, Dict[int, bytes]] = {}
+        for d in infos:
+            if (d.get("product_id") != SPEEDNOVA_PID
+                    or d.get("interface_number") != OMNI_INTERFACE
+                    or d.get("usage") != 0x0001
+                    or d.get("usage_page") not in (OMNI_CONTROL, OMNI_KEYBOARD)):
+                continue
+            receivers.setdefault(_instance(d["path"]), {})[d["usage_page"]] = d["path"]
+
+        out: List[Tuple[str, str, Reading]] = []
+        for cols in receivers.values():
+            if OMNI_CONTROL not in cols:
+                continue
+            self._diag.append(f"[ASUS] ROG SpeedNova receiver pid={SPEEDNOVA_PID:04x}")
+            r = self._ask(cols[OMNI_CONTROL], OMNI_PAIRS, lambda r: bool(parse_pairs(r)),
+                          OMNI_PACKET_LENGTH)
+            # A partial pair record must not authorize a model-specific query.
+            pids = parse_pairs(r) if r is not None and len(r) == OMNI_PACKET_LENGTH else []
+            self._diag.append("  paired: " + (" ".join(f"{p:04x}" for p in pids) or "none"))
+            if SPEEDNOVA_KEYBOARD_PID not in pids or OMNI_KEYBOARD not in cols:
+                continue
+            self._diag.append(f"  keyboard {SPEEDNOVA_KEYBOARD_NAME} pid={SPEEDNOVA_KEYBOARD_PID:04x}")
+            r = self._ask(cols[OMNI_KEYBOARD], OMNI_KEYBOARD_REQUEST, is_omni_keyboard_reply,
+                          OMNI_PACKET_LENGTH)
+            res = self._parsed(r, lambda r: parse_omni_keyboard(r, 6))
+            if res is not None:
+                out.append((SPEEDNOVA_KEYBOARD_NAME, "keyboard", res))
+        return out
+
     def _read_headset(self, path) -> Optional[Tuple[int, bool]]:
         """One feature-report exchange with the ROG Strix Go 2.4 (a mirror of
         G-Helper's WriteForResponse): send the packet, wait 35 ms, read the feature
@@ -542,24 +583,23 @@ class AsusProvider(Provider):
 
         for d in infos:
             pid = d.get("product_id")
-            if pid == HARPE_II_RECEIVER:
-                path = d.get("path", b"")
-                path = path.decode("utf-8", "replace") if isinstance(path, bytes) else str(path)
-                if "mi_02&col03" not in path.lower():
-                    continue
-                request, wanted, parse = OMNI_MOUSE_REQUEST, is_omni_mouse_reply, parse_omni_mouse
-            elif pid == HARPE_II_CABLE:
-                if d.get("interface_number") != INTERFACE or d.get("usage_page", 0) < 0xFF00:
-                    continue
-                request, wanted = REQUEST, has_echo
-                parse = lambda r: parse_reply(r, PERCENT)
-            else:
+            if pid != HARPE_II_CABLE:
                 continue
+            if d.get("interface_number") != INTERFACE or d.get("usage_page", 0) < 0xFF00:
+                continue
+            request, wanted = REQUEST, has_echo
+            parse = lambda r: parse_reply(r, PERCENT)
             name = "ROG Harpe II Extreme" if "EXTREME" in (d.get("product_string") or "").upper() else "ROG Harpe II Ace"
             self._diag.append(f"[ASUS] {name} pid={pid:04x}")
             res = self._parsed(self._ask(d["path"], request, wanted, 64), parse)
             if res is not None:
                 keep(name, "mouse", res)
+
+        # 1AD0 is shared with keyboards: never send the Harpe mouse query based
+        # on the generic receiver identity or product string alone.
+        for name, kind, res in self._poll_speednova_keyboard(infos):
+            self._diag.append(f"  -> {name}: {res[0]}%{' charging' if res[1] else ''}")
+            keep(name, kind, res)
 
         for name, kind, res in self._poll_omni(infos):
             self._diag.append(f"  -> {name}: {res[0]}%{' charging' if res[1] else ''}")

@@ -114,6 +114,25 @@ class VoidEliteTest(unittest.TestCase):
         self.assertEqual(consumer.writes, [])
         self.assertTrue(vendor.writes)
 
+    def test_missing_vendor_pair_never_writes_to_other_collections(self):
+        for page, usage in ((0x000C, 1), (0xFF00, 1), (0xFFC5, 2)):
+            with self.subTest(page=page, usage=usage):
+                dev = FakeDongle([reply(0x32, 0x01)])
+                out = self.poll({b"other": dev},
+                                [entry(0x0A55, b"other", 3, page, usage)])
+                self.assertEqual(out, [])
+                self.assertEqual(dev.writes, [])
+
+    def test_silent_vendor_pair_never_falls_back_to_sibling_usage(self):
+        control = FakeDongle(silent=True)
+        sibling = FakeDongle([reply(0x32, 0x01)])
+        out = self.poll({b"control": control, b"sibling": sibling},
+                        [entry(0x0A55, b"sibling", 3, 0xFFC5, 2),
+                         entry(0x0A55, b"control", 3, 0xFFC5, 1)])
+        self.assertEqual(out, [])
+        self.assertTrue(control.writes)
+        self.assertEqual(sibling.writes, [])
+
     def test_parse_void(self):
         self.assertEqual(C.parse_void(reply(0x4B, 0x01)), (75, False))
         self.assertEqual(C.parse_void(reply(0x4B, 0x05)), (75, True))

@@ -1,6 +1,10 @@
 """French application text; brands and device names are kept unchanged."""
 
 MESSAGES = {
+    "startup.hid_unavailable": 'Windows n’a pas pu charger la prise en charge HID. La lecture des batteries par USB et 2,4 GHz est indisponible. Bluetooth et les paramètres restent accessibles. Ouvrez le diagnostic pour plus de détails.',
+    "state.poll_unavailable": 'Lecture de la batterie indisponible',
+    "state.poll_stale": '{level}% (dernière valeur ; lecture de la batterie indisponible)',
+    "settings.open_failed": "Impossible d’ouvrir les paramètres. Les réglages de base restent accessibles dans {preferences}, depuis le menu de l’icône de notification.",
     "preferences.icon_style": "Style des icônes",
     "icon_style.outline": "Contour",
     "icon_style.filled": "Rempli",
@@ -284,7 +288,8 @@ MESSAGES = {
     'settings.ring_thin': 'Fin',
     'settings.ring_classic': 'Classique (plus épais)',
     "settings.iconify_title": "Catalogue d’icônes Iconify",
-    'settings.iconify_hint': 'Choisissez une icône parmi les collections disponibles. Les téléchargements de la galerie sont effacés à la fermeture des paramètres ; les icônes appliquées restent disponibles hors ligne.',
+    "settings.iconify_saved_unavailable": "Une icône enregistrée n’a pas pu être vérifiée. Votre choix est conservé, mais l’icône par défaut est affichée. Ouvrez Paramètres > Appareils pour la choisir à nouveau ou rétablir l’icône par défaut.",
+    "settings.iconify_hint": "La recherche télécharge les icônes depuis api.iconify.design. Le cache de la galerie est effacé à la fermeture des paramètres ; les icônes appliquées fonctionnent hors ligne.",
     "settings.iconify_browse": "Parcourir les icônes",
     "settings.iconify_search": "Rechercher des icônes",
     "settings.iconify_search_button": "Rechercher",

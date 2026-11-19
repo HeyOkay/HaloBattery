@@ -7,11 +7,13 @@ public sealed partial class MainWindow
     private bool windowChromePending,windowMinimumPending;
     private XamlRoot? windowLayoutRoot;
     private double windowLayoutScale;
+#if HALO_BATTERY_VERIFICATION
     private WindowInteractionMetrics? windowInteractionMetrics;
     private sealed class WindowInteractionMetrics
     {
         internal long LayoutCalls,PageLayouts,ChromeBatches,NativePositionEvents,RailFrames;
     }
+#endif
 
     private void QueueWindowChromeRefresh(bool updateMinimum=false)
     {
@@ -26,7 +28,9 @@ public sealed partial class MainWindow
             if(closing) { windowMinimumPending=false;return; }
             if(IsSettingsWindowHidden) return;
             var minimum=windowMinimumPending;windowMinimumPending=false;
+#if HALO_BATTERY_VERIFICATION
             if(windowInteractionMetrics is {} metrics) metrics.ChromeBatches++;
+#endif
             UpdateMaximizeButton();
             if(minimum) UpdateMinimumWidth();
             else { PositionPill();UpdateDragRegion(); }

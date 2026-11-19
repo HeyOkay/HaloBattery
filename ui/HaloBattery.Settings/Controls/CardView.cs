@@ -8,7 +8,7 @@ namespace HaloBattery.Settings.Controls;
 // Карточка макета v3: одна панель со скруглением 20 и обводкой, заголовок (иконка, название, описание,
 // действие, стрелка) и раскрываемое тело. Низ скруглён всегда (скругляется внешняя рамка), раскрытие
 // и сворачивание идут столько же, сколько переход страниц (300 мс).
-internal sealed class CardView : UserControl
+internal sealed partial class CardView : UserControl
 {
     private readonly Border frame = new();
     // Подсветка рамки под курсором (как Reveal в Windows 10): отдельный слой поверх рамки, ничего не меняет в раскладке
