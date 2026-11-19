@@ -83,8 +83,16 @@ RECEIVERS = {
     0xC52F, 0xC518, 0xC51A, 0xC51B, 0xC521, 0xC525, 0xC526,  # Nano
     0xC52E, 0xC531, 0xC534, 0xC535, 0xC537,
     0xC539, 0xC53A, 0xC53D, 0xC53F, 0xC541, 0xC545, 0xC547,  # Lightspeed
-    0xC54D,
+    0xC54D,                                              # PRO X SUPERLIGHT 2 / PRO X2 SUPERSTRIKE
+    0xC54F,                                              # PRO X3 SUPERSTRIKE receiver
 }
+
+# The PRO X3 SUPERSTRIKE's HID++ endpoint may be on Logitech's newer vendor
+# usage page FF43, with short (0301) and long (0302) report collections.
+# C54F is the wireless receiver; C0A9 is the wired mouse.
+# Restrict this alternative route to these specific Logitech devices so other
+# products' vendor collections never receive HID++ requests accidentally.
+PRO_X3_HIDPP_PIDS = {0xC54F, 0xC0A9}
 
 # headsets with HID++ battery (feature 0x1F20), from HeadsetControl's device list.
 # The value is the name to show when the headset does not report one.
@@ -598,11 +606,15 @@ class LogitechProvider(Provider):
         groups: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         headset: Dict[Tuple[int, str], bytes] = {}
         alt: Dict[Tuple[int, str], Optional[bytes]] = {}
+        pro_x3: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         for d in infos:
             pid, page, usage = d["product_id"], d.get("usage_page"), d.get("usage")
             key = (pid, _instance(d))
             if page == 0xFF00 and usage in (1, 2):
                 groups.setdefault(key, {})[usage] = d["path"]
+            elif pid in PRO_X3_HIDPP_PIDS and page == 0xFF43 and usage in (0x0301, 0x0302):
+                # For these PIDs, 0301 carries short reports and 0302 long ones.
+                pro_x3.setdefault(key, {})[usage - 0x0300] = d["path"]
             elif pid in HEADSETS and (page, usage) == HEADSET_COLLECTION.get(pid, (0xFF43, 0x0202)):
                 # only the headsets in the list: other devices never got a request on
                 # these collections, and must not get one now
@@ -611,6 +623,11 @@ class LogitechProvider(Provider):
                     alt[key] = next((x["path"] for x in infos
                                      if x["product_id"] == pid
                                      and (x.get("usage_page"), x.get("usage")) == (0xFF43, 0x0202)), None)
+        # Keep FF00 preferred whenever a device exposes both old and new pages.
+        for key, paths in pro_x3.items():
+            current = groups.setdefault(key, {})
+            for usage, path in paths.items():
+                current.setdefault(usage, path)
         # the ff00 collections win; the headset collection is used only without them
         for key, path in headset.items():
             if 2 not in groups.get(key, {}):

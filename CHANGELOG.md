@@ -13,6 +13,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+
+- **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
+  (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
+  short, `ff43:0302` long) while keeping existing `ff00` paths preferred.
+  Also recognize the `046d:c0a9` wired interface. Confirmed on a physical mouse under Windows: battery level
+  matches Logitech G HUB, charging is reported, and the tray icon greys out
+  when powered off and recovers on reconnect. The wired path and low-battery
+  notifications have not been verified on hardware.
+
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
