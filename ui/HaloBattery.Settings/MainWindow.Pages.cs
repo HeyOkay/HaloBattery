@@ -210,6 +210,7 @@ public sealed partial class MainWindow
             // The native editor is top-aligned inside its ScrollViewer; leave
             // balanced space around its single line in the 30-DIP field.
             var name = new TextBox { Text = device.Name, MaxLength = 60, Height = 30, MinHeight = 30, Width = 240, MinWidth = 0, FontSize = 13, Padding = new(14, 6, 14, 6), CornerRadius = new(15), BorderThickness = new(0), Background = Brush(dark ? "#303030" : "#ECECEC"), Foreground = TextBrush, VerticalContentAlignment = VerticalAlignment.Center };
+            EnableControlSpotlight(name);
             AutomationProperties.SetName(name, T("settings.rename"));
             var committed = device.Name;
             void Commit()

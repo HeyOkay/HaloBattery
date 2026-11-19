@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: hyzen.lofree.tech battery routine; lofree.tech/home index-BTVblIUr.js power/online frame (HaloBattery #165).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -22,7 +25,7 @@ from providers import lofree as F  # noqa: E402
 def report(b2, data=(), offset=(0, 0)):
     """Input report 0x04: id, then 31 bytes; byte 2 = b2, bytes 4-5 = offset, data at 7."""
     p = [0x00, 0x00, b2, len(data), offset[0], offset[1], 0x00] + list(data)
-    return [F.REPORT_ID] + p + [0x00] * (31 - len(p))
+    return [0x04] + p + [0x00] * (31 - len(p))
 
 
 class FakeKeyboard:
@@ -40,11 +43,11 @@ class FakeKeyboard:
         if self.silent:
             return
         b2 = data[3]
-        if b2 in (F.START, F.END):
+        if b2 in (0x01, 0x02):
             self.queue.append(report(b2))
             return
         self.queue += [list(n) for n in self.noise]
-        answer = {F.CMD_ONLINE: self.online, F.CMD_BATTERY: self.battery}[b2]
+        answer = {0xAA: self.online, 0x1A: self.battery}[b2]
         self.queue.append(report(b2, [answer], (1, 0) if self.bad_offset else (0, 0)))
 
     def on_read(self):
@@ -113,12 +116,12 @@ class ProviderTest(unittest.TestCase):
 
 # ------------------------------------------------------------- the Flow Lite84 (#165)
 
-def flow_reply(cmd, value=0, charging=0, mv=0, status=0x00, header=F.FLOW_HEADER,
+def flow_reply(cmd, value=0, charging=0, mv=0, status=0x00, header=0x08,
                break_checksum=False):
     """A 17-byte frame of the shape the Flow Lite84 dongle answers with."""
     frame = ([header, cmd, status, 0x00, 0x00, 0x00, value, charging]
              + list(mv.to_bytes(2, "big")) + [0x00] * 6)
-    ck = F.flow_checksum(frame)
+    ck = ((0x55 - sum(frame)) & 0xFF)
     if break_checksum:
         ck ^= 0xFF
     return frame + [ck]
@@ -153,9 +156,9 @@ class FakeFlow:
             return
         cmd = data[1]
         self.queue += [list(n) for n in self.noise]
-        if cmd == F.FLOW_CMD_ONLINE:
+        if cmd == 0x03:
             self.queue.append(flow_reply(cmd, value=self.online))
-        elif cmd == F.FLOW_CMD_BATTERY:
+        elif cmd == 0x04:
             self.queue.append(flow_reply(cmd, value=self.level, charging=self.charging,
                                          mv=self.mv, break_checksum=self.break_checksum))
 
@@ -253,9 +256,9 @@ class FlowPollTest(FlowProviderTest):
         self.poll(tables, devices)
         pad = [0x00] * 10
         self.assertEqual(kbd.writes, [
-            [F.FLOW_HEADER, F.FLOW_CMD_ONLINE, 0x00, 0x00, 0x00, F.FLOW_FLAG_KEYBOARD]
+            [0x08, 0x03, 0x00, 0x00, 0x00, 0x80]
             + pad + [0xCA],
-            [F.FLOW_HEADER, F.FLOW_CMD_BATTERY, 0x00, 0x00, 0x00, F.FLOW_FLAG_KEYBOARD]
+            [0x08, 0x04, 0x00, 0x00, 0x00, 0x80]
             + pad + [0xC9],
         ])
         self.assertTrue(all(len(w) == 17 for w in kbd.writes))
@@ -268,30 +271,33 @@ class FlowPollTest(FlowProviderTest):
                        if (e["usage_page"], e["usage"]) == F.FLOW_CONTROL_USAGE)
         self.assertEqual(kbd.path, control["path"])
 
-    def test_a_control_collection_that_cannot_take_the_frame_is_skipped(self):
-        kbd, tables, devices = self.one_flow()
-        found = self.poll(tables, devices, lengths={F.FLOW_CONTROL_USAGE: 9})
-        self.assertEqual([r.level for r in found], [57])
-        control = next(e for e in tables[F.FLOW_VID]
-                       if (e["usage_page"], e["usage"]) == F.FLOW_CONTROL_USAGE)
-        self.assertNotEqual(kbd.path, control["path"])
-        self.assertIn("cannot take a 17-byte frame; skipped", self.diag())
+    def test_incompatible_control_never_falls_back_to_unsourced_collections(self):
+        # The named Flow driver opens FF02:0002 only. A shape on the same PID
+        # is not authority to send this command to another endpoint.
+        for length in (0, 9, 33, False, 17.0):
+            with self.subTest(length=length):
+                kbd, tables, devices = self.one_flow()
+                self.assertEqual(self.poll(tables, devices,
+                                          lengths={F.FLOW_CONTROL_USAGE: length}), [])
+                self.assertEqual(kbd.opened, 0)
+                self.assertEqual(kbd.writes, [])
+                self.assertIn("cannot take a 17-byte frame; skipped", self.diag())
 
     def test_offline_keyboard_gives_no_icon_and_no_battery_request(self):
         kbd, tables, devices = self.one_flow(online=0)
         self.assertEqual(self.poll(tables, devices), [])
-        self.assertEqual([w[1] for w in kbd.writes], [F.FLOW_CMD_ONLINE])
+        self.assertEqual([w[1] for w in kbd.writes], [0x03])
         self.assertIn("keyboard offline", self.diag())
 
     def test_silent_dongle_times_out(self):
         kbd, tables, devices = self.one_flow(silent=True)
         self.assertEqual(self.poll(tables, devices), [])
-        self.assertEqual([w[1] for w in kbd.writes], [F.FLOW_CMD_ONLINE])
+        self.assertEqual([w[1] for w in kbd.writes], [0x03])
 
     def test_noise_and_a_broken_checksum_are_skipped(self):
         noise = [flow_reply(0x0A, value=3),                               # an event push
-                 flow_reply(F.FLOW_CMD_BATTERY, value=99, break_checksum=True),
-                 flow_reply(F.FLOW_CMD_BATTERY, value=98, status=0x02)]   # an error frame
+                 flow_reply(0x04, value=99, break_checksum=True),
+                 flow_reply(0x04, value=98, status=0x02)]   # an error frame
         kbd, tables, devices = self.one_flow(level=40, noise=noise)
         self.assertEqual([r.level for r in self.poll(tables, devices)], [40])
 
@@ -313,6 +319,60 @@ class FlowPollTest(FlowProviderTest):
         self.assertEqual([(r.key, r.name, r.level, r.kind, r.source) for r in res],
                          [("lofree:0025", "Lofree HYZEN67", 66, "keyboard", "lofree"),
                           ("lofree:024f", "Lofree Flow Lite84", 57, "keyboard", "lofree")])
+
+    def test_exact_aula_sibling_with_unknown_caps_never_receives_flow_command(self):
+        kbd, tables, devices = self.one_flow()
+        aula = FakeFlow()
+        entry = {"vendor_id": 0x05AC, "product_id": 0x024F,
+                 "interface_number": 3, "usage_page": 0xFF60, "usage": 0x0061,
+                 "product_string": "F108Pro Dongle", "path": b"aula-control"}
+        tables[F.FLOW_VID].append(entry)
+        devices[entry["path"]] = aula
+        self.assertEqual(self.poll(tables, devices,
+                                   lengths={F.FLOW_CONTROL_USAGE: 0}), [])
+        self.assertEqual((kbd.opened, aula.opened), (0, 0))
+        self.assertEqual((kbd.writes, aula.writes), ([], []))
+
+    def test_another_receiver_cannot_lend_its_alternate_collection(self):
+        kbd, tables, devices = self.one_flow()
+        foreign = FakeFlow()
+        entry = {"vendor_id": F.FLOW_VID, "product_id": F.FLOW_PID,
+                 "interface_number": 1, "usage_page": 0xFF04, "usage": 2,
+                 "product_string": "2.4G Wireless Receiver", "path": b"other-physical-receiver"}
+        tables[F.FLOW_VID].append(entry)
+        devices[entry["path"]] = foreign
+        self.assertEqual(self.poll(tables, devices,
+                                   lengths={F.FLOW_CONTROL_USAGE: 9}), [])
+        self.assertEqual((kbd.opened, foreign.opened), (0, 0))
+        self.assertEqual((kbd.writes, foreign.writes), ([], []))
+
+    def test_shared_pid_control_shape_does_not_override_foreign_identity(self):
+        for product in ("F108Pro Dongle", "Apple Keyboard", "Other Receiver", "", None, 123):
+            with self.subTest(product=product):
+                kbd, tables, devices = self.one_flow()
+                for entry in tables[F.FLOW_VID]:
+                    entry["product_string"] = product
+                self.assertEqual(self.poll(tables, devices), [])
+                self.assertEqual((kbd.opened, kbd.writes), (0, []))
+
+    def test_unknown_caps_preserve_verified_flow_control(self):
+        kbd, tables, devices = self.one_flow(level=61)
+        for entry in tables[F.FLOW_VID]:
+            entry["product_string"] = " 2.4G WIRELESS RECEIVER "
+        self.assertEqual([s.level for s in self.poll(tables, devices)], [61])
+        control = next(entry for entry in tables[F.FLOW_VID]
+                       if (entry["usage_page"], entry["usage"]) == F.FLOW_CONTROL_USAGE)
+        self.assertEqual(kbd.path, control["path"])
+        self.assertEqual([frame[1] for frame in kbd.writes], [0x03, 0x04])
+
+    def test_wrong_vendor_or_product_never_receives_flow_command(self):
+        for field, value in (("vendor_id", 0x1234), ("product_id", 0x024E)):
+            with self.subTest(field=field):
+                kbd, tables, devices = self.one_flow()
+                for entry in tables[F.FLOW_VID]:
+                    entry[field] = value
+                self.assertEqual(self.poll(tables, devices), [])
+                self.assertEqual((kbd.opened, kbd.writes), (0, []))
 
 
 if __name__ == "__main__":

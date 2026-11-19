@@ -177,13 +177,52 @@ class FileRecoveryTests(unittest.TestCase):
         (self.app / updates.INTERNAL).rmdir()
         self.assertFalse(updates.cleanup(str(self.app)))
 
-    def test_legacy_unowned_backups_and_staging_are_not_deleted(self):
-        (self.app / (updates.EXE_NAME + ".old")).write_bytes(b"only legacy previous copy")
+    def legacy_backups(self):
+        """What the updater of 1.17.0 and earlier leaves: two *.old names, no record."""
+        (self.app / (updates.EXE_NAME + ".old")).write_bytes(b"legacy previous executable")
+        (self.app / (updates.INTERNAL + ".old")).mkdir()
+        (self.app / (updates.INTERNAL + ".old") / "library.dll").write_bytes(b"legacy library")
+
+    def test_legacy_backups_are_removed_so_the_next_update_can_swap(self):
+        # Updating from 1.17.0 with its own updater must not block every later update.
+        self.legacy_backups()
+        self.assertEqual(updates.can_install(True, str(self.app))[0], False)
         self.assertTrue(updates.cleanup(str(self.app), str(self.new)))
-        self.assertEqual((self.app / (updates.EXE_NAME + ".old")).read_bytes(), b"only legacy previous copy")
+        for name in updates.LEGACY_BACKUPS:
+            self.assertFalse((self.app / name).exists(), name)
+        # Unowned staging and every other *.old name stay; user data is untouched.
         self.assertTrue(self.new.exists())
-        with self.assertRaisesRegex(OSError, "backup"):
-            updates.swap_files(str(self.new), str(self.app))
+        self.assertEqual((self.app / "notes.old").read_bytes(), b"user data: notes.old")
+        self.assertEqual((self.app / "config.json").read_bytes(), b"user data: config.json")
+        self.assertEqual(updates.can_install(True, str(self.app)), (True, ""))
+        self.assertTrue(self.finish())
+        self.assertEqual((self.app / updates.EXE_NAME).read_bytes(), b"new executable")
+
+    def test_legacy_backups_stay_without_the_current_program_files(self):
+        # A copy that is missing its own _internal is not the start that the old
+        # updater handed over to: its backup may be the only working copy.
+        self.legacy_backups()
+        for child in (self.app / updates.INTERNAL).iterdir():
+            child.unlink()
+        (self.app / updates.INTERNAL).rmdir()
+        self.assertFalse(updates.cleanup(str(self.app), str(self.new)))
+        self.assertEqual((self.app / (updates.EXE_NAME + ".old")).read_bytes(), b"legacy previous executable")
+        self.assertTrue((self.app / (updates.INTERNAL + ".old") / "library.dll").exists())
+
+    def test_a_legacy_backup_that_cannot_be_removed_is_reported(self):
+        self.legacy_backups()
+        with mock.patch.object(updates, "_remove", lambda path: None):
+            self.assertFalse(updates.cleanup(str(self.app), str(self.new)))
+        ok, why = updates.can_install(True, str(self.app))
+        self.assertFalse(ok)
+        self.assertIn("setup", why)
+
+    def test_startup_after_a_legacy_update_clears_its_backups(self):
+        self.legacy_backups()
+        app = self.startup()
+        self.assertFalse((self.app / (updates.EXE_NAME + ".old")).exists())
+        self.assertFalse((self.app / (updates.INTERNAL + ".old")).exists())
+        self.assertTrue(app.install_ok, app.install_why)
 
     def test_new_attempt_cannot_overwrite_an_unresolved_transaction(self):
         self.failed_restore(updates.INTERNAL)

@@ -85,6 +85,9 @@ STAGING_NAME = "HaloBattery-update"
 FINISH_FLAG = "--finish-update"
 UPDATE_STATE = ".halobattery-update.json"
 STAGE_STATE = ".halobattery-stage.json"
+# The updater of 1.17.0 and earlier moved exactly these aside, wrote no record and
+# left their removal to the next start of the new copy.
+LEGACY_BACKUPS = (EXE_NAME + OLD_SUFFIX, INTERNAL + OLD_SUFFIX)
 # in the app folder, never copied over or removed: the user's own files
 KEEP = {"portable.txt", "config.json", "config.json.bad", "history.json", "status.json",
         "halo_battery.log", "halo_battery.log.1", "diagnostics.txt", "notification_icon.png",
@@ -252,6 +255,10 @@ def can_install(frozen: bool, app_dir: str) -> Tuple[bool, str]:
     # previous copy, while startup cleanup/recovery still owns a transaction.
     if os.path.lexists(os.path.join(app_dir, UPDATE_STATE)):
         return False, "previous update cleanup or recovery is pending"
+    # swap_files() refuses while a backup name is taken; say so instead of offering
+    # an update that exits, fails and restarts the app.
+    if any(os.path.lexists(os.path.join(app_dir, name)) for name in LEGACY_BACKUPS):
+        return False, "a previous update's backup could not be removed; run setup to repair"
     # On Windows tempfile retries PermissionError when os.access says the directory
     # is writable, even if its ACL denies creating/deleting files (Program Files).
     # One exclusive open gives the real answer without blocking application startup.
@@ -819,17 +826,43 @@ def _clear_owned_staging(root: str) -> None:
         log.info("update: completed staging cleanup left a directory for manual inspection")
 
 
+def _clear_legacy_backups(app_dir: str) -> bool:
+    """Remove the backups of a pre-recovery-record update; False if one remains.
+
+    Only the two names that updater created, only while this copy's own program
+    files are present (this start is the one that updater handed over to), and
+    never through a link or junction. Every other *.old name stays.
+    """
+    if not (os.path.isfile(os.path.join(app_dir, EXE_NAME))
+            and os.path.isdir(os.path.join(app_dir, INTERNAL))):
+        return not any(os.path.lexists(os.path.join(app_dir, n)) for n in LEGACY_BACKUPS)
+    for name in LEGACY_BACKUPS:
+        path = os.path.join(app_dir, name)
+        if not os.path.lexists(path):
+            continue
+        if os.path.islink(path) or getattr(os.lstat(path), "st_file_attributes", 0) & 0x400:
+            log.warning("update: %s is a link; left in place", name)
+            return False
+        _remove_checked(path)
+        log.info("update: removed %s left by the previous updater", name)
+    return True
+
+
 def cleanup(app_dir: str, staging: Optional[str] = None) -> bool:
     """Delete only verified terminal transaction backups; False retains recovery.
 
-    Missing/old-format evidence never authorizes deleting arbitrary *.old files.
+    Missing/old-format evidence never authorizes deleting arbitrary *.old files;
+    without a record only the two legacy backup names are removed (see
+    _clear_legacy_backups), so an update from 1.17.0 or earlier does not block the next.
     Interrupted/malformed/failed records preserve both backups and staging. The
     marker is removed last, making partial cleanup safe to retry after a crash.
     """
     try:
         state = _read_update_state(app_dir)
         if state is None:
-            return True  # No owned transaction: leave legacy backups/staging alone.
+            # No owned transaction: legacy staging stays; legacy backups would block
+            # every later swap_files(), so remove exactly those.
+            return _clear_legacy_backups(app_dir)
         if state["state"] not in ("installed", "rolled_back"):
             return False
         if (not all(os.path.exists(os.path.join(app_dir, name)) for name in state["files"])

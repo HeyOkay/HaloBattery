@@ -7,15 +7,42 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+
+- Keep the SignPath TEST credential in the protected signing jobs only; build
+  and packaging jobs do not receive or forward it.
+
+- Add isolated, opt-in SignPath test signing for application and installer builds.
+- MCHOSE V9 no longer retries a refused output report as a feature report;
+  Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
+  can show no reading until that connection's protocol is verified. Malformed
+  battery values are refused rather than clamped to a plausible percentage.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add pointer-following outline highlights to rounded Settings controls without
+  permanent borders.
+- Show the selected Phone Link mobile device's cached battery with a phone
+  pictogram, independently of Bluetooth. Previously admitted values remain
+  explicitly last-reported; ancient cold-start caches cannot seed a level.
+  This requires a supported Windows 11 Phone Link companion cache, not a
+  real-time or all-linked-phones API. Phones classified by existing Bluetooth
+  metadata also use the phone glyph.
+- Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
+  the mouse pictogram; the existing charge-register reader already returned
+  75% on the reporter's receiver. Confirmed on hardware by @breezywine in
+  [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
+- Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.
+- Razer Kraken V4 (2.4 GHz receiver `1532:056C` or USB-C cable
+  `1532:056B`): read the battery level and charging state over its MediaTek
+  channel. Confirmed on hardware by @Zireael3Z: 87% matched the receiver and
+  the charging ring followed the cable.
 - Open the existing What's new window from About, directly below the version.
+- Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -63,12 +90,62 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
+- Keep the last reported Phone Link charge visible when its cache does not
+  change; stop stale charging animation and do not treat it as a live reading.
+- Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
+  block Windows session-end cleanup after tray icons disappear.
+- Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the
+  HyperX Cloud III feature-report fallback works again; let a read with its
+  own longer timeout (HyperX Cloud Flight, 2 s) end empty instead of failing; close the
+  Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
+- Keep cached HID transport error diagnostics available without new native calls;
+  preserve bounded feature-call timeout and handle-cleanup behavior.
+- Keep Settings highlights responsive during pointer movement and reuse device-family row geometry during expansion.
+- Prevent native dropdown containers from clipping Settings highlights without enlarging menus.
+- Match light-theme hover backgrounds on the hamburger and neutral title-bar
+  buttons to the active navigation background.
+- Query MCHOSE V9 Pro only through its sourced output-report transport instead
+  of retrying a refused request as an unconfirmed feature report.
+- Keep Atlas Air on its confirmed SInf/GSI exchange when the headset is silent,
+  without sending the Stealth 700 CoAP initialization command.
+- Reject malformed SteelSeries percentages and discrete battery codes before
+  conversion, retaining documented raw-scale and overreporting corrections.
+- Require fresh Skullcandy input instead of presenting an unchanged old snapshot
+  as a new battery reading, while accepting a steady level in a fresh packet.
+- Add the confirmed Turtle Beach Stealth Pro II receiver `10f5:2285`.
+- Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
+  original exchange receives no answer; mark its coarse levels and unknown charging.
+- Refuse Glorious query echoes and provisional replies without suppressing real 0%.
+- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
+  or disconnected-keyboard status as a current keyboard reading.
+- Refuse malformed percentages in AM Infinity and
+  SteelSeries Aerox instead of clamping them to a misleading 100% reading.
+- Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
+  ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Keep Lofree Flow queries on the verified receiver control collection, preventing
+  fallback writes to AULA F108 and other devices sharing its USB ID (#413).
+- Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
+  Delux M900 Pro and VGN N75 PRO support from pending device pull requests,
+  retaining their exact target and transport checks.
+- Limit generic MCHOSE `3837` mouse queries to the documented A7 receiver collection.
+  Unknown `3837` products and unsourced keyboard/collection fallbacks remain
+  excluded until exact protocol evidence is available.
+- Bound Steam's retained readings to the same 16 endpoints selected for polling.
+- Restore the original Rapoo VT9 Pro receiver's passive battery reports, keeping
+  them separate from newer Rapoo formats and accepting Windows zero padding.
+- Recover wired Steam Controller support and keep identical puck devices separate,
+  using one bounded passive listen window. Restore a current Simplified Chinese README.
+- Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
+- Limit installer cleanup to its exact executable paths and preserve portable data; verify update archives, pin process identity and report incomplete installation.
 - Keep update backups and staged files after an interrupted update or failed
   rollback; verify a durable completed transaction before startup cleanup.
+- After an update made by 1.17.0 or earlier, remove exactly the two backups that
+  updater left (`HaloBattery.exe.old`, `_internal.old`) so the next in-app update
+  can install; setup also clears them and a stuck update record.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
-- Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 
-- Limit installer cleanup to its exact executable paths and preserve portable data; verify update archives, pin process identity and report incomplete installation.
+- Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
 

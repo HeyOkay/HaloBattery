@@ -1,6 +1,11 @@
 """French application text; brands and device names are kept unchanged."""
 
 MESSAGES = {
+    "provider.phone_link": "Mobile connecté",
+    "icon.phone": "Téléphone",
+    "state.phone_link_stale": "L’état de Mobile connecté est ancien ; ouvrez l’application pour l’actualiser",
+    "state.phone_link_unavailable": "État de la batterie de Mobile connecté indisponible",
+    "state.phone_link_last_reported": "{level}% (dernière valeur de Mobile connecté)",
     "startup.hid_unavailable": 'Windows n’a pas pu charger la prise en charge HID. La lecture des batteries par USB et 2,4 GHz est indisponible. Bluetooth et les paramètres restent accessibles. Ouvrez le diagnostic pour plus de détails.',
     "state.poll_unavailable": 'Lecture de la batterie indisponible',
     "state.poll_stale": '{level}% (dernière valeur ; lecture de la batterie indisponible)',
@@ -111,8 +116,10 @@ MESSAGES = {
     "provider.atk_keyboard": "Clavier ATK V75X",
     "provider.atk_nearlink": "Souris ATK X1 Nearlink",
     "provider.aula": "Claviers AULA F87 Pro V2C",
+    "provider.aula_f108": "Claviers AULA F108 Pro",
     "provider.dareu": "Souris DAREU",
     "provider.eweadn": "Souris EWEADN / 前行者",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Souris Endgame Gear 4K (XM2w / OP1w)",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -121,6 +128,7 @@ MESSAGES = {
     "provider.inphic": "Souris Inphic / Attack Shark",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Casques Jabra (dongle Link 380 / 390)",
+    "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Claviers MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Claviers MonsGeek",

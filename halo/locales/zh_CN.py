@@ -1,6 +1,11 @@
 """Simplified Chinese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "provider.phone_link": "手机连接",
+    "icon.phone": "手机",
+    "state.phone_link_stale": "手机连接的状态已过期；请打开手机连接刷新",
+    "state.phone_link_unavailable": "手机连接的电池状态不可用",
+    "state.phone_link_last_reported": "{level}%（手机连接上次报告）",
     "startup.hid_unavailable": 'Windows 无法加载 HID 支持，无法读取通过 USB 和 2.4 GHz 连接的设备电量。蓝牙和设置仍然可用。请打开诊断查看详情。',
     "state.poll_unavailable": '无法更新电量',
     "state.poll_stale": '{level}%（上次读数；无法更新电量）',
@@ -112,8 +117,10 @@ MESSAGES = {
     "provider.atk_keyboard": "ATK V75X 键盘",
     "provider.atk_nearlink": "ATK X1 Nearlink 鼠标",
     "provider.aula": "AULA F87 Pro V2C 键盘",
+    "provider.aula_f108": "AULA F108 Pro 键盘",
     "provider.dareu": "DAREU 鼠标",
     "provider.eweadn": "EWEADN / 前行者 鼠标",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Endgame Gear 4K 鼠标（XM2w / OP1w）",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -122,6 +129,7 @@ MESSAGES = {
     "provider.inphic": "Inphic / Attack Shark 鼠标",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Jabra 耳机（Link 380 / 390 适配器）",
+    "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "MCHOSE 键盘",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "MonsGeek 键盘",

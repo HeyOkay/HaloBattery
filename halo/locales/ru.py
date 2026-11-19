@@ -1,6 +1,11 @@
 """Russian translations for the complete application and native settings UI."""
 
 MESSAGES = {
+    "provider.phone_link": "Связь с телефоном",
+    "icon.phone": "Телефон",
+    "state.phone_link_stale": "Данные «Связи с телефоном» устарели; откройте приложение, чтобы обновить их",
+    "state.phone_link_unavailable": "Данные о заряде из «Связи с телефоном» недоступны",
+    "state.phone_link_last_reported": "{level}% (последние данные «Связи с телефоном»)",
     "startup.hid_unavailable": 'Windows не удалось загрузить HID-модуль. Уровни заряда по USB и 2,4 ГГц недоступны. Bluetooth и настройки продолжают работать. Подробности - в диагностике.',
     "state.poll_unavailable": 'Не удалось обновить заряд',
     "state.poll_stale": '{level}% (последнее показание; не удалось обновить заряд)',
@@ -110,8 +115,10 @@ MESSAGES = {
     "provider.atk_keyboard": "Клавиатура ATK V75X",
     "provider.atk_nearlink": "Мыши ATK X1 Nearlink",
     "provider.aula": "Клавиатуры AULA F87 Pro V2C",
+    "provider.aula_f108": "Клавиатуры AULA F108 Pro",
     "provider.dareu": "Мыши DAREU",
     "provider.eweadn": "Мыши EWEADN / 前行者",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Мыши Endgame Gear 4K (XM2w / OP1w)",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -120,6 +127,7 @@ MESSAGES = {
     "provider.inphic": "Мыши Inphic / Attack Shark",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Гарнитуры Jabra (приёмник Link 380 / 390)",
+    "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Клавиатуры MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Клавиатуры MonsGeek",

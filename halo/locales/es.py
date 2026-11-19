@@ -8,6 +8,11 @@ AdrianH23 reviewed the port: https://github.com/TiagoFerreiraDomingues/HaloBatte
 """
 
 MESSAGES = {
+    "provider.phone_link": "Enlace Móvil",
+    "icon.phone": "Teléfono",
+    "state.phone_link_stale": "El estado de Enlace Móvil está desactualizado; abre Enlace Móvil para actualizarlo",
+    "state.phone_link_unavailable": "Estado de batería de Enlace Móvil no disponible",
+    "state.phone_link_last_reported": "{level}% (último dato de Enlace Móvil)",
     "startup.hid_unavailable": 'Windows no pudo cargar la compatibilidad HID. No se pueden leer las baterías por USB ni por 2,4 GHz. Bluetooth y Configuración siguen disponibles. Abre Diagnóstico para ver los detalles.',
     "state.poll_unavailable": 'Consulta de batería no disponible',
     "state.poll_stale": '{level}% (último valor; consulta de batería no disponible)',
@@ -121,8 +126,10 @@ MESSAGES = {
     "provider.atk_keyboard": "Teclado ATK V75X",
     "provider.atk_nearlink": "Ratones ATK X1 Nearlink",
     "provider.aula": "Teclados AULA F87 Pro V2C",
+    "provider.aula_f108": "Teclados AULA F108 Pro",
     "provider.dareu": "Ratones DAREU",
     "provider.eweadn": "Ratones EWEADN / 前行者",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Ratones Endgame Gear 4K (XM2w / OP1w)",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -131,6 +138,7 @@ MESSAGES = {
     "provider.inphic": "Ratones Inphic / Attack Shark",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Auriculares Jabra (adaptador Link 380 / 390)",
+    "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Teclados MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Teclados MonsGeek",

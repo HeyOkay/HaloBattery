@@ -216,3 +216,66 @@ class PresentationSettingTests(HideRenameTestCase):
         self.assertEqual(model.snapshot()['devices'][0]['kind'],'headset')
         app.icons[key].status=replace(dev(),kind='gamepad')
         self.assertEqual(model.snapshot()['devices'][0]['kind'],'gamepad')
+
+    def test_phone_identity_survives_tray_customization_and_unknown_charge(self):
+        phone=hb.DeviceStatus('phone_link:11111111-1111-4111-8111-111111111111',
+            'Linked tablet',46,False,True,'phone_link',kind='phone',charging_known=False)
+        app=make_app({'low':50});app.hid_results=[phone];app.bt_cache=[];app.tray_size=20
+        app.apply([phone]);model=SettingsController(app)
+        self.assertIn(phone.key,app.icons)
+        self.assertEqual(app.notes,[],'unknown charging must not invent a low-battery transition')
+        self.assertEqual(hb.badge_for(phone),'phone')
+        self.assertIn('phone',dict(hb.PICTOGRAM_CHOICES))
+        model.set_device(phone.key,'pictogram','speaker')
+        item=model.snapshot()['devices'][0]
+        self.assertEqual((item['kind'],item['pictogram']),('phone','speaker'))
+
+    def test_unavailable_phone_keeps_unknown_icon_without_old_battery_arc(self):
+        phone=hb.DeviceStatus('phone_link:11111111-1111-4111-8111-111111111111',
+            'Linked tablet',None,False,False,'phone_link',kind='phone',charging_known=False)
+        app=make_app();app.hid_results=[phone];app.bt_cache=[];app.tray_size=20
+        app.apply([phone]);model=SettingsController(app)
+        item=model.snapshot()['devices'][0]
+        self.assertIsNone(item['status'].level)
+        self.assertFalse(item['status'].online)
+        self.assertEqual(item['kind'],'phone')
+        self.assertEqual(app.notes,[])
+        self.assertNotIn(phone.key,app.history.devices)
+
+    def test_last_reported_phone_keeps_ring_and_percent_without_online_or_charge_claim(self):
+        from halo import i18n
+        phone=hb.DeviceStatus('phone_link:11111111-1111-4111-8111-111111111111',
+            'Linked phone',46,False,False,'phone_link',kind='phone',charging_known=False,
+            ui_message='state.phone_link_last_reported',ui_params={'level':46})
+        app=make_app();app.hid_results=[phone];app.bt_cache=[];app.tray_size=20
+        app.apply([phone]);model=SettingsController(app)
+        for language in i18n.LANGUAGES:
+            self.assertEqual(hb.device_state(phone,language=language),
+                i18n.translate('state.phone_link_last_reported',language=language,level=46))
+        self.assertFalse(model.snapshot()['devices'][0]['status'].online)
+        for style in ('thin','classic'):
+            for light in (False,True):
+                app.cfg.update(ring_style=style,percent_in_icon=False);app.light_taskbar=light
+                expected=icons.render(46,False,True,light_taskbar=light,badge='phone',size=80,ring_style=style)
+                self.assertEqual(model.preview(phone.key).tobytes(),expected.tobytes())
+                app.cfg['percent_in_icon']=True
+                self.assertEqual(app.icon_render_state(phone)[7],'46')
+                self.assertFalse(app.icon_render_state(phone)[6], 'cached charging must not animate')
+        for bad in (replace(phone,source='bluetooth'),replace(phone,level=True),
+                    replace(phone,level=None),replace(phone,level=101)):
+            self.assertFalse(app.icon_render_state(bad)[2], 'only a valid retained Phone Link level keeps its arc')
+
+    def test_retained_phone_cannot_trigger_alerts_or_extend_history_use(self):
+        cached=lambda level:hb.DeviceStatus('phone_link:11111111-1111-4111-8111-111111111111',
+            'Linked phone',level,False,False,'phone_link',kind='phone',charging_known=False,
+            ui_message='state.phone_link_last_reported',ui_params={'level':level})
+        app=make_app({'low':50,'low_sound':True,'full_alert':True});app.bt_cache=[];app.tray_size=20
+        with patch.object(hb,'play_low_sound') as sound:
+            for level in (5,100):
+                status=cached(level);app.hid_results=[status]
+                app.full_state[status.key]='charging';app.apply([status])
+                self.assertNotIn(status.key,app.full_state)
+                self.assertEqual(app.notes,[])
+                self.assertEqual(app.history.devices[status.key]['samples'],[])
+                self.assertEqual(app.history.devices[status.key]['use'],0)
+            sound.assert_not_called()

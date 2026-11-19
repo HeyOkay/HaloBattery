@@ -141,6 +141,18 @@
         8.25
       ],
       "stroke_width": 2.3255813953488373
+    },
+    "phone": {
+      "file": "lucide-smartphone.svg",
+      "sha256": "753578f0d5d4b25a1ee93b4cda837b85a1a2ceef1ee49756c9fb2233670d78c2",
+      "upstream_url": "https://unpkg.com/lucide-static@1.17.0/icons/smartphone.svg",
+      "upstream_sha256": "04e49a72309fe04fc063b6ddb5a0c4f7bb4843d8ae640df2af603162688c8776",
+      "scale": 0.5,
+      "translation": [
+        8,
+        8
+      ],
+      "stroke_width": 2
     }
   }
 }

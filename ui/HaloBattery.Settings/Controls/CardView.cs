@@ -43,6 +43,7 @@ internal sealed partial class CardView : UserControl
     public UIElement? ActionElement => actionHost.Content as UIElement;
     public bool HasIcon => iconHost.Content is not null;
     public bool Expandable => chevron is not null;
+    internal bool IsAnimating => tick is not null;
     public IEnumerable<UIElement> BodyElements => body.Children;
     // Entry fade can target content without changing the panel fill/border.
     internal IEnumerable<UIElement> EntryFadeTargets => head.Children.Cast<UIElement>().Append(divider);
@@ -90,6 +91,7 @@ internal sealed partial class CardView : UserControl
             glyph.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5); glyph.RenderTransform = chevronTurn;
             chevron = new Button { Content = glyph, Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(0), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chevron, ui.V("expand"));
+            ui.EnableControlSpotlight(chevron);
             chevron.ClickMode = ClickMode.Press;
             chevron.Click += (_, _) => Toggle();
             Grid.SetColumn(chevron, 3);
@@ -116,8 +118,13 @@ internal sealed partial class CardView : UserControl
         bodyHost.Clip = clip;
         SizeChanged += (_, e) =>
         {
-            divider.Width = Math.Max(0, e.NewSize.Width - 2);
-            ui.InvalidateCardSpotlightGeometry();
+            var widthChanged = e.NewSize.Width != e.PreviousSize.Width;
+            if (widthChanged) divider.Width = Math.Max(0, e.NewSize.Width - 2);
+            // Expand/collapse animates the body clip/height only; descendants
+            // keep their offsets in this card's Canvas. An animation moving
+            // descendants must invalidate the complete control geometry.
+            if (!widthChanged && IsAnimating) ui.InvalidateCardSpotlightBounds();
+            else ui.InvalidateCardSpotlightGeometry();
         };
         divider.SizeChanged += (_, _) => { if (expanded && tick is null) SetBodyHeight(FullHeight); };
         var stack = new StackPanel();
@@ -198,7 +205,7 @@ internal sealed partial class CardView : UserControl
         if (chevron is not null) Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chevron, ui.V("expand"));
     }
 
-    private void Toggle()
+    internal void Toggle()
     {
         var opening = !expanded;
         expanded = opening;

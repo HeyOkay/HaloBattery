@@ -78,6 +78,12 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 ; Upgrade or downgrade: start from a clean library folder, so no file of the old
 ; version is left next to the new one (PyInstaller mixes them up).
 Type: filesandordirs; Name: "{app}\_internal"
+; Setup lays down a known-good copy, so an in-app update's leftovers are no longer
+; needed: the backups the updater moved aside and its recovery record. Left in place
+; they block every later in-app update. Exact names only; user files stay.
+Type: files; Name: "{app}\HaloBattery.exe.old"
+Type: filesandordirs; Name: "{app}\_internal.old"
+Type: files; Name: "{app}\.halobattery-update.json"
 
 [UninstallDelete]
 ; Updated program libraries may not be in the original uninstall log. User data
