@@ -203,6 +203,19 @@ class PulsarTest(unittest.TestCase):
         P.hid = types.SimpleNamespace(device=self.bus.device_class())
         return self.bus
 
+    def test_the_lamzu_atlantis_v2_receiver_is_read(self):
+        # #408: 3554:f50d 'LAMZU Pro 1K Receiver' publishes ff02:0002 and the
+        # same 17-byte Compx frame as the rest of the family
+        bus = self.one_receiver(vid=0x3554, pid=0xF50D, replies=[reply(73, 0, 3980)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f50d", d.key)
+        self.assertEqual("Lamzu Atlantis V2 (2.4 GHz)", d.name)
+        self.assertEqual(73, d.level)
+        self.assertEqual("mouse", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
     def test_the_r1_pro_max_receiver_is_read(self):
         bus = self.one_receiver(replies=[reply(78, 0, 3900)])
         provider = P.PulsarProvider()

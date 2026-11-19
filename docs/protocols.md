@@ -317,6 +317,12 @@ literal fake replies, with no new hardware commands.
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
 
+### LAMZU Atlantis V2
+
+**Connection:** 2.4 GHz receiver (3554:F50D, "LAMZU Pro 1K Receiver") or USB cable (3554:F50F)
+
+The Compx 17-byte power query used by the Pulsar / ATK family: the receiver publishes `ff02:0002` and answers level byte 6, on-cable byte 7 and millivolts in bytes 8-9. The cable id `3554:F50F` is shared with the LAMZU Thorn; Windows exposes the product string, so only a cable whose product string contains "ATLANTIS" is treated as the Atlantis Pro, and it shares the `pulsar:3554f50d` icon with the receiver. Confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408): receiver 70% matching the Lamzu driver, cable 95% while charging. The Atlantis cable is shown as "LAMZU Atlantis Pro (wired)" because that is the name Windows reports.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
