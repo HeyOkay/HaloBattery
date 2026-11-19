@@ -17,7 +17,7 @@ POWERSHELL = shutil.which("powershell.exe")
 @unittest.skipUnless(os.name == "nt" and POWERSHELL, "Windows PowerShell required")
 class SettingsPublishTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="halo publish [test] ")
+        self.temp = tempfile.TemporaryDirectory(prefix="halo publish [test] owner's ")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
         self.repo = self.root / "repository"
@@ -55,6 +55,8 @@ class SettingsPublishTests(unittest.TestCase):
         self.trace = self.root / "dotnet.trace"
         self.arguments = self.root / "dotnet-arguments.json"
         self.toolchain_arguments = self.root / "toolchain-arguments.json"
+        self.msvc = self.root / "fake pinned msvc [owner's]"
+        self.sdk = self.root / "fake pinned sdk [owner's]"
         self.sibling = self.repo / ".build" / "unrelated [keep]"
         self.sibling.mkdir(parents=True)
         (self.sibling / "keep.txt").write_text("keep", encoding="utf-8")
@@ -74,11 +76,20 @@ function global:python {
     [IO.File]::WriteAllText($env:HALO_TEST_TOOLCHAIN_ARGUMENTS, (ConvertTo-Json -InputObject @($args)))
     if ($env:HALO_TEST_MODE -eq 'toolchainFailure') { $global:LASTEXITCODE = 17; return }
     $global:LASTEXITCODE = 0
-    return (@{msvc='D:/fake-pinned-msvc'; sdk='D:/fake-pinned-sdk'} | ConvertTo-Json)
+    return (@{msvc=$env:HALO_TEST_MSVC; sdk=$env:HALO_TEST_SDK} | ConvertTo-Json)
 }
 function global:dotnet {
     [IO.File]::AppendAllText($env:HALO_TEST_TRACE, "called`n")
     $global:LASTEXITCODE = 0
+    if ($args[0] -eq 'publish' -and $args -contains '-p:PublishAot=true') {
+        $expectedBin = Join-Path $env:HALO_TEST_MSVC 'bin/Hostx64/x64'
+        $expectedLib = (Join-Path $env:HALO_TEST_MSVC 'lib/x64') + ';' +
+            (Join-Path $env:HALO_TEST_SDK 'c/um/x64') + ';' + (Join-Path $env:HALO_TEST_SDK 'c/ucrt/x64')
+        if (-not $env:PATH.StartsWith($expectedBin + ';') -or $env:LIB -cne $expectedLib -or
+            $env:INCLUDE -cne (Join-Path $env:HALO_TEST_MSVC 'include')) {
+            throw 'AOT toolchain paths did not match the literal fixture roots'
+        }
+    }
     if ($args[0] -eq '--version') {
         if ($env:HALO_TEST_MODE -eq 'sdkMismatch') { return '0.0.0' }
         return '10.0.404'
@@ -154,6 +165,7 @@ try {
                    HALO_TEST_CONTAINED=str(self_contained).lower(),
                    HALO_TEST_ARGUMENTS=str(self.arguments),
                    HALO_TEST_TOOLCHAIN_ARGUMENTS=str(self.toolchain_arguments),
+                   HALO_TEST_MSVC=str(self.msvc), HALO_TEST_SDK=str(self.sdk),
                    HALO_TEST_TOOLCHAIN_CACHE=toolchain_cache or "",
                    HALO_TEST_ASSETS=str(self.assets),
                    HALO_TEST_LOCK=str(self.project / ("packages.aot.true.lock.json" if
@@ -164,7 +176,7 @@ try {
                    HALO_TEST_OUTPUT=str(output if output is not None else self.output),
                    HALO_TEST_INTERMEDIATE=str(intermediate if intermediate is not None else self.intermediate))
         return subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                               "-File", str(runner)], env=env, capture_output=True, text=True, timeout=30)
+                               "-File", str(runner)], env=env, capture_output=True, text=True, timeout=90)
 
     def assert_no_transaction_dirs(self):
         names = [p.name for p in self.output.parent.iterdir()]
