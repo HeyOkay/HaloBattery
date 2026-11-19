@@ -114,6 +114,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   or disconnected-keyboard status as a current keyboard reading.
 - Refuse malformed percentages in AM Infinity and
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
+- Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
+  ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Keep Lofree Flow queries on the verified receiver control collection, preventing
+  fallback writes to AULA F108 and other devices sharing its USB ID (#413).
+- Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
+  Delux M900 Pro and VGN N75 PRO support from pending device pull requests,
+  retaining their exact target and transport checks.
+- Limit generic MCHOSE `3837` mouse queries to the documented A7 receiver collection.
+  Unknown `3837` products and unsourced keyboard/collection fallbacks remain
+  excluded until exact protocol evidence is available.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 

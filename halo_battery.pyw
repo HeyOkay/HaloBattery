@@ -153,8 +153,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
-                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
-                       EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, AulaF108Provider, DareuProvider,
+                       EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -226,12 +226,14 @@ PROVIDER_LABELS = {
     "atk_nearlink": "ATK X1 Nearlink mice",
     "audeze": "Audeze Maxwell",
     "aula": "AULA F87 Pro V2C keyboards",
+    "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
     "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
+    "eweadn_ydx": "EWEADN X23 Pro",
     "finalmouse": "Finalmouse UltralightX",
     "glorious": "Glorious Model O Wireless",
     "gwolves": "G-Wolves mice",
@@ -286,7 +288,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
-            AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
+            AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
@@ -295,7 +297,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
 
 
 # ---------------------------------------------------------------- config

@@ -24,7 +24,8 @@ _CONFLICTS = frozenset((frozenset(("razer", "barracuda")),
                        frozenset(("razer", "barracuda_x")),
                        frozenset(("pulsar", "gwolves")),
                        frozenset(("logitech", "astro")),
-                       frozenset(("logitech", "logitech_centurion"))))
+                       frozenset(("logitech", "logitech_centurion")),
+                       frozenset(("aula_f108", "lofree"))))
 _TIMEOUTS = {"logitech": 45.0, "xinput": 35.0, "razer": 25.0,
              "turtlebeach": 30.0, "jbl": 15.0, "dji": 15.0, "discovery": 10.0}
 _CIRCUIT_COOLDOWN = 60.0
