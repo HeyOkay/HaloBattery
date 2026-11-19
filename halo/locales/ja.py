@@ -1,6 +1,11 @@
 """Japanese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "provider.phone_link": "スマートフォン連携",
+    "icon.phone": "スマートフォン",
+    "state.phone_link_stale": "スマートフォン連携の状態が古くなっています。アプリを開いて更新してください",
+    "state.phone_link_unavailable": "スマートフォン連携のバッテリー情報を取得できません",
+    "state.phone_link_last_reported": "{level}%（スマートフォン連携の前回の値）",
     "startup.hid_unavailable": 'Windows が HID サポートを読み込めませんでした。USB と 2.4 GHz 接続のバッテリー残量を取得できません。Bluetooth と設定は引き続き利用できます。詳細は診断を開いて確認してください。',
     "state.poll_unavailable": 'バッテリー情報を取得できません',
     "state.poll_stale": '{level}%（前回の値・バッテリー情報を取得できません）',
@@ -111,8 +116,10 @@ MESSAGES = {
     "provider.atk_keyboard": "ATK V75X キーボード",
     "provider.atk_nearlink": "ATK X1 Nearlink マウス",
     "provider.aula": "AULA F87 Pro V2C キーボード",
+    "provider.aula_f108": "AULA F108 Pro キーボード",
     "provider.dareu": "DAREU マウス",
     "provider.eweadn": "EWEADN / 前行者 マウス",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Endgame Gear 4K マウス（XM2w / OP1w）",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",

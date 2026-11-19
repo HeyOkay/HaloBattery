@@ -1,6 +1,11 @@
 """English is the reference catalog and fallback for every language."""
 
 MESSAGES = {
+    "provider.phone_link": "Phone Link",
+    "icon.phone": "Phone",
+    "state.phone_link_stale": "Phone Link status is out of date; open Phone Link to refresh",
+    "state.phone_link_unavailable": "Phone Link battery status unavailable",
+    "state.phone_link_last_reported": "{level}% (last reported by Phone Link)",
     "startup.hid_unavailable": "Windows couldn't load HID support. Battery readings over USB and 2.4 GHz are unavailable. Bluetooth and Settings remain available. Open Diagnostics for details.",
     "state.poll_unavailable": 'Battery query unavailable',
     "state.poll_stale": '{level}% (last known; battery query unavailable)',
@@ -110,8 +115,10 @@ MESSAGES = {
     "provider.atk_keyboard": "ATK V75X keyboard",
     "provider.atk_nearlink": "ATK X1 Nearlink mice",
     "provider.aula": "AULA F87 Pro V2C keyboards",
+    "provider.aula_f108": "AULA F108 Pro keyboards",
     "provider.dareu": "DAREU mice",
     "provider.eweadn": "EWEADN / 前行者 mice",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",

@@ -51,3 +51,22 @@ are processed locally in memory and are not uploaded.
 Exit HaloBattery before manually removing its local data. Removing settings or
 artwork resets the corresponding preferences and custom icons. Windows registry
 entries are separate from these files.
+
+## Phone Link cache
+
+The Phone Link provider reads two existing local JSON files in the current
+user's `Microsoft.YourPhone_8wekyb3d8bbwe` package: the Start-menu companion
+card and device identity metadata. It uses only the selected mobile device's
+identity, battery/charging text and cache timestamp. Unrelated card text,
+notifications, images, links, certificate fields and other metadata are not
+used or logged. Files are bounded, read-only, and never copied into diagnostics.
+
+The selected device's UUID/name and accepted battery status use the same local
+settings/history/status paths as other devices. The provider adds no phone,
+Bluetooth, network, app-launch or account request. It does not access message,
+contact, notification or photo databases or decode media from the card. Only one
+sanitized admission tuple (device key, cache timestamp, level and charger flag)
+is retained in memory, never the card or other private content. Older admitted
+levels are explicitly last-reported, not current; a cold-start cache older than
+three hours cannot seed a level. Disable Phone Link under Device types to stop
+its local cache reads.

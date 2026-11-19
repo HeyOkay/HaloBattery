@@ -69,17 +69,23 @@ def make_request() -> List[int]:
 def parse_status(resp) -> Optional[Tuple[int, int, int]]:
     """(keyboard level, mouse level, device type) from a status reply, or None.
 
-    A reply counts only when the device type is one the driver knows (1, 2 or 3) and the
-    keyboard level is in range - an asleep receiver answers with zeros, which would
-    otherwise show as a real 0 %.
+    Only a type carrying a keyboard (1 or 3), with its own online flag set,
+    can publish a keyboard reading. The dongle may retain a valid old level
+    while payload[3] is zero; mouse presence is not keyboard presence.
     """
-    if not resp or len(resp) < 9:
+    if not isinstance(resp, (bytes, bytearray, list, tuple)):
         return None
-    r = bytes(resp)
+    try:
+        r = bytes(resp)
+    except (TypeError, ValueError):
+        return None
+    if len(r) < 9:
+        return None
     kind = r[7]
     level = r[2]
     mouse = r[3]
-    if kind not in (1, 2, 3) or level > 100:
+    # ___dongleCheck24GStatusByF7: payload[3] is keyboard online.
+    if kind not in (1, 3) or r[4] != 1 or level > 100:
         return None
     return level, mouse, kind
 

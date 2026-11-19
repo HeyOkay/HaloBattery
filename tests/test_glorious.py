@@ -38,7 +38,7 @@ class ParseTest(unittest.TestCase):
         req = G.make_request(65)
         self.assertEqual(65, len(req))
         self.assertEqual(0x00, req[0])
-        self.assertEqual(G.BATTERY_COMMAND, req[1:7])
+        self.assertEqual([0x00, 0x00, 0x02, 0x02, 0x00, 0x83], req[1:7])
         self.assertEqual([0] * 58, req[7:])
 
     def test_the_documented_reply(self):
@@ -53,15 +53,15 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(two[1])
         self.assertTrue(three[1])
 
-    def test_a_waking_mouse_is_read(self):
-        self.assertEqual((80, False), G.parse_reply(reply(80, status=0xA2)))
+    def test_a_waking_mouse_is_not_yet_a_confirmed_reading(self):
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA2)))
 
     def test_an_asleep_mouse_is_not_a_reading(self):
-        self.assertIsNone(G.parse_reply(reply(80, status=G.STATUS_ASLEEP)))
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA4)))
 
     def test_other_frames_are_refused(self):
         bad = list(CAPTURED_75)
-        bad[G.FUNC_INDEX] = 0x81
+        bad[6] = 0x81
         self.assertIsNone(G.parse_reply(bad))
         self.assertIsNone(G.parse_reply(reply(101)))
         self.assertIsNone(G.parse_reply([0x00, 0xA1, 0x00]))
@@ -158,7 +158,7 @@ class PollTest(unittest.TestCase):
         G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
         self.assertEqual(75, provider.poll()[0].level)
         # the next answer is an asleep status: no new level, the icon greys out
-        dev.replies = [reply(75, status=G.STATUS_ASLEEP)]
+        dev.replies = [reply(75, status=0xA4)]
         self.now[0] += 30
         out = provider.poll()
         self.assertEqual([(75, False, False)], [(s.level, s.charging, s.online) for s in out])

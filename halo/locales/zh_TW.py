@@ -1,6 +1,11 @@
 """Traditional Chinese UI messages; keys and parameters follow locales/en.py."""
 
 MESSAGES = {
+    "provider.phone_link": "手機連結",
+    "icon.phone": "手機",
+    "state.phone_link_stale": "手機連結的狀態已過期；請開啟手機連結重新整理",
+    "state.phone_link_unavailable": "手機連結的電池狀態無法取得",
+    "state.phone_link_last_reported": "{level}%（手機連結上次回報）",
     "startup.hid_unavailable": 'Windows 無法載入 HID 支援，無法讀取透過 USB 和 2.4 GHz 連線的裝置電量。藍牙與設定仍可使用。請開啟診斷查看詳細資訊。',
     "state.poll_unavailable": '無法更新電量',
     "state.poll_stale": '{level}%（上次讀數；無法更新電量）',
@@ -111,8 +116,10 @@ MESSAGES = {
     "provider.atk_keyboard": "ATK V75X 鍵盤",
     "provider.atk_nearlink": "ATK X1 Nearlink 滑鼠",
     "provider.aula": "AULA F87 Pro V2C 鍵盤",
+    "provider.aula_f108": "AULA F108 Pro 鍵盤",
     "provider.dareu": "DAREU 滑鼠",
     "provider.eweadn": "EWEADN / 前行者 滑鼠",
+    "provider.eweadn_ydx": "EWEADN X23 Pro",
     "provider.endgame_4k": "Endgame Gear 4K 滑鼠（XM2w / OP1w）",
     "provider.finalmouse": "Finalmouse UltralightX",
     "provider.hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",

@@ -29,6 +29,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: z750sasr/mchose-a5-pro-max-web-driver, A5 battery page 00/command 83; HaloBattery #149.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -42,7 +45,7 @@ from providers import mchose as M  # noqa: E402
 
 def answer(level=58, charging=False):
     """A reply as the reference expects it: 0xA1, ..., page, command, charge, level."""
-    return ([0xA1, 0x00, 0x00, 0x00, M.A5_PAGE, M.A5_CMD_BATTERY,
+    return ([0xA1, 0x00, 0x00, 0x00, 0x00, 0x83,
              1 if charging else 0, level] + [0x00] * 56)
 
 
@@ -71,7 +74,7 @@ class FakeMchose:
     def get_feature_report(self, report_id, length):
         self.reads += 1
         if self.path == self.answer_path:
-            return [M.A5_REPORT_ID] + answer(self.level, self.charging)
+            return [0x00] + answer(self.level, self.charging)
         return [0x00] * length               # silent: no 0xA1 marker in it
 
 
@@ -222,7 +225,7 @@ class HeadsetTest(unittest.TestCase):
         self.assertEqual(M.parse_status_55(status_reply(level=100, state=4)), (100, False))
 
     def test_a_sleeping_status_reply_is_a_none_level(self):
-        self.assertEqual(M.parse_status_55(status_reply(level=0, state=M.STATUS_ASLEEP)),
+        self.assertEqual(M.parse_status_55(status_reply(level=0, state=0x1A)),
                          (None, False))
 
     def test_an_unknown_status_state_is_refused(self):

@@ -145,7 +145,7 @@ from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider,
-                       EightBitDoProvider,
+                       EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
@@ -153,8 +153,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
-                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, DareuProvider,
-                       EweadnProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, AulaF108Provider, DareuProvider,
+                       EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
@@ -226,12 +226,14 @@ PROVIDER_LABELS = {
     "atk_nearlink": "ATK X1 Nearlink mice",
     "audeze": "Audeze Maxwell",
     "aula": "AULA F87 Pro V2C keyboards",
+    "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
     "corsair": "Corsair headsets",
     "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
+    "eweadn_ydx": "EWEADN X23 Pro",
     "finalmouse": "Finalmouse UltralightX",
     "glorious": "Glorious Model O Wireless",
     "gwolves": "G-Wolves mice",
@@ -261,6 +263,7 @@ PROVIDER_LABELS = {
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "plantronics": "Plantronics headsets (BT600 adapter)",
+    "phone_link": "Phone Link",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
@@ -285,16 +288,16 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
-            AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
+            AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider(), EndgameWEProvider(),
+            SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -999,7 +1002,7 @@ MIC_WORDS = ("microphone", " mic", "mic ")
 def badge_for(st: DeviceStatus) -> str:
     if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone",
                    "speaker", "webcam", "health", "smart_home",
-                   "watch", "display", "tracker"):   # from the device
+                   "watch", "display", "tracker", "phone"):   # from the device
         return st.kind
     n = st.name.lower()
     if any(w in n for w in MIC_WORDS):
@@ -1020,7 +1023,7 @@ PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboa
                      ("microphone", "Microphone"), ("speaker", "Speaker"), ("webcam", "Webcam"),
                      ("health", "Health device"), ("smart_home", "Smart home"),
                      ("watch", "Smartwatch"), ("display", "Display / TV"), ("tracker", "Tag / Tracker"),
-                     ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
+                     ("phone", "Phone / tablet"), ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 CONTROLLER_BRANDS = ("default", "xbox", "playstation", "nintendo")
 CONTROLLER_PICTOGRAMS = ("gamepad", "dualshock", "dualsense")
@@ -1201,8 +1204,16 @@ def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "", *, la
                           name=name or st.name, state=device_state(st, left, language=language))
 
 
+def phone_link_last_reported(st: DeviceStatus) -> bool:
+    """A known cached percentage can be drawn without claiming a live connection."""
+    return (st.source == "phone_link" and st.ui_message == "state.phone_link_last_reported"
+            and type(st.level) is int and 0 <= st.level <= 100)
+
+
 def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
+    if phone_link_last_reported(st):
+        return i18n.translate("state.phone_link_last_reported", language=language, level=st.level)
     if st.polling_stale:
         return i18n.translate("state.poll_unavailable" if st.level is None else "state.poll_stale",
                               language=language, level=st.level)
@@ -1627,7 +1638,7 @@ class App:
         animate = self.cfg["animation"] and st.charging and st.online
         text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
         brand, color = self.controller_style(st)
-        state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+        state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,
                 size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
                 self.cfg.get("filled_icons", False))
@@ -1773,7 +1784,7 @@ class App:
                     self.configure_polling()
                 save_config(self.cfg)
                 if key == "bluetooth":
-                    self.bt_cache = []
+                    self._bt_clear()
                     self.bt_wake.set()
                 if key == "update_check":
                     if self.cfg[key]:
@@ -2559,6 +2570,15 @@ class App:
             self.bt_fresh.set()
             self.wake.bluetooth()
 
+    def _bt_clear(self):
+        """Bluetooth switched off: drop its readings. The revision bump makes the next
+        poll treat Bluetooth as completed, so its icons are removed instead of kept."""
+        with self.lock:
+            if self.bt_cache:
+                self.bt_cache = []
+                self._bt_revision = getattr(self, "_bt_revision", 0) + 1
+                self.wake.bluetooth()
+
     def bt_loop(self):
         """Separate thread: PowerShell can take a few seconds and must not delay
         the mouse and headset icons. On Windows a long-lived watcher reports
@@ -2591,7 +2611,7 @@ class App:
                 log.info("bluetooth: %d device(s) in %.1f s", len(res), time.time() - t0)
                 self._bt_update(res)            # same checked path as the watcher
             else:
-                self.bt_cache = []
+                self._bt_clear()
                 self.bt_fresh.set()
             self.bt_wake.wait(60)
             self.bt_wake.clear()

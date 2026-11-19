@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: hyzen.lofree.tech battery routine; lofree.tech/home index-BTVblIUr.js power/online frame (HaloBattery #165).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -22,7 +25,7 @@ from providers import lofree as F  # noqa: E402
 def report(b2, data=(), offset=(0, 0)):
     """Input report 0x04: id, then 31 bytes; byte 2 = b2, bytes 4-5 = offset, data at 7."""
     p = [0x00, 0x00, b2, len(data), offset[0], offset[1], 0x00] + list(data)
-    return [F.REPORT_ID] + p + [0x00] * (31 - len(p))
+    return [0x04] + p + [0x00] * (31 - len(p))
 
 
 class FakeKeyboard:
@@ -40,11 +43,11 @@ class FakeKeyboard:
         if self.silent:
             return
         b2 = data[3]
-        if b2 in (F.START, F.END):
+        if b2 in (0x01, 0x02):
             self.queue.append(report(b2))
             return
         self.queue += [list(n) for n in self.noise]
-        answer = {F.CMD_ONLINE: self.online, F.CMD_BATTERY: self.battery}[b2]
+        answer = {0xAA: self.online, 0x1A: self.battery}[b2]
         self.queue.append(report(b2, [answer], (1, 0) if self.bad_offset else (0, 0)))
 
     def on_read(self):

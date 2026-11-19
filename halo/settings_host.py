@@ -320,7 +320,8 @@ class SettingsHost:
                 pictogram=item.get("pictogram", ""), controller=bool(item.get("controller")),
                 brand=item.get("brand", "default"), brandColor=bool(item.get("brand_color")),
                 lowOverride=item.get("low_override"), hidden=bool(item.get("hidden")), level=level,
-                charging=status.charging if type(status.charging) is bool else None, online=bool(status.online),
+                charging=status.charging if type(status.charging) is bool and
+                    getattr(status, "charging_known", True) is not False else None, online=bool(status.online),
                 paused=bool(getattr(status, "polling_paused", False))))
         with self._lock:
             keys = [item["key"] for item in devices]
@@ -348,7 +349,7 @@ class SettingsHost:
             options=dict(languages=options((key, value.name) for key, value in i18n.LANGUAGES.items()),
                 intervals=options(intervals), thresholds=options(thresholds),
                 pictograms=options((value, tr("icon." + value) if value else tr("choice.auto")) for value in
-                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "headset", "gamepad", "bluetooth")),
+                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "phone", "headset", "gamepad", "bluetooth")),
                 brands=options((value, tr("controller." + value)) for value in ("default", "xbox", "playstation", "nintendo")), iconThemes=options(themes)),
             update=dict(version=update.get("version", ""), progress=progress, installOk=bool(state.get("install_ok")),
                         status=state.get("update_status", ""), message=state.get("update_message", "")))

@@ -82,6 +82,6 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in
 
 Device protocols come from OpenRazer, HeadsetControl, Solaar, rivalcfg, G-Helper and other open projects, and from captures and test runs sent by the community. **[Full credits →](docs/credits.md)**
 
-MIT licensed, see [LICENSE](LICENSE).
+MIT licensed, see [LICENSE](LICENSE). [Code-signing policy](docs/code-signing.md).
 
 [Privacy](docs/privacy.md)
