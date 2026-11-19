@@ -143,7 +143,7 @@ from halo import app_icon, flyout, history, icons, tray_history, updates, whatsn
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
+                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BlackSharkMtkProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider,
                        EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
@@ -229,6 +229,7 @@ PROVIDER_LABELS = {
     "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
+    "blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
     "corsair": "Corsair headsets",
     "dji": "DJI Mic Mini 2",
     "dareu": "DAREU mice",
@@ -297,6 +298,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            BlackSharkMtkProvider(),
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),

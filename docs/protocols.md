@@ -180,6 +180,19 @@ OpenRGB's [Kraken V4 merge request](https://gitlab.com/CalcProgrammer1/OpenRGB/-
 
 **Status:** **confirmed on hardware by @Zireael3Z**: the level matched the receiver at 87%, and the charging ring changed and reported charging while the cable was connected.
 
+### Razer BlackShark V2 HyperSpeed (MediaTek)
+
+**Connection:** 2.4 GHz receiver (1532:0565, "Razer BlackShark V2 HS 2.4", manufacturer "MediaTek Inc") or USB-C cable (1532:056E)
+
+A MediaTek command channel, not the PA protocol of the 2020/2023 models: report id 2 on usage page 0xFF14, 64-byte frames, addressed to domain `0x80` through the dongle and `0x00` on the cable. While the cable is plugged in the dongle stops answering, so the cable is read first.
+
+    request  [0]=02 [2]=60|seq [6]=04 [9]=80/00 [10]=21/2A [62]=XOR of bytes 0..61
+    reply    [0]=02 [2]&1F=seq [8]=80 [9]=domain [10]=cmd [11]=01 ack [12]=count [13]=value
+
+`0x21` reads the percentage, `0x2A` the charging flag; both are GETs and nothing else is sent. A bad checksum, a wrong sequence/domain/command, a missing acknowledgement or a zero payload count is refused, as openrazer's kernel driver does.
+
+Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.com/justik13/razer-blackshark-v2-hyperspeed-webhid) (MIT), with read-only implementations in [arkady-emelyanov/blackshark-battery](https://github.com/arkady-emelyanov/blackshark-battery) and [openrazer PR #2974](https://github.com/openrazer/openrazer/pull/2974). **Confirmed on hardware** in [#86](https://github.com/HeyOkay/HaloBattery/issues/86): level and charging both work on the receiver and the USB-C cable.
+
 ### Sony INZONE H9
 
 **Connection:** the headset's USB dongle (`054C:0E53`), which exposes a serial (COM) port
