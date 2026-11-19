@@ -142,6 +142,7 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
+from providers.base import is_coarse_reading  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BlackSharkMtkProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider, DarmosharkProvider,
@@ -1643,10 +1644,13 @@ class App:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
         animate = self.cfg["animation"] and st.charging and st.online
-        # Coarse levels show the same number; the tooltip and status file keep
-        # the "about" wording rather than putting a marker in the tray icon.
+        # Exact and coarse ("about NN%") levels show the number; the tooltip and
+        # status file keep the "about" wording. Any other approx text marks a
+        # level the device did not report as a number (a wired pad's placeholder
+        # 100, a level from before the cable went in): no number for those.
         text = ""
-        if self.cfg.get("percent_in_icon") and st.level is not None:
+        if (self.cfg.get("percent_in_icon") and st.level is not None
+                and (not st.approx or is_coarse_reading(st))):
             text = str(st.level)
         brand, color = self.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
