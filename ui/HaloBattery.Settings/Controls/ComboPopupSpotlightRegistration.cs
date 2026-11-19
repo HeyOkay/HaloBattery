@@ -5,6 +5,8 @@ using Microsoft.UI.Xaml.Controls;
 namespace HaloBattery.Settings.Controls;
 
 // Style setters carry only a bool across the XAML ABI, never a MainWindow.
+// The Settings process owns one MainWindow. Multiple hosts would need a
+// per-ComboBox registration instead of this process-local weak owner.
 public sealed partial class ComboPopupSpotlightRegistration : DependencyObject
 {
     private static WeakReference<MainWindow>? window;

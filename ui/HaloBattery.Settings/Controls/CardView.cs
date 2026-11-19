@@ -120,6 +120,9 @@ internal sealed partial class CardView : UserControl
         {
             var widthChanged = e.NewSize.Width != e.PreviousSize.Width;
             if (widthChanged) divider.Width = Math.Max(0, e.NewSize.Width - 2);
+            // Expand/collapse animates the body clip/height only; descendants
+            // keep their offsets in this card's Canvas. An animation moving
+            // descendants must invalidate the complete control geometry.
             if (!widthChanged && IsAnimating) ui.InvalidateCardSpotlightBounds();
             else ui.InvalidateCardSpotlightGeometry();
         };
