@@ -88,6 +88,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
+- Glorious Model O- / Model D / Model D- Wireless (`258a:2024`, `2023`, `2025`;
+  wired `2013`, `2012`, `2014`): the same Sinowealth battery query the Model O
+  already uses, from korkje/mxw's `SUPPORTED_MICE` table
+  ([#221](https://github.com/HeyOkay/HaloBattery/issues/221)). **Unverified** -
+  only the Model O (`2022`) is confirmed on hardware.
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
