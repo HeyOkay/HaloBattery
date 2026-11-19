@@ -8,7 +8,7 @@ namespace HaloBattery.Settings.Controls;
 
 // Installed as an app-wide implicit style, including template-created bars in
 // popups, lists and editors. No visual-tree scanning or per-frame callbacks.
-public sealed class ScrollBarAppearance : DependencyObject
+public sealed partial class ScrollBarAppearance : DependencyObject
 {
     public static readonly DependencyProperty EnabledProperty = DependencyProperty.RegisterAttached(
         "Enabled", typeof(bool), typeof(ScrollBarAppearance), new PropertyMetadata(false, EnabledChanged));

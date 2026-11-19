@@ -19,11 +19,13 @@ public sealed partial class MainWindow
     private bool spotlightGeometryDirty = true;
     private readonly List<(CardView card, Rect bounds)> spotlightBounds = new();
     private HashSet<CardView> spotlightLit = new(), spotlightNext = new();
+#if HALO_BATTERY_VERIFICATION
     private SpotlightMetrics? spotlightMetrics;
     private sealed class SpotlightMetrics
     {
         internal long Flushes, GeometryBuilds, BrushWrites, DragFrameTicks;
     }
+#endif
 
     private void InitializeCardSpotlights()
     {
@@ -92,7 +94,11 @@ public sealed partial class MainWindow
         {
             // Rendering subscribers keep XAML's frame clock active. Scope this
             // to a captured native thumb; do not redraw cards or set scroll offsets.
-            scrollDragFrame = (_, _) => { if (spotlightMetrics is { } metrics) metrics.DragFrameTicks++; };
+            scrollDragFrame = (_, _) => {
+#if HALO_BATTERY_VERIFICATION
+                if (spotlightMetrics is { } metrics) metrics.DragFrameTicks++;
+#endif
+            };
             CompositionTarget.Rendering += scrollDragFrame;
         }
     }
@@ -150,7 +156,11 @@ public sealed partial class MainWindow
 
     private void SetCardSpotlight(CardView card, Point? point)
     {
+#if HALO_BATTERY_VERIFICATION
         if (card.SetSpotlight(point) && spotlightMetrics is { } metrics) metrics.BrushWrites++;
+#else
+        card.SetSpotlight(point);
+#endif
     }
 
     private void ResetCardSpotlights(bool preserveScrollDrag = false)
@@ -183,7 +193,9 @@ public sealed partial class MainWindow
         if (spotlightPointer is not { } pointer || spotlightDragPointer is not null || closing || IsSettingsWindowHidden || pageHosts.Count == 0) return;
         var (content, scroll) = pageHosts[0];
         if (!content.IsLoaded || !scroll.IsLoaded) return;
+#if HALO_BATTERY_VERIFICATION
         if (spotlightMetrics is { } metrics) metrics.Flushes++;
+#endif
         if (spotlightGeometryDirty || !ReferenceEquals(content, spotlightGeometryContent))
         {
             spotlightBounds.Clear();
@@ -192,7 +204,9 @@ public sealed partial class MainWindow
                     spotlightBounds.Add((card, card.TransformToVisual(content).TransformBounds(new Rect(0, 0, card.ActualWidth, card.ActualHeight))));
             spotlightGeometryContent = content;
             spotlightGeometryDirty = false;
+#if HALO_BATTERY_VERIFICATION
             if (spotlightMetrics is { } builds) builds.GeometryBuilds++;
+#endif
         }
         // Two transforms per frame, rather than one native coordinate lookup
         // per card per pointer packet. Cached card positions survive scrolling.

@@ -1,0 +1,14 @@
+{
+  "captured": "2026-11-18",
+  "sdk": "10.0.404",
+  "runtime": "10.0.15",
+  "vectors": 73,
+  "pipeMessages": 7,
+  "source": "unchanged pre-sourcegen HaloBattery.Settings serialization implementation",
+  "sourceSha256": {
+    "SettingsProtocol.cs": "ac97bbc397a08e801ec082a9a033e197e38ae8f5452bb8f585c5bf580f30897f",
+    "WindowStateStore.cs": "3b74b78a1dff33eab67603a6abe35493fdbfc5d46065866be18f2983be90fdaa"
+  },
+  "oracleTsvSha256": "33dd748ee648cd1cdfea5802ad64f462643bd7701da4a5e8c2af0b1b20813823",
+  "pipeOutputSha256": "99df26b8613e323c0495f2bbcfeb78dcae1a80ec52bf62f6cf9f7244309e5994"
+}

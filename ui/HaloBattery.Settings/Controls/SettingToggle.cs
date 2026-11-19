@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml.Shapes;
 namespace HaloBattery.Settings.Controls;
 
 // The source shell's 40 x 22 switch, with native keyboard and automation behavior.
-internal sealed class SettingToggle : ToggleButton
+internal sealed partial class SettingToggle : ToggleButton
 {
     private readonly MainWindow ui;
     private Grid? thumbHost;
