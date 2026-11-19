@@ -610,8 +610,9 @@ this family, but the response still carries the byte. Only this product string i
 never opened.
 
 The configurator's wireless-module driver has **no charging query and no charging event**
-for this family, so the app reports the level and marks charging unknown. Whether the
-keyboard exposes a charger state at all is being checked with the reporter (#460).
+for this family, so the app reports the level and marks charging unknown. Confirmed on the
+reporter's hardware by @fogius (#460): the tray level appeared. Whether the keyboard exposes
+a charger state at all is being checked with the reporter.
 
 Source: Red Square's public web configurator (`conf.red-square.org`, model table and
 `GskyWirelessModuleSeries` driver). Not open source; the protocol notes above are the
