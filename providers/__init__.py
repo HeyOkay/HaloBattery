@@ -29,6 +29,7 @@ from .nintendo import NintendoProvider  # noqa: F401
 from .shield import ShieldProvider  # noqa: F401
 from .asus import AsusProvider  # noqa: F401
 from .glorious import GloriousProvider  # noqa: F401
+from .gs3075t import Gs3075tProvider  # noqa: F401
 from .lamzu_sw import LamzuSinowealthProvider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
@@ -36,9 +37,11 @@ from .astro import AstroProvider  # noqa: F401
 from .corsair import CorsairProvider  # noqa: F401
 from .kraken_v4 import KrakenV4Provider  # noqa: F401
 from .dji import DjiProvider  # noqa: F401
+from .darmoshark import DarmosharkProvider  # noqa: F401
 from .lamzu import LamzuAtlantisProvider, LamzuProvider  # noqa: F401
 from .vaxee import VaxeeProvider  # noqa: F401
 from .am_infinity import AmInfinityProvider  # noqa: F401
+from .blackshark_mtk import BlackSharkMtkProvider  # noqa: F401
 from .nzxt import NzxtProvider  # noqa: F401
 from .steam import SteamProvider  # noqa: F401
 from .inphic import InphicProvider  # noqa: F401
@@ -52,6 +55,7 @@ from .sony_inzone import SonyInzoneProvider  # noqa: F401
 from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
 from .finalmouse import FinalmouseProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
+from .attackshark_x66 import AttackSharkX66Provider  # noqa: F401
 from .hyperx_alpha_wireless import HyperXAlphaWirelessProvider  # noqa: F401
 from .jabra import JabraProvider  # noqa: F401
 from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
@@ -64,3 +68,5 @@ from .endgame_we import EndgameWEProvider  # noqa: F401
 from .endgame_4k import Endgame4kProvider  # noqa: F401
 from .plantronics import PlantronicsProvider  # noqa: F401
 from .phone_link import PhoneLinkProvider  # noqa: F401
+from .blackshark_v3x import BlackSharkV3XProvider  # noqa: F401
+from .ninjutso_sora_v3 import NinjutsoSoraV3Provider  # noqa: F401

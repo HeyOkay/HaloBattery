@@ -142,9 +142,10 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
+from providers.base import is_coarse_reading  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
-                       DeviceStatus, DjiProvider,
+                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BlackSharkMtkProvider, BluetoothProvider, CorsairProvider,
+                       DeviceStatus, DjiProvider, DarmosharkProvider,
                        EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
@@ -153,9 +154,9 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
-                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, AulaF108Provider, DareuProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider)
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -229,13 +230,17 @@ PROVIDER_LABELS = {
     "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
+    "blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
+    "blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
     "corsair": "Corsair headsets",
     "dji": "DJI Mic Mini 2",
+    "darmoshark": "Darmoshark N5",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "eweadn_ydx": "EWEADN X23 Pro",
     "finalmouse": "Finalmouse UltralightX",
     "glorious": "Glorious Model O Wireless",
+    "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
@@ -257,10 +262,12 @@ PROVIDER_LABELS = {
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "mchose": "MCHOSE mice",
+    "attackshark_x66": "ATTACKSHARK X66",
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
     "nintendo": "Nintendo Switch controllers",
+    "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "plantronics": "Plantronics headsets (BT600 adapter)",
@@ -284,7 +291,7 @@ PROVIDER_LABELS = {
 
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
-    return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+    return [RazerProvider(), BlackSharkV3XProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
             JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
@@ -295,10 +302,11 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            BlackSharkMtkProvider(),
             IRocksProvider(),
-            SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
+            SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider(), KrakenV4Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
 
 
 # ---------------------------------------------------------------- config
@@ -1637,7 +1645,14 @@ class App:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
         animate = self.cfg["animation"] and st.charging and st.online
-        text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
+        # Exact and coarse ("about NN%") levels show the number; the tooltip and
+        # status file keep the "about" wording. Any other approx text marks a
+        # level the device did not report as a number (a wired pad's placeholder
+        # 100, a level from before the cable went in): no number for those.
+        text = ""
+        if (self.cfg.get("percent_in_icon") and st.level is not None
+                and (not st.approx or is_coarse_reading(st))):
+            text = str(st.level)
         brand, color = self.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,

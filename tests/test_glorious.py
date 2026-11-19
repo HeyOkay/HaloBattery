@@ -171,5 +171,30 @@ class PollTest(unittest.TestCase):
         self.assertEqual([], out)
 
 
+O_MINUS = [{"path": b"ffff0", "interface_number": 2,
+            "usage_page": 0xFFFF, "usage": 0x0000,
+            "product_id": 0x2024, "product_string": "Model O- Wireless"}]
+WIRED_O_MINUS = {"path": b"wired-o-minus", "interface_number": 0,
+                 "product_id": 0x2013, "product_string": "Model O-"}
+
+
+class FamilyTest(PollTest):
+    def test_the_model_o_minus_is_read_with_its_own_key(self):
+        out, dev = self.poll([CAPTURED_75], infos=O_MINUS)
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("glorious:2024", "Glorious Model O- Wireless", 75, "mouse")])
+        self.assertEqual([bytes(G.make_request(65))], dev.sent)
+
+    def test_the_model_o_minus_cable_counts_as_charging(self):
+        out, _dev = self.poll([CAPTURED_75], infos=O_MINUS + [WIRED_O_MINUS])
+        self.assertEqual((75, True, True), (out[0].level, out[0].charging, out[0].online))
+
+    def test_two_glorious_mice_keep_separate_icons(self):
+        infos = self.INFO + O_MINUS
+        out, _dev = self.poll([CAPTURED_75, CAPTURED_75_CHARGING], infos=infos)
+        self.assertEqual([(s.key, s.level) for s in out],
+                         [("glorious:2022", 75), ("glorious:2024", 75)])
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

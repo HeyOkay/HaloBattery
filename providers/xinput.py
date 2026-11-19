@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, hidlist, wgi
+from . import beitong, flydigi, hidlist, raikiri, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -304,6 +304,12 @@ class XInputProvider(Provider):
         )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
+        # The Raikiri II's own query is paired to its one XInput slot; its WGI
+        # report is not in NAMED_VIDS, so the generic Xbox entry is not shown.
+        single_raikiri = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == (raikiri.VID, raikiri.PID)
+        )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         if len(reports) != len(slots):
@@ -328,7 +334,12 @@ class XInputProvider(Provider):
         vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
-            if only_vid == FLYDIGI_VID:
+            if single_raikiri:
+                try:
+                    vendor_reading = raikiri.read_connected(self._diag)
+                except Exception as e:     # a broken vendor path must not blind XInput
+                    self._diag.append(f"[Raikiri] {e}")
+            elif only_vid == FLYDIGI_VID:
                 try:
                     vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput

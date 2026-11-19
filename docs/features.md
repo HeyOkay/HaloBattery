@@ -5,7 +5,7 @@
 
 ## The icon
 
-- **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. Controller logos are chosen manually; the default is a generic controller.
+- **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. A device that only reports coarse steps shows its number like any other device; the tooltip and status file keep the “about NN%” wording. A level the device did not report as a number (a wired controller shown as full on its cable, a level remembered from before the cable was plugged in) keeps the pictogram. Controller logos are chosen manually and the default is a generic controller.
 - **Custom pictograms**: the Devices page can search a reviewed [Iconify catalogue](iconify.md), preview a symbol inside the real ring and save it for one device. Monochrome symbols follow the theme; colored artwork keeps its original colors, including fixed parts of mixed icons. Selections work offline. Search uses pages of 50 candidates with round arrow and number buttons; neighboring previews are prepared ahead of time. Temporary gallery caches are cleared when Settings closes. Complete attribution and licenses are available in Settings; the existing percentage and ring-only modes retain priority.
 - **Ring thickness**: choose the current thin ring or the classic thicker ring on the Tray icons page. The same style applies to previews, charging animations and the no-device indicator.
 - **Display scaling**: tray artwork is rendered at the taskbar's physical icon size and refreshed when its DPI changes, keeping the thin ring and pictograms sharp.

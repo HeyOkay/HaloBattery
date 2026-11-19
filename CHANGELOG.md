@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- URX Core75 now checks the product string as well as `36B0:3002`, so an
+  EVO75 on the same receiver id is no longer labelled as a URX board (#448).
 - Keep the SignPath TEST credential in the protected signing jobs only; build
   and packaging jobs do not receive or forward it.
 
@@ -22,6 +24,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Percentage in the icon: devices that only report coarse battery steps now
+  show the same `NN` number as exact devices, without a `~` marker. The tooltip
+  and status file still say "about NN%".
 - Add pointer-following outline highlights to rounded Settings controls without
   permanent borders.
 - Show the selected Phone Link mobile device's cached battery with a phone
@@ -41,8 +46,48 @@ and the project follows [Semantic Versioning](https://semver.org/).
   `1532:056B`): read the battery level and charging state over its MediaTek
   channel. Confirmed on hardware by @Zireael3Z: 87% matched the receiver and
   the charging ring followed the cable.
+- **Razer BlackShark V2 HyperSpeed** (`1532:0565` receiver, `1532:056E` cable): the
+  headset's MediaTek channel - report id 2 on `0xFF14`, a sequence, domain and XOR
+  checksum, with `0x21` for the level and `0x2A` for the charging state. The cable is
+  read first because the dongle goes quiet while it is plugged in. Protocol from
+  justik13/razer-blackshark-v2-hyperspeed-webhid, with read-only implementations in
+  blackshark-battery and openrazer PR #2974. **Confirmed on hardware** in #86: level
+  and charging (the receiver and cable paths were not reported separately).
+- **Razer BlackShark V3 X HyperSpeed** (`1532:057D` receiver / `1532:057C`
+  cable, #280): the receiver's newer 64-byte feature-report protocol (report
+  id `0x07`, class `0x07`, battery command `0x80`, level byte 10), from
+  everyoneexe/blackshark-linux's Synapse captures. A different protocol from
+  the BlackShark V3's `0x02` frames; **confirmed on hardware** in #280 for the
+  level and charging, with the cable identity `057C` added in test build 4 and
+  the charging flag at byte 10 fixed in test build 5.
+- **ASUS ROG Azoth X** (`1c25` in the OMNI receiver's pair list): the same
+  keyboard `02 12 01` read and byte-6 level as the other OMNI keyboards;
+  confirmed on the reporter's keyboard in #269.
+- **ASUS ROG Raikiri II** (`0b05:1c92`): the vendor query `B0 12 04` on
+  `ff03:0001`, level byte 5 and charging byte 10, paired to the controller's
+  one XInput slot so the generic Xbox icon is replaced rather than duplicated
+  (#269). Confirmed on the reporter's hardware: 70% wireless, 69% with the
+  charging ring on the cable; test build 2 uses output/input reports.
+- Darmoshark N5 (`1915:0723` receiver / `1915:073c` cable): the 64-byte `ff0a:0001`
+  power query, level byte 6 (legacy) or byte 11 (v2); confirmed on hardware in
+  [#430](https://github.com/HeyOkay/HaloBattery/issues/430) at 63%, matching the mouse.
+- Corsair M65 RGB Ultra Wireless (`1B1C:1BA6` SLIPSTREAM receiver or
+  `1B1C:1BB5` USB cable): battery level and charging state, confirmed on
+  hardware in [#411](https://github.com/HeyOkay/HaloBattery/issues/411).
+- Teevolution Terra Pro on its 1K receiver (`3554:F520`), confirmed on
+  hardware in #448; the existing `3554:F523` reader now uses the mouse pictogram.
+- Battery and charging support for the Ninjutso Sora V3 on its 2.4 GHz receiver
+  (`093a:eb02`) and USB cable (`093a:e010`), using the current NinjaForce
+  feature-report protocol (battery command `0x12`, charging `0x11`). Tested by
+  @Cynersi on both connections; the level matched NinjaForce and the cable
+  reported charging.
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
+- GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
+  `AA 10 18` query (#379); level and charging measured by the reporter. Byte
+  26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
+- ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
+  33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -88,6 +133,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
+- Glorious Model O- / Model D / Model D- Wireless (`258a:2024`, `2023`, `2025`;
+  wired `2013`, `2012`, `2014`): the same Sinowealth battery query the Model O
+  already uses, from korkje/mxw's `SUPPORTED_MICE` table
+  ([#221](https://github.com/HeyOkay/HaloBattery/issues/221)). The Model O- was
+  confirmed by its owner in #221 (level and charging); the Model D and D- are
+  **unverified** on hardware.
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
