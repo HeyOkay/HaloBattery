@@ -22,6 +22,7 @@ public sealed partial class MainWindow
     private string? previewDeviceKey;
     private string lastError = "";
     private long previewGeneration;
+    private TaskbarPreviewWindow? taskbarPreview;
     private Action? pendingEditorCommit;
 
     private bool BoolCfg(string key, bool fallback = false) => State.Settings.TryGetValue(key, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : fallback;
@@ -369,38 +370,45 @@ public sealed partial class MainWindow
             ShowError(T("settings.tray_preview_unavailable"));
             return;
         }
+        var packed = TraySnapshot();
+        var browser = new Uri(path).AbsoluteUri + "?state=" + packed;
         try
         {
-            // Give the standalone replica the devices Halo is showing right now.
-            // The URL-safe base64 keeps the snapshot out of any server or file
-            // write; the page falls back to its own demo profile when absent.
-            var states = new Dictionary<string, object>();
-            var pinned = new List<object>();
-            foreach (var device in State.Devices.Where(device => !device.Hidden))
+            if (taskbarPreview is not null)
             {
-                var kind = TrayKind(device.Kind);
-                if (states.ContainsKey(kind)) continue;
-                var mode = device.Paused ? "paused"
-                    : !device.Online ? "sleeping"
-                    : device.Charging == true
-                        ? (device.Level is null ? "unknown_charging" : "charging")
-                        : device.Level is null ? "sleeping" : "normal";
-                states[kind] = new { mode, level = device.Level };
-                pinned.Add(new { id = "halo-" + kind, label = device.Name, icon = "halo:" + kind });
+                taskbarPreview.Activate();
+                return;
             }
-            var snapshot = new
+            var result = TaskbarPreviewWindow.CreateAsync(
+                new Uri("https://halo.tray/index.html?state=" + packed),
+                Path.GetDirectoryName(path)!);
+            result.ContinueWith(task =>
             {
-                theme = State.IconLightTaskbar ? "light" : "dark",
-                dpi = 96,
-                language = State.Language == "ru" ? "ru-RU" : "en-US",
-                states,
-                pinned,
-                tray = Array.Empty<object>()
-            };
-            var json = JsonSerializer.Serialize(snapshot);
-            var packed = Uri.EscapeDataString(Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                new Uri(path).AbsoluteUri + "?state=" + packed)
+                if (task.IsFaulted)
+                {
+                    DispatcherQueue.TryEnqueue(() => OpenTrayPreviewInBrowser(browser));
+                    return;
+                }
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    taskbarPreview = task.Result;
+                    taskbarPreview.Closed += (_, _) => taskbarPreview = null;
+                    taskbarPreview.Activate();
+                });
+            }, TaskScheduler.Default);
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine(error);
+            OpenTrayPreviewInBrowser(browser);
+        }
+    }
+
+    private void OpenTrayPreviewInBrowser(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
             {
                 UseShellExecute = true
             });
@@ -410,6 +418,38 @@ public sealed partial class MainWindow
             System.Diagnostics.Debug.WriteLine(error);
             ShowError(T("settings.tray_preview_unavailable"));
         }
+    }
+
+    private string TraySnapshot()
+    {
+        // Give the standalone replica the devices Halo is showing right now.
+        // The URL-safe base64 keeps the snapshot out of any server or file
+        // write; the page falls back to its own demo profile when absent.
+        var states = new Dictionary<string, object>();
+        var pinned = new List<object>();
+        foreach (var device in State.Devices.Where(device => !device.Hidden))
+        {
+            var kind = TrayKind(device.Kind);
+            if (states.ContainsKey(kind)) continue;
+            var mode = device.Paused ? "paused"
+                : !device.Online ? "sleeping"
+                : device.Charging == true
+                    ? (device.Level is null ? "unknown_charging" : "charging")
+                    : device.Level is null ? "sleeping" : "normal";
+            states[kind] = new { mode, level = device.Level };
+            pinned.Add(new { id = "halo-" + kind, label = device.Name, icon = "halo:" + kind });
+        }
+        var snapshot = new
+        {
+            theme = State.IconLightTaskbar ? "light" : "dark",
+            dpi = 96,
+            language = State.Language == "ru" ? "ru-RU" : "en-US",
+            states,
+            pinned,
+            tray = Array.Empty<object>()
+        };
+        return Uri.EscapeDataString(Convert.ToBase64String(
+            Encoding.UTF8.GetBytes(JsonSerializer.Serialize(snapshot))));
     }
 
     private static string TrayKind(string kind) => kind switch

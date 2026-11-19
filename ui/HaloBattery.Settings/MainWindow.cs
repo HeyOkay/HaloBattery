@@ -98,7 +98,7 @@ public sealed partial class MainWindow : Window
   InitializeCardSpotlights();
   settings.ColorValuesChanged+=OnColorsChanged;
   AppWindow.Changed+=OnWindowChanged;
-  Closed+=(_,_)=>{closing=true;CancelStartupSplash();settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
+  Closed+=(_,_)=>{closing=true;taskbarPreview?.Close();CancelStartupSplash();settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
   BuildHeader();
