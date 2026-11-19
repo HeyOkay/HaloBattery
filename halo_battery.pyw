@@ -2184,7 +2184,7 @@ class App:
                 continue          # turned off in Preferences > Device types: not opened at all
             if isinstance(p, PlayStationProvider):
                 p.switch_bluetooth = bool(self.cfg.get("playstation_full_mode", False))
-            if isinstance(p, AtkKeyboardProvider):
+            if isinstance(p, (AtkKeyboardProvider, MchoseK99Provider)):
                 p.activity.wake = self.wake.set
             try:
                 found = p.poll()
@@ -2844,7 +2844,7 @@ class App:
             settings_host.close()
         self.stop_evt.set()
         for provider in self.providers:
-            if isinstance(provider, AtkKeyboardProvider):
+            if isinstance(provider, (AtkKeyboardProvider, MchoseK99Provider)):
                 provider.close()
         self.history.save(force=True)
         if self.cfg.get("status_file"):

@@ -57,6 +57,28 @@ class FakeDev:
         return self.replies.pop(0) if self.replies else []
 
 
+class FakeActivity:
+    def __init__(self, active=True):
+        self.is_active = active
+        self.paths = []
+        self.held = []
+
+    def configure(self, paths):
+        self.paths = list(paths)
+
+    def start(self):
+        return True
+
+    def active(self):
+        return self.is_active
+
+    def hold(self, seconds):
+        self.held.append(seconds)
+
+    def close(self):
+        pass
+
+
 class ParseTests(unittest.TestCase):
     def test_the_request_is_the_glw_func_config_read(self):
         req = K.make_request()
@@ -93,10 +115,10 @@ class PollTests(unittest.TestCase):
         K.hid = self._hid
         K.hidlist.enumerate = self._enumerate
 
-    def poll(self, fake):
+    def poll(self, fake, activity=None):
         K.hid = types.SimpleNamespace(device=lambda: fake)
         K.hidlist.enumerate = lambda vid=0: entries()
-        p = K.MchoseK99Provider()
+        p = K.MchoseK99Provider(activity=activity or FakeActivity())
         return p.poll(), p.diagnostics()
 
     def test_the_keyboard_is_read_with_charging(self):
@@ -119,6 +141,14 @@ class PollTests(unittest.TestCase):
         self.assertEqual([(s.level, s.online, s.charging_known) for s in out],
                          [(None, False, False)])
         self.assertTrue(any("no answer" in line for line in diag))
+
+    def test_without_keyboard_activity_no_query_is_sent(self):
+        fake = FakeDev([reply(90)])
+        out, diag = self.poll(fake, activity=FakeActivity(active=False))
+        self.assertEqual([(s.level, s.online, s.polling_paused) for s in out],
+                         [(None, False, True)])
+        self.assertEqual(fake.sent, [])
+        self.assertTrue(any("waiting for keyboard activity" in line for line in diag))
 
 
 if __name__ == "__main__":

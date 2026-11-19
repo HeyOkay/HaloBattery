@@ -67,8 +67,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery at payload byte 32; bit 7 charging). The earlier `55 03 00 38 38`
   query returned a different info frame and a wrong level (52 % while M HUB
   showed 90 %), so it was replaced. Confirmed on hardware by @Kolomhon in #458:
-the level agreed with M HUB within its 10 % display step, and the charging bit
-followed the cable.
+  the level agreed with M HUB within its 10 % display step, and the charging bit
+  followed the cable. Polling is now paused until real keyboard input, so an
+  idle keyboard is not woken by the battery query.
 
 ### Fixed
 

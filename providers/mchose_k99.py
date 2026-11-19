@@ -17,7 +17,9 @@ This is the protocol from krisgfx9/Wireless-Device-Battery-Monitor PR #1957,
 recovered from M HUB's own web driver and confirmed on a G75 V2 on the same
 3837:3033 receiver.  It replaces the earlier 55 03 00 38 38 request, which
 returned a different info frame (52% in the reporter's diagnostics while M HUB
-showed 90% and no charging state).  Only read-only frames are sent.
+showed 90% and no charging state).  Only read-only frames are sent.  A poll itself can wake a sleeping keyboard,
+so the provider asks only shortly after real keyboard input, as the ATK
+keyboard provider does; an idle keyboard is left alone.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ try:
 except ImportError:              # pragma: no cover
     hid = None
 
+from .atk_activity import REFRESH, RETRY, KeyboardActivity
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
@@ -50,7 +53,6 @@ CHECKSUM_AT = 3
 ATTEMPTS = 3
 READ_TIMEOUT_MS = 250
 ATTEMPT_GAP = 0.15
-ASLEEP_KEEP = 300
 
 NAME = "MCHOSE K99 V3"
 KEY = "mchose_k99:3033"
@@ -99,9 +101,13 @@ def parse_reply(r) -> Optional[Tuple[int, bool, int]]:
 class MchoseK99Provider(Provider):
     name = "mchose_k99"
 
-    def __init__(self):
+    def __init__(self, activity=None):
         self._diag: List[str] = []
         self._last: Optional[Tuple[int, bool, float]] = None
+        self.activity = activity if activity is not None else KeyboardActivity()
+        self._fresh = None
+        self._tried = None
+        self._paused = None
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
@@ -120,24 +126,53 @@ class MchoseK99Provider(Provider):
                           f"'{d.get('product_string') or ''}' "
                           f"iface={d.get('interface_number')} "
                           f"{d.get('usage_page'):04x}:{d.get('usage'):04x}")
+        # The query itself can wake a sleeping keyboard (and its wake report
+        # can reach the desktop as input). Only poll shortly after real
+        # keyboard input, as the ATK keyboard provider does.
+        self.activity.configure([e["path"] for e in infos if e.get("product_id") == PID])
+        if not self.activity.start() or not self.activity.active():
+            if self._paused is not True:
+                log.info("MCHOSE K99 battery polling paused; waiting for keyboard activity")
+            self._paused = True
+            self._diag.append("  queries paused: waiting for keyboard activity")
+            return [self._idle_status(paused=True)]
+        if self._paused is not False:
+            log.info("MCHOSE K99 battery polling resumed after keyboard activity")
+        self._paused = False
+        now = time.monotonic()
+        if self._fresh is not None and 0 <= now - self._fresh < REFRESH:
+            self._diag.append(f"  cached: next query after {REFRESH - (now - self._fresh):.0f} s")
+            return [self._status()]
+        if self._tried is not None and 0 <= now - self._tried < RETRY:
+            self._diag.append("  last query failed; retrying later")
+            return [self._idle_status(paused=False)]
+        self._tried = now
         got = self._read(d["path"])
         if got is None:
             self._diag.append("  no answer (keyboard asleep or off)")
-            if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
-                level, charging, _ = self._last
-                return [DeviceStatus(KEY, NAME, level, charging, False,
-                                     "mchose_k99", kind="keyboard",
-                                     wake_on_input=True, charging_known=False)]
-            return [DeviceStatus(KEY, NAME, None, False, False, "mchose_k99",
-                                 kind="keyboard", wake_on_input=True,
-                                 charging_known=False)]
+            return [self._idle_status(paused=False)]
 
         level, charging, raw = got
         self._diag.append(f"  -> {level}% charging={charging} raw={raw:02x}")
         self._last = (level, charging, time.time())
-        return [DeviceStatus(KEY, NAME, level, charging, True, "mchose_k99",
-                             kind="keyboard", wake_on_input=True,
-                             charging_known=True)]
+        self._fresh = time.monotonic()
+        self.activity.hold(REFRESH)
+        return [self._status()]
+
+    def _status(self):
+        assert self._last is not None
+        level, charging, _ = self._last
+        return DeviceStatus(KEY, NAME, level, charging, True, "mchose_k99",
+                            kind="keyboard", wake_on_input=True, charging_known=True)
+
+    def _idle_status(self, paused: bool):
+        level = self._last[0] if self._last else None
+        return DeviceStatus(KEY, NAME, level, False, False, "mchose_k99",
+                            kind="keyboard", wake_on_input=True,
+                            charging_known=False, polling_paused=paused)
+
+    def close(self):
+        self.activity.close()
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for page, usage in ((PAGE, USAGE), (ALT_PAGE, ALT_USAGE)):
