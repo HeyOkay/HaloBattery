@@ -185,6 +185,13 @@ public sealed partial class MainWindow
         Section(parent, T("settings.iconify_title"));
         var browse = Button(T("settings.iconify_browse"), true);
         var catalog = Expander(T("settings.iconify_title"), T("settings.iconify_hint"), browse, "palette");
+        void RefreshSavedIconHint()
+        {
+            if (catalog.DescriptionElement is TextBlock hint)
+                hint.Text = T("settings.iconify_hint") + (SelectedDevice?.CustomIconUnavailable == true
+                    ? "\n\n" + T("settings.iconify_saved_unavailable") : "");
+        }
+        RefreshSavedIconHint();
         parent.Children.Add(catalog);
         var body = new StackPanel { Spacing = 12, Margin = new(24, 16, 24, 20) };
         catalog.AddBody(body);
@@ -195,6 +202,7 @@ public sealed partial class MainWindow
             Height = 32, MinHeight = 32, CornerRadius = new(16), Padding = new(14, 4, 14, 4),
             Background = Brush(dark ? "#303030" : "#ECECEC"), Foreground = TextBrush, BorderThickness = new(0)
         };
+        EnableControlSpotlight(search);
         AutomationProperties.SetName(search, T("settings.iconify_search"));
         var searchButton = Button(T("settings.iconify_search_button"), true);
         var searchRow = new Grid { ColumnSpacing = 8 };
@@ -344,8 +352,11 @@ public sealed partial class MainWindow
         pageBindings.Add(() =>
         {
             if (!CatalogActive(view)) return;
+            // Explain an unavailable saved selection outside the collapsed
+            // gallery; do not silently clear the user's configured choice.
             view.Current.Text = SelectedDevice?.CustomIconName is { Length: > 0 } id
                 ? T("settings.iconify_current") + ": " + id : T("settings.iconify_default");
+            RefreshSavedIconHint();
             view.PreviewBackground.Background = Brush(State.IconLightTaskbar ? "#F3F3F3" : "#202020");
             RefreshCatalogScale(view);
         });

@@ -1,6 +1,15 @@
 """English is the reference catalog and fallback for every language."""
 
 MESSAGES = {
+    "provider.phone_link": "Phone Link",
+    "icon.phone": "Phone",
+    "state.phone_link_stale": "Phone Link status is out of date; open Phone Link to refresh",
+    "state.phone_link_unavailable": "Phone Link battery status unavailable",
+    "state.phone_link_last_reported": "{level}% (last reported by Phone Link)",
+    "startup.hid_unavailable": "Windows couldn't load HID support. Battery readings over USB and 2.4 GHz are unavailable. Bluetooth and Settings remain available. Open Diagnostics for details.",
+    "state.poll_unavailable": 'Battery query unavailable',
+    "state.poll_stale": '{level}% (last known; battery query unavailable)',
+    "settings.open_failed": "Couldn't open Settings. Basic preferences are still available from {preferences} in the tray menu.",
     "preferences.icon_style": "Icon style",
     "icon_style.outline": "Outline",
     "icon_style.filled": "Filled",
@@ -282,7 +291,8 @@ MESSAGES = {
     'settings.ring_thin': 'Thin',
     'settings.ring_classic': 'Classic (thicker)',
     "settings.iconify_title": "Iconify icon catalog",
-    'settings.iconify_hint': 'Choose an icon from supported collections. Gallery downloads last until Settings closes; applied icons remain available offline.',
+    "settings.iconify_saved_unavailable": "A saved custom icon could not be verified. Your selection is kept, but the default icon is shown. Open Settings > Devices to choose it again or restore the default.",
+    "settings.iconify_hint": "Search downloads icons from api.iconify.design. Gallery caches are cleared when Settings closes; applied icons work offline.",
     "settings.iconify_browse": "Browse icons",
     "settings.iconify_search": "Search icons",
     "settings.iconify_search_button": "Search",

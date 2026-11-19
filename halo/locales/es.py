@@ -8,6 +8,15 @@ AdrianH23 reviewed the port: https://github.com/TiagoFerreiraDomingues/HaloBatte
 """
 
 MESSAGES = {
+    "provider.phone_link": "Enlace Móvil",
+    "icon.phone": "Teléfono",
+    "state.phone_link_stale": "El estado de Enlace Móvil está desactualizado; abre Enlace Móvil para actualizarlo",
+    "state.phone_link_unavailable": "Estado de batería de Enlace Móvil no disponible",
+    "state.phone_link_last_reported": "{level}% (último dato de Enlace Móvil)",
+    "startup.hid_unavailable": 'Windows no pudo cargar la compatibilidad HID. No se pueden leer las baterías por USB ni por 2,4 GHz. Bluetooth y Configuración siguen disponibles. Abre Diagnóstico para ver los detalles.',
+    "state.poll_unavailable": 'Consulta de batería no disponible',
+    "state.poll_stale": '{level}% (último valor; consulta de batería no disponible)',
+    "settings.open_failed": "No se pudo abrir Configuración. Las preferencias básicas siguen disponibles en {preferences} en el menú del icono de la bandeja.",
     "preferences.icon_style": "Estilo de iconos",
     "icon_style.outline": "Contorno",
     "icon_style.filled": "Relleno",
@@ -297,7 +306,8 @@ MESSAGES = {
     'settings.ring_thin': 'Fino',
     'settings.ring_classic': 'Clásico (más grueso)',
     "settings.iconify_title": "Catálogo de iconos de Iconify",
-    'settings.iconify_hint': 'Elige un icono de las colecciones compatibles. Las descargas de la galería se borran al cerrar Ajustes; los iconos aplicados siguen disponibles sin conexión.',
+    "settings.iconify_saved_unavailable": "No se pudo verificar un icono guardado. Se conserva tu selección, pero se muestra el icono predeterminado. Abre Ajustes > Dispositivos para elegirlo de nuevo o restablecer el predeterminado.",
+    "settings.iconify_hint": "La búsqueda descarga iconos de api.iconify.design. La caché de la galería se borra al cerrar Ajustes; los iconos aplicados funcionan sin conexión.",
     "settings.iconify_browse": "Explorar iconos",
     "settings.iconify_search": "Buscar iconos",
     "settings.iconify_search_button": "Buscar",

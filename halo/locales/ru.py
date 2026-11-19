@@ -1,6 +1,15 @@
 """Russian translations for the complete application and native settings UI."""
 
 MESSAGES = {
+    "provider.phone_link": "Связь с телефоном",
+    "icon.phone": "Телефон",
+    "state.phone_link_stale": "Данные «Связи с телефоном» устарели; откройте приложение, чтобы обновить их",
+    "state.phone_link_unavailable": "Данные о заряде из «Связи с телефоном» недоступны",
+    "state.phone_link_last_reported": "{level}% (последние данные «Связи с телефоном»)",
+    "startup.hid_unavailable": 'Windows не удалось загрузить HID-модуль. Уровни заряда по USB и 2,4 ГГц недоступны. Bluetooth и настройки продолжают работать. Подробности - в диагностике.',
+    "state.poll_unavailable": 'Не удалось обновить заряд',
+    "state.poll_stale": '{level}% (последнее показание; не удалось обновить заряд)',
+    "settings.open_failed": "Не удалось открыть настройки. Основные параметры доступны в пункте «{preferences}» меню значка в трее.",
     "preferences.icon_style": "Стиль значков",
     "icon_style.outline": "Контур",
     "icon_style.filled": "Заливка",
@@ -281,7 +290,8 @@ MESSAGES = {
     "settings.ring_thin": "Тонкое",
     "settings.ring_classic": "Классическое (толще)",
     "settings.iconify_title": "Каталог значков Iconify",
-    'settings.iconify_hint': 'Выберите иконку из доступных коллекций. Загрузки галереи удаляются при закрытии настроек; применённые иконки остаются доступны без интернета.',
+    "settings.iconify_saved_unavailable": "Не удалось проверить сохранённую иконку. Ваш выбор сохранён, но пока показана стандартная иконка. Откройте «Настройки > Устройства», чтобы выбрать её заново или вернуть стандартную.",
+    "settings.iconify_hint": "Поиск загружает иконки с api.iconify.design. Кэш галереи очищается при закрытии настроек; применённые иконки работают без интернета.",
     "settings.iconify_browse": "Выбрать значок",
     "settings.iconify_search": "Поиск значков",
     "settings.iconify_search_button": "Найти",
