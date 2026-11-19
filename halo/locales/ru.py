@@ -126,6 +126,7 @@ MESSAGES = {
     "provider.inphic": "Мыши Inphic / Attack Shark",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Гарнитуры Jabra (приёмник Link 380 / 390)",
+    "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Клавиатуры MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Клавиатуры MonsGeek",
