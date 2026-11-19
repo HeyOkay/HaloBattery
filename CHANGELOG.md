@@ -137,6 +137,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Recover wired Steam Controller support and keep identical puck devices separate,
   using one bounded passive listen window. Restore a current Simplified Chinese README.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
+- Limit installer cleanup to its exact executable paths and preserve portable data; verify update archives, pin process identity and report incomplete installation.
+- Keep update backups and staged files after an interrupted update or failed
+  rollback; verify a durable completed transaction before startup cleanup.
+- After an update made by 1.17.0 or earlier, remove exactly the two backups that
+  updater left (`HaloBattery.exe.old`, `_internal.old`) so the next in-app update
+  can install; setup also clears them and a stuck update record.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 
 - Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.

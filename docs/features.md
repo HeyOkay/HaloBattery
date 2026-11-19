@@ -160,6 +160,22 @@ back, while the ring fades, slides and scales through native Composition animati
 
 The app checks for a new release once a day (or at once with **Settings → General → Check for updates now**) and adds **Update to vX.Y.Z** to the menu when there is one. One click downloads it, checks it, closes the app, replaces the program files and starts the new version, which then shows what is new in a small window. Settings, the battery history and `portable.txt` are kept. From version 1.14.0 or older, or when the app sits in a folder it cannot write to (e.g. Program Files), update by hand: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.
 
+Before replacing files, the updater saves `.halobattery-update.json` beside the
+executable. Startup removes only that transaction’s `.old` backups after it
+verifies a completed install or complete rollback against the executable hash
+and an independent stage-local ownership receipt. The receipt binds the owning
+app, staging root, file inventory and transaction token; an edited path alone
+cannot authorize deletion. Cleanup keeps that receipt until other staged files
+are removed, so a locked file can be retried. If the receipt is lost after all
+backups were already removed, startup finishes the transaction without deleting
+the unowned staging remainder; inspect that remainder manually.
+Interrupted updates, failed restores and unreadable recovery records keep the
+backups and downloaded files, and block another in-app install. Exit the app
+before repairing or restoring those files by hand; keep the recovery record
+until recovery is complete. Old backups without a transaction record are also
+left in place for manual inspection. Saved Iconify artwork and native window
+settings are preserved during replacement.
+
 ## SmartScreen and antivirus warnings
 
 Windows SmartScreen may warn about an unrecognized app on first launch, because the file is not code-signed: **More info → Run anyway**. Some antivirus tools flag unsigned Python apps by mistake (usually a generic `!ml` detection). The release is built by GitHub Actions straight from this repository, with public build logs; if you would rather not trust it, run it from source (see below).
@@ -167,6 +183,16 @@ Windows SmartScreen may warn about an unrecognized app on first launch, because 
 ## Portable mode
 
 To keep the settings, the log and the battery history next to the app instead of in `%APPDATA%\HaloBattery` (for a USB stick or a folder you sync), create an empty file named `portable.txt` in the app's folder, next to `HaloBattery.exe` (or `halo_battery.pyw` when running from source), and restart the app. The folder must be writable: if it is not (e.g. inside `C:\Program Files`), the app keeps using `%APPDATA%\HaloBattery`. Settings are not moved over by themselves: copy `config.json` from `%APPDATA%\HaloBattery` to keep them. **Start with Windows** still adds an entry to the registry of the current user.
+
+Setup and uninstall close only the app and Settings from the selected install
+folder. Uninstall preserves settings, history, custom icons and other user files
+stored beside the executable. Deleting `%APPDATA%\HaloBattery` remains an
+explicit choice in interactive uninstall; silent uninstall keeps that data.
+Uninstall removes the installer’s recorded program files and `_internal`
+contents. An additional top-level program file introduced by an in-app update
+can remain if it was never recorded by Setup; the install folder is removed
+only when empty. Inspect such leftovers manually rather than deleting the
+folder recursively, which would also remove portable user data.
 
 ## Run from source
 

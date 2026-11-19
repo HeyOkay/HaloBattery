@@ -9,6 +9,7 @@ MESSAGES = {
     "startup.hid_unavailable": "Windows couldn't load HID support. Battery readings over USB and 2.4 GHz are unavailable. Bluetooth and Settings remain available. Open Diagnostics for details.",
     "state.poll_unavailable": 'Battery query unavailable',
     "state.poll_stale": '{level}% (last known; battery query unavailable)',
+    "notification.update_not_completed": "The update to v{target} did not finish. HaloBattery is still running v{version}. Try again or download the release manually.",
     "settings.open_failed": "Couldn't open Settings. Basic preferences are still available from {preferences} in the tray menu.",
     "preferences.icon_style": "Icon style",
     "icon_style.outline": "Outline",
