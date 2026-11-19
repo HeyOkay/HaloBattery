@@ -501,6 +501,10 @@ Full reports must contain at least 64 bytes on USB or 78 on Bluetooth.
 DualSense charge states `0`/`1` accept levels `0..10`; state `2` explicitly means
 full. Charging-error and reserved states are refused. DualShock 4 accepts ordinary
 levels `0..10` and cable-connected `11` as full, refusing reserved/error values.
+The pinned driver's comment (lines 2550–2557) defines no-cable bins only through
+`10`, while its implementation (2580–2588) saturates every value `>=10` to full.
+Halo deliberately refuses undocumented off-cable `11..15`; this stricter
+validation is not a claim that those codes were verified on hardware.
 No additional HID requests are introduced by these validation changes.
 
 USB endpoint keys no longer change when another controller is attached. USB and
@@ -508,8 +512,10 @@ Bluetooth are combined only when existing serial metadata supplies a unique,
 matching valid MAC for that PID. Empty, placeholder or cloned metadata does not
 prove a match; endpoints remain distinct. This may show two connections for one
 physical pad when USB lacks its MAC, but it cannot replace a different controller's
-battery. Legacy plain USB preferences/history migrate only for one unambiguous
-USB candidate. No new pairing feature report is sent to discover missing MACs.
+battery. Legacy plain preferences/history consider every USB endpoint and
+Bluetooth endpoints without a usable MAC; unique old USB serial/instance keys also migrate.
+Shared or conflicting metadata never selects an owner, and an alias cannot take
+over another live key. No new pairing feature report is sent to discover missing MACs.
 
 
 ### Sony DualSense (PS5)

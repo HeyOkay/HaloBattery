@@ -105,7 +105,10 @@ def parse_ds4(byte: int) -> Optional[Tuple[int, bool]]:
         return raw * 10, charging
     if charging and raw == 11:       # documented full code, only with the cable
         return 100, True
-    # Cable codes 14/15 are charging faults; 12/13 and wireless >10 undefined.
+    # The pinned driver documents no-cable bins only through 10 (2550-2557),
+    # although its no-cable implementation saturates every value >=10 (2580-2588).
+    # Deliberately refuse undocumented wireless 11..15 rather than invent full.
+    # Cable codes 14/15 are charging faults; 12/13 are undefined.
     return None
 
 
@@ -328,18 +331,20 @@ class PlayStationProvider(Provider):
             conns.append({"pid": pid, "name": name, "bluetooth": bluetooth,
                           "mac": serial if bluetooth and _mac(serial) else "", "reading": res,
                           "basic": basic, "usb": "" if bluetooth else ident,
-                          "identity": ident, "serial": serial})
+                          "identity": ident, "serial": serial,
+                          "legacy_serials": serials or ({""} if bluetooth else {"usb-" + _instance(ifaces[0]["path"])})})
 
         devs = self._merge(conns)
         # USB keys always include their endpoint identity. Adding/removing
         # another pad cannot rename a surviving pad or move its preferences.
         out: List[DeviceStatus] = []
-        usb_results = {}
+        connection_results = {}
         for dev in devs:
             ident = dev["mac"] or dev["identity"]
             key = f"ps:{dev['pid']:04x}:{ident}"
+            connection_results[(dev["pid"], dev["bluetooth"], dev["identity"])] = key
             if dev["usb"]:
-                usb_results[dev["usb"]] = key
+                connection_results[(dev["pid"], False, dev["usb"])] = key
             res = dev["reading"]
             if res is None and dev.get("basic"):
                 # Bluetooth, basic mode, not switched on purpose: this is the normal state,
@@ -387,15 +392,26 @@ class PlayStationProvider(Provider):
         for key in [k for k in self._pending_since if k not in present]:
             del self._pending_since[key]
         self._gave_up &= present
-        usb_by_pid = {}
+        # Older keys could be plain for either transport without a usable MAC,
+        # or carry a USB serial/instance when multiple pads were present. Build
+        # proof across ALL endpoints, including unreadable ones. A merged pair
+        # counts as one target only because _merge proved its unique MAC match.
+        legacy_targets = {}
+        conflicting = set()
         for connection in conns:
-            if not connection["bluetooth"]:
-                usb_by_pid.setdefault(connection["pid"], []).append(connection)
-        for pid, candidates in usb_by_pid.items():
-            if len(candidates) == 1:
-                target = usb_results.get(candidates[0]["usb"])
-                if target:
-                    self._aliases[f"ps:{pid:04x}:"] = target
+            prefix = f"ps:{connection['pid']:04x}:"
+            target = connection_results[(connection["pid"], connection["bluetooth"], connection["identity"])]
+            if not connection["bluetooth"] or not _mac(connection["serial"]):
+                legacy_targets.setdefault(prefix, set()).add(target)
+            serials = connection["legacy_serials"]
+            for serial in serials:
+                if serial:
+                    old = prefix + serial
+                    legacy_targets.setdefault(old, set()).add(target)
+                    if len(serials) > 1:
+                        conflicting.add(old)
+        self._aliases = {old: next(iter(targets)) for old, targets in legacy_targets.items()
+                         if len(targets) == 1 and old not in conflicting and old not in present}
         return out
 
     def _merge(self, conns: List[dict]) -> List[dict]:
@@ -439,7 +455,7 @@ class PlayStationProvider(Provider):
         return out
 
     def legacy_key_aliases(self) -> dict[str, str]:
-        """Pure cached migration proof from the latest unambiguous USB poll."""
+        """Pure cached migration proof across the latest USB and Bluetooth poll."""
         return dict(self._aliases)
 
     @staticmethod

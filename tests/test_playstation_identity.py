@@ -34,7 +34,9 @@ class PlayStationIdentityTests(unittest.TestCase):
                            {BT_PATH: FakePad("full", status=0x02), USB_PATH: usb_pad(0x17)})
         self.assertEqual([(v.key, v.level, v.charging) for v in values],
                          [("ps:0ce6:" + bt_serial, 70, True)])
-        self.assertEqual(self.provider.legacy_key_aliases(), {"ps:0ce6:": "ps:0ce6:" + bt_serial})
+        self.assertEqual(self.provider.legacy_key_aliases(),
+                         {"ps:0ce6:": "ps:0ce6:" + bt_serial,
+                          "ps:0ce6:a0:ab:51:12:34:56": "ps:0ce6:" + bt_serial})
 
     def test_equal_usb_and_bt_serials_still_read_both_transport_reports(self):
         bt = FakePad("full", status=0x02)
@@ -118,7 +120,7 @@ class PlayStationIdentityTests(unittest.TestCase):
         moved = self.poll([entry(USB_PATH_2, mac="")], {USB_PATH_2: usb_pad(0x08)})[0].key
         self.assertNotEqual(old, moved)
 
-    def test_legacy_alias_is_only_the_sole_usb_candidate_and_is_cached(self):
+    def test_legacy_alias_is_only_the_sole_candidate_and_is_cached(self):
         pad = usb_pad(0x08)
         value = self.poll([entry(USB_PATH, mac="")], {USB_PATH: pad})[0]
         clock, features = self.clock.now, list(pad.features)
@@ -154,6 +156,55 @@ class PlayStationIdentityTests(unittest.TestCase):
         values = self.poll([entry(BT_PATH), entry(USB_PATH, mac="102030405060")],
                            {BT_PATH: FakePad("full", status=0x05), USB_PATH: usb_pad(0x05)})
         self.assertEqual(len(values), 2)
+
+    def test_sole_bluetooth_without_mac_migrates_plain_key(self):
+        for serial in ("", "dummy", "000000000000"):
+            with self.subTest(serial=serial):
+                value = self.poll([entry(BT_PATH, mac=serial)], {BT_PATH: FakePad("basic")})[0]
+                self.assertEqual(self.provider.legacy_key_aliases()["ps:0ce6:"], value.key)
+                if serial:
+                    self.assertEqual(self.provider.legacy_key_aliases()["ps:0ce6:" + serial], value.key)
+
+    def test_no_mac_bluetooth_and_usb_never_move_plain_key_to_usb(self):
+        for serial in ("", "dummy"):
+            for reverse in (False, True):
+                descriptors = [entry(BT_PATH, mac=serial), entry(USB_PATH, mac="")]
+                if reverse:
+                    descriptors.reverse()
+                values = self.poll(descriptors, {BT_PATH: FakePad("basic"), USB_PATH: usb_pad(0x08)})
+                self.assertEqual(len(values), 2)
+                self.assertNotIn("ps:0ce6:", self.provider.legacy_key_aliases())
+
+    def test_unique_legacy_usb_serials_migrate_to_their_own_endpoint(self):
+        descriptors = [entry(USB_PATH, mac="pad-one"), entry(USB_PATH_2, mac="pad-two")]
+        for ordering in (descriptors, list(reversed(descriptors))):
+            values = self.poll(ordering, {USB_PATH: usb_pad(0x08), USB_PATH_2: usb_pad(0x03)})
+            keys = {value.level: value.key for value in values}
+            self.assertEqual(self.provider.legacy_key_aliases(),
+                             {"ps:0ce6:pad-one": keys[80], "ps:0ce6:pad-two": keys[30]})
+
+    def test_conflicting_collection_serial_cannot_migrate_a_shared_legacy_key(self):
+        other_collection = USB_PATH.replace(b"&0&0000#", b"&0&0001#")
+        self.poll([entry(USB_PATH, mac="pad-one"), entry(other_collection, mac="pad-two"),
+                   entry(USB_PATH_2, mac="pad-two")],
+                  {USB_PATH: usb_pad(0x08), other_collection: usb_pad(0x08), USB_PATH_2: usb_pad(0x03)})
+        self.assertNotIn("ps:0ce6:pad-one", self.provider.legacy_key_aliases())
+        self.assertNotIn("ps:0ce6:pad-two", self.provider.legacy_key_aliases())
+
+    def test_shared_usb_bt_placeholder_serial_does_not_prove_legacy_owner(self):
+        self.poll([entry(BT_PATH, mac="dummy"), entry(USB_PATH, mac="dummy")],
+                  {BT_PATH: FakePad("basic"), USB_PATH: usb_pad(0x08)})
+        self.assertEqual(self.provider.legacy_key_aliases(), {})
+
+    def test_unreadable_bluetooth_still_blocks_plain_usb_alias(self):
+        self.poll([entry(BT_PATH, mac=""), entry(USB_PATH, mac="")],
+                  {USB_PATH: usb_pad(0x08)})
+        self.assertNotIn("ps:0ce6:", self.provider.legacy_key_aliases())
+
+    def test_legacy_serial_cannot_take_over_another_live_endpoint_key(self):
+        self.poll([entry(USB_PATH, mac="usb-8&5678ef01&0"), entry(USB_PATH_2, mac="")],
+                  {USB_PATH: usb_pad(0x08), USB_PATH_2: usb_pad(0x03)})
+        self.assertNotIn("ps:0ce6:usb-8&5678ef01&0", self.provider.legacy_key_aliases())
 
 
 if __name__ == "__main__":

@@ -63,6 +63,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Preserve unambiguous legacy PlayStation names, icons and history across USB
+  and Bluetooth, including unique USB serial keys; refuse ambiguous migrations.
 - Refuse the captured GameSir Nova 2 Lite full-capacity placeholder instead of
   showing a false 100%, while retaining real full readings on other controllers.
 - Refuse malformed Windows controller capacities before percentage conversion;
