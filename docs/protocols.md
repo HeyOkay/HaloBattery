@@ -379,6 +379,25 @@ same receiver ships with other Sonix boards (other GANSS T-series models, the
 ATTACKSHARK X66), so only a receiver whose product string contains "GS3075T"
 (the reporter's says "GS3075T 2.4G") is asked.
 
+### Darmoshark N5
+
+**Connection:** 2.4 GHz receiver (`1915:0723`, "1K NRF Receiver") or USB cable (`1915:073c`)
+
+The non-numbered 64-byte output/input pair on `ff0a:0001`. The power query is
+`41 00 81 01` followed by zeroes (the `0x40` bit marks the receiver; the wired
+mouse uses `01`), with the last byte completing the report's sum to `0xA1`.
+The reply is matched by operation `0x01` and sub-command `0x01`; the legacy
+layout carries the percentage at byte 6, and the `15 19` pair at bytes 6-7 marks
+the v2 layout with the percentage at byte 11. Only 0-100 is accepted. The
+charging-state byte is not decoded, so the app shows no charging ring rather
+than guessing.
+
+Protocol and offsets from [OpenLogi's Darmoshark driver](https://github.com/ayasaki-exs/OpenLogi/tree/feat/darmoshark-driver)
+and [ayasaki-exs/darmoshark-battery](https://github.com/ayasaki-exs/darmoshark-battery);
+the receiver and its docs were supplied by the [#430](https://github.com/HeyOkay/HaloBattery/issues/430)
+reporter. **Confirmed on hardware** in #430: the receiver's power reply read
+**63%**, matching the mouse. Charging is not decoded.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)

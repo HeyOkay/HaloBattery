@@ -85,6 +85,7 @@ MESSAGES = {
     "provider.blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
     "provider.corsair": "Corsair 耳機",
     "provider.dji": "DJI Mic Mini 2",
+    "provider.darmoshark": "Darmoshark N5",
     "provider.gwolves": "G-Wolves 滑鼠",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.gs3075t": "GANSS GS3075T 鍵盤",
