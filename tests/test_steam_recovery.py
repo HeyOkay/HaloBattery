@@ -198,3 +198,15 @@ class SteamRecoveryTests(unittest.TestCase):
         current = self.poll([changed], {changed["path"]: Device(self, [CHARGED])})[0]
         self.assertEqual(current.key, first.key)
         self.assertEqual((current.level, current.charging), (100, True))
+
+    def test_slot_capacity_bounds_cache_to_selected_endpoints(self):
+        entries = [endpoint(f"puck-{i}") for i in range(17)]
+        devices = {item["path"]: Device(self, [AWAKE]) for item in entries}
+        all_keys = {f"steam:1304:2:path-{steam.SteamProvider._endpoint(item['path'])}" for item in entries}
+        # Simulate last readings retained before a deterministic selection change.
+        self.provider._last = dict.fromkeys(all_keys, (95, False))
+        values = self.poll(list(reversed(entries)), devices)
+        self.assertEqual(len(values), 16)
+        self.assertEqual(set(self.provider._last), {value.key for value in values})
+        self.assertEqual(sum(device.reads > 0 for device in devices.values()), 16)
+        self.assertEqual(self.provider.legacy_key_aliases(), {})

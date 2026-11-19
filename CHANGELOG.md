@@ -63,6 +63,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Bound Steam's retained readings to the same 16 endpoints selected for polling.
 - Restore the original Rapoo VT9 Pro receiver's passive battery reports, keeping
   them separate from newer Rapoo formats and accepting Windows zero padding.
 - Recover wired Steam Controller support and keep identical puck devices separate,

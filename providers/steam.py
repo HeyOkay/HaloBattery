@@ -135,6 +135,9 @@ class SteamProvider(Provider):
         self._diag: List[str] = []
         self._last: Dict[str, Tuple[int, bool]] = {}   # key -> level, charging
         self._legacy_aliases = {}
+        # Lifetime retirement is intentional: once two endpoints claim an old
+        # slot key, removing one does not prove which owned its saved settings.
+        # Never guess that ownership later in this provider's run.
         self._ambiguous_legacy = set()
 
     def legacy_key_aliases(self):
@@ -344,9 +347,9 @@ class SteamProvider(Provider):
                                         kind="gamepad", via=via))
             else:
                 self._diag.append("    nothing in the window (no controller in this slot)")
-        current = {key for pid, iface, path, how, key in eligible}
+        current = {key for pid, iface, path, how, key in slots}
         for key in list(self._last):
-            if key not in current:       # the puck left: nothing is kept for it
+            if key not in current:       # gone or outside this poll's bounded selection
                 self._last.pop(key, None)
         return out
 
