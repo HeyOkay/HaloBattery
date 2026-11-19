@@ -77,6 +77,17 @@ INFO = [
 CABLE_INFO = [
     {"path": b"cable-ff90", "interface_number": 0, "usage_page": 0xFF90, "usage": 1,
      "product_id": B.PID_CABLE, "product_string": "BlackShark V3 X USB"},
+    {"path": b"cable-ff82", "interface_number": 0, "usage_page": 0xFF82, "usage": 1,
+     "product_id": B.PID_CABLE, "product_string": "BlackShark V3 X USB"},
+]
+
+# The non-vendor pages both identities also publish (#280 diagnostics).
+OTHER_PAGES = [
+    {"path": b"%s-%04x" % (tag, page), "interface_number": 0, "usage_page": page,
+     "usage": 1, "product_id": pid, "product_string": name}
+    for tag, pid, name in ((b"rx", B.PID_RECEIVER, "BlackShark V3 X"),
+                           (b"cable", B.PID_CABLE, "BlackShark V3 X USB"))
+    for page in (0x000C, 0x000B)
 ]
 
 
@@ -143,6 +154,37 @@ class ProtocolTests(unittest.TestCase):
     def test_razer_standard_path_does_not_claim_the_v3x(self):
         self.assertFalse(R.maybe_wireless(B.PID, "BlackShark V3 X"))
 
+    def test_razer_standard_path_does_not_claim_the_057c_cable(self):
+        self.assertFalse(R.maybe_wireless(B.PID_CABLE, "BlackShark V3 X USB"))
+
+
+class RazerReaderTests(unittest.TestCase):
+    """The general Razer reader must leave both V3 X identities alone (#280)."""
+
+    def setUp(self):
+        self._saved = (R.hid, R.hidlist)
+
+    def tearDown(self):
+        R.hid, R.hidlist = self._saved
+
+    def test_the_057c_cable_and_057d_receiver_are_not_polled_by_the_razer_reader(self):
+        opened = []
+
+        class Untouchable:
+            def open_path(self, path):
+                opened.append(path)
+                raise AssertionError("the Razer reader opened a V3 X collection")
+
+        infos = [dict(d, serial_number="") for d in CABLE_INFO + INFO + OTHER_PAGES]
+        R.hid = type("HID", (), {"device": Untouchable})
+        R.hidlist = type("HL", (), {"enumerate": staticmethod(lambda vid=0: list(infos))})
+        provider = R.RazerProvider()
+        self.assertEqual([], provider.poll())
+        self.assertEqual([], opened)
+        diag = "\n".join(provider.diagnostics())
+        self.assertIn("pid=057c", diag)
+        self.assertIn("pid=057d", diag)
+
 
 class PollTests(unittest.TestCase):
     def setUp(self):
@@ -164,7 +206,7 @@ class PollTests(unittest.TestCase):
                           for s in out],
                          [("blackshark_v3x:057d", "Razer BlackShark V3 X HyperSpeed",
                            77, True, "headset", False)])
-        self.assertEqual([b"ff90"], dev.opened)
+        self.assertEqual([b"ff82"], dev.opened)
         self.assertEqual(bytes(B.make_query()), dev.sent[0])
         self.assertTrue(dev.closed)
 
@@ -181,25 +223,45 @@ class PollTests(unittest.TestCase):
                          [("blackshark_v3x:057d",
                            "Razer BlackShark V3 X HyperSpeed (USB cable)",
                            88, True, True)])
-        self.assertEqual([b"cable-ff90"], dev.opened)
+        self.assertEqual([b"cable-ff82"], dev.opened)
         self.assertEqual([s[8] for s in dev.sent], [B.CMD_BATTERY, B.CMD_CHARGING])
 
     def test_the_cable_is_tried_before_the_receiver(self):
         out, dev = self.poll([reply(66)], infos=CABLE_INFO + INFO)
         self.assertEqual([(s.name, s.level) for s in out],
                          [("Razer BlackShark V3 X HyperSpeed (USB cable)", 66)])
-        self.assertEqual([b"cable-ff90"], dev.opened)
+        self.assertEqual([b"cable-ff82"], dev.opened)
 
     def test_an_unknown_charge_state_keeps_the_level(self):
         out, _dev = self.poll([reply(77), charge_reply(2)])
         self.assertEqual((out[0].level, out[0].charging, out[0].charging_known),
                          (77, False, False))
 
-    def test_a_refusing_page_falls_through_to_the_next(self):
-        out, dev = self.poll([[], [], [], [], reply(64)])
-        # the first path returns no reply on all four reads, second answers
+    def test_a_silent_cable_falls_through_to_the_receiver(self):
+        out, dev = self.poll([[], [], [], [], reply(64)], infos=CABLE_INFO + INFO)
+        # the cable's ff82 returns no reply on all four reads, the receiver's answers
         self.assertEqual([s.level for s in out], [64])
-        self.assertEqual([b"ff90", b"ff82"], dev.opened)
+        self.assertEqual([b"cable-ff82", b"ff82"], dev.opened)
+
+    def test_only_iface0_ff82_is_written(self):
+        # ff90 refused every write in #280; the consumer/telephony pages were never
+        # shown to answer. With the headset off, only the two ff82 collections get
+        # the battery query, once each.
+        out, dev = self.poll([], infos=CABLE_INFO + INFO + OTHER_PAGES)
+        self.assertEqual([(s.level, s.online) for s in out], [(None, False)])
+        self.assertEqual([b"cable-ff82", b"ff82"], dev.opened)
+        self.assertEqual([B.CMD_BATTERY, B.CMD_BATTERY], [s[8] for s in dev.sent])
+
+    def test_no_ff82_collection_means_nothing_is_sent(self):
+        out, dev = self.poll([reply(50)], infos=[INFO[0]] + OTHER_PAGES)
+        self.assertEqual([(s.level, s.online) for s in out], [(None, False)])
+        self.assertEqual([], dev.opened)
+        self.assertEqual([], dev.sent)
+
+    def test_ff82_on_another_interface_is_not_written(self):
+        moved = [dict(INFO[1], interface_number=1)]
+        _out, dev = self.poll([reply(50)], infos=moved)
+        self.assertEqual([], dev.sent)
 
     def test_no_reply_keeps_the_icon_without_a_level(self):
         out, _dev = self.poll([])

@@ -23,9 +23,13 @@ The reply keeps the same fields; byte 10 is the percentage (0..100).
 Charging is class 0x07, command 0x84, two zero arguments; its reply carries
 one argument at byte 10, where 0 means on battery and 1 means charging.
 
-The repository opens the first interface that accepts the feature report; a
-receiver may expose several vendor pages, so all of them are tried here.  No
-configuration, firmware or lighting command is ever sent.
+The reference opens the first interface that accepts the feature report.  Both
+identities expose four collections on interface 0 (`000c`, `000b`, `ff90`,
+`ff82`); in the #280 diagnostics `ff90:0001` refused the feature write on every
+poll and only `ff82:0001` answered, on the receiver (test build 2) and on the
+cable (test build 5).  So the queries go to interface 0 `ff82:0001` only; the
+other collections, including the non-vendor consumer and telephony pages, get
+nothing.  No configuration, firmware or lighting command is ever sent.
 """
 from __future__ import annotations
 
@@ -60,6 +64,9 @@ STATUS_OK = 0x02
 MAX_ARGUMENTS = 52
 SETTLE_S = 0.05          # the reference waits 50 ms after SET before GET
 REPLY_TRIES = 4
+# The one collection shown to answer on both ids (#280 test builds 2 and 5).
+INTERFACE = 0
+USAGE_PAGE, USAGE = 0xFF82, 0x0001
 
 
 def checksum(frame) -> int:
@@ -117,17 +124,18 @@ def parse_reply(data, command: int = CMD_BATTERY) -> Optional[int]:
     return None
 
 
+def is_command_collection(d: dict) -> bool:
+    return (d.get("interface_number") == INTERFACE
+            and d.get("usage_page") == USAGE_PAGE
+            and d.get("usage") == USAGE)
+
+
 def candidates(infos: List[dict]) -> List[dict]:
-    """The command collection(s), cable first, then receiver, vendor pages first."""
-    mine = [d for d in infos if d.get("product_id") in PIDS]
+    """The proven command collection (iface 0, ff82:0001): cable first, then receiver."""
+    mine = [d for d in infos if d.get("product_id") in PIDS and is_command_collection(d)]
     cable = [d for d in mine if d.get("product_id") == PID_CABLE]
     receiver = [d for d in mine if d.get("product_id") == PID_RECEIVER]
-    result = []
-    for group in (cable, receiver):
-        vendor = [d for d in group if (d.get("usage_page") or 0) >= 0xFF00]
-        other = [d for d in group if d not in vendor]
-        result.extend(vendor + other)
-    return result
+    return cable + receiver
 
 
 class BlackSharkV3XProvider(Provider):
@@ -195,6 +203,9 @@ class BlackSharkV3XProvider(Provider):
             if any(d.get("product_id") == pid for d in present):
                 label = NAME + (" (USB cable)" if pid == PID_CABLE else "")
                 self._diag.append(f"[BlackShark V3 X] pid={pid:04x} '{label}'")
+        if not candidates(infos):
+            self._diag.append(f"  no iface={INTERFACE} {USAGE_PAGE:04x}:{USAGE:04x} "
+                              "collection; nothing sent")
         for d in candidates(infos):
             self._diag.append(f"  trying iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")

@@ -732,8 +732,11 @@ captures by everyoneexe/blackshark-linux (`PROTOCOL.md`,
 are 64-byte feature reports with report id `0x07`; the battery is a read-only
 GET, class `0x07`, command `0x80`, with the level in byte 10 and a CRC of XOR
 bytes 3..60 in byte 62. The PC receiver (`057D`) and the cable (`057C`) publish
-the same vendor pages (`ff90`, `ff82`); the cable is tried first and the two
-identities share one icon.
+the same collections on interface 0 (`000c`, `000b`, `ff90`, `ff82`). In the
+#280 diagnostics `ff90:0001` refused the feature write and only `ff82:0001`
+answered, on both ids, so only interface 0 `ff82:0001` is written; the cable is
+tried first and the two identities share one icon. The general Razer reader
+skips both ids.
 
 **Confirmed on hardware** in [#280](https://github.com/HeyOkay/HaloBattery/issues/280)
 with test build 2: the reporter saw a live level (49%). The charging state is
