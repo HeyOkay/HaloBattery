@@ -55,6 +55,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the BlackShark V3's `0x02` frames; **confirmed on hardware** in #280 for the
   level and charging, with the cable identity `057C` added in test build 4 and
   the charging flag at byte 10 fixed in test build 5.
+- **ASUS ROG Azoth X** (`1c25` in the OMNI receiver's pair list): the same
+  keyboard `02 12 01` read and byte-6 level as the other OMNI keyboards;
+  confirmed on the reporter's keyboard in #269.
+- **ASUS ROG Raikiri II** (`0b05:1c92`): the vendor query `B0 12 04` on
+  `ff03:0001`, level byte 5 and charging byte 10, paired to the controller's
+  one XInput slot so the generic Xbox icon is replaced rather than duplicated
+  (#269). Confirmed on the reporter's hardware: 70% wireless, 69% with the
+  charging ring on the cable; test build 2 uses output/input reports.
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
