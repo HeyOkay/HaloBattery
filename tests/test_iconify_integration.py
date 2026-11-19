@@ -201,6 +201,24 @@ class CustomSelectionTests(HideRenameTestCase):
         model._catalog.load.return_value=None; model.load_custom_icons()
         self.assertEqual(len(app.icon_render_state(dev())),13)
 
+    def test_startup_upgrade_requests_local_sources_only_and_runs_once(self):
+        app, model, asset = self.setup_model()
+        key = dev().key
+        app.stop_evt = threading.Event()
+        app.cfg["custom_icons"] = {key: asset.id}
+        app._custom_assets = {asset.id: asset}
+        model._catalog.needs_upgrade.return_value = True
+        model._catalog.prepare.return_value = asset
+        with patch.object(model, "adopt_custom_icon_upgrade") as adopt, \
+                patch("halo.settings_model.threading.Thread") as worker:
+            worker.return_value.start.side_effect = lambda: worker.call_args.kwargs["target"]()
+            model.schedule_custom_icon_upgrade()
+            model.schedule_custom_icon_upgrade()
+            worker.assert_called_once()
+        model._catalog.prepare.assert_called_once_with(asset.icon_id, cancel=app.stop_evt, offline=True)
+        adopt.assert_called_once_with(asset, expected={key: (asset.id, 0)})
+        self.assertEqual(app.cfg["custom_icons"], {key: asset.id})
+
     def test_custom_config_values_require_safe_asset_hashes(self):
         self.assertTrue(hb._valid_setting("custom_icons",{"mouse":"a"*64}))
         for value in ([], True, "foo", {"mouse":"../../x"}, {"mouse":True}, {1:"a"*64}, {"mouse":"A"*64}):

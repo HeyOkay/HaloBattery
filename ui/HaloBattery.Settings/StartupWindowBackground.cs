@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace HaloBattery.Settings;
 
 /// <summary>Prepare the native window before exposing its first XAML frame.</summary>
-internal sealed class StartupWindowBackground : IDisposable
+internal sealed partial class StartupWindowBackground : IDisposable
 {
     private const uint EraseBackground=0x0014,NonClientDestroy=0x0082;
     private const nuint SubclassId=0x48425350;
@@ -40,7 +40,9 @@ internal sealed class StartupWindowBackground : IDisposable
         Cloaked=false;
     }
 
+#if HALO_BATTERY_VERIFICATION
     internal static bool IsAppCloaked(nint hwnd)=>DwmGetWindowAttribute(hwnd,14,out var flags,sizeof(int))>=0 && (flags&1)!=0;
+#endif
 
     internal void UpdateTheme(bool dark)
     {
@@ -62,6 +64,7 @@ internal sealed class StartupWindowBackground : IDisposable
         return DefSubclassProc(hwnd,message,wParam,lParam);
     }
 
+#if HALO_BATTERY_VERIFICATION
     // A fixture-only offscreen DC verifies the actual HWND callback's paint color,
     // independently of XAML brushes. It never samples the user's desktop.
     internal uint VerifyPaintColor()
@@ -87,6 +90,8 @@ internal sealed class StartupWindowBackground : IDisposable
         }
     }
 
+#endif
+
     public void Dispose()
     {
         if(window!=0){RemoveWindowSubclass(window,callback,SubclassId);window=0;}
@@ -103,14 +108,18 @@ internal sealed class StartupWindowBackground : IDisposable
     [DllImport("comctl32.dll")]private static extern nint DefSubclassProc(nint hwnd,uint message,nint wParam,nint lParam);
     [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]private static extern bool GetClientRect(nint hwnd,out NativeRect bounds);
     [DllImport("user32.dll")]private static extern int FillRect(nint dc,ref NativeRect bounds,nint brush);
-    [DllImport("user32.dll",ExactSpelling=true)]private static extern nint SendMessageW(nint hwnd,uint message,nint wParam,nint lParam);
     [DllImport("gdi32.dll",SetLastError=true)]private static extern nint CreateSolidBrush(uint color);
     [DllImport("gdi32.dll")] [return:MarshalAs(UnmanagedType.Bool)]private static extern bool DeleteObject(nint handle);
+#if HALO_BATTERY_VERIFICATION
+    [DllImport("user32.dll",ExactSpelling=true)]private static extern nint SendMessageW(nint hwnd,uint message,nint wParam,nint lParam);
     [DllImport("gdi32.dll",SetLastError=true)]private static extern nint CreateCompatibleDC(nint dc);
     [DllImport("gdi32.dll",SetLastError=true)]private static extern nint CreateBitmap(int width,int height,uint planes,uint bitsPerPixel,nint bits);
     [DllImport("gdi32.dll",SetLastError=true)]private static extern nint SelectObject(nint dc,nint bitmap);
     [DllImport("gdi32.dll")]private static extern uint GetPixel(nint dc,int x,int y);
     [DllImport("gdi32.dll")] [return:MarshalAs(UnmanagedType.Bool)]private static extern bool DeleteDC(nint dc);
+#endif
     [DllImport("dwmapi.dll")]private static extern int DwmSetWindowAttribute(nint hwnd,uint attribute,ref int value,int size);
+#if HALO_BATTERY_VERIFICATION
     [DllImport("dwmapi.dll")]private static extern int DwmGetWindowAttribute(nint hwnd,uint attribute,out int value,int size);
+#endif
 }

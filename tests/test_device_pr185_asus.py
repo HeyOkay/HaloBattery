@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: G-Helper app/Peripherals/Mouse/AsusMouse.cs; OMNI pair-list and mouse/keyboard commands.
+# Keep protocol selectors independent of the provider constants under test.
 import os
 import sys
 import types
@@ -37,7 +40,7 @@ class FakeMouse:
 
     def on_write(self, data):
         self.writes.append(list(data))
-        if list(data[:3]) != A.REQUEST or len(self.writes) < self.answer_on:
+        if list(data[:3]) != [0x00, 0x12, 0x07] or len(self.writes) < self.answer_on:
             return
         if self.mode == "answer":
             self.queue.append(reply(self.level, self.charging, self.report_id))
@@ -179,9 +182,9 @@ def omni_bus(entries, pairs=OMNI_PAIRS_REPLY, mouse=OMNI_MOUSE_REPLY,
              keyboard=OMNI_KEYBOARD_REPLY):
     by_page = {d["usage_page"]: d["path"] for d in entries if d["interface_number"] == 2}
     return {
-        by_page[0xFF02]: FakeCollection(A.OMNI_PAIRS, pairs),
-        by_page[0xFF01]: FakeCollection(A.OMNI_MOUSE_REQUEST, mouse),
-        by_page[0xFF00]: FakeCollection(A.OMNI_KEYBOARD_REQUEST, keyboard),
+        by_page[0xFF02]: FakeCollection([0x01, 0xA0, 0x00, 0x00], pairs),
+        by_page[0xFF01]: FakeCollection([0x03, 0x12, 0x07], mouse),
+        by_page[0xFF00]: FakeCollection([0x02, 0x12, 0x01], keyboard),
         [d["path"] for d in entries if d["interface_number"] == 0][0]: FakeCollection([0, 0, 0]),
     }
 
@@ -228,7 +231,7 @@ class OmniPollTest(ProviderTest):
         ])
         writes = {c.request[0]: c.writes for c in bus.values() if c.writes}
         self.assertEqual(sorted(writes), [0x01, 0x02, 0x03])
-        for request in (A.OMNI_PAIRS, A.OMNI_MOUSE_REQUEST, A.OMNI_KEYBOARD_REQUEST):
+        for request in ([0x01, 0xA0, 0x00, 0x00], [0x03, 0x12, 0x07], [0x02, 0x12, 0x01]):
             w = writes[request[0]]
             self.assertEqual(len(w), 1)
             self.assertEqual(len(w[0]), 64)
@@ -312,6 +315,101 @@ class OmniPollTest(ProviderTest):
             self.assertTrue(name.startswith("ROG "), hex(pid))
         for pid, (name, byte) in A.OMNI_KEYBOARDS.items():
             self.assertIn(byte, (6, 11), hex(pid))
+
+
+def speednova_entries(instance="7&1111111&0"):
+    return [dict(d, product_id=0x1AD0, path=d["path"].replace(b"pid_1ace", b"pid_1ad0"),
+                 product_string="ROG SPEEDNOVA 8K RECEIVER") for d in omni_entries(instance)]
+
+
+# #238's reporter diagnostics, independently of the provider's model table.
+SPEEDNOVA_PAIRS_REPLY = [0x01, 0xA0, 0x00, 0x01, 0x00, 0x12, 0x1C, 0x02, 0x04] + [0] * 55
+SPEEDNOVA_KEYBOARD_REPLY = [0x02, 0x12, 0x01, 0x00, 0x00, 0x00, 0x24, 0x02,
+                          0x01, 0x00, 0x14, 0x24] + [0] * 52
+
+
+class SpeedNovaPollTest(ProviderTest):
+    def test_the_confirmed_keyboard_gets_only_its_documented_queries(self):
+        for charging in (0, 1):
+            with self.subTest(charging=charging):
+                entries = speednova_entries()
+                keyboard_reply = list(SPEEDNOVA_KEYBOARD_REPLY)
+                keyboard_reply[9] = charging
+                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY, keyboard=keyboard_reply)
+                res = self.poll(entries, bus)
+                self.assertEqual([(r.name, r.level, r.charging, r.kind) for r in res],
+                                 [("ROG Azoth 96 HE", 36, bool(charging), "keyboard")])
+                self.assertEqual(bus[entries[1]["path"]].writes,
+                                 [[0x01, 0xA0, 0x00, 0x00] + [0] * 60])
+                self.assertEqual(bus[entries[2]["path"]].writes,
+                                 [[0x02, 0x12, 0x01] + [0] * 61])
+                self.assertEqual(bus[entries[3]["path"]].opened, 0)
+                self.assertEqual(bus[entries[3]["path"]].writes, [])
+                self.assertEqual(bus[entries[0]["path"]].opened, 0)
+
+    def test_unknown_pairings_never_authorize_a_mouse_or_keyboard_query(self):
+        # Neither a plausible cable PID nor an explicit product name identifies
+        # the paired Harpe model on this shared receiver.
+        for paired, product in ((0x1234, "ROG SPEEDNOVA 8K RECEIVER"),
+                                (0x1C69, "ROG HARPE II ACE"),
+                                (0x1234, "ROG HARPE II EXTREME")):
+            with self.subTest(paired=paired, product=product):
+                entries = [dict(d, product_string=product) for d in speednova_entries()]
+                pairs = [0x01, 0xA0, 0, 1, 0, paired & 0xFF, paired >> 8, 3, 5] + [0] * 55
+                bus = omni_bus(entries, pairs=pairs)
+                self.assertEqual(self.poll(entries, bus), [])
+                self.assertEqual(bus[entries[2]["path"]].opened, 0)
+                self.assertEqual(bus[entries[3]["path"]].opened, 0)
+                self.assertEqual(bus[entries[3]["path"]].writes, [])
+
+    def test_the_pair_list_requires_the_recorded_identity_and_collection(self):
+        for changes in ({"interface_number": 3}, {"usage_page": 0xFF03},
+                        {"usage": 2}, {"usage": None}, {"product_id": 0x1ACF}):
+            with self.subTest(changes=changes):
+                entries = speednova_entries()
+                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY)
+                entries[1] = dict(entries[1], **changes)
+                self.assertEqual(self.poll(entries, bus), [])
+                self.assertEqual(sum(c.opened for c in bus.values()), 0)
+                self.assertEqual(sum(len(c.writes) for c in bus.values()), 0)
+
+    def test_the_keyboard_requires_the_recorded_collection(self):
+        for changes in ({"interface_number": 3}, {"usage_page": 0xFF03},
+                        {"usage": 2}, {"usage": None}, {"product_id": 0x1ACF}):
+            with self.subTest(changes=changes):
+                entries = speednova_entries()
+                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY)
+                entries[2] = dict(entries[2], **changes)
+                self.assertEqual(self.poll(entries, bus), [])
+                self.assertEqual(bus[entries[2]["path"]].opened, 0)
+                self.assertEqual(bus[entries[2]["path"]].writes, [])
+                self.assertEqual(bus[entries[3]["path"]].writes, [])
+
+    def test_a_missing_or_truncated_pair_list_cannot_authorize_another_query(self):
+        for pairs in ([], SPEEDNOVA_PAIRS_REPLY[:7], SPEEDNOVA_PAIRS_REPLY[:9],
+                      [0x01, 0xFF, 0xAA] + [0] * 61):
+            with self.subTest(pairs=pairs):
+                entries = speednova_entries()
+                bus = omni_bus(entries, pairs=pairs)
+                self.assertEqual(self.poll(entries, bus), [])
+                self.assertEqual(bus[entries[2]["path"]].opened, 0)
+                self.assertEqual(bus[entries[3]["path"]].opened, 0)
+
+    def test_each_speednova_receiver_uses_its_own_keyboard_channel(self):
+        first, second = speednova_entries(), speednova_entries("7&2222222&0")
+        bus = omni_bus(first, pairs=SPEEDNOVA_PAIRS_REPLY, keyboard=SPEEDNOVA_KEYBOARD_REPLY)
+        bus.update(omni_bus(second, pairs=[0x01, 0xA0, 0, 1, 0, 0x34, 0x12, 2, 4] + [0] * 55))
+        self.assertEqual([(r.name, r.level) for r in self.poll(first + second, bus)],
+                         [("ROG Azoth 96 HE", 36)])
+        self.assertEqual(bus[second[2]["path"]].opened, 0)
+
+    def test_the_harpe_cable_keeps_its_existing_query(self):
+        cable = dict(issue_81_entries()[0], product_id=0x1C69)
+        mouse = FakeMouse(level=90, charging=1)
+        res = self.poll([cable], {cable["path"]: mouse})
+        self.assertEqual([(r.name, r.level, r.charging) for r in res],
+                         [("ROG Harpe II Ace", 90, True)])
+        self.assertEqual(mouse.writes, [[0x00, 0x12, 0x07] + [0] * 61])
 
 
 if __name__ == "__main__":

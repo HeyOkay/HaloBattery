@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Media;
 namespace HaloBattery.Settings;
 
 /// <summary>Temporary whole-HWND opacity; restore native styles after entrance.</summary>
-internal sealed class StartupWindowFade : IDisposable
+internal sealed partial class StartupWindowFade : IDisposable
 {
     private const int ExtendedStyle=-20,Layered=0x00080000;
     private readonly nint window;
@@ -19,10 +19,12 @@ internal sealed class StartupWindowFade : IDisposable
     private EventHandler<object>? rendering;
     private DispatcherQueueTimer? deadline;
     private bool disposed;
+#if HALO_BATTERY_VERIFICATION
     internal bool HadIntermediateAlpha { get; private set; }
     internal int Frames { get; private set; }
     internal bool NativeStyleRestored { get; private set; }
     internal bool FinishedNormally { get; private set; }
+#endif
 
     internal StartupWindowFade(nint hwnd)
     {
@@ -56,9 +58,12 @@ internal sealed class StartupWindowFade : IDisposable
             var eased=progress*progress*(3-2*progress);
             var alpha=(byte)Math.Round(targetAlpha*eased);
             if(!SetLayeredWindowAttributes(window,0,alpha,2)){Dispose();return;}
+#if HALO_BATTERY_VERIFICATION
             Frames++;
             HadIntermediateAlpha|=alpha>0 && alpha<targetAlpha;
-            if(progress>=1){FinishedNormally=true;Dispose();}
+            if(progress>=1)FinishedNormally=true;
+#endif
+            if(progress>=1)Dispose();
         };
         CompositionTarget.Rendering+=rendering;
         // A minimized/occluded render loop must not leave the HWND transparent.
@@ -81,7 +86,9 @@ internal sealed class StartupWindowFade : IDisposable
             // the presenter while the short entrance animation was running.
             SetWindowLongW(window,ExtendedStyle,GetWindowLongW(window,ExtendedStyle)&~Layered);
         }
+#if HALO_BATTERY_VERIFICATION
         NativeStyleRestored=((GetWindowLongW(window,ExtendedStyle)&Layered)!=0)==wasLayered;
+#endif
     }
 
     public void Dispose()

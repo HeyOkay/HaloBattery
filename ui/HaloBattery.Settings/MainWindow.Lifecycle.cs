@@ -5,9 +5,10 @@ namespace HaloBattery.Settings;
 
 public sealed partial class MainWindow
 {
-    private long windowShowCount;
+#if HALO_BATTERY_VERIFICATION
     private PreparedWindowView? firstPreparedView;
     private sealed record PreparedWindowView(int X,int Y,int Width,int Height,bool RailExpanded,double RailWidth,string Page,bool PageReady,int LabelCount,bool VisibleBeforeShow);
+#endif
 
     internal void ShowSettingsWindow(string? page,string? deviceKey,long? requestId=null)
     {
@@ -40,11 +41,12 @@ public sealed partial class MainWindow
         // Explicit requests for another page/device are prepared while hidden.
         if(current!=page || selectionChanged && page=="devices")
             Navigate(page,!IsSettingsWindowHidden);
+#if HALO_BATTERY_VERIFICATION
         firstPreparedView??=new(AppWindow.Position.X,AppWindow.Position.Y,AppWindow.Size.Width,AppWindow.Size.Height,
             expanded,rail.Width.Value,current,frame.Content is not null,State.Labels.Count,AppWindow.IsVisible);
+#endif
         RefreshBindings();
         ActivateSettingsWindow();
-        windowShowCount++;
         if(previewImage is not null) StartPreview();
         Bridge.SendVisibility(true,requestId);
     }
@@ -63,8 +65,6 @@ public sealed partial class MainWindow
 
     [DllImport("user32.dll")][return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(nint window);
-    [DllImport("user32.dll")]
-    private static extern nint GetForegroundWindow();
 
     private void OnSettingsWindowHidden()
     {

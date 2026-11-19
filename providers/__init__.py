@@ -1,5 +1,6 @@
 from .base import DeviceStatus, Provider  # noqa: F401
 from .aula import AulaProvider  # noqa: F401
+from .aula_f108 import AulaF108Provider  # noqa: F401
 from .alienware import AlienwareProvider  # noqa: F401
 from .barracuda import BarracudaProvider  # noqa: F401
 from .barracuda_x import BarracudaXProvider  # noqa: F401
@@ -47,6 +48,7 @@ from .skullcandy import SkullcandyProvider  # noqa: F401
 from .rapoo import RapooProvider  # noqa: F401
 from .ajazz import AjazzProvider  # noqa: F401
 from .sony_inzone import SonyInzoneProvider  # noqa: F401
+from .sony_h9ii import SonyH9IIProvider  # noqa: F401
 from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
 from .finalmouse import FinalmouseProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
@@ -56,6 +58,7 @@ from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
 from .hyperx_ngenuity import HyperXNgenuityProvider  # noqa: F401
 from .monsgeek import MonsGeekProvider  # noqa: F401
 from .eweadn import EweadnProvider  # noqa: F401
+from .eweadn_ydx import EweadnYdxProvider  # noqa: F401
 from .mchose_kb import MchoseKbProvider  # noqa: F401
 from .endgame_we import EndgameWEProvider  # noqa: F401
 from .endgame_4k import Endgame4kProvider  # noqa: F401

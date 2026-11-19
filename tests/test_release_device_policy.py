@@ -7,10 +7,13 @@ from providers import ajazz, endgame_4k, turtlebeach, sony_inzone, lamzu_sw, log
 
 
 class StableDevicePolicyTests(unittest.TestCase):
-    def test_aj159_and_kysona_are_not_opened_even_with_valid_vendor_collections(self):
-        entries = [{"product_id": pid, "usage_page": 0xFFFF, "usage": 2,
-                    "path": b"held", "interface_number": 2}
-                   for _, pid, _ in ajazz.ALT_TARGETS]
+    def test_aj159_is_enabled_after_its_f7_05_level_was_confirmed(self):
+        # #289's owner captured report05 at70%; the prior shared hold is obsolete.
+        self.assertEqual(ajazz.ENABLED_ALT_TARGETS, {(0x3151, 0x402D)})
+
+    def test_kysona_is_not_opened_even_with_a_valid_vendor_collection(self):
+        entries = [{"product_id": 0x5031, "usage_page": 0xFFFF, "usage": 2,
+                    "path": b"held", "interface_number": 2}]
         with mock.patch.object(ajazz.hidlist, "enumerate",
                                side_effect=lambda vid=0: entries if vid == 0x3151 else []), \
              mock.patch.object(ajazz.hid, "device") as device:
@@ -61,15 +64,20 @@ class StableDevicePolicyTests(unittest.TestCase):
             device.assert_not_called()
             self.assertTrue(any("release hold" in line for line in provider.diagnostics()))
 
-    def test_pro_x_3_does_not_open_its_centurion_collection(self):
-        entries = [{"product_id": 0x0B45, "usage_page": 0xFFA0, "usage": 1,
-                    "path": b"held", "interface_number": 3}]
-        with mock.patch.object(logitech_centurion.hidlist, "enumerate", return_value=entries), \
-             mock.patch.object(logitech_centurion.hid, "device") as device:
+    def test_pro_x_3_uses_its_separately_sourced_status_reader(self):
+        # HeadsetControl1d2ccd14 supplies the exact X3 50/23 exchange; the old
+        # release hold based on unconfirmed X2 compatibility is superseded.
+        entries = [{"vendor_id": 0x046D, "product_id": 0x0B45,
+                    "usage_page": 0xFFA0, "usage": 1,
+                    "path": b"prox3", "interface_number": 3}]
+        with mock.patch.object(logitech_centurion.hidlist, "enumerate", return_value=entries):
             provider = logitech_centurion.LogitechCenturionProvider()
-            self.assertEqual(provider.poll(), [])
-            device.assert_not_called()
-            self.assertTrue(any("release hold" in line for line in provider.diagnostics()))
+            with mock.patch.object(provider, "_read", side_effect=AssertionError("X2 query on X3")), \
+                 mock.patch.object(provider, "_read_x3", return_value=(78, False, False)) as read:
+                [status] = provider.poll()
+                read.assert_called_once_with(b"prox3")
+                self.assertEqual((status.level, status.charging, status.charging_known),
+                                 (78, False, False))
 
     def test_confirmed_pro_x_2_is_still_polled(self):
         entries = [{"product_id": 0x0AF7, "usage_page": 0xFFA0, "usage": 1,

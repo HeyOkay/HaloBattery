@@ -36,16 +36,29 @@ which agree on everything below except where noted:
     headset is off, and the battery reply is 51 0b ... with byte 8 = 04: byte 10 percent,
     byte 12 = 02 charging.
 
-The PRO X 3 LIGHTSPEED (046D:0B45) lists the same three collections on the same
-interface in a reporter's diagnostics (0xFF13, 0xFFA0 and the consumer page, interface
-3), so it is read the same way. Unverified: no PRO X 3 was on hand. The read is read-only
-either way, and a device that does not answer simply shows nothing.
+PRO X 3 LIGHTSPEED (046D:0B45) uses a separate, sourced exchange, never the X2
+fallback. Sapd/HeadsetControl at 1d2ccd1412246d85b2f8733d739cc865ba466aab:
+  * lib/devices/logitech_gpro_x3_lightspeed.hpp L14-24,46-64,80-93: exact receiver,
+    interface 3 / FFA0:0001, prefix 50 23, Root feature lookup and battery function 0.
+  * lib/devices/protocols/logitech_centurion_protocol.hpp L89-145,237-275,305-325,
+    394-448,554-670: 64-byte zero-padded HID output reports (report ID 50), timed
+    input reads, dynamic bridge/battery indexes, framing and battery fields.
+  * tests/test_protocols.cpp L1589-1596,1643-1666: captured receiver revision 1.02
+    replies, battery 78%, and the exact battery request; upstream PR #618 reports
+    Ubuntu hardware observations, with Windows/macOS and charging unverified.
+  https://github.com/Sapd/HeadsetControl/pull/618
+Only the three battery-read exchanges are used here. No timers, settings, pairing,
+setup, feature reports, FeatureSet enumeration or X2 legacy fallback is sent.
+Indexes are rediscovered every poll so a re-paired headset cannot inherit a cached
+feature layout. Unsupported fragmented replies are refused; no extra status probe
+is sent after a timeout. We have not tested this path on real hardware.
 
 Every request reads: discovery lists features and the battery request reads the level.
 No function that changes a setting is sent. A level above 100 is refused.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -60,9 +73,7 @@ from .base import DeviceStatus, Provider, hexdump, log
 LOGITECH_VID = 0x046D
 PIDS = {0x0AF7: "Logitech G PRO X 2 LIGHTSPEED",
         0x0B45: "Logitech PRO X 3 LIGHTSPEED"}
-# #343/#298: PRO X 3 does not answer the PRO X 2 exchange; same collections
-# do not establish protocol compatibility. Preserve the PRO X 2 stable path.
-ENABLED_PIDS = frozenset((0x0AF7,))
+ENABLED_PIDS = frozenset((0x0AF7, 0x0B45))
 USAGE_PAGE, USAGE = 0xFFA0, 0x0001
 
 REPORT_ID = 0x51
@@ -132,6 +143,94 @@ class LogitechCenturionProvider(Provider):
         self._diag: List[str] = []
         # path -> (bridge index, {headset feature id: index}) once discovery succeeded
         self._features: Dict[bytes, Tuple[int, Dict[int, int]]] = {}
+
+    # X3 has its own prefix and read-only Root lookup sequence. Keep the X2
+    # framing, enumeration, feature cache and legacy path below unchanged.
+    @staticmethod
+    def _x3_payload(reply):
+        if (not isinstance(reply, (bytes, bytearray, list, tuple))
+                or any(type(b) is not int or not 0 <= b <= 255 for b in reply)
+                or len(reply) < 5 or list(reply[:2]) != [0x50, 0x23]):
+            return None
+        length = reply[2]
+        # Prefix + length + flags + payload must fit the canonical 64 bytes.
+        # Flags encode fragmentation; these small exchanges need one frame.
+        if length <= 1 or length + 3 > min(len(reply), 64) or reply[3] != 0:
+            return None
+        return list(reply[4:3 + length])
+
+    def _x3_exchange(self, dev, payload, read_size, write_size, *, bridge=None, sub_index=None):
+        report = [0x50, 0x23, len(payload) + 1, 0] + payload
+        report += [0] * (64 - len(report))
+        count = dev.write(report)
+        # Native output is padded to its cached collection caps. Legacy HIDAPI
+        # exposes the canonical caller size. A partial write cannot be queried.
+        if type(count) is not int or count != write_size:
+            raise OSError("PRO X 3 incomplete output report")
+        # Upstream bounds an exchange to eight input reads. Omit its optional
+        # bridge-status retry, keeping at most three requests per poll.
+        for _ in range(8):
+            p = self._x3_payload(dev.read(read_size, READ_TIMEOUT_MS))
+            if p is None or len(p) < 2:
+                continue
+            if bridge is None:
+                if p[:2] == [0, 1]:
+                    return p[2:]
+                continue
+            if p[0] != bridge:
+                continue
+            if p[1] == 0 and len(p) >= 4:
+                if p[3] == 0:
+                    raise Offline("PRO X 3 bridge reports headset disconnected")
+                continue
+            if p[1] == 0x11:  # Receiver ACK, not the headset's battery reply.
+                continue
+            if (p[1] != 0x10 or len(p) < 7 or p[4] != 0
+                    or (p[2] << 8 | p[3]) != len(p) - 4):
+                continue
+            if p[5] == 0xFF and p[6] == sub_index:
+                raise ValueError("PRO X 3 headset rejected feature")
+            if p[5] == sub_index and p[6] == 1:
+                return p[7:]
+        raise TimeoutError("PRO X 3 battery exchange did not answer")
+
+    def _read_x3(self, path):
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+            read_size = write_size = 64
+            caps_method = getattr(dev, "get_report_lengths", None)
+            if callable(caps_method):
+                caps = caps_method()
+                sizes = (caps.get("input"), caps.get("output")) if isinstance(caps, dict) else ()
+                if (len(sizes) != 2
+                        or any(type(n) is not int or not 64 <= n <= 32768 for n in sizes)):
+                    raise ValueError("PRO X 3 collection cannot carry a 64-byte input/output report")
+                read_size, write_size = sizes
+            # HeadsetControl Root.getFeature(0003), then bridged
+            # Root.getFeature(0104). The captured indexes 3 and 5 are not constants.
+            bridge_info = self._x3_exchange(dev, [0, 1, 0, 3], read_size, write_size)
+            if len(bridge_info) < 3 or not 0 < bridge_info[0] < 255:
+                raise ValueError("PRO X 3 receiver has no bridge")
+            bridge = bridge_info[0]
+            battery_info = self._x3_exchange(
+                dev, [bridge, 0x11, 0, 5, 0, 0, 1, 1, 4], read_size, write_size,
+                bridge=bridge, sub_index=0)
+            if len(battery_info) < 3 or not 0 < battery_info[0] < 255:
+                raise ValueError("PRO X 3 headset has no battery feature")
+            index = battery_info[0]
+            data = self._x3_exchange(
+                dev, [bridge, 0x11, 0, 3, 0, index, 1], read_size, write_size,
+                bridge=bridge, sub_index=index)
+            if not data or data[0] > 100:
+                raise ValueError("PRO X 3 invalid battery percentage")
+            known = len(data) >= 3 and data[2] in (0, 1, 2)
+            return data[0], known and data[2] in (1, 2), known
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
 
     # ---- transport ---------------------------------------------------------
     def _write(self, dev, data: List[int]) -> None:
@@ -261,6 +360,7 @@ class LogitechCenturionProvider(Provider):
             log.warning("hid.enumerate(logitech centurion): %s", e)
             return []
         out: List[DeviceStatus] = []
+        seen_x3 = set()
         for d in infos:
             name = PIDS.get(d["product_id"])
             if name is None or (d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE):
@@ -268,23 +368,36 @@ class LogitechCenturionProvider(Provider):
             if d["product_id"] not in ENABLED_PIDS:
                 self._diag.append(f"[Logitech] pid={d['product_id']:04x}: release hold; not opening")
                 continue
-            key = f"logitech-centurion:{d['product_id']:04x}"
+            x3 = d["product_id"] == 0x0B45
+            if x3:
+                path = d.get("path")
+                if (d.get("vendor_id") != 0x046D or d.get("interface_number") != 3
+                        or not isinstance(path, (bytes, str)) or not path):
+                    continue
+                raw_path = path.lower().encode("utf-8") if isinstance(path, str) else path.lower()
+                key = "logitech-centurion:0b45:" + hashlib.sha256(raw_path).hexdigest()
+                if key in seen_x3:
+                    continue
+                seen_x3.add(key)
+            else:
+                key = f"logitech-centurion:{d['product_id']:04x}"
             self._diag.append(f"[Logitech] pid={d['product_id']:04x} '{name}' "
                               f"iface={d.get('interface_number')} {USAGE_PAGE:04x}:{USAGE:04x}")
             try:
-                res = self._read(d["path"])
+                res = self._read_x3(d["path"]) if x3 else self._read(d["path"])
             except Offline as e:
                 self._diag.append(f"  {e}")
                 res = None
             except (TimeoutError, ValueError, OSError, IOError, IndexError) as e:
                 self._diag.append(f"  {e}")
-                self._features.pop(d["path"], None)       # discover again next time
+                if not x3:
+                    self._features.pop(d["path"], None)   # discover X2 again next time
                 res = None
             # a switched-off headset leaves the tray (README: The icon)
             if res is not None:
-                level, charging = res
+                level, charging = res[:2]
                 out.append(DeviceStatus(key, name, level, charging, True, "logitech",
-                                        kind="headset"))
+                                        kind="headset", charging_known=res[2] if x3 else True))
         return out
 
     def diagnostics(self) -> List[str]:

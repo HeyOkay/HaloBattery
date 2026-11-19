@@ -15,6 +15,9 @@
 #ifndef AppVersion
   #error Pass the version: iscc /DAppVersion=1.2.3 installer\HaloBattery.iss
 #endif
+#if (Ver & 0xFFFFFF00) != (EncodeVer(6, 7, 4) & 0xFFFFFF00)
+  #error Use the pinned Inno Setup 6.7.4 compiler from scripts/get_inno.ps1.
+#endif
 #ifndef SourceDir
   #define SourceDir "..\dist\HaloBattery"
 #endif
@@ -34,6 +37,8 @@ AppPublisherURL=https://github.com/HeyOkay/HaloBattery
 AppSupportURL=https://github.com/HeyOkay/HaloBattery/issues
 AppUpdatesURL=https://github.com/HeyOkay/HaloBattery/releases
 VersionInfoVersion={#AppVersion}
+VersionInfoProductName=HaloBattery
+VersionInfoProductVersion={#AppVersion}
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\HaloBattery
 DisableProgramGroupPage=yes

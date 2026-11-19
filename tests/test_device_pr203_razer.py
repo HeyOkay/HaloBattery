@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: OpenRazer driver/razercommon.h status table.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -111,10 +114,10 @@ class FakeMouse:
         out = bytearray(90)
         out[1:8] = req[1:8]
         if req[1] == self.tid:
-            out[0] = R.STATUS_OK
+            out[0] = 0x02
             out[9] = self.values.get(req[7], 0)
         else:
-            out[0] = R.STATUS_NOT_SUPPORTED
+            out[0] = 0x05
         return [0x00] + list(out)        # hidapi on Windows puts the report id first
 
 

@@ -16,7 +16,9 @@ public sealed partial class MainWindow
     private readonly Canvas startupShadowHost=new();
     private SpriteVisual? startupShadowVisual;
     private DropShadow? startupShadow;
+#if HALO_BATTERY_VERIFICATION
     private bool startupContourShadowCreated,startupShadowIsSoft;
+#endif
     private readonly TaskCompletionSource<bool> startupIconReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<bool> startupCancelled=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<Action> startupSubscriptions=new();
@@ -26,8 +28,10 @@ public sealed partial class MainWindow
     private StartupShowRequest? showAfterStartup;
     private sealed record StartupShowRequest(string? Page,string? DeviceKey,long? RequestId);
     private string? pendingStartupPage,pendingStartupDeviceKey;
+#if HALO_BATTERY_VERIFICATION
     private long startupStartedAt,contentReadyAt;
     private bool splashFrameRendered,contentFrameRendered;
+#endif
     private long startupNavigationVersion;
     private readonly Dictionary<UIElement,long> startupFadeVersions=new();
     private Task<bool>? splashPresented;
@@ -35,9 +39,13 @@ public sealed partial class MainWindow
     private StartupWindowFade? startupWindowFade;
     private Task? startupWindowFadeCompletion;
     private StartupWindowBackground? startupWindowBackground;
+#if HALO_BATTERY_VERIFICATION
     private uint? startupBackgroundPaintSample;
+#endif
     private CancellationTokenSource? startupRevealDeadline;
+#if HALO_BATTERY_VERIFICATION
     private bool startupFramePreparedWhileCloaked,startupRevealFallbackUsed;
+#endif
     internal bool IsClosingSettings=>closing || closingWindowState;
 
     private void InitializeStartupSplash()
@@ -89,8 +97,10 @@ public sealed partial class MainWindow
         startupShadowVisual.Size=new(StartupLogoSize,StartupLogoSize);
         startupShadowVisual.Shadow=startupShadow;
         ElementCompositionPreview.SetElementChildVisual(startupShadowHost,startupShadowVisual);
+#if HALO_BATTERY_VERIFICATION
         startupContourShadowCreated=true;
         startupShadowIsSoft=startupShadow.Offset==System.Numerics.Vector3.Zero && startupShadow.BlurRadius>=24 && startupShadow.Opacity<=0.18f;
+#endif
     }
     private void StartupIconFailed(SvgImageSource sender,SvgImageSourceFailedEventArgs args)
     {
@@ -109,9 +119,11 @@ public sealed partial class MainWindow
     {
         if(IsClosingSettings || startupSplashShown)return;
         startupSplashShown=true;
+#if HALO_BATTERY_VERIFICATION
         startupStartedAt=Stopwatch.GetTimestamp();
         if(Bridge.FixtureMode && Arg("--verify-scope")=="startup-splash")
             startupBackgroundPaintSample=startupWindowBackground!.VerifyPaintColor();
+#endif
         PrepareSettingsWindowForShow();
         AppWindow.Show();Activate();
         Bridge.SendVisibility(true);
@@ -125,7 +137,9 @@ public sealed partial class MainWindow
         await Task.WhenAny(startupIconReady.Task,startupCancelled.Task);
         if(IsClosingSettings)return false;
         if(!await NextStartupFrameAsync())return false;
+#if HALO_BATTERY_VERIFICATION
         startupFramePreparedWhileCloaked=StartupWindowBackground.IsAppCloaked(hwnd);
+#endif
         // Commit the prepared theme/backdrop while the native window is still
         // concealed. This waits for readiness rather than a fixed loading delay.
         var commit=ElementCompositionPreview.GetElementVisual(root).Compositor.RequestCommitAsync().AsTask();
@@ -138,7 +152,9 @@ public sealed partial class MainWindow
             await Task.WhenAny(startupWindowFadeCompletion,startupCancelled.Task);
         if(IsClosingSettings)return false;
         InitializeStartupShadow();
+#if HALO_BATTERY_VERIFICATION
         splashFrameRendered=true;
+#endif
         return true;
     }
 
@@ -146,11 +162,13 @@ public sealed partial class MainWindow
     {
         if(startupCompleted || IsClosingSettings)return;
         if(splashPresented is null || !await splashPresented)return;
+#if HALO_BATTERY_VERIFICATION
         if(Bridge.FixtureMode && Arg("--capture-startup")=="yes")
         {
             if(startupEntranceFade is not null)await startupEntranceFade;
             await FixtureWindowCapture.CaptureAsync(hwnd,Path.Combine(Arg("--verify-dir"),"splash.composited.png"));
         }
+#endif
         // Loaded is not a rendered frame. Let the compositor receive the splash
         // before building controls; never do that work inside a rendering event.
         if(!await EnqueueStartupAsync(()=>
@@ -180,10 +198,12 @@ public sealed partial class MainWindow
             if(!await NextStartupFrameAsync())return;
         }
         while(preparedNavigation!=startupNavigationVersion);
+#if HALO_BATTERY_VERIFICATION
         contentFrameRendered=true;
         contentReadyAt=Stopwatch.GetTimestamp();
         firstPreparedView??=new(AppWindow.Position.X,AppWindow.Position.Y,AppWindow.Size.Width,AppWindow.Size.Height,
             expanded,rail.Width.Value,current,frame.Content is not null,State.Labels.Count,true);
+#endif
         // Both fades share the compositor clock. There is no artificial minimum
         // loading duration; replacing the entrance animation starts at its live
         // opacity, even when the content was ready before fade-in completed.
@@ -311,7 +331,9 @@ public sealed partial class MainWindow
         try { await Task.Delay(TimeSpan.FromSeconds(2),token); }
         catch(OperationCanceledException){return;}
         if(IsClosingSettings)return;
+#if HALO_BATTERY_VERIFICATION
         startupRevealFallbackUsed=true;
+#endif
         // A rendering/driver failure must never strand an inaccessible window.
         // No Activate/Restore here: preserve a user's minimize or focus change.
         ReleaseStartupWindowBackground();

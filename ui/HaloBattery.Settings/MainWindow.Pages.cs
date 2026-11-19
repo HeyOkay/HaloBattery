@@ -34,7 +34,7 @@ public sealed partial class MainWindow
         foreach (var (name, value) in values) text = text.Replace("{" + name + "}", Convert.ToString(value, System.Globalization.CultureInfo.CurrentCulture) ?? "");
         return text;
     }
-    private void SetGlobal(string key, object? value) => Bridge.SendCommand("setGlobal", new { key, value });
+    private void SetGlobal(string key, object? value) => Bridge.SendCommand("setGlobal", SettingsJson.Object(("key", key), ("value", value)));
     public void ApplyState(UiState state)
     {
         if (IsClosingSettings) return;
@@ -111,11 +111,11 @@ public sealed partial class MainWindow
         return new Page { Content = Scroll(content), Background = Brush("#00000000") };
     }
 
-    private sealed record Choice(JsonElement Value, string Label)
+    private sealed partial record Choice(JsonElement Value, string Label)
     {
         public override string ToString() => Label;
     }
-    private static Choice Pick(object? value, string label) => new(JsonSerializer.SerializeToElement(value), label);
+    private static Choice Pick(object? value, string label) => new(SettingsJson.Element(value), label);
     private static List<Choice> Picks(IEnumerable<UiOption> options) => options.Select(o => new Choice(o.Value, o.Label)).ToList();
     private ComboBox ChoiceBox(string name, Func<List<Choice>> options, Func<object?> value, Action<object?> changed)
     {
@@ -127,7 +127,7 @@ public sealed partial class MainWindow
             // An open native flyout owns its selection until it closes.
             if (combo.IsDropDownOpen) return;
             var choices = options();
-            var next = JsonSerializer.Serialize(choices.Select(c => new { value = c.Value, label = c.Label }));
+            var next = SettingsJson.Choices(choices.Select(c => (c.Value, c.Label)));
             if (next != signature)
             {
                 combo.Items.Clear();
@@ -135,7 +135,7 @@ public sealed partial class MainWindow
                 signature = next;
                 FitComboBox(combo);
             }
-            var selected = JsonSerializer.SerializeToElement(value()).GetRawText();
+            var selected = SettingsJson.Element(value()).GetRawText();
             combo.SelectedItem = combo.Items.Cast<Choice>().FirstOrDefault(c => c.Value.GetRawText() == selected);
             combo.IsEnabled = combo.Items.Count > 0;
         });
@@ -198,14 +198,14 @@ public sealed partial class MainWindow
     private void BuildDevices(StackPanel p)
     {
         var selector = ChoiceBox(T("settings.select_device"), () => State.Devices.Select(d => Pick(d.Key, d.Name + (d.Hidden ? " - " + T("settings.hidden") : ""))).ToList(), () => selectedDeviceKey,
-            value => Bridge.SendCommand("selectDevice", new { deviceKey = value }));
+            value => Bridge.SendCommand("selectDevice", SettingsJson.Object(("deviceKey", value))));
         p.Children.Add(Card(T("settings.select_device"), "", selector, "smartphone-nfc"));
         if (SelectedDevice is { } device)
         {
             // Detached controls can lose focus after a backend selection change.
             // Every callback on this page therefore keeps its original stable key.
             var deviceKey = device.Key;
-            void ChangeDevice(string field, object? value) => Bridge.SendCommand("setDevice", new { deviceKey, field, value });
+            void ChangeDevice(string field, object? value) => Bridge.SendCommand("setDevice", SettingsJson.Object(("deviceKey", deviceKey), ("field", field), ("value", value)));
             AddPreview(p, true);
             // The native editor is top-aligned inside its ScrollViewer; leave
             // balanced space around its single line in the 30-DIP field.
@@ -265,7 +265,7 @@ public sealed partial class MainWindow
         AddPreview(p, false);
         Section(p, T("settings.content"));
         p.Children.Add(Card(T("settings.content"), "", ChoiceBox(T("settings.content"), () => new() { Pick("pictogram", T("settings.pictogram")), Pick("percent", T("settings.percentage")), Pick("ring", T("settings.ring_only")) }, () => ContentMode,
-            mode => Bridge.SendCommand("setIconContent", new { mode })), "circle"));
+            mode => Bridge.SendCommand("setIconContent", SettingsJson.Object(("mode", mode)))), "circle"));
         GlobalChoice(p, "filled_icons", "preferences.icon_style", () => new() { Pick(false, T("icon_style.outline")), Pick(true, T("icon_style.filled")) }, () => BoolCfg("filled_icons"));
         var fallback = GlobalToggle(p, "badges", "settings.fallback", icon: "mouse");
         pageBindings.Add(() => fallback.Visibility = ContentMode == "percent" ? Visibility.Visible : Visibility.Collapsed);
@@ -304,7 +304,7 @@ public sealed partial class MainWindow
             var providerName = State.Providers[i].Name;
             var provider = State.Providers[i];
             var control = ToggleControl(provider.Label, () => State.Providers.FirstOrDefault(s => s.Name == providerName)?.Enabled == true,
-                enabled => Bridge.SendCommand("setProvider", new { name = providerName, enabled }));
+                enabled => Bridge.SendCommand("setProvider", SettingsJson.Object(("name", providerName), ("enabled", enabled))));
             var row = DetailRow(provider.Label, control, i != 0);
             if (row is FrameworkElement element) element.Margin = new(60, 0, 24, 0);
             providers.AddBody(row);
@@ -318,7 +318,7 @@ public sealed partial class MainWindow
         GlobalToggle(p, "update_check", "preferences.updates", icon: "refresh-cw");
         ActionCard(p, "preferences.check_now", "settings.check", "checkUpdate", icon: "download");
         var install = Button("", true);
-        install.Click += (_, _) => Bridge.SendCommand("startUpdate", new { });
+        install.Click += (_, _) => Bridge.SendCommand("startUpdate", SettingsJson.Object());
         var progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 4, HorizontalAlignment = HorizontalAlignment.Stretch };
         var update = Card("", "", install, "download");
         update.SetFooter(progress);

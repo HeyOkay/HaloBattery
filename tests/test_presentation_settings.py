@@ -1,5 +1,11 @@
 """Selected-cache migration races and ring-style settings without devices/network."""
 from dataclasses import replace
+import copy
+import hashlib
+import io
+import json
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import threading
 import unittest
@@ -7,9 +13,10 @@ from unittest.mock import Mock,patch
 from PIL import Image
 from test_hide_rename import HideRenameTestCase,dev,hb,make_app
 from halo.settings_model import SettingsController
-from halo import icons,svg_glyph
+from halo import icons,svg_glyph,iconify_catalog
 
 REAL_DEVICE_ICON=hb.DeviceIcon
+REAL_SAVE_CONFIG=hb.save_config
 
 
 class PresentationSettingTests(HideRenameTestCase):
@@ -25,6 +32,112 @@ class PresentationSettingTests(HideRenameTestCase):
         model._catalog=Mock();model._catalog.needs_upgrade.side_effect=lambda a:a.metadata['renderer_revision']!=svg_glyph.RENDERER_VERSION
         return old,new
 
+    def legacy_catalog(self,app,model):
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        model.context['data_dir']=temporary.name
+        source=iconify_catalog.canonical_icon({'icons':{'mouse':{'body':'<path d="M0 0h10v10z"/>'}}},'mouse')
+        entry={'name':'Test','author':{'name':'Artist'},'license':{'spdx':'MIT','title':'MIT'},
+               'license_text':'Copyright Artist. Permission to use.','notices':[],
+               'provenance':{},'icons':{'mouse':iconify_catalog._hash(source)}}
+        registry={'schema':1,'collections':{'test':entry}}
+        catalog=iconify_catalog.IconifyCatalog(temporary.name,registry=registry,
+            fetch=lambda url:self.fail('startup must remain offline'))
+        # A prior-format master has no evidence checksum in its configured ID.
+        image=Image.new('L',(1024,1024));image.paste(255,(504,504,520,520))
+        stream=io.BytesIO();image.save(stream,'PNG');png=stream.getvalue()
+        version=svg_glyph.PREVIOUS_RENDERER_VERSION
+        asset_id=iconify_catalog._hash([iconify_catalog.ASSET_REVISION,'test:mouse',entry['icons']['mouse'],version])
+        metadata=dict(asset_id=asset_id,icon_id='test:mouse',source_hash=entry['icons']['mouse'],
+            renderer_revision=version,collection=entry['name'],author=entry['author'],license=entry['license'],
+            license_text=entry['license_text'],notices=[],provenance={},png_sha256=hashlib.sha256(png).hexdigest())
+        folder=catalog.root/'assets'/asset_id;folder.mkdir(parents=True)
+        (folder/'metadata.json').write_bytes(iconify_catalog._json_bytes(metadata))
+        (folder/'glyph.png').write_bytes(png)
+        (folder/'source.json').write_bytes(iconify_catalog._json_bytes(source))
+        model._catalog=catalog;app.cfg['custom_icons']={dev().key:asset_id}
+        return catalog,asset_id,folder,png,source
+
+    def test_startup_seals_verified_legacy_evidence_and_preserves_original_pixels(self):
+        app,model=self.setup_model();catalog,old_id,folder,png,source=self.legacy_catalog(app,model)
+        model.load_custom_icons()
+        selected=app.cfg['custom_icons'][dev().key]
+        self.assertNotEqual(selected,old_id)
+        self.assertEqual(set(app._custom_assets),{selected})
+        self.assertEqual(app._custom_icon_errors,[])
+        selected_folder=catalog.root/'assets'/selected
+        self.assertEqual((selected_folder/'glyph.png').read_bytes(),png)
+        self.assertEqual((selected_folder/'source.json').read_bytes(),iconify_catalog._json_bytes(source))
+        changed=copy.deepcopy(catalog.registry);changed['collections']['test']['license_text']='Changed after update'
+        restarted=iconify_catalog.IconifyCatalog(model.context['data_dir'],registry=changed,
+            fetch=lambda url:self.fail('network'))
+        self.assertIsNotNone(restarted.load(selected))
+        self.assertIn(selected,restarted._pinned)
+
+    def test_unverifiable_legacy_on_first_update_retains_binding_and_exposes_warning(self):
+        app,model=self.setup_model();catalog,old_id,folder,png,source=self.legacy_catalog(app,model)
+        catalog._collections['test']['license_text']='Changed before migration'
+        with self.assertLogs('halo_battery',level='WARNING'):
+            model.load_custom_icons()
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old_id})
+        self.assertEqual(app._custom_assets,{})
+        self.assertEqual(app._custom_icon_errors,[old_id])
+        self.assertEqual(model.snapshot()['custom_icon_errors'],[old_id])
+        self.assertEqual((folder/'glyph.png').read_bytes(),png)
+        model.apply_custom_icon(dev().key,None)
+        self.assertEqual(model.snapshot()['custom_icon_errors'],[])
+
+    def test_failed_legacy_sealing_keeps_valid_old_pixels_and_config(self):
+        app,model=self.setup_model();catalog,old_id,folder,png,source=self.legacy_catalog(app,model)
+        with patch.object(catalog,'_write_selection',side_effect=OSError('read only')):
+            with self.assertLogs('halo_battery',level='WARNING'):
+                model.load_custom_icons()
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old_id})
+        self.assertEqual(set(app._custom_assets),{old_id})
+        self.assertEqual(app._custom_icon_errors,[])
+        self.assertEqual((folder/'glyph.png').read_bytes(),png)
+
+    def test_failed_config_migration_rolls_back_to_original_binding(self):
+        app,model=self.setup_model();catalog,old_id,folder,png,source=self.legacy_catalog(app,model)
+        model.context['save_config']=Mock(side_effect=OSError('read only config'))
+        with self.assertLogs('halo_battery',level='WARNING'):
+            model.load_custom_icons()
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old_id})
+        self.assertEqual(set(app._custom_assets),{old_id})
+        self.assertTrue(folder.is_dir())
+
+    def test_real_config_replace_failure_preserves_disk_binding_and_original_master(self):
+        app,model=self.setup_model();catalog,old_id,folder,png,source=self.legacy_catalog(app,model)
+        config_path=Path(model.context['data_dir'])/'config.json'
+        model.context['save_config']=REAL_SAVE_CONFIG
+        original_replace=hb.os.replace
+        def fail_config_replace(source_path,target_path):
+            if str(target_path)==str(config_path):
+                raise OSError('read only configuration')
+            return original_replace(source_path,target_path)
+        with patch.object(hb,'CONFIG_PATH',str(config_path)):
+            REAL_SAVE_CONFIG(app.cfg)
+            original_config=config_path.read_bytes()
+            with patch.object(hb.os,'replace',side_effect=fail_config_replace):
+                with self.assertLogs('halo_battery',level='WARNING'):
+                    model.load_custom_icons()
+        self.assertEqual(config_path.read_bytes(),original_config)
+        self.assertEqual(json.loads(config_path.read_text(encoding='utf-8'))['custom_icons'],{dev().key:old_id})
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old_id})
+        self.assertEqual(set(app._custom_assets),{old_id})
+        self.assertEqual((folder/'glyph.png').read_bytes(),png)
+        self.assertEqual((folder/'source.json').read_bytes(),iconify_catalog._json_bytes(source))
+        self.assertIsNotNone(catalog.load(old_id))
+        self.assertFalse(Path(str(config_path)+'.tmp').exists())
+
+    def test_unavailable_registry_reports_all_saved_selections_without_resetting(self):
+        app,model=self.setup_model();selected='a'*64
+        app.cfg['custom_icons']={dev().key:selected}
+        with patch.object(model,'icon_catalog',side_effect=ValueError('invalid registry')):
+            with self.assertLogs('halo_battery',level='WARNING'):
+                model.load_custom_icons()
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:selected})
+        self.assertEqual(app._custom_icon_errors,[selected])
+
     def test_cache_upgrade_preserves_choice_and_replaces_only_pixels(self):
         app,model=self.setup_model();old,new=self.assets(app,model)
         self.assertTrue(model.adopt_custom_icon_upgrade(new))
@@ -32,6 +145,24 @@ class PresentationSettingTests(HideRenameTestCase):
         self.assertEqual(app.pictogram(dev()),'mouse')
         self.assertEqual(set(app._custom_assets),{new.id})
         self.assertFalse(model.adopt_custom_icon_upgrade(new))
+
+    def test_reapplying_repaired_same_id_clears_its_saved_icon_warning(self):
+        app,model=self.setup_model();old,new=self.assets(app,model)
+        app._custom_assets={};app._custom_icon_errors=[old.id]
+        self.assertTrue(model.apply_custom_icon(dev().key,old))
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old.id})
+        self.assertEqual(set(app._custom_assets),{old.id})
+        self.assertEqual(model.snapshot()['custom_icon_errors'],[])
+
+    def test_repaired_selection_does_not_clear_another_failed_device_id(self):
+        app,model=self.setup_model();old,new=self.assets(app,model)
+        other_key='offline-other-device'
+        app.cfg['custom_icons'][other_key]=new.id
+        app._custom_assets={};app._custom_icon_errors=[old.id,new.id]
+        self.assertTrue(model.apply_custom_icon(dev().key,old))
+        self.assertEqual(app.cfg['custom_icons'],{dev().key:old.id,other_key:new.id})
+        self.assertEqual(set(app._custom_assets),{old.id})
+        self.assertEqual(model.snapshot()['custom_icon_errors'],[new.id])
 
     def test_upgrade_cannot_replace_a_newer_user_selection(self):
         app,model=self.setup_model();old,new=self.assets(app,model)
@@ -49,7 +180,7 @@ class PresentationSettingTests(HideRenameTestCase):
         # Deterministic worker runs immediately, without a network/thread.
         with patch('halo.settings_model.threading.Thread',lambda target,**kw:SimpleNamespace(start=target)):
             model.schedule_custom_icon_upgrade();model.schedule_custom_icon_upgrade()
-        model._catalog.prepare.assert_called_once_with(old.icon_id,cancel=None)
+        model._catalog.prepare.assert_called_once_with(old.icon_id,cancel=None,offline=True)
         self.assertEqual(app.cfg['custom_icons'][dev().key],old.id)
 
     def test_ring_style_is_validated_and_stored(self):

@@ -29,6 +29,7 @@ class DeviceStatus:
     charging_known: bool = True  # False: level valid, charger query unavailable; suppress alerts
 
     polling_paused: bool = False  # cached by choice; explain in menu, keep normal icon
+    polling_stale: bool = False   # native I/O failed; retained reading is not current
 
     # Presentation metadata; English approx remains available to diagnostics.
     ui_message: str = ""
@@ -44,6 +45,15 @@ class Provider:
 
     def diagnostics(self) -> List[str]:
         return []
+
+    def legacy_key_aliases(self) -> dict[str, str]:
+        """Cached old-to-current device keys, only for unambiguous identities.
+
+        Called after a successful poll on its existing provider worker/lease.
+        Implementations must return metadata from that poll without performing
+        device I/O, enumeration, waits or other native work.
+        """
+        return {}
 
 
 def hexdump(data, limit: int = 32) -> str:

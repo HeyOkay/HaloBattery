@@ -1,0 +1,9 @@
+[
+  "{\"type\":\"hello\",\"protocol\":1,\"uiVersion\":\"1\"}",
+  "{\"type\":\"visibility\",\"visible\":true,\"requestId\":9223372036854775807}",
+  "{\"type\":\"visibility\",\"visible\":false}",
+  "{\"type\":\"command\",\"protocol\":1,\"id\":1,\"name\":\"setGlobal\",\"args\":{\"key\":\"value\",\"value\":null}}",
+  "{\"type\":\"catalog\",\"protocol\":1,\"id\":2,\"action\":\"details\",\"deviceKey\":\"fixture:\\u4E00\",\"query\":\"\",\"start\":0,\"size\":1,\"iconId\":\"icon:test\"}",
+  "{\"type\":\"preview\",\"id\":3,\"deviceKey\":null}",
+  "{\"type\":\"closing\"}"
+]
