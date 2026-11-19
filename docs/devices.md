@@ -25,7 +25,7 @@
 | [G-Wolves HSK Pro ACE and the other models with a receiver of their own](protocols.md#g-wolves-hsk-pro-ace-and-the-other-models-with-a-receiver-of-their-own) | The model's own receiver or USB cable | no |
 | [G-Wolves WARG, HTS Plus (Pro), HTXU, Lycan, Fenrir Pro / Asym, HTX Mini](protocols.md#g-wolves-warg-hts-plus-pro-htxu-lycan-fenrir-pro--asym-htx-mini) | 8K receiver or USB cable | no |
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
-| [Glorious Model O / O- / D / D- Wireless](protocols.md#glorious-model-o-o--d-and-d--wireless) | 2.4 GHz receiver | Model O; O-/D/D- untried |
+| [Glorious Model O / O- / D / D- Wireless](protocols.md#glorious-model-o-o--d-and-d--wireless) | 2.4 GHz receiver | Model O and O-; D/D- untried |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
 | [Inphic In9 Pro, Attack Shark X11 / R1 / X3 Max](protocols.md#inphic-and-attack-shark-mice-1d57-receivers) | 2.4 GHz receiver (`1d57:fa65`, `1d57:fa60`) | yes |
