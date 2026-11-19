@@ -66,6 +66,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Darmoshark N5 (`1915:0723` receiver / `1915:073c` cable): the 64-byte `ff0a:0001`
   power query, level byte 6 (legacy) or byte 11 (v2); confirmed on hardware in
   [#430](https://github.com/HeyOkay/HaloBattery/issues/430) at 63%, matching the mouse.
+- Corsair M65 RGB Ultra Wireless (`1B1C:1BA6` SLIPSTREAM receiver or
+  `1B1C:1BB5` USB cable): battery level and charging state, confirmed on
+  hardware in [#411](https://github.com/HeyOkay/HaloBattery/issues/411).
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix

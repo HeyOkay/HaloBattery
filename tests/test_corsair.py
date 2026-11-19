@@ -46,6 +46,17 @@ def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
+def cable_bragi_reply(value=380, size=C.BRAGI_MSG_SIZE):
+    """The wired M65 answer: report id 0, then `02 00 <value LE16>` (OpenLinkHub)."""
+    payload = bytearray(size)
+    payload[0] = 0x00
+    payload[1] = C.BRAGI_CMD_GET
+    payload[2] = 0x00
+    payload[3] = value & 0xFF
+    payload[4] = (value >> 8) & 0xFF
+    return list(payload)
+
+
 def hs80_usb_reply(tenths=970, channel=0, command=0x02, status=0):
     report = bytearray(C.HS80_USB_REPORT_SIZE)
     report[:4] = bytes((0x01, channel, command, status))
@@ -131,6 +142,22 @@ class BragiParseTest(unittest.TestCase):
     def test_the_reporter_s_answer_parses_to_55_percent(self):
         # the frame from the probe output in #56: 01 02 00 26 02 ...
         self.assertEqual(C.parse_bragi(bragi_reply(550)), 55)
+
+    def test_the_wired_m65_answer_uses_the_openlinkhub_shape(self):
+        # #411, from the reporter's cable run: 00 02 00 e8 03 = 1000 = 100 %.
+        self.assertEqual(C.parse_bragi_cable(cable_bragi_reply(1000)), 100)
+        self.assertEqual(C.parse_bragi_cable(cable_bragi_reply(380)), 38)
+        self.assertIsNone(C.parse_bragi_cable(cable_bragi_reply(1001)))
+
+    def test_the_wired_m65_charge_codes_include_full(self):
+        # OpenLinkHub's m65rgbultraWU status map: 1 charging, 2 on battery,
+        # 3 full (the reporter's test-3 answer `00 02 00 03`).
+        self.assertTrue(C.parse_bragi_charge_cable(cable_bragi_reply(1)))
+        self.assertFalse(C.parse_bragi_charge_cable(cable_bragi_reply(2)))
+        self.assertFalse(C.parse_bragi_charge_cable(cable_bragi_reply(3)))
+        self.assertEqual(C.parse_bragi_charge_cable_state(cable_bragi_reply(3)), 3)
+        self.assertIsNone(C.parse_bragi_charge_cable(cable_bragi_reply(4)))
+        self.assertIsNone(C.parse_bragi_charge_cable_state(cable_bragi_reply(4)))
 
     def test_the_value_is_tenths_of_a_percent(self):
         self.assertEqual(C.parse_bragi(bragi_reply(765)), 76)
@@ -518,6 +545,106 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(out[0].level, 76)
         self.assertEqual(bus.opened, [b"d"])
 
+    def test_the_m65_slipstream_receiver_is_read(self):
+        # #411: 1b1c:1ba6 'CORSAIR SLIPSTREAM WIRELESS USB Receiver'; the dump
+        # carries the same ff42:0001/0002 pair as the Dark Core dongle. OpenLinkHub's
+        # m65rgbultraW package also asks property 0x10 for the charge state.
+        class ChargingReceiver(FakeDongle):
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                if len(self.writes) >= 3:
+                    return list(bragi_reply(1))
+                return list(bragi_reply(550))
+
+        out, bus = self.poll(
+            [entry(0x1BA6, b"m65", 1, 0xFF42, 0x0001,
+                   "CORSAIR SLIPSTREAM WIRELESS USB Receiver")],
+            {b"m65": ChargingReceiver(replies=[])})
+        self.assertEqual(len(out), 1)
+        st = out[0]
+        self.assertEqual((st.key, st.name, st.level, st.charging, st.kind),
+                         ("corsair:m65", "Corsair M65 RGB Ultra Wireless", 55, True, "mouse"))
+        self.assertTrue(st.online)
+        self.assertEqual(bus.opened, [b"m65"])
+        self.assertEqual(len(bus.dongles[b"m65"].writes), 3)
+        self.assertEqual(bus.dongles[b"m65"].writes[0][:4],
+                         bytes((0x00, 0x09, 0x02, 0x0F)))
+        self.assertEqual(bus.dongles[b"m65"].writes[2][:4],
+                         bytes((0x00, 0x09, 0x02, 0x10)))
+
+    def test_the_m65_cable_reads_level_and_charge_on_target_08(self):
+        # #411: 1b1c:1bb5 is the same mouse when its cable is connected. OpenLinkHub's
+        # m65rgbultraWU package sends 00 08 02 0f and 00 08 02 10 for level/charge.
+        class Cable(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {1: [cable_bragi_reply(380)],   # level
+                               2: [cable_bragi_reply(380)],   # level, confirmed
+                               3: [cable_bragi_reply(1)]}     # charge: 1 = charging
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        d = Cable()
+        out, bus = self.poll(
+            [entry(0x1BB5, b"m65-cable", 1, 0xFF42, 0x0001,
+                   "CORSAIR M65 RGB ULTRA WIRELESS Gaming Mouse")],
+            {b"m65-cable": d})
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.kind) for s in out],
+                         [("corsair:m65", "Corsair M65 RGB Ultra Wireless", 38, True,
+                           "mouse")])
+        self.assertEqual(len(d.writes), 3)
+        self.assertEqual(d.writes[0][:4], bytes((0x00, 0x08, 0x02, 0x0F)))
+        self.assertEqual(d.writes[2][:4], bytes((0x00, 0x08, 0x02, 0x10)))
+        self.assertEqual([len(w) for w in d.writes], [C.BRAGI_MSG_SIZE + 1] * 3)
+
+    def test_the_m65_full_charge_code_keeps_the_level_and_no_charging_ring(self):
+        # Test 3's answer was 00 02 00 e8 03 (100 %) followed by 00 02 00 03:
+        # state 3 is "full" in OpenLinkHub, not a charging state.
+        class Cable(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {1: [cable_bragi_reply(1000)],
+                               2: [cable_bragi_reply(1000)],
+                               3: [cable_bragi_reply(3)]}
+
+            def read(self, size, timeout_ms):
+                self.reads += 1
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        d = Cable()
+        out, bus = self.poll(
+            [entry(0x1BB5, b"m65-cable", 1, 0xFF42, 0x0001,
+                   "CORSAIR M65 RGB ULTRA WIRELESS Gaming Mouse")],
+            {b"m65-cable": d})
+        self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                         [("corsair:m65", 100, False)])
+
+    def test_the_m65_receiver_and_cable_share_one_icon(self):
+        # While charging, the receiver and the cable can both be present; the cable
+        # reading carries the charge state and must replace the receiver's copy.
+        class Cable(FakeDongle):
+            def __init__(self):
+                super().__init__(replies=[])
+                self.script = {1: [cable_bragi_reply(380)], 2: [cable_bragi_reply(380)],
+                               3: [cable_bragi_reply(1)]}
+
+            def read(self, size, timeout_ms):
+                q = self.script.get(len(self.writes)) or []
+                return list(q.pop(0)) if q else []
+
+        out, bus = self.poll(
+            [entry(0x1BA6, b"m65-rx", 1, 0xFF42, 0x0001),
+             entry(0x1BB5, b"m65-cable", 1, 0xFF42, 0x0001)],
+            {b"m65-rx": FakeDongle(bragi_reply(550)),
+             b"m65-cable": Cable()})
+        self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                         [("corsair:m65", 38, True)])
+        self.assertNotIn(b"m65-rx", bus.opened)
+
     def test_the_m75_slipstream_receiver_is_read(self):
         # #301: 1b1c:1bdc 'CORSAIR SLIPSTREAM WIRELESS USB Receiver' publishes the same
         # ff42:0001/0002 pair as the Dark Core dongle, so the same framed ask applies
@@ -535,6 +662,8 @@ class BragiPollTest(unittest.TestCase):
                                   0x0A97: "Corsair HS80 Max Wireless"})
         self.assertEqual(C.BRAGI_PIDS, {
             0x1B7F: "Corsair Dark Core RGB Pro SE",
+            0x1BA6: "Corsair M65 RGB Ultra Wireless",   # #411 (Slipstream receiver)
+            0x1BB5: "Corsair M65 RGB Ultra Wireless",   # #411 (the same mouse on its cable)
             0x0A40: "Corsair Virtuoso RGB Wireless SE",
             0x0A3E: "Corsair Virtuoso RGB Wireless SE",
             0x0A3D: "Corsair Virtuoso RGB Wireless SE",
@@ -548,6 +677,7 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3E])
         self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3D])
         self.assertEqual(C.BRAGI_KEYS[0x0A64], C.BRAGI_KEYS[0x0A62])
+        self.assertEqual(C.BRAGI_KEYS[0x1BA6], C.BRAGI_KEYS[0x1BB5])
         self.assertEqual(C.BRAGI_SESSION_PIDS, {0x0A40})
         self.assertNotIn(0x1B7F, C.PIDS)
         self.assertNotIn(0x0A40, C.PIDS)
