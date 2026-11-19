@@ -103,6 +103,7 @@ MESSAGES = {
     "provider.mchose": "Souris MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Manettes Nintendo Switch",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Manettes PlayStation",
     "provider.plantronics": "Casques Plantronics (adaptateur BT600)",
     "provider.pulsar": "Souris Pulsar / ATK VXE / Redragon",

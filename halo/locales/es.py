@@ -112,6 +112,7 @@ MESSAGES = {
     "provider.mchose": "Ratones MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Mandos Nintendo Switch",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Mandos PlayStation",
     "provider.plantronics": "Auriculares Plantronics (adaptador BT600)",
     "provider.pulsar": "Ratones Pulsar / ATK VXE / Redragon",

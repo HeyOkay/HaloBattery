@@ -104,6 +104,7 @@ MESSAGES = {
     "provider.mchose": "MCHOSE マウス",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Nintendo Switch コントローラー",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "PlayStation コントローラー",
     "provider.plantronics": "Plantronics ヘッドセット（BT600 アダプター）",
     "provider.pulsar": "Pulsar / ATK VXE / Redragon マウス",

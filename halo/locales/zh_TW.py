@@ -104,6 +104,7 @@ MESSAGES = {
     "provider.mchose": "MCHOSE 滑鼠",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Nintendo Switch 控制器",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "PlayStation 控制器",
     "provider.plantronics": "Plantronics 耳機（BT600 轉接器）",
     "provider.pulsar": "Pulsar / ATK VXE / Redragon 滑鼠",

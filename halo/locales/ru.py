@@ -102,6 +102,7 @@ MESSAGES = {
     "provider.mchose": "Мыши MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Контроллеры Nintendo Switch",
+    "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Контроллеры PlayStation",
     "provider.plantronics": "Гарнитуры Plantronics (адаптер BT600)",
     "provider.pulsar": "Мыши Pulsar / ATK VXE / Redragon",

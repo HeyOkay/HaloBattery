@@ -156,7 +156,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider)
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -267,6 +267,7 @@ PROVIDER_LABELS = {
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
     "nintendo": "Nintendo Switch controllers",
+    "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "plantronics": "Plantronics headsets (BT600 adapter)",
@@ -305,7 +306,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), KrakenV4Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
 
 
 # ---------------------------------------------------------------- config
