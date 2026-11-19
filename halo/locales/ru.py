@@ -1,6 +1,11 @@
 """Russian translations for the complete application and native settings UI."""
 
 MESSAGES = {
+    "provider.phone_link": "Связь с телефоном",
+    "icon.phone": "Телефон",
+    "state.phone_link_stale": "Данные «Связи с телефоном» устарели; откройте приложение, чтобы обновить их",
+    "state.phone_link_unavailable": "Данные о заряде из «Связи с телефоном» недоступны",
+    "state.phone_link_last_reported": "{level}% (последние данные «Связи с телефоном»)",
     "startup.hid_unavailable": 'Windows не удалось загрузить HID-модуль. Уровни заряда по USB и 2,4 ГГц недоступны. Bluetooth и настройки продолжают работать. Подробности - в диагностике.',
     "state.poll_unavailable": 'Не удалось обновить заряд',
     "state.poll_stale": '{level}% (последнее показание; не удалось обновить заряд)',

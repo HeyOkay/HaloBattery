@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class SettingsSourcesTests(unittest.TestCase):
     def test_requested_setting_glyphs_keep_their_official_geometry(self):
-        names = {"languages", "circle-arrow-up", "smartphone-nfc", "bluetooth",
+        names = {"languages", "circle-arrow-up", "smartphone", "smartphone-nfc", "bluetooth",
                  "circle", "loader-circle", "sun-moon", "battery-full", "bell-off",
                  "keyboard", "headphones", "mic", "speaker", "webcam", "heart-pulse",
                  "house", "watch", "tv-minimal", "radar", "gamepad-2", "eye-closed"}

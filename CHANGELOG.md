@@ -19,6 +19,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Add pointer-following outline highlights to rounded Settings controls without
   permanent borders.
+- Show the selected Phone Link mobile device's cached battery with a phone
+  pictogram, independently of Bluetooth. Previously admitted values remain
+  explicitly last-reported; ancient cold-start caches cannot seed a level.
+  This requires a supported Windows 11 Phone Link companion cache, not a
+  real-time or all-linked-phones API. Phones classified by existing Bluetooth
+  metadata also use the phone glyph.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
@@ -69,6 +75,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Keep the last reported Phone Link charge visible when its cache does not
+  change; stop stale charging animation and do not treat it as a live reading.
 - Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
   block Windows session-end cleanup after tray icons disappear.
 - Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the

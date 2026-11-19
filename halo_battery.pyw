@@ -145,7 +145,7 @@ from providers import hidlist  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
                        AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
                        DeviceStatus, DjiProvider,
-                       EightBitDoProvider,
+                       EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
@@ -261,6 +261,7 @@ PROVIDER_LABELS = {
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "plantronics": "Plantronics headsets (BT600 adapter)",
+    "phone_link": "Phone Link",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
@@ -288,7 +289,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             AsusProvider(), GWolvesProvider(), AulaProvider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider(), EndgameWEProvider(),
+            SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             IRocksProvider(),
@@ -999,7 +1000,7 @@ MIC_WORDS = ("microphone", " mic", "mic ")
 def badge_for(st: DeviceStatus) -> str:
     if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone",
                    "speaker", "webcam", "health", "smart_home",
-                   "watch", "display", "tracker"):   # from the device
+                   "watch", "display", "tracker", "phone"):   # from the device
         return st.kind
     n = st.name.lower()
     if any(w in n for w in MIC_WORDS):
@@ -1020,7 +1021,7 @@ PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboa
                      ("microphone", "Microphone"), ("speaker", "Speaker"), ("webcam", "Webcam"),
                      ("health", "Health device"), ("smart_home", "Smart home"),
                      ("watch", "Smartwatch"), ("display", "Display / TV"), ("tracker", "Tag / Tracker"),
-                     ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
+                     ("phone", "Phone / tablet"), ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 CONTROLLER_BRANDS = ("default", "xbox", "playstation", "nintendo")
 CONTROLLER_PICTOGRAMS = ("gamepad", "dualshock", "dualsense")
@@ -1201,8 +1202,16 @@ def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "", *, la
                           name=name or st.name, state=device_state(st, left, language=language))
 
 
+def phone_link_last_reported(st: DeviceStatus) -> bool:
+    """A known cached percentage can be drawn without claiming a live connection."""
+    return (st.source == "phone_link" and st.ui_message == "state.phone_link_last_reported"
+            and type(st.level) is int and 0 <= st.level <= 100)
+
+
 def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
+    if phone_link_last_reported(st):
+        return i18n.translate("state.phone_link_last_reported", language=language, level=st.level)
     if st.polling_stale:
         return i18n.translate("state.poll_unavailable" if st.level is None else "state.poll_stale",
                               language=language, level=st.level)
@@ -1627,7 +1636,7 @@ class App:
         animate = self.cfg["animation"] and st.charging and st.online
         text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
         brand, color = self.controller_style(st)
-        state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+        state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,
                 size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
                 self.cfg.get("filled_icons", False))

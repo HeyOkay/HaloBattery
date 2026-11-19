@@ -368,7 +368,7 @@ class PresentationTests(unittest.TestCase):
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Enceinte", "Webcam",
                                   "Appareil de santé", "Maison connectée", "Montre connectée",
-                                  "Écran / TV", "Balise / Localisateur", "Casque",
+                                  "Écran / TV", "Balise / Localisateur", "Téléphone", "Casque",
                                   "Manette", "Bluetooth"])
 
     def test_immediate_switch_all_icons_placeholder_and_both_directions(self):
