@@ -6,7 +6,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
+- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
 ### Changed
+
+- Keep the SignPath TEST credential in the protected signing jobs only; build
+  and packaging jobs do not receive or forward it.
+
+- Add isolated, opt-in SignPath test signing for application and installer builds.
 - MCHOSE V9 no longer retries a refused output report as a feature report;
   Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
   can show no reading until that connection's protocol is verified. Malformed
@@ -17,6 +26,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add pointer-following outline highlights to rounded Settings controls without
+  permanent borders.
+- Show the selected Phone Link mobile device's cached battery with a phone
+  pictogram, independently of Bluetooth. Previously admitted values remain
+  explicitly last-reported; ancient cold-start caches cannot seed a level.
+  This requires a supported Windows 11 Phone Link companion cache, not a
+  real-time or all-linked-phones API. Phones classified by existing Bluetooth
+  metadata also use the phone glyph.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
@@ -67,6 +84,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Keep the last reported Phone Link charge visible when its cache does not
+  change; stop stale charging animation and do not treat it as a live reading.
+- Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
+  block Windows session-end cleanup after tray icons disappear.
+- Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the
+  HyperX Cloud III feature-report fallback works again; let a read with its
+  own longer timeout (HyperX Cloud Flight, 2 s) end empty instead of failing; close the
+  Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
+- Keep cached HID transport error diagnostics available without new native calls;
+  preserve bounded feature-call timeout and handle-cleanup behavior.
+- Keep Settings highlights responsive during pointer movement and reuse device-family row geometry during expansion.
+- Prevent native dropdown containers from clipping Settings highlights without enlarging menus.
+- Match light-theme hover backgrounds on the hamburger and neutral title-bar
+  buttons to the active navigation background.
 - Query MCHOSE V9 Pro only through its sourced output-report transport instead
   of retrying a refused request as an unconfirmed feature report.
 - Keep Atlas Air on its confirmed SInf/GSI exchange when the headset is silent,
@@ -81,10 +112,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Refuse Glorious query echoes and provisional replies without suppressing real 0%.
 - Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
   or disconnected-keyboard status as a current keyboard reading.
-- Refuse malformed percentages in AM Infinity, BlackShark PA, MCHOSE A5 and
+- Refuse malformed percentages in AM Infinity and
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
+- Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
 

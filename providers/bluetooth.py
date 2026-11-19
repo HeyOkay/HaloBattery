@@ -157,7 +157,7 @@ AUDIO_SERVICES = ("0000110b-", "0000111e-", "00001108-", "00001131-")   # A2DP s
 
 
 def kind_from_class(raw, le: bool) -> str:
-    """headset / mouse / keyboard / gamepad from the Bluetooth Class of Device
+    """Device kind from the Bluetooth Class of Device
     (classic) or the GAP Appearance value (LE); "" if unknown or other."""
     try:
         raw = int(raw)
@@ -165,12 +165,21 @@ def kind_from_class(raw, le: bool) -> str:
         return ""
     if le:
         cat, sub = raw >> 6, raw & 0x3F
+        # Bluetooth SIG Assigned Numbers: GAP 0x0040 is Generic Phone.
+        # https://www.bluetooth.com/specifications/assigned-numbers/
+        if cat == 1 and sub == 0:
+            return "phone"
         if cat == 0x0F:                               # HID
             return {1: "keyboard", 2: "mouse", 3: "gamepad", 4: "gamepad"}.get(sub, "")
         if cat == 0x25:                               # wearable audio device
             return "headset"
         return ""
     major, minor = (raw >> 8) & 0x1F, (raw >> 2) & 0x3F
+    # Phone major class 2; minor 0..3 = generic/cellular/cordless/smartphone.
+    # ClassOfDevice is already present in the existing Windows snapshot;
+    # this classification adds no Bluetooth request or name-based guessing.
+    if major == 2 and minor in (0, 1, 2, 3):
+        return "phone"
     if major == 4:                                    # audio / video
         return "headset" if minor in (1, 2, 6) else ""   # wearable headset, hands-free, headphones
     if major == 5:                                    # peripheral

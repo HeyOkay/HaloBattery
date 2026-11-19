@@ -202,6 +202,7 @@ public sealed partial class MainWindow
             Height = 32, MinHeight = 32, CornerRadius = new(16), Padding = new(14, 4, 14, 4),
             Background = Brush(dark ? "#303030" : "#ECECEC"), Foreground = TextBrush, BorderThickness = new(0)
         };
+        EnableControlSpotlight(search);
         AutomationProperties.SetName(search, T("settings.iconify_search"));
         var searchButton = Button(T("settings.iconify_search_button"), true);
         var searchRow = new Grid { ColumnSpacing = 8 };
