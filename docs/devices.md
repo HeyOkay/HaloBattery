@@ -44,6 +44,7 @@
 | [Logitech G PRO X 2 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver | yes |
 | [Logitech PRO X 3 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver; disabled in 1.17.0 | no; protocol investigation pending |
 | [Logitech G502 LIGHTSPEED, G502 X PLUS](protocols.md#logitech-g502-lightspeed-g502-x-plus) | Lightspeed receiver | yes |
+| [Logitech MX Revolution](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | 2.4 GHz receiver (`046D:C525`) | yes (reporter confirmed) |
 | [MCHOSE A5 Pro Max](protocols.md#mchose-a5-pro-max) | 2.4 GHz receiver or USB cable | yes |
 | [MCHOSE A7 V2 Ultra](protocols.md#mchose-a7-v2-ultra) | 2.4 GHz receiver | no |
 | [MCHOSE G7](protocols.md#mchose-g7) | USB (chip 'YJX-CHIP') | yes |
@@ -106,7 +107,7 @@ Devices added by integrating the open upstream pull requests; details and author
 
 | Family | Devices |
 |---|---|
-| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O Wireless |
+| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O Wireless, Logitech MX Revolution |
 | Keyboards | Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X / VGN N75 PRO, AULA F108 Pro, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), Teevolution Terra Pro, MCHOSE K87, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
 | Headsets | Logitech G535, Turtle Beach Stealth Pro II / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Controllers | NVIDIA SHIELD (2017), FlyDigi Vader 5 Pro |

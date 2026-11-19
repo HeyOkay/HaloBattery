@@ -34,6 +34,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   This requires a supported Windows 11 Phone Link companion cache, not a
   real-time or all-linked-phones API. Phones classified by existing Bluetooth
   metadata also use the phone glyph.
+- Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
+  the mouse pictogram; the existing charge-register reader already returned
+  75% on the reporter's receiver. Confirmed on hardware by @breezywine in
+  [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.
