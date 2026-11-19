@@ -592,6 +592,31 @@ percentage matched URX HUB. The charging state is **not exposed**: a second prob
 the charging cable in returned byte-identical replies (`08 00 07 4c ...`), so the app shows
 the level only rather than inventing a charger state.
 
+### Red Square Alumix TKL (RSQ-20055)
+
+**Connection:** 2.4 GHz receiver (342D:E411, product string `RSQ_20055_2.4G`)
+
+The receiver exposes the keyboard's config channel as usage page `0xFF60`, usage `0x61`.
+Red Square's web configurator (`conf.red-square.org`) sends a 32-byte tunnel frame on
+output report **7**:
+
+    request  07 | 05 01 01 0A 07 8B 00 ...        report id 7, settings read (0x8B)
+    reply    07 | 05 A1 01 0A 07 8B <sleep> <debounce> <battery> <module> ...
+
+The level is the ninth byte after the report id (offset 8). The same read is what the
+configurator calls `getDeviceSleepTime`; its model table does not draw a battery icon for
+this family, but the response still carries the byte. Only this product string is queried:
+`342D:E411` is shared by several Red Square models, and the receiver's DFU collection is
+never opened.
+
+The configurator's wireless-module driver has **no charging query and no charging event**
+for this family, so the app reports the level and marks charging unknown. Whether the
+keyboard exposes a charger state at all is being checked with the reporter (#460).
+
+Source: Red Square's public web configurator (`conf.red-square.org`, model table and
+`GskyWirelessModuleSeries` driver). Not open source; the protocol notes above are the
+independently written implementation.
+
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
 **Connection:** Lightspeed, Unifying or Bolt receiver

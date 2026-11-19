@@ -13,6 +13,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Red Square Alumix TKL (RSQ-20055) battery level over its 2.4 GHz receiver,
+  using the settings read from Red Square's web configurator ([#460](https://github.com/HeyOkay/HaloBattery/issues/460)).
+  Charging is not exposed by that driver yet, so it stays unknown pending the
+  reporter's check.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
