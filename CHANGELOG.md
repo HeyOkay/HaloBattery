@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
+- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
 ### Changed
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
@@ -73,6 +77,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   preserve bounded feature-call timeout and handle-cleanup behavior.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
+- Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
 
