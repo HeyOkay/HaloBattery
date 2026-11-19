@@ -32,6 +32,7 @@
 | [HyperX Cloud II Wireless](protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
 | [HyperX Cloud II Wireless (Kingston revision)](protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle (`0951:1718`) | yes |
 | [HyperX Cloud III S Wireless](protocols.md#hyperx-cloud-iii-s-wireless) | 2.4 GHz dongle | yes |
+| [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) (03F0:0FCC receiver) | 2.4 GHz dongle | yes (level and charging confirmed by reporter) |
 | [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |

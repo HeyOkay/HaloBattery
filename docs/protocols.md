@@ -101,6 +101,18 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+The `03F0:0FCC` receiver is matched separately, using the same `FF13:0001`
+collection and existing requests. Source:
+[HyperBatteryMonitor Cloud3WirelessAlternateReceiverDevice.cs](https://github.com/davidsantanaalves/HyperBatteryMonitor/blob/main/Devices/Cloud3WirelessAlternateReceiverDevice.cs),
+`Definition`, `QueryBatteryAsync`, `QueryChargeStatusAsync`, `ProcessInputReport`.
+Its battery parser uses the same state gate and byte 4 percentage. HBM pads output
+reports to the descriptor length; Halo retains its existing 62-byte request, which
+the reporter confirmed on their receiver. HBM treats charging byte 1 as charging,
+while Halo retains its existing 1/2 interpretation. No new commands or microphone
+queries are introduced. The reporter confirmed this path on hardware: detection,
+level, charging, restart and receiver replug all recovered.
+The key remains `hyperx:0fcc`; it is not merged with another receiver PID.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)
