@@ -358,9 +358,11 @@ as the report id, so the query is sent as `00 AA 10 18 ...` (33 bytes to hidapi,
 32 on the wire); without the leading zero the receiver answers only a short
 `55 18` acknowledgement and no level arrives. The first request after the link
 wakes up can be lost, and the receiver answers more readily while the 2.4 GHz
-link is active; up to four attempts are made. Measured on a GS3075T by the
-reporter of #379; other GANSS T-series boards use the same receiver but are not
-claimed.
+link is active; the query is still sent once per poll and never re-sent after
+silence or a refused write. Measured on a GS3075T by the reporter of #379. The
+same receiver ships with other Sonix boards (other GANSS T-series models, the
+ATTACKSHARK X66), so only a receiver whose product string contains "GS3075T"
+(the reporter's says "GS3075T 2.4G") is asked.
 
 ### MCHOSE A5 Pro Max
 

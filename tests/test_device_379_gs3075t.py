@@ -106,6 +106,40 @@ class PollTest(unittest.TestCase):
         out, _ = self.poll(FakeKeyboard([reply()]), entries(pid=0xFEFC))
         self.assertEqual(out, [])
 
+    def test_a_fefe_receiver_of_another_board_gets_no_command(self):
+        # The same 0C45:FEFE FF60:0061 receiver ships with the ATTACKSHARK X66 (#451).
+        for product in ("X66 2.4G", "", None):
+            with self.subTest(product=product):
+                ents = entries()
+                ents[0]["product_string"] = product
+                fake = FakeKeyboard([reply()])
+                out, diag = self.poll(fake, ents)
+                self.assertEqual(out, [])
+                self.assertEqual(fake.sent, [])
+                self.assertIsNone(fake.path)
+                self.assertTrue(any("not a GS3075T" in line for line in diag))
+
+    def test_a_silent_keyboard_gets_one_write_per_poll(self):
+        fake = FakeKeyboard([])
+        out, _ = self.poll(fake, entries())
+        self.assertEqual(out, [])
+        self.assertEqual(fake.sent, [bytes(G.write_frame())])
+
+    def test_a_refused_write_is_not_repeated(self):
+        class Refusing(FakeKeyboard):
+            def write(self, data):
+                self.sent.append(bytes(data))
+                return -1
+
+            def read(self, size, timeout_ms=0):
+                raise AssertionError("no read after a refused write")
+
+        fake = Refusing([reply()])
+        out, diag = self.poll(fake, entries())
+        self.assertEqual(out, [])
+        self.assertEqual(len(fake.sent), 1)
+        self.assertTrue(any("refused" in line for line in diag))
+
 
 if __name__ == "__main__":
     unittest.main()

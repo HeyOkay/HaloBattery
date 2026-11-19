@@ -18,11 +18,15 @@ hidapi and puts the 32-byte query above on the wire. Without it the receiver
 answers only a short ``55 18`` acknowledgement and the level never arrives.
 
 The first request after the link wakes up can be lost, and the receiver answers
-more readily while the 2.4 GHz link is active. Up to four attempts are made.
+more readily while the 2.4 GHz link is active. The query is still sent once per
+poll and never re-sent after silence or a refused write: a lost first request is
+answered on the next poll.
 
 The reporter measured both the level and the charging byte on a GS3075T. The
-same receiver ships with other GANSS T-series boards; only this model is
-claimed here.
+same 0C45:FEFE receiver and FF60:0061 collection ship with other Sonix boards
+(other GANSS T-series models, the ATTACKSHARK X66, which takes a different
+command), so the query is only sent to a receiver whose product string names
+the GS3075T (the reporter's says "GS3075T 2.4G", #379).
 """
 from __future__ import annotations
 
@@ -48,8 +52,8 @@ LEVEL_AT = 25
 CHARGE_AT = 26
 CHARGE_ON = (0x01, 0x02)         # 02 charging up; 01 cable in and full
 READ_MS = 100
-ATTEMPTS = 4
 REPORT_ID = 0x00
+PRODUCT_MARK = "GS3075T"         # product string of the confirmed receiver (#379)
 
 
 def request() -> List[int]:
@@ -100,28 +104,27 @@ class Gs3075tProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            for attempt in range(ATTEMPTS):
-                if attempt:
-                    time.sleep(0.2)
+            # One write per poll: never re-sent after silence or a refused write.
+            try:
+                sent = dev.write(write_frame())
+            except (OSError, ValueError) as e:
+                self._diag.append(f"    write: {e}")
+                return None
+            if sent is not None and sent < 0:
+                self._diag.append("    the write was refused")
+                return None
+            deadline = time.time() + 0.75
+            while time.time() < deadline:
                 try:
-                    dev.write(write_frame())
+                    r = dev.read(REPORT_LEN, READ_MS)
                 except (OSError, ValueError) as e:
-                    self._diag.append(f"    write: {e}")
+                    self._diag.append(f"    read: {e}")
                     return None
-                deadline = time.time() + 0.75
-                while time.time() < deadline:
-                    try:
-                        r = dev.read(REPORT_LEN, READ_MS)
-                    except (OSError, ValueError) as e:
-                        self._diag.append(f"    read: {e}")
-                        return None
-                    parsed = parse_reply(r)
-                    if parsed is not None:
-                        self._diag.append(f"    answer: {hexdump(r, 12)} -> "
-                                          f"{parsed[0]}% charging={parsed[1]}")
-                        return parsed
-                if attempt + 1 < ATTEMPTS:
-                    self._diag.append("    no answer yet; retrying")
+                parsed = parse_reply(r)
+                if parsed is not None:
+                    self._diag.append(f"    answer: {hexdump(r, 12)} -> "
+                                      f"{parsed[0]}% charging={parsed[1]}")
+                    return parsed
             self._diag.append("    no answer (keyboard off or asleep)")
             return None
         finally:
@@ -151,7 +154,13 @@ class Gs3075tProvider(Provider):
             if path in seen:
                 continue
             seen.add(path)
-            name = (d.get("product_string") or "").strip() or "GANSS GS3075T"
+            product = (d.get("product_string") or "").strip()
+            if PRODUCT_MARK not in product.upper():
+                # Shared Sonix receiver of another board: send nothing to it.
+                self._diag.append(f"[GS3075T] {product or '(no product string)'} "
+                                  f"vid={VID:04x} pid={PID:04x}: not a GS3075T, not asked")
+                continue
+            name = product
             self._diag.append(f"[GS3075T] {name} vid={VID:04x} pid={PID:04x} "
                               f"iface={d.get('interface_number')}")
             got = self._read(path)
