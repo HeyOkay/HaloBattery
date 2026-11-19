@@ -17,6 +17,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add pointer-following outline highlights to rounded Settings controls without
+  permanent borders.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
@@ -75,6 +77,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
 - Keep cached HID transport error diagnostics available without new native calls;
   preserve bounded feature-call timeout and handle-cleanup behavior.
+- Keep Settings highlights responsive during pointer movement and reuse device-family row geometry during expansion.
+- Prevent native dropdown containers from clipping Settings highlights without enlarging menus.
+- Match light-theme hover backgrounds on the hamburger and neutral title-bar
+  buttons to the active navigation background.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 
