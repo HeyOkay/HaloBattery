@@ -27,20 +27,25 @@
 | [GameSir G7 Pro; FlyDigi Vader Pro (tested by users)](protocols.md#gamesir-g7-pro-flydigi-vader-pro) | 2.4 GHz receiver (shows up as an Xbox controller) | yes |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
+| [Inphic In9 Pro, Attack Shark X11 / R1 / X3 Max](protocols.md#inphic-and-attack-shark-mice-1d57-receivers) | 2.4 GHz receiver (`1d57:fa65`, `1d57:fa60`) | yes |
 | [HyperX Cloud Alpha 2](protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
 | [HyperX Cloud II Core Wireless](protocols.md#hyperx-cloud-ii-core-wireless) | 2.4 GHz dongle or USB cable | yes |
 | [HyperX Cloud II Wireless](protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle | no |
+| [HyperX Cloud II Wireless (Kingston revision)](protocols.md#hyperx-cloud-ii-wireless) | 2.4 GHz dongle (`0951:1718`) | yes |
 | [HyperX Cloud III S Wireless](protocols.md#hyperx-cloud-iii-s-wireless) | 2.4 GHz dongle | yes |
+| [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) (03F0:0FCC receiver) | 2.4 GHz dongle | yes (level and charging confirmed by reporter) |
 | [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [Keychron Ultra-Link 8K, Keychron M5](protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
+| [LAMZU Atlantis V2](protocols.md#lamzu-atlantis-v2) | 2.4 GHz receiver (3554:F50D) or USB cable (3554:F50F) | yes (level and charging) |
 | [Lofree Hyzen](protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
 | [Lofree Flow Lite84](protocols.md#lofree-flow-lite84) | 2.4 GHz dongle | yes (earlier community report; current guard not hardware-retested) |
 | [Logitech (more HID++ 2.0 devices, older HID++ 1.0 keyboards and mice, G-series headsets)](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
 | [Logitech G PRO X 2 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver | yes |
 | [Logitech PRO X 3 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver; disabled in 1.17.0 | no; protocol investigation pending |
 | [Logitech G502 LIGHTSPEED, G502 X PLUS](protocols.md#logitech-g502-lightspeed-g502-x-plus) | Lightspeed receiver | yes |
+| [Logitech MX Revolution](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | 2.4 GHz receiver (`046D:C525`) | yes (reporter confirmed) |
 | [MCHOSE A5 Pro Max](protocols.md#mchose-a5-pro-max) | 2.4 GHz receiver or USB cable | yes |
 | [MCHOSE A7 V2 Ultra](protocols.md#mchose-a7-v2-ultra) | 2.4 GHz receiver | no |
 | [MCHOSE G7](protocols.md#mchose-g7) | USB (chip 'YJX-CHIP') | yes |
@@ -57,6 +62,8 @@
 | [Razer DeathAdder V4 Pro](protocols.md#razer-deathadder-v4-pro) | 2.4 GHz receiver | yes |
 | [Razer DeathStalker V2 Pro TKL](protocols.md#razer-deathstalker-v2-pro-tkl) | HyperSpeed receiver or USB cable | yes |
 | [Razer DeathStalker V2 Pro, BlackWidow V3 Mini, V4 Mini and V4 Tenkeyless HyperSpeed](protocols.md#razer-deathstalker-v2-pro-blackwidow-v3-mini-v4-mini-and-v4-tenkeyless-hyperspeed) | HyperSpeed receiver or USB cable | no |
+| [Razer Kraken V4](protocols.md#razer-kraken-v4) | 2.4 GHz receiver (1532:056C) or USB-C cable (1532:056B) | yes (reporter confirmed) |
+| [Razer Pro Click V2 Vertical Edition](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | yes |
 | [Razer wireless mice (other OpenRazer models)](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | likely |
 | [Sony DualSense (PS5)](protocols.md#sony-dualsense-ps5) | USB or Bluetooth | yes |
 | [Sony DualShock 4 (PS4)](protocols.md#sony-dualshock-4-ps4) | USB cable and Bluetooth | yes |
@@ -102,9 +109,9 @@ Devices added by integrating the open upstream pull requests; details and author
 
 | Family | Devices |
 |---|---|
-| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O Wireless |
+| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O Wireless, Logitech MX Revolution |
 | Keyboards | Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X / VGN N75 PRO, AULA F108 Pro, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), Teevolution Terra Pro, MCHOSE K87, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
-| Headsets | Logitech G535, Turtle Beach Stealth Pro II / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
+| Headsets | Logitech G535, Turtle Beach Stealth Pro II (incl. Xbox 10f5:2285) / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Controllers | NVIDIA SHIELD (2017), FlyDigi Vader 5 Pro |
 
 ## Phone Link selected mobile device

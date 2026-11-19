@@ -92,7 +92,7 @@ class AtlantisProviderTest(unittest.TestCase):
     def tearDown(self):
         L.hid, L.hidlist, L.compx_output_length = self._saved
 
-    def add_mouse(self, pid, prefix):
+    def add_mouse(self, pid, prefix, product="LAMZU THORN"):
         shapes = [(0, 0x0001, 0x0006), (1, 0xFF05, 0), (1, 0xFF03, 0),
                   (1, 0x000C, 1), (1, 0x0001, 0x80), (1, 0xFF02, 2),
                   (1, 0xFF04, 2), (2, 0x0001, 2)]
@@ -100,7 +100,7 @@ class AtlantisProviderTest(unittest.TestCase):
             self.entries.append({"vendor_id": L.COMPX_VID, "product_id": pid,
                                  "interface_number": iface, "usage_page": page,
                                  "usage": usage, "path": f"{prefix}-{n}".encode(),
-                                 "product_string": "LAMZU THORN"})
+                                 "product_string": product})
 
     @staticmethod
     def power_reply(level, charging=0, millivolts=0):
@@ -124,6 +124,15 @@ class AtlantisProviderTest(unittest.TestCase):
         self.replies = [self.power_reply(95, 1, 4205)]
         found = L.LamzuAtlantisProvider().poll()
         self.assertEqual([("lamzu:3554f510", "LAMZU Thorn (wired)", 95, True, "lamzu")],
+                         [(s.key, s.name, s.level, s.charging, s.source) for s in found])
+
+    def test_atlantis_pro_cable_uses_the_atlantis_icon_not_thorn(self):
+        # #408: F50F is shared; Windows calls this one "LAMZU Atlantis Pro".
+        # It must share the Atlantis V2 receiver's key, not the Thorn's.
+        self.add_mouse(0xF50F, "cable", product="LAMZU Atlantis Pro")
+        self.replies = [self.power_reply(95, 1, 4205)]
+        found = L.LamzuAtlantisProvider().poll()
+        self.assertEqual([("pulsar:3554f50d", "LAMZU Atlantis Pro (wired)", 95, True, "lamzu")],
                          [(s.key, s.name, s.level, s.charging, s.source) for s in found])
 
     def test_cable_wins_when_receiver_and_cable_are_both_present(self):

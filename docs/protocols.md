@@ -87,6 +87,8 @@ The same `66 <cmd>` 62-byte exchange as the Cloud III Wireless row, from @dantif
 
 The vendor collection, picked by usage page rather than position (0xFF90:0x0303): the dongle carries four collections on the one interface, so the first one is not the right one. A 52-byte output report `06 ff bb <command> 00` is answered by 20 bytes echoing the command: command 0x02 carries the level in byte 7 (voltage in bytes 5-6), command 0x03 reports charging in byte 4 - the same exchange HeadsetControl uses for these two product ids. **Unverified** - no Cloud II Wireless was on hand, so a reply that does not echo the command is ignored and a level above 100 refused rather than shown
 
+The **Kingston-branded revision** (`0951:1718`, sold before HyperX moved to HP vendor ids) is the same headset with a longer exchange, documented by three sources that agree byte for byte: HeadsetControl's `hyperx_cloud_2_wireless_kingston.hpp` (written from LennardKittner/HyperHeadset), HyperHeadset's `cloud_ii_wireless.rs`, and Agustin-Jerusalinsky/hyperx-cloud-II-battery. Its vendor collection is `0xFF13:0x0001`, not the consumer pages beside it; the request is 62 bytes, `06 00 02 00 9A 00 00 68 4A 8E 0A 00 00 00 BB <cmd> <payload>`, sent after one input-report read that the references use as a prepare step. The reply is report `0x0B` (`0B 00 BB <cmd> ...`): byte 7 is the level for command `0x02`, and byte 4 is the charging state for command `0x03` (1 charging, 2 fully charged - both mean on the cable; 0 not charging). **Confirmed on hardware** in [#192](https://github.com/HeyOkay/HaloBattery/issues/192): the level and the charging indication both followed the cable on the reporter's dongle.
+
 ### HyperX Cloud III S Wireless
 
 **Connection:** 2.4 GHz dongle (03F0:02CC, and 03F0:06BE which the reference also lists)
@@ -98,6 +100,18 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 **Connection:** 2.4 GHz dongle (03F0:05B7, and 03F0:0C9D which the reference also lists)
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
+
+The `03F0:0FCC` receiver is matched separately, using the same `FF13:0001`
+collection and existing requests. Source:
+[HyperBatteryMonitor Cloud3WirelessAlternateReceiverDevice.cs](https://github.com/davidsantanaalves/HyperBatteryMonitor/blob/main/Devices/Cloud3WirelessAlternateReceiverDevice.cs),
+`Definition`, `QueryBatteryAsync`, `QueryChargeStatusAsync`, `ProcessInputReport`.
+Its battery parser uses the same state gate and byte 4 percentage. HBM pads output
+reports to the descriptor length; Halo retains its existing 62-byte request, which
+the reporter confirmed on their receiver. HBM treats charging byte 1 as charging,
+while Halo retains its existing 1/2 interpretation. No new commands or microphone
+queries are introduced. The reporter confirmed this path on hardware: detection,
+level, charging, restart and receiver replug all recovered.
+The key remains `hyperx:0fcc`; it is not merged with another receiver PID.
 
 ### JBL Quantum 910 Wireless
 
@@ -155,6 +169,16 @@ On battery and after charge completion, it displays the reported level unchanged
 **Connection:** 2.4 GHz receiver (1532:0555)
 
 The headset's own "PA" protocol: output reports 0x02 on the vendor interface 0xFF00, remote mode 0xE1, commands 0x21 (battery) and 0x2A (charging)
+
+### Razer Kraken V4
+
+**Connection:** 2.4 GHz receiver (1532:056C) or USB-C cable (1532:056B), both on usage page 0xFF14
+
+The receiver presents a MediaTek command channel, the same 64-byte frame family as the BlackShark V2 HyperSpeed: report id 2, sequence in byte 2, payload length in byte 6, address/domain in byte 9 (0x80 through the receiver, 0x00 on the cable), command in byte 10 and an XOR checksum in byte 62. Commands 0x21 (battery) and 0x2A (charging) are sent in that order. The reply's value byte is the percentage for 0x21, and 0 on battery / 1 while charging for 0x2A; the data-valid byte is not the charging state. If 0x2A is silent or returns anything other than 0/1, the level is still shown with charging unknown.
+
+OpenRGB's [Kraken V4 merge request](https://gitlab.com/CalcProgrammer1/OpenRGB/-/merge_requests/3042) documents this frame and the packet capture for this model, and [openrazer issue 2298](https://github.com/openrazer/openrazer/issues/2298) identifies the device. OpenRGB lists commands 0x21 and 0x2A as present but not decoded; the BlackShark sibling uses 0x21 for the level and 0x2A for charging. [Sebax95's Kraken V4 Pro battery tool](https://github.com/Sebax95/Razer-Kraken-V4-Pro-Battery-Detector-Linux) documents the same 0x2A mapping and warns that the reply's data-valid byte is always 1, not the charging state. Read-only: no setting, lighting or firmware command is sent.
+
+**Status:** **confirmed on hardware by @Zireael3Z**: the level matched the receiver at 87%, and the charging ring changed and reported charging while the cable was connected.
 
 ### Sony INZONE H9
 
@@ -296,12 +320,32 @@ level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
 the last confirmed value is retained greyed for the existing cache interval.
 The original reading was confirmed by the reporter; this flag correction uses
 literal fake replies, with no new hardware commands.
+### Inphic and Attack Shark mice (1D57 receivers)
+
+**Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)
+
+The mouse announces its level and charging state by itself; nothing is ever written to it. The frames were decoded from INPHIC HUB, the vendor's own Windows app, which opens the status collection `000a:0000` with hidapi (and keeps `ff00:0001` for its writes). Windows hands the report id back first:
+
+    standard frame    03 <model> 40 <sub> <level>
+    X6/R1 generation  03 10 40 <stage> <level/10>
+
+`<sub>` is `0x01` for a level, `0x02` for full (shown as 100 %) and `0x03` for charging. A frame carrying only the charging state keeps the last level on screen, as in the vendor app; a level outside 1..100 is refused. On the X3 Max `0x02` is its cable state rather than a full battery — a 67 % unit sent it a minute after plugging in — so the last level stays and the icon shows charging. The `0x10` generation is the exception: the stage byte holds the DPI stage rather than the charging sub-command, the level arrives in steps of ten, and its frames carry no charging state at all — so an R1 on the cable keeps its normal icon by design. The dongle's config ACK (`03 10 50 ...`) and DPI-button report (`03 10 10 ...`) share the shape and are rejected by the `0x40` command check.
+
+Model codes: `0x95 / 0x90 / 0x93 / 0x99` on the Inphic In9 Pro and `0x3F` on the Delux M900 Pro (see [Delux M900 Pro and VGN N75 PRO](#delux-m900-pro-and-vgn-n75-pro)) on `fa65`, `0x55` (X11), `0x4E` (X3 Max) and `0x10` (X6/R1) on the `fa60` receivers. Each receiver is read only for the codes proven on it. Frames arrive every couple of seconds; a poll that misses one keeps the last level, greys it out after a while, then drops the icon — a value is never invented.
+
+Sources: INPHIC HUB's own parse (the vendor app the reporter linked in [#160](https://github.com/HeyOkay/HaloBattery/issues/160)); [blak0p/attack-shark-linux](https://github.com/blak0p/attack-shark-linux) (`docs/protocol-x6.md`, validated live on the dongle, MIT) for the X6/R1 shape. **Confirmed on hardware**: In9 Pro ([#160](https://github.com/HeyOkay/HaloBattery/issues/160), including the charging state), X11 ([#163](https://github.com/HeyOkay/HaloBattery/issues/163)) and R1 ([#69](https://github.com/HeyOkay/HaloBattery/issues/69), `03 10 40 01 09` = 90 %); the X3 Max's 30 % frame was caught in its reporter's diagnostics ([#228](https://github.com/HeyOkay/HaloBattery/issues/228)).
 
 ### LAMZU Maya X
 
 **Connection:** 8K dongle (373E:001E) or USB cable (373E:001C)
 
 The same feature report exchange as the WLmouse and G-Wolves mice (`00 00 02 02 00 83` out, `a1 00 02 02 00 83 <charging> <battery %>` back), on the vendor collection `ffff:0000` of interface 2 only; protocol from Sheroune/lamzu-battery-monitory (MIT). Confirmed on a Maya X on its 8K dongle
+
+### LAMZU Atlantis V2
+
+**Connection:** 2.4 GHz receiver (3554:F50D, "LAMZU Pro 1K Receiver") or USB cable (3554:F50F)
+
+The Compx 17-byte power query used by the Pulsar / ATK family: the receiver publishes `ff02:0002` and answers level byte 6, on-cable byte 7 and millivolts in bytes 8-9. The cable id `3554:F50F` is shared with the LAMZU Thorn; Windows exposes the product string, so only a cable whose product string contains "ATLANTIS" is treated as the Atlantis Pro, and it shares the `pulsar:3554f50d` icon with the receiver. Confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408): receiver 70% matching the Lamzu driver, cable 95% while charging. The Atlantis cable is shown as "LAMZU Atlantis Pro (wired)" because that is the name Windows reports.
 
 ### MCHOSE A5 Pro Max
 
@@ -705,7 +749,7 @@ The provider reads HID++ 2.0 generically from the receiver's `ff00` vendor colle
 
 The **G535** (0AC4) is long-only: its dongle exposes just the consumer collection `000C:0001`, with no `ff00` pair, so there is no feature table to ask. Its charge register is read with a *long* report instead - `11 FF 05 0D` is answered by `10 FF 05 0D <mV hi> <mV lo> <state>` (state `01` discharging, `03` charging) - and the voltage is mapped through HeadsetControl's G535 curve. It is read *before* the HID++ 2.0 ping, because a 1.0 headset does not answer one and otherwise looks asleep. The register is answered on the `ff43:0202` collection; the consumer collection is silent, so both are tried (#339). **Confirmed on hardware** by @ti-henrq: `register 0d: 4069 mV -> 85%`, icon shown.
 
-Devices with no feature table at all (the older HID++ 1.0 generation) are read through the old battery registers instead: a short report `10 <slot> 81 <register>` on the short collection reads register `0x0D` (a percentage with a charging status - `30` discharging, `50` recharging, `90` full) or register `0x07` (a discrete level - 7 full, 5 good, 3 low, 1 critical - beside a charging byte), the same registers and order Solaar uses. This was added for the M710 keyboard of the MK710 wireless desktop ([#159](https://github.com/HeyOkay/HaloBattery/issues/159)), built from Solaar's implementation; **confirmed on hardware** in the reporter's test-build run - the icon shows the keyboard's coarse level.
+Devices with no feature table at all (the older HID++ 1.0 generation) are read through the old battery registers instead: a short report `10 <slot> 81 <register>` on the short collection reads register `0x0D` (a percentage with a charging status - `30` discharging, `50` recharging, `90` full) or register `0x07` (a discrete level - 7 full, 5 good, 3 low, 1 critical - beside a charging byte), the same registers and order Solaar uses. This was added for the M710 keyboard of the MK710 wireless desktop ([#159](https://github.com/HeyOkay/HaloBattery/issues/159)), built from Solaar's implementation; **confirmed on hardware** in the reporter's test-build run - the icon shows the keyboard's coarse level. The **MX Revolution** (`046D:C525`, #449) is another HID++ 1.0 device: its paired slot answers the charge register with 75%, and the receiver id is mapped to the model name because the device has no feature table to report one. **Confirmed on hardware by @breezywine**: the test build shows the MX Revolution name and mouse icon.
 
 ### Endgame Gear XM2we
 

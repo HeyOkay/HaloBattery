@@ -6,10 +6,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
-- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
-
 ### Changed
 
 - Keep the SignPath TEST credential in the protected signing jobs only; build
@@ -34,9 +30,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
   This requires a supported Windows 11 Phone Link companion cache, not a
   real-time or all-linked-phones API. Phones classified by existing Bluetooth
   metadata also use the phone glyph.
+- Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
+  the mouse pictogram; the existing charge-register reader already returned
+  75% on the reporter's receiver. Confirmed on hardware by @breezywine in
+  [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
+- Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.
+- Razer Kraken V4 (2.4 GHz receiver `1532:056C` or USB-C cable
+  `1532:056B`): read the battery level and charging state over its MediaTek
+  channel. Confirmed on hardware by @Zireael3Z: 87% matched the receiver and
+  the charging ring followed the cable.
 - Open the existing What's new window from About, directly below the version.
+- Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -84,6 +90,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
 - Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
