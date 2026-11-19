@@ -101,8 +101,11 @@ property 0x10, matching OpenLinkHub's m65rgbultraW package (state 1 charging,
 identity 1b1c:1bb5, which publishes the same pair and answers level on target
 0x08 plus charge property 0x10 (the exchange OpenLinkHub's m65rgbultraWU
 package uses). The cable and receiver share one icon; the cable's charging
-reading wins while it is connected. **Unverified** on this provider until the
-reporter runs the corrected test build.
+reading wins while it is connected. Confirmed on the reporter's mouse in #411
+(test builds 4 and 5): receiver replies 01 02 00 d4 03 (98 %) and charge state 2; cable
+replies 00 02 00 3e 03 (83 %) with charge state 1, and 00 02 00 e8 03 (100 %)
+with state 3 (full). Both identities answered on ff42:0001 only, so the M65 ids
+are asked there and nowhere else, and the cable is asked on target 0x08 only.
 """
 from __future__ import annotations
 
@@ -354,10 +357,16 @@ BRAGI_BARE_PIDS = {0x0A40, 0x0A3E, 0x0A3D, 0x0A64, 0x0A62}
 BRAGI_SESSION_PIDS = {0x0A40}
 # the wired ids resolve their target the other way round: HeadsetControl's
 # resolveTarget tries 0x08 first on a wired id and 0x09 on a receiver, with the
-# other as the fallback (#570). The M65 RGB Ultra Wireless on its cable
-# (1b1c:1bb5) uses the same Bragi battery/charge properties as OpenLinkHub's
-# m65rgbultraWU package, with target 0x08 first.
-BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62, 0x1BB5}
+# other as the fallback (#570).
+BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62}
+# The M65 RGB Ultra Wireless on its cable (1b1c:1bb5) uses the same Bragi
+# battery/charge properties as OpenLinkHub's m65rgbultraWU package, on target
+# 0x08 only: that package sends nothing to 0x09, and in #411 the 0x09 fallback
+# only ever got the error 01 02 06. So the cable has no fallback target.
+M65_CABLE_PID = 0x1BB5
+# The M65 ids answered only on ff42:0001 (#411, receiver and cable); they are
+# never asked on ff42:0002 or on any other collection.
+BRAGI_EXACT_PIDS = {0x1BA6, M65_CABLE_PID}
 # ids that answer the charge property 0x10. The Virtuoso family was measured in
 # #204; the wired M65 uses the same property in OpenLinkHub's m65rgbultraWU
 # package, and its Slipstream receiver uses m65rgbultraW's charge query (#411).
@@ -587,6 +596,15 @@ class CorsairProvider(Provider):
         is not asked. When 0xFF42 is missing, the remaining collections are tried,
         which then costs one read window.
         """
+        if any(d.get("product_id") in BRAGI_EXACT_PIDS for d in infos):
+            # The M65 ids (#411): only the collection both identities answered on.
+            exact = [d for d in infos
+                     if (d.get("usage_page"), d.get("usage")) == (BRAGI_VENDOR_PAGE,
+                                                                  BRAGI_USAGE)]
+            if not exact:
+                self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} "
+                                  "collection; nothing sent")
+            return sorted(exact, key=lambda d: d.get("interface_number") or 99)
         vend = [d for d in infos if d.get("usage_page") == BRAGI_VENDOR_PAGE]
         if not vend:
             self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x} collection; trying all "
@@ -672,6 +690,8 @@ class CorsairProvider(Provider):
     @staticmethod
     def _routes(pid: int) -> Tuple[int, ...]:
         """The target order for a pid: the wired ids try themselves first (HSC #570)."""
+        if pid == M65_CABLE_PID:
+            return (BRAGI_ROUTE_DONGLE,)
         if pid in BRAGI_WIRED_PIDS:
             return (BRAGI_ROUTE_DONGLE, BRAGI_ROUTE_MOUSE)
         if pid in (0x0A3E, 0x0A64):

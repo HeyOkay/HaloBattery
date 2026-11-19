@@ -645,6 +645,49 @@ class BragiPollTest(unittest.TestCase):
                          [("corsair:m65", 38, True)])
         self.assertNotIn(b"m65-rx", bus.opened)
 
+    def test_a_silent_m65_cable_gets_no_target_09_fallback(self):
+        # OpenLinkHub's m65rgbultraWU asks target 0x08 only; in #411 the 0x09
+        # fallback only got the error 01 02 06. A silent cable gets 0x08 and nothing else.
+        d = FakeDongle(silent=True)
+        out, bus = self.poll(
+            [entry(0x1BB5, b"m65-cable", 1, 0xFF42, 0x0001,
+                   "CORSAIR M65 RGB ULTRA WIRELESS Gaming Mouse")],
+            {b"m65-cable": d})
+        self.assertEqual(out, [])
+        self.assertEqual(C.CorsairProvider._routes(0x1BB5), (C.BRAGI_ROUTE_DONGLE,))
+        self.assertEqual([w[1] for w in d.writes], [C.BRAGI_ROUTE_DONGLE])
+
+    def test_the_m65_ids_are_asked_on_ff42_0001_only(self):
+        # #411: both identities answered on ff42:0001. A silent 0001 does not lead
+        # to ff42:0002 (the notice channel) or to any other collection.
+        for pid in (0x1BA6, 0x1BB5):
+            with self.subTest(pid=hex(pid)):
+                e = [entry(pid, b"c0001", 1, 0xFF42, 0x0001),
+                     entry(pid, b"c0002", 2, 0xFF42, 0x0002),
+                     entry(pid, b"mouse", 0, 0x0001, 0x0002)]
+                out, bus = self.poll(e, {b"c0001": FakeDongle(silent=True),
+                                         b"c0002": FakeDongle(bragi_reply(765)),
+                                         b"mouse": FakeDongle(bragi_reply(765))})
+                self.assertEqual(out, [])
+                self.assertEqual(bus.opened, [b"c0001"])
+
+    def test_an_m65_without_ff42_0001_is_not_opened(self):
+        e = [entry(0x1BA6, b"c0002", 2, 0xFF42, 0x0002),
+             entry(0x1BA6, b"mouse", 0, 0x0001, 0x0002)]
+        out, bus = self.poll(e, {b"c0002": FakeDongle(bragi_reply(765)),
+                                 b"mouse": FakeDongle(bragi_reply(765))})
+        self.assertEqual(out, [])
+        self.assertEqual(bus.opened, [])
+
+    def test_the_captured_m65_replies_parse(self):
+        # #411 raw replies: receiver 01 02 00 d4 03 (98 %), charge 01 02 00 02 00
+        # (on battery); cable 00 02 00 3e 03 (83 %), charge 00 02 00 01 (charging).
+        pad = lambda h: list(bytes.fromhex(h).ljust(C.BRAGI_MSG_SIZE, b"\0"))  # noqa: E731
+        self.assertEqual(C.parse_bragi(pad("01 02 00 d4 03")), 98)
+        self.assertIs(C.parse_bragi_charge(pad("01 02 00 02 00")), False)
+        self.assertEqual(C.parse_bragi_cable(pad("00 02 00 3e 03")), 83)
+        self.assertIs(C.parse_bragi_charge_cable(pad("00 02 00 01")), True)
+
     def test_the_m75_slipstream_receiver_is_read(self):
         # #301: 1b1c:1bdc 'CORSAIR SLIPSTREAM WIRELESS USB Receiver' publishes the same
         # ff42:0001/0002 pair as the Dark Core dongle, so the same framed ask applies
