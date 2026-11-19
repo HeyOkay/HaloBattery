@@ -19,6 +19,8 @@ The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prer
 
 <img src="docs/icons.png" alt="Every icon state: headset, mouse, keyboard, controllers and Bluetooth at 100 % down to 15 %, charging and asleep" width="560">
 
+**English** | [简体中文](README.zh-CN.md)
+
 </div>
 
 ## Features

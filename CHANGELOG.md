@@ -124,6 +124,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Limit generic MCHOSE `3837` mouse queries to the documented A7 receiver collection.
   Unknown `3837` products and unsourced keyboard/collection fallbacks remain
   excluded until exact protocol evidence is available.
+- Bound Steam's retained readings to the same 16 endpoints selected for polling.
+- Restore the original Rapoo VT9 Pro receiver's passive battery reports, keeping
+  them separate from newer Rapoo formats and accepting Windows zero padding.
+- Recover wired Steam Controller support and keep identical puck devices separate,
+  using one bounded passive listen window. Restore a current Simplified Chinese README.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
 

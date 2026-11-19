@@ -577,9 +577,31 @@ Read straight from the HID input report: exact percentage and charging state (US
 
 ### Steam Controller (2025) with its puck
 
-**Connection:** 2.4 GHz puck (28DE:1304 Proteus, 28DE:1305 Nereid)
+**Connection:** wired USB `28de:1302`, or puck `28de:1304` (Proteus) / `28de:1305` (Nereid).
 
-Listened to, never written: the puck relays each controller on its own vendor collection (usage page 0xFF00 / usage 0x0001) on interfaces 2 to 5, one interface per controller slot, as SDL's driver reads it (src/joystick/hidapi/SDL_hidapi_steam_triton.c). Input report 0x43 carries the charge state in byte 0 (1 discharging, 2 charging, 4 charging done) and the level in % in byte 1; reports 0x79 and 0x46 report a controller connecting or disconnecting, and 0x42, 0x45 and 0x47 are the controller's state reports. The puck sends 0x43 about every 2.5 s while the controller is awake - ~0.4 Hz, measured over ~9k frames by [CouchTurtle/sc2-research](https://github.com/CouchTurtle/sc2-research) and on live hardware by [eva-val/steambattery](https://github.com/eva-val/steambattery), and #58's first tester run is what showed the original 0.4 s listen window missing it. A slot with a live controller is therefore listened to for up to 5 s per poll (twice the cadence) and stops early on a disconnect; a quiet slot costs only the short window. The last level is kept between reports the way SDL keeps it; a slot that goes quiet keeps its last value greyed, and a disconnect removes the icon at once. SDL sends rumble, IMU and a lizard mode command over the same report and disables lizard mode every 3 seconds - none of that is sent here, so the controller keeps behaving the way the user's games expect. The older 2015 Steam Controller and its dongle speak a different protocol and are not covered. **Confirmed on hardware** (@Kosminaut13, #58): his run caught the 0x43 report inside the 5 s window - `43 01 5f` at 95 % while awake and `43 04 64` at 100 % charging on the cable, with the tray following both states and an asleep slot keeping its last value greyed. A level above 100 is refused rather than shown
+Passive input only. The wired identity requires `ff00:0001` and a nonnegative USB
+interface. Puck controller slots use interfaces 2-5: prefer `ff00:0001`, then
+another vendor page, then gamepad `0001:0005`, preserving the prior listen-only
+fallback order. Sources: SDL at `742645f`,
+its [device identities](https://github.com/libsdl-org/SDL/blob/742645fe283a0a724bb85da0e247c4ad14fc2329/src/joystick/controller_list.h#L682-L685),
+[Triton driver selection](https://github.com/libsdl-org/SDL/blob/742645fe283a0a724bb85da0e247c4ad14fc2329/src/joystick/hidapi/SDL_hidapi_steam_triton.c#L444-L486)
+and [battery structure](https://github.com/libsdl-org/SDL/blob/742645fe283a0a724bb85da0e247c4ad14fc2329/src/joystick/hidapi/steam/controller_structs.h#L687-L697).
+Report `43` carries charge state then percentage; `79`/`46` signal connection
+changes. BLE `1303`, the older `1142` dongle and other Valve products are excluded.
+No output/feature reports or lizard-mode changes are sent.
+
+The [PR #265 recovery](https://github.com/HeyOkay/HaloBattery/pull/265) observes
+all slots within one shared five-second round-robin window, with a 0.4-second
+quiet window, at most 16 handles and 4096 reports per slot. A battery/disconnect
+reply ends that slot's observation; every handle closes after polling. Keys
+include normalized USB instance, PID and interface, so duplicated serials do
+not merge physical controllers. Legacy aliases are accepted only when unambiguous.
+
+The prior [#58 puck confirmation](https://github.com/HeyOkay/HaloBattery/issues/58)
+remains: `43 01 5f` reported 95%, `43 04 64` 100%/charge complete, with cached
+readings greyed while quiet. Wired USB and the recovered multi-device behavior
+have fake-device tests but were not tested on hardware in this change. A level
+above 100 is refused rather than shown.
 
 ### Xbox-compatible controllers (other models)
 
@@ -907,3 +929,36 @@ selected. Other receivers are not queried in that poll. VGN uses the separate
 `atk_keyboard:320f:5088` key for both cable and receiver. Shared legacy settings
 are left with ATK because their former owner cannot be proved; they are not
 guessed onto VGN. Separate simultaneous-keyboard polling is not provided here.
+### Passive Inphic / Attack Shark and Rapoo readers
+
+These enabled providers send **no requests**, so their evidence concerns input
+layouts and receiver identities rather than authorization for device writes.
+[Inphic PR #181](https://github.com/HeyOkay/HaloBattery/pull/181) records INPHIC
+HUB's parser, the driver supplied in [#160](https://github.com/HeyOkay/HaloBattery/issues/160#issuecomment-5922153086),
+and receiver reports for `1d57:fa65` and `fa60` in #160/#163/#69/#228. It
+distinguishes `03 <model> 40 <subcommand> <level>` from the R1/X6 ten-step
+shape, and records model-specific charging/stale-value limits.
+[Rapoo PR #215](https://github.com/HeyOkay/HaloBattery/pull/215) records the
+vendor HUB report-7 parser and A HUB's `RapooDevice.dll` keyboard parser,
+with captured `bd 01 ...` status frames and the receiver/cable IDs in
+[#193](https://github.com/HeyOkay/HaloBattery/issues/193). `24ae:14a9` was
+added from [#235](https://github.com/HeyOkay/HaloBattery/issues/235).
+The vendor binaries/web bundles are named historical sources, not pinned
+source files in this repository; do not present them as reproducibly archived.
+
+The older **Rapoo VT9 Pro `24ae:185a`** is a separate passive family. The
+[reporter's capture in #109](https://github.com/HeyOkay/HaloBattery/issues/109#issuecomment-5880593801)
+contains ten interrupt-IN packets `bb b0 42 20 03 01 64` from the same USB device
+whose descriptor identifies `24ae:185a`. State byte 5 is `01` discharging or
+`02` charging; byte 6 is percentage. These state meanings are retained in the
+[test-build source at `d5a5a5d`](https://github.com/casparas123/HaloBattery/blob/d5a5a5dfc6e93b2b26719f590e7dc65f1e3e4bdb/providers/rapoo.py#L1-L36).
+Only interface 1's `ff00:0002` / `ff00:000e` collections are listened to; no
+query is sent. The logical seven-byte report can carry zero padding from
+Windows HID reads. Other report families, unknown states and percentages above
+100 are refused. The existing 64-byte read buffer is a caller limit, not a
+claim about this receiver's missing HID report descriptor. A quiet receiver
+keeps its last value greyed for up to five minutes; unplugging clears it.
+
+The capture confirms 100% discharging only. Charging and other percentages
+have source-based simulated tests; the old test build received no reporter
+confirmation, and this recovery has not been tested on hardware.
