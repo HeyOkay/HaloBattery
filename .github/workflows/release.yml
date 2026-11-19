@@ -190,7 +190,7 @@ jobs:
       attestations: write
     steps:
       - name: Download publish assets
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.release-artifact }}
           path: release-assets
@@ -538,13 +538,13 @@ jobs:
           persist-credentials: false
 
       - name: Download unsigned bundle from this run
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.test_build.outputs.bundle-id }}
           path: signpath-input/bundle
 
       - name: Download signed payload from this run
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.test_sign_payload.outputs.artifact-id }}
           path: signpath-input/signed-payload
@@ -684,19 +684,19 @@ jobs:
           persist-credentials: false
 
       - name: Download unsigned installer from this run
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.test_package.outputs.installer-id }}
           path: signpath-input/unsigned-installer
 
       - name: Download signed installer from this run
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.test_sign_installer.outputs.artifact-id }}
           path: signpath-input/signed-installer
 
       - name: Download packaged application from this run
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.test_package.outputs.package-id }}
           path: signpath-test-results
