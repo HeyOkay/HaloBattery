@@ -84,7 +84,14 @@ RECEIVERS = {
     0xC52E, 0xC531, 0xC534, 0xC535, 0xC537,
     0xC539, 0xC53A, 0xC53D, 0xC53F, 0xC541, 0xC545, 0xC547,  # Lightspeed
     0xC54D,
+    0xC54F,  # PRO X3 SUPERSTRIKE LIGHTSPEED receiver
 }
+
+# Additional HID++ collections from the recovered PRO X3 support patch:
+# https://github.com/AprilNEA/OpenLogi/pull/2191 (C54F, FF43:0302)
+# Recovered patch and C54D scope review: https://github.com/HeyOkay/HaloBattery/pull/465
+# Reuse existing read-only HID++ queries; restrict collection fallback to these IDs.
+PRO_X3_HIDPP_IDS = {0xC54F, 0xC0A9}
 
 # headsets with HID++ battery (feature 0x1F20), from HeadsetControl's device list.
 # The value is the name to show when the headset does not report one.
@@ -598,11 +605,14 @@ class LogitechProvider(Provider):
         groups: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         headset: Dict[Tuple[int, str], bytes] = {}
         alt: Dict[Tuple[int, str], Optional[bytes]] = {}
+        pro_x3: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         for d in infos:
             pid, page, usage = d["product_id"], d.get("usage_page"), d.get("usage")
             key = (pid, _instance(d))
             if page == 0xFF00 and usage in (1, 2):
                 groups.setdefault(key, {})[usage] = d["path"]
+            elif pid in PRO_X3_HIDPP_IDS and page == 0xFF43 and usage in (0x0301, 0x0302):
+                pro_x3.setdefault(key, {})[usage - 0x0300] = d["path"]
             elif pid in HEADSETS and (page, usage) == HEADSET_COLLECTION.get(pid, (0xFF43, 0x0202)):
                 # only the headsets in the list: other devices never got a request on
                 # these collections, and must not get one now
@@ -611,6 +621,11 @@ class LogitechProvider(Provider):
                     alt[key] = next((x["path"] for x in infos
                                      if x["product_id"] == pid
                                      and (x.get("usage_page"), x.get("usage")) == (0xFF43, 0x0202)), None)
+        # Existing FF00 paths win independently of enumeration order.
+        for key, paths in pro_x3.items():
+            dest = groups.setdefault(key, {})
+            for usage, path in paths.items():
+                dest.setdefault(usage, path)
         # the ff00 collections win; the headset collection is used only without them
         for key, path in headset.items():
             if 2 not in groups.get(key, {}):
