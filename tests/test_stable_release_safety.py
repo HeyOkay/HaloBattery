@@ -125,10 +125,29 @@ else:
 '''
 
 
-def step(name):
-    body = TEXT.split("      - name: " + name + "\n", 1)[1].split("\n      - name:", 1)[0]
+def publisher(text):
+    """Select one two-space-indented job, never the remainder of the file."""
+    body = text.split("\njobs:\n", 1)[1]
+    match = re.search(r"(?m)^  publish:\n", body)
+    if match is None:
+        raise ValueError("Stable publisher job is missing")
+    tail = body[match.end():]
+    boundary = re.search(r"(?m)^(?:  [A-Za-z_][A-Za-z0-9_-]*:|[^ #\s])", tail)
+    return "  publish:\n" + (tail[:boundary.start()] if boundary else tail)
+
+
+def step(name, text=TEXT):
+    body = publisher(text).split("      - name: " + name + "\n", 1)[1]
+    body = re.split(r"(?m)^      - ", body, maxsplit=1)[0]
     script = body.split("        run: |\n", 1)[1]
-    return "\n".join(line[10:] for line in script.splitlines() if line.strip()) + "\n"
+    # Literal run content ends when a nonempty line leaves its indentation.
+    lines = []
+    for line in script.splitlines():
+        if line.strip() and not line.startswith("          "):
+            break
+        if line.strip():
+            lines.append(line[10:])
+    return "\n".join(lines) + "\n"
 
 
 def bash_path():
@@ -139,8 +158,30 @@ def bash_path():
 
 
 class StablePublisherPolicyTests(unittest.TestCase):
+    def test_later_jobs_cannot_enter_publisher_policy_or_executable_steps(self):
+        # A following job intentionally contains commands forbidden to the
+        # publisher and a duplicate step name. Neither belongs to its policy
+        # or offline executable fixture, regardless of job ordering.
+        stable_only = TEXT.split("\n  publish:\n", 1)[0] + "\n" + publisher(TEXT)
+        appended = stable_only + """
+  unrelated_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish attested draft
+        run: |
+          python unrelated.py
+          exit 99
+"""
+        self.assertEqual(publisher(appended).rstrip(), publisher(stable_only).rstrip())
+        self.assertNotIn("python unrelated.py", publisher(appended))
+        for name in ("Validate release assets", "Attach to release", "Publish attested draft"):
+            with self.subTest(step=name):
+                self.assertEqual(step(name, appended), step(name, stable_only))
+                self.assertEqual(step(name, TEXT), step(name, stable_only))
+
     def test_only_fresh_publisher_gets_attestation_permissions(self):
-        build, publish = TEXT.split("\n  publish:\n", 1)
+        build = TEXT.split("\n  publish:\n", 1)[0]
+        publish = publisher(TEXT)
         self.assertNotIn("id-token: write", build)
         self.assertNotIn("attestations: write", build)
         self.assertIn("      contents: read", build)
