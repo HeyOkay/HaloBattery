@@ -132,7 +132,7 @@ class RingStyleTests(unittest.TestCase):
             icons.charging_frames(60,True,ring_style='classic')
             self.assertTrue(all(call.kwargs['ring_style']=='classic' for call in render.call_args_list))
 
-    def test_custom_rgb_centre_geometry_and_dim_color_are_unchanged(self):
+    def test_classic_insets_custom_centre_and_preserves_dim_colour(self):
         for level, charging, online, paused in _STATES:
             for light in (False,True):
                 with self.subTest(state=(level,charging,online,paused),light=light):
@@ -140,9 +140,14 @@ class RingStyleTests(unittest.TestCase):
                     options=dict(size=32,light_taskbar=light,force_active=paused,custom_glyph=centre)
                     thin=icons.render(level,charging,online,**options)
                     classic=icons.render(level,charging,online,ring_style='classic',**options)
-                    self.assertEqual(centre.calls[0],centre.calls[1])
-                    self.assertEqual(thin.crop((12,12,20,20)).tobytes(),classic.crop((12,12,20,20)).tobytes())
-                    self.assertEqual(classic.getpixel((16,16))[:3],(221,46,68))
+                    active = online and (level is not None or charging or paused)
+                    alpha = 255 if active else 110
+                    fg = (0,0,0) if light else (255,255,255)
+                    self.assertEqual(centre.calls[0], (32,fg,alpha,230/255))
+                    self.assertEqual(centre.calls[1], (32,fg,255,230/255))
+                    self.assertEqual(classic.getpixel((16,16)), (221,46,68,alpha))
+                    self.assertGreater(classic.getpixel((12,12))[3], 0)
+                    self.assertLess(classic.getpixel((12,12))[3], thin.getpixel((12,12))[3])
 
     def test_invalid_styles_are_rejected_even_if_renderer_is_mocked(self):
         for value in (None,False,True,0,1,4.0,[],{},'','thick','Thin','classic '):

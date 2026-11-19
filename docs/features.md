@@ -25,6 +25,14 @@ each device or protocol. Drivers that refuse cancellation can still occupy the
 fixed worker budget; Diagnostics distinguishes unavailable readings from an
 ordinary sleeping device.
 
+The native HID adapter keeps the last transport diagnostic as text for
+`device.error()`. Reading it performs no native call, including before opening
+or after closing a device; a successful transport operation clears it to
+`Success`. The bounded adapter deliberately lets a `send_feature_report()`
+deadline raise `TimeoutError` (an `OSError`) instead of returning HIDAPI's `-1`.
+Callers keep that failure distinct from a valid reply while cancellation and
+native handle cleanup continue under the existing owner.
+
 If the native HID module is missing or blocked, HaloBattery explains the failure
 and keeps Settings and Windows Bluetooth support available. USB/2.4 GHz support
 is not emulated; Diagnostics includes the native loader error.
@@ -164,7 +172,7 @@ To keep the settings, the log and the battery history next to the app instead of
 
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
 2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
-3. Install .NET SDK 10.0.401 for the native settings window. From the repository
+3. Install .NET SDK 10.0.404 for the native settings window. From the repository
    root, run `python -m pip install -r requirements.txt`,
    `python tools/make_icon.py halo.ico`, then `./scripts/build_settings.ps1`
    in PowerShell. Keep its `.build/settings-ui` output in place.

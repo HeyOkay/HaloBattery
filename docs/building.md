@@ -93,3 +93,31 @@ The installer script also rejects other compiler versions.
 checks. Portable extraction uses `/PORTABLE=1 /CURRENTUSER /NOICONS` and does not
 register an installed Inno Setup application. Building the HaloBattery installer
 does not install or uninstall HaloBattery.
+
+
+## Stable release publication
+
+The owner enabled repository release immutability on 2026-11-17 and set the
+Actions variable `STABLE_RELEASE_IMMUTABILITY_ENABLED=true`. This policy protects
+future published releases; it does not retroactively lock earlier releases.
+The existing `prerelease-build` release remains mutable for rolling test builds.
+Do not delete and recreate it after enabling the policy.
+
+The stable publisher receives validated build files on a fresh runner, creates
+a new draft, uploads without replacement and checks the remote asset digests.
+It refuses any existing release or draft for that tag. GitHub provenance
+attestations bind the ZIP and installer to the exact tag commit and release
+workflow. Publication follows verification of those attestations; afterward,
+`gh release verify <tag>` and `gh release verify-asset <tag> <file>` check the
+immutable release and its assets. These attestations do not code-sign the EXE
+or replace the pending SignPath integration.
+
+Only the publisher receives `contents: write`, `id-token: write` and
+`attestations: write`. Build/test jobs keep read-only repository permissions,
+and manual dispatch cannot publish. No persistent signing/admin token is
+stored in the workflow. The owner acknowledgement variable is a prerequisite,
+not a substitute for the actual GitHub repository setting.
+
+A failed upload or attestation can leave an unpublished draft. A rerun stops
+rather than modifying it. Inspect the failed run and draft, retain evidence,
+and recover deliberately; there is no automated asset deletion or overwrite.
