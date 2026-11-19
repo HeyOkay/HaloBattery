@@ -1,0 +1,702 @@
+{
+  "repository": "HeyOkay/HaloBattery",
+  "ref": "pre-release",
+  "path": "halo/icon_artwork.py",
+  "github_blob_sha": "7dafd7e97bf8817ef6a6e92ae89736a9d7eb5147",
+  "source_url": "https://github.com/HeyOkay/HaloBattery/blob/pre-release/halo/icon_artwork.py",
+  "mode": "Original grayscale PNG masks extracted without modification; CSS luminance masks apply the theme color.",
+  "ring_included": false,
+  "application_logo_included": false,
+  "glyphs": [
+    "bluetooth",
+    "display",
+    "gamepad",
+    "headset",
+    "health",
+    "keyboard",
+    "microphone",
+    "mouse",
+    "nintendo",
+    "playstation",
+    "smart_home",
+    "speaker",
+    "tracker",
+    "watch",
+    "webcam",
+    "xbox"
+  ],
+  "files": [
+    {
+      "glyph": "headset",
+      "size": 16,
+      "file": "headset-16.png",
+      "sha256": "5316e7a0e2fd8ca13dcdad1005fb7ef91d962cd85e3730f7b0171fba1d33a6e4"
+    },
+    {
+      "glyph": "headset",
+      "size": 20,
+      "file": "headset-20.png",
+      "sha256": "2bbbdd65ef96ff5da8ff557998500d38af8aeabbbd39e1f37498b4eaac5338d6"
+    },
+    {
+      "glyph": "headset",
+      "size": 24,
+      "file": "headset-24.png",
+      "sha256": "9669e732b91ab87f0b61cdcdb5ca2ac9aba07db1d9f8cf5b1902021eabd4aae7"
+    },
+    {
+      "glyph": "headset",
+      "size": 32,
+      "file": "headset-32.png",
+      "sha256": "b0bc98b3cbeff83d21b7d463d8991228351147905d52cc361d4aa103bb2be532"
+    },
+    {
+      "glyph": "headset",
+      "size": 40,
+      "file": "headset-40.png",
+      "sha256": "bd2ab7851645a85702b1bc96cf8b0ed2a5458fdc19c876d77f03cf1c5e0af532"
+    },
+    {
+      "glyph": "headset",
+      "size": 48,
+      "file": "headset-48.png",
+      "sha256": "11b3d10880dea67a69a9d4f566ad83d4b90d7a790bac1a33dca359d1af616771"
+    },
+    {
+      "glyph": "headset",
+      "size": 64,
+      "file": "headset-64.png",
+      "sha256": "13254fe3422bbf4b113c1d39c060bbc39f38d1764a8494495e6e0f8fdd23a55f"
+    },
+    {
+      "glyph": "mouse",
+      "size": 16,
+      "file": "mouse-16.png",
+      "sha256": "b94d32f239ab0c63a654aa3e52ffbf070b6f1ecfd7c7aa35e471f7fecdb92fa0"
+    },
+    {
+      "glyph": "mouse",
+      "size": 20,
+      "file": "mouse-20.png",
+      "sha256": "ecf03942b8910bb85c61a67125f42fe57ed813398f127e6df8d5c6c8215a69b6"
+    },
+    {
+      "glyph": "mouse",
+      "size": 24,
+      "file": "mouse-24.png",
+      "sha256": "ac06cae711414d9d045ce1d3681bc65092b61f389a4b2079d889a18fa404f223"
+    },
+    {
+      "glyph": "mouse",
+      "size": 32,
+      "file": "mouse-32.png",
+      "sha256": "4b7a6c2f34cd9d4eb5ffefc23968e431c12cee4e59ead68064e36af17fe05db4"
+    },
+    {
+      "glyph": "mouse",
+      "size": 40,
+      "file": "mouse-40.png",
+      "sha256": "c63d79469403739b8c886b7328a6bb2baf7e3d2d7cf1f469fbbc8796d94dee69"
+    },
+    {
+      "glyph": "mouse",
+      "size": 48,
+      "file": "mouse-48.png",
+      "sha256": "62ad85745d494fadf8bebaac90daa95a6246b4f1cfa161a6ef978a64a03bf266"
+    },
+    {
+      "glyph": "mouse",
+      "size": 64,
+      "file": "mouse-64.png",
+      "sha256": "e033e15dde0054b84efb64aaf96e6efb3c6d4aa3ef44060719129ac7e9fb0f6a"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 16,
+      "file": "keyboard-16.png",
+      "sha256": "a92d576ca47cb250961c86227d2f8742927cdddd51ecfbf9073a751300d56367"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 20,
+      "file": "keyboard-20.png",
+      "sha256": "04bfe76a1a5872c16197cfd9a43a5ec7aa0cc223bcb8b9edc162c0e5aaa9fd0b"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 24,
+      "file": "keyboard-24.png",
+      "sha256": "899bac6dd04df6f74276a4fa0f1cf2c2d7cceb0ec0c928e6c1546f9576137c7f"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 32,
+      "file": "keyboard-32.png",
+      "sha256": "9c36ff929784dca70421a94e0f63a52b059c43c1502ec8191dc6044fbdec5b3c"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 40,
+      "file": "keyboard-40.png",
+      "sha256": "d24626a4debed6cfb20ee1cee8ff93fdbbb9332d24218edf87848d0046690ebe"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 48,
+      "file": "keyboard-48.png",
+      "sha256": "53311b41f3cff7b39ec7b94a4ba3993c16c37754eca7e88ae727b12ef5d17efd"
+    },
+    {
+      "glyph": "keyboard",
+      "size": 64,
+      "file": "keyboard-64.png",
+      "sha256": "b5cf928d0b62c61fddef933ce13452655e90f1071cccbc302bbfbaafc1f384e3"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 16,
+      "file": "gamepad-16.png",
+      "sha256": "5acef862fbd84ae46b7f53e7878845af22710ad95621f7ee21afa37464ab7e59"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 20,
+      "file": "gamepad-20.png",
+      "sha256": "76b4e3fc3a38a6b88cd366b23ee423f66b7c2a476de1195b5c96bef9815fe983"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 24,
+      "file": "gamepad-24.png",
+      "sha256": "5fe1bbaccfbd0d826948156736d9ba580dabed7eb14b3eb2285eb92513aff9c2"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 32,
+      "file": "gamepad-32.png",
+      "sha256": "47fd11c5f94393c73484b0331ff808c5ae2cf2e3d9743433e074fe0b3101b0e4"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 40,
+      "file": "gamepad-40.png",
+      "sha256": "dbdc00de2ea4571f186aff4d3abb14820d4db25ef3dcf13195253f6a44838107"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 48,
+      "file": "gamepad-48.png",
+      "sha256": "6dbf7a5ef1c8b80ae3eacf1406419a5c1078421e1a7eb2a469eba8e7ee6aa55f"
+    },
+    {
+      "glyph": "gamepad",
+      "size": 64,
+      "file": "gamepad-64.png",
+      "sha256": "64845a3bd5a03e1b227f4b1f796a3e57e98d8f5b4f219c2d5079b29d312bd46d"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 16,
+      "file": "bluetooth-16.png",
+      "sha256": "380d3c884fbfd9d0456ddb12be15f76ff4d321bc156014a7d6071648f035066f"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 20,
+      "file": "bluetooth-20.png",
+      "sha256": "c3d91335b5aeea5db3e4c9c36d2811dacc523c2292a0ddc78b7a02769ab176a7"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 24,
+      "file": "bluetooth-24.png",
+      "sha256": "65102447c54b38a85686ca460d6ac5e9c01eaeb6e204e4542bd05954efeded23"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 32,
+      "file": "bluetooth-32.png",
+      "sha256": "fbdbf1d27c43a2dda16b5361a4dfa4807b8b783a41ae78ab494c1fc00b63621c"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 40,
+      "file": "bluetooth-40.png",
+      "sha256": "5dc78a5b4214467ca4e04c18849be7bbd273206ca45e5bfaa63e4d15c4e7969c"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 48,
+      "file": "bluetooth-48.png",
+      "sha256": "0f76004f5327b4a344fbd5f2e937beb2d3e88eb6585aece46ef18aea03ec7e29"
+    },
+    {
+      "glyph": "bluetooth",
+      "size": 64,
+      "file": "bluetooth-64.png",
+      "sha256": "d7791ad7cee2b922f3106a0f1887f39d7e07f9945195ff7256fff2ab721df346"
+    },
+    {
+      "glyph": "xbox",
+      "size": 16,
+      "file": "xbox-16.png",
+      "sha256": "8bc04db399446e29aaa7ef4c1318d13b1a5a782045f5f0c83156564847a05664"
+    },
+    {
+      "glyph": "xbox",
+      "size": 20,
+      "file": "xbox-20.png",
+      "sha256": "dfc0f3116a8dfcc6af4f22f67586a04d893032011398975b2d723c31b4be9803"
+    },
+    {
+      "glyph": "xbox",
+      "size": 24,
+      "file": "xbox-24.png",
+      "sha256": "b590922d2a4853f9af85a852cab9e3ff2aeef9fe77ab712f05a925fa9cca6438"
+    },
+    {
+      "glyph": "xbox",
+      "size": 32,
+      "file": "xbox-32.png",
+      "sha256": "fdc3fa4a8923362b790dedb7cde8b8afa5dfd54274c1879132bb541be4c2c068"
+    },
+    {
+      "glyph": "xbox",
+      "size": 40,
+      "file": "xbox-40.png",
+      "sha256": "6a851d1a8c37d7f3a3290c71de7ebd0ba0b549d1a35d535d7bfedb339ac15ac4"
+    },
+    {
+      "glyph": "xbox",
+      "size": 48,
+      "file": "xbox-48.png",
+      "sha256": "a349a5a14d4fc343ccd464892560feaec5c4941ce4491dea1141b9427aa38b53"
+    },
+    {
+      "glyph": "xbox",
+      "size": 64,
+      "file": "xbox-64.png",
+      "sha256": "05f75426fc7fbaf7f9b404fc2a3864af10a5f4843c8373655ce9f5c64f14cdde"
+    },
+    {
+      "glyph": "playstation",
+      "size": 16,
+      "file": "playstation-16.png",
+      "sha256": "ed576282de91f1e19baf8d59029e8ffaad79d90048c3c8e1ebc07578e188e487"
+    },
+    {
+      "glyph": "playstation",
+      "size": 20,
+      "file": "playstation-20.png",
+      "sha256": "2df0906bbdb8db5ece18ab0def8617c4dedb0d2075bd1021d2ac0e248c9fc9d5"
+    },
+    {
+      "glyph": "playstation",
+      "size": 24,
+      "file": "playstation-24.png",
+      "sha256": "1eac5fa08b71c4e37e23ddad22220189dcc43edc241488fe49d3b4054e3c0a77"
+    },
+    {
+      "glyph": "playstation",
+      "size": 32,
+      "file": "playstation-32.png",
+      "sha256": "0b58c954e83bd582bad4880da4ba6e98e42924222af1737fea7d11d8613b5c53"
+    },
+    {
+      "glyph": "playstation",
+      "size": 40,
+      "file": "playstation-40.png",
+      "sha256": "e4c42388b6f7cbd871455a3febaab595c1721c9a4fefc2487ab37da4bc9b9a37"
+    },
+    {
+      "glyph": "playstation",
+      "size": 48,
+      "file": "playstation-48.png",
+      "sha256": "65b5fbe8254188d1df9ddff080b2562291e37974bc8dc9b7f8e63c486d334f50"
+    },
+    {
+      "glyph": "playstation",
+      "size": 64,
+      "file": "playstation-64.png",
+      "sha256": "8f07f3d6bc5f4274ac313ddd5c7b503432e915ba2d95419294f2fd0263173acd"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 16,
+      "file": "nintendo-16.png",
+      "sha256": "a1365eaa34840bba92322822e50d4b966a0b5f7d2ff2b5d34c5af29045153e2f"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 20,
+      "file": "nintendo-20.png",
+      "sha256": "bdcde3c8c8f4a6675044946977ba349f22084fa814e633053721eed9eedaab4d"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 24,
+      "file": "nintendo-24.png",
+      "sha256": "4bd346d7bedac43d548100cb84476b7ac1d03b5bc85ffcba18e9e14f9d51f319"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 32,
+      "file": "nintendo-32.png",
+      "sha256": "1e94883ca924f7ee0b6801a56a743a22ef60cb010004e84a070f0fc1e7287b8d"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 40,
+      "file": "nintendo-40.png",
+      "sha256": "5472bbd03c42de2e7603253b8edf968fad4f50be4d5325e3004589dc769e8469"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 48,
+      "file": "nintendo-48.png",
+      "sha256": "c4adb1fc342922542fca5ee3ac63f451f946825f4748b2f2c16e975e00474323"
+    },
+    {
+      "glyph": "nintendo",
+      "size": 64,
+      "file": "nintendo-64.png",
+      "sha256": "4c79c404b8d65929e80cd562c42431309b5aa45a849f4fc097f919f97700c1cc"
+    },
+    {
+      "glyph": "microphone",
+      "size": 16,
+      "file": "microphone-16.png",
+      "sha256": "a9cd613fcbe78be0ce38a0b412825ea40e3559649a657d188779d19e29b6ab14"
+    },
+    {
+      "glyph": "microphone",
+      "size": 20,
+      "file": "microphone-20.png",
+      "sha256": "4382b8868d56945aa1ae5e3f7cd60c7306255979b550f5a80b747644cadbab2b"
+    },
+    {
+      "glyph": "microphone",
+      "size": 24,
+      "file": "microphone-24.png",
+      "sha256": "001a45ea31e5231871075821a1df54aa887de08b386483bbf0d3771c39c63c7a"
+    },
+    {
+      "glyph": "microphone",
+      "size": 32,
+      "file": "microphone-32.png",
+      "sha256": "b0025aeda58a558336dae1f63f30a12e5c8ca65c9615a30a3349ea7738165e6d"
+    },
+    {
+      "glyph": "microphone",
+      "size": 40,
+      "file": "microphone-40.png",
+      "sha256": "7c74c288bb1426ba58f871851e7bcec5bb4600c1b563ef4348ffa5f965bf85d6"
+    },
+    {
+      "glyph": "microphone",
+      "size": 48,
+      "file": "microphone-48.png",
+      "sha256": "48cecbcf75530cf9bb70131261f686b39a1c57a72330f60fd505b4cb79889c27"
+    },
+    {
+      "glyph": "microphone",
+      "size": 64,
+      "file": "microphone-64.png",
+      "sha256": "a4da02a9be7f1bb63cdcbe42cde514de1e1d1945d175b701d1d31852809d6eeb"
+    },
+    {
+      "glyph": "speaker",
+      "size": 16,
+      "file": "speaker-16.png",
+      "sha256": "dd61f63ba3337173353a799ac9417d438537081f6787aa45a108109dc8daa0b7"
+    },
+    {
+      "glyph": "speaker",
+      "size": 20,
+      "file": "speaker-20.png",
+      "sha256": "5a047368f277d89b7626cff4caf8fa3e20bb71d934a3c0b9cebd655ff9589692"
+    },
+    {
+      "glyph": "speaker",
+      "size": 24,
+      "file": "speaker-24.png",
+      "sha256": "d72b1f6be4f4897b66c125402e137481bd8f67cc2c76503992fffd5d108f6f25"
+    },
+    {
+      "glyph": "speaker",
+      "size": 32,
+      "file": "speaker-32.png",
+      "sha256": "33692601759b9710dd919303f5134c23e15bf59a6c805bd379bfddf26861eb5c"
+    },
+    {
+      "glyph": "speaker",
+      "size": 40,
+      "file": "speaker-40.png",
+      "sha256": "0a6ed63bac1fc874c38dc799208c5beb0627a416f8d90b0218e439401d63a2f0"
+    },
+    {
+      "glyph": "speaker",
+      "size": 48,
+      "file": "speaker-48.png",
+      "sha256": "45ce9e22775b20cd2924101b34d91358e170126a468fed9f0c8dff4a668c46d7"
+    },
+    {
+      "glyph": "speaker",
+      "size": 64,
+      "file": "speaker-64.png",
+      "sha256": "8c9db8cc304ae76bf33886337028be70855810875dcc28c2849aaa86983a5e0b"
+    },
+    {
+      "glyph": "webcam",
+      "size": 16,
+      "file": "webcam-16.png",
+      "sha256": "d0017d9be62af3be82d2d7266a71124479577ff9f3c19a7329e58829b5418480"
+    },
+    {
+      "glyph": "webcam",
+      "size": 20,
+      "file": "webcam-20.png",
+      "sha256": "0ab40970a68e9d1453884014ae21613df5abf9ebc9d882bd6b20ba92b96af389"
+    },
+    {
+      "glyph": "webcam",
+      "size": 24,
+      "file": "webcam-24.png",
+      "sha256": "6336d12d05e9d1ed403c518d96556c2f1d857624100f38730424bf68ffaadd45"
+    },
+    {
+      "glyph": "webcam",
+      "size": 32,
+      "file": "webcam-32.png",
+      "sha256": "788efd430d01a129e8e700ebbf3e00b737c67f7d6fd193bc337c699ed6654613"
+    },
+    {
+      "glyph": "webcam",
+      "size": 40,
+      "file": "webcam-40.png",
+      "sha256": "55b202f73e9bc498a499aa842e54adaeb37c677b53709e635b14be737cfe9527"
+    },
+    {
+      "glyph": "webcam",
+      "size": 48,
+      "file": "webcam-48.png",
+      "sha256": "9598501b87f5a66d4a6a089c7ef0db876852286bcd5b884769a30fc011fc6991"
+    },
+    {
+      "glyph": "webcam",
+      "size": 64,
+      "file": "webcam-64.png",
+      "sha256": "9a4bc24c7046fd59d98bac0226d19fab4d28120068242308f56dca10a1a2ba23"
+    },
+    {
+      "glyph": "health",
+      "size": 16,
+      "file": "health-16.png",
+      "sha256": "ba4bf47f871f991cd4f3ac34f8af7502ffecac916141027022c0004b85f34260"
+    },
+    {
+      "glyph": "health",
+      "size": 20,
+      "file": "health-20.png",
+      "sha256": "038652dd3a30df7cde38ebeff9de9bc79a439f4a330342d1c4b2da4a5a18952e"
+    },
+    {
+      "glyph": "health",
+      "size": 24,
+      "file": "health-24.png",
+      "sha256": "06a5136849a3bed4f5bac9baf5d8a84869acbbd2cbbd1505316a1001c08838e4"
+    },
+    {
+      "glyph": "health",
+      "size": 32,
+      "file": "health-32.png",
+      "sha256": "860f8d112f816d60fa98824317809e6fd4256cffc4af2d45bc018deea698dce9"
+    },
+    {
+      "glyph": "health",
+      "size": 40,
+      "file": "health-40.png",
+      "sha256": "4444326af59983586e0c43b856918ff1eba1c3b4c12251d8b733fabc7190fbe3"
+    },
+    {
+      "glyph": "health",
+      "size": 48,
+      "file": "health-48.png",
+      "sha256": "c2776bc955a47d54d07325e7e084d075ffe6ea91f1aadf432c82514063c01089"
+    },
+    {
+      "glyph": "health",
+      "size": 64,
+      "file": "health-64.png",
+      "sha256": "8ba7e913908f8737ac2cbd104a02d56e0648a65178d1710a048b90c3e1da5c3f"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 16,
+      "file": "smart_home-16.png",
+      "sha256": "bc8636b27c541c9bf67eb106454b1ca121be49f7c95a0ebc844d127f20538507"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 20,
+      "file": "smart_home-20.png",
+      "sha256": "c95b9cbd50880e5400473e7ade60ddac7784cd71c412ecb2598b1feabd27d62a"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 24,
+      "file": "smart_home-24.png",
+      "sha256": "d8644ddf71d362304f4a8b48a84d92a4fbfbeda16a8bf2b2cd0f627617573daa"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 32,
+      "file": "smart_home-32.png",
+      "sha256": "92913d79b09389ff1c38e87316b2d5a082561b7dec2568cecbcd9e986a4fb529"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 40,
+      "file": "smart_home-40.png",
+      "sha256": "aa017d83b8b676b7ee417b8b0b063f840995c29c75642006955e835faf5cc4fb"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 48,
+      "file": "smart_home-48.png",
+      "sha256": "893c17197192df8e9112db111aa2feb4929e46cdecae4a73e92e4e1032e901fc"
+    },
+    {
+      "glyph": "smart_home",
+      "size": 64,
+      "file": "smart_home-64.png",
+      "sha256": "b6d479cee5956c1cf99edf5002f83889853e22aae9d7a6f61946767cf8586929"
+    },
+    {
+      "glyph": "watch",
+      "size": 16,
+      "file": "watch-16.png",
+      "sha256": "00e02f7fd045d0492583997d58d11eab354613064464e723fc4fb35709a6fe29"
+    },
+    {
+      "glyph": "watch",
+      "size": 20,
+      "file": "watch-20.png",
+      "sha256": "0837a9a68ccadfd8fe12983fbf5b5362988d4244672a668e8086262c0f0068d8"
+    },
+    {
+      "glyph": "watch",
+      "size": 24,
+      "file": "watch-24.png",
+      "sha256": "6eef3d1a2c53dd18c52297c122d11a32c39ccdcde0484e5c4f3616af27b6935d"
+    },
+    {
+      "glyph": "watch",
+      "size": 32,
+      "file": "watch-32.png",
+      "sha256": "bbb8d97e4a9369d0c8f785d2973cf05ec2c90e5ec3bdf56f2265b2b6b37b334b"
+    },
+    {
+      "glyph": "watch",
+      "size": 40,
+      "file": "watch-40.png",
+      "sha256": "1846ffb560cd75fdb1ffbd127e679a45948bb2b98f13ff650c3a760385203e5e"
+    },
+    {
+      "glyph": "watch",
+      "size": 48,
+      "file": "watch-48.png",
+      "sha256": "5186efb300e9475a4ea60cac82ae6b15434106932a8aca4c36220f4183c43495"
+    },
+    {
+      "glyph": "watch",
+      "size": 64,
+      "file": "watch-64.png",
+      "sha256": "88b7127d81a85a5680fa4cc19e0fba3c6223cd3a9cc21ec4829ee2fa2c11e812"
+    },
+    {
+      "glyph": "tracker",
+      "size": 16,
+      "file": "tracker-16.png",
+      "sha256": "654e0c2a1bc17c2f5e5afa462585d28f68a518fb37c209cd68f739f6825e19c5"
+    },
+    {
+      "glyph": "tracker",
+      "size": 20,
+      "file": "tracker-20.png",
+      "sha256": "5bb2197555a9d7072db96817b1ae1bd492a46b6b01fcdeaddc349d84a83ca097"
+    },
+    {
+      "glyph": "tracker",
+      "size": 24,
+      "file": "tracker-24.png",
+      "sha256": "7017064414acbe794d7691ee1cd1ef5d81161070cad8692cacf7dd5aec1a0c1b"
+    },
+    {
+      "glyph": "tracker",
+      "size": 32,
+      "file": "tracker-32.png",
+      "sha256": "5e7206efc21694b6eb89187ccda823ecb88b796ff2d31d50934756eceb1d2879"
+    },
+    {
+      "glyph": "tracker",
+      "size": 40,
+      "file": "tracker-40.png",
+      "sha256": "cef2de48899efb20c301ab5ce21805a577742c9b44587869781443c83c197a08"
+    },
+    {
+      "glyph": "tracker",
+      "size": 48,
+      "file": "tracker-48.png",
+      "sha256": "d49b43cbc8d1564ecb4973055f707c4636fc4842d0eb6b7d88cecc7f317b5952"
+    },
+    {
+      "glyph": "tracker",
+      "size": 64,
+      "file": "tracker-64.png",
+      "sha256": "86f638324de1b4914c4ea638d5cc6ebf76d6a8c4e18f298d19ca9776ac43956a"
+    },
+    {
+      "glyph": "display",
+      "size": 16,
+      "file": "display-16.png",
+      "sha256": "f181baa8da40fadc73bf417a83750ae7268dfc3f11419e691f1967c88ecc0976"
+    },
+    {
+      "glyph": "display",
+      "size": 20,
+      "file": "display-20.png",
+      "sha256": "611b2971aac55c752b4a87052c3b69ff5ec9c0e85af9fa9377fc5b68e99fd2fd"
+    },
+    {
+      "glyph": "display",
+      "size": 24,
+      "file": "display-24.png",
+      "sha256": "3b0754445895e46e3c7e94b5f22b407caafefb090442d6a261dba343d53f9052"
+    },
+    {
+      "glyph": "display",
+      "size": 32,
+      "file": "display-32.png",
+      "sha256": "ea9886c63777b1cbf87f4a565242732f6ca10d23b349494088ea9a06a263e747"
+    },
+    {
+      "glyph": "display",
+      "size": 40,
+      "file": "display-40.png",
+      "sha256": "c26d98b9e004632038d238650c4dda3808c34fa8544be3d40750ea2510d403c3"
+    },
+    {
+      "glyph": "display",
+      "size": 48,
+      "file": "display-48.png",
+      "sha256": "5321101404edc4b67e01a9b09b7669925c559d5781988db0d7308c808b62b24c"
+    },
+    {
+      "glyph": "display",
+      "size": 64,
+      "file": "display-64.png",
+      "sha256": "e44c83337bd65072d12185e53137d55f48b1bcdaf9fc70c2f2b012115b03bab8"
+    }
+  ]
+}

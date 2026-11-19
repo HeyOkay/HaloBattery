@@ -1,0 +1,63 @@
+{
+  "environment": "Chromium on the user’s Windows computer",
+  "source_windows_build": "26300.9974",
+  "checks": {
+    "local_preview": "HTTP success on 127.0.0.1:8767; background server retained",
+    "english_only_ui": true,
+    "clock_format": "HH:mm",
+    "date_format": "DD.MM.YYYY",
+    "materials": "Acrylic only; one shared taskbar material layer",
+    "removed_ui": [
+      "Seconds button",
+      "Battery button",
+      "material selector",
+      "calendar panel",
+      "quick-settings panel"
+    ],
+    "independent_device_states": "Mouse charging at 50%, keyboard low at 10%, headset charging with unknown level, gamepad sleeping; switching devices and pin/unpin preserved states",
+    "full_state": "Fully charged displays 100% and a full ring",
+    "pinning": "Speaker pinned and unpinned through the UI",
+    "dpi_125": {
+      "backing_pixels": 25,
+      "displayed_physical_pixels": 25
+    },
+    "dpi_200": {
+      "backing_pixels": 40,
+      "displayed_physical_pixels": 40
+    },
+    "dpi_300": {
+      "backing_pixels": 60,
+      "displayed_physical_pixels": 60,
+      "visible_pinned": 3,
+      "overflow": 13,
+      "within_viewport": true
+    },
+    "dark_foreground": "rgb(255,255,255)",
+    "light_foreground": "rgba(0,0,0,0.894)",
+    "chevron": "expanded rotation observed; 200ms transition; closing returns collapsed state",
+    "overflow_and_language_flyout_blur": "30px backdrop blur; contrasting-background test in both themes; diagnostic background removed",
+    "network_click": "no popup opens",
+    "original_png_mask_sha256": "112 files verified",
+    "native_state_atlases": 100,
+    "saved_startup_profile": {
+      "theme": "dark",
+      "dpi": 192,
+      "selected_device": "keyboard",
+      "pinned": [
+        "mouse",
+        "keyboard",
+        "headset",
+        "gamepad"
+      ],
+      "verified_after_reload": true
+    },
+    "javascript_syntax": "component and inline demo scripts passed node --check",
+    "captured_console_warnings_and_errors": []
+  },
+  "limits": [
+    "Full native Windows pixel equivalence has not been verified.",
+    "Charging-opacity endpoint blending occurs in browser Canvas.",
+    "Native font availability and renderer differences can affect other systems.",
+    "Reduced-motion support is implemented but was not manually toggled."
+  ]
+}

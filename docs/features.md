@@ -13,6 +13,7 @@
 - **Amber**: close to the alert threshold. **Red**: at or below it.
 - **Green**: charging. A known battery level breathes in brightness; an unknown level uses a rotating green arc over a steady neutral ring. Turning animation off in Settings leaves the arc still.
 - **Translucent**: the mouse is asleep and keeps its last level for 5 minutes. A device that is switched off leaves the tray and comes back when it is switched on.
+- **Windows 11 tray preview**: the Tray icons page opens an interactive taskbar replica with the current devices, states, taskbar colour and DPI. It is a local HTML preview, not a second live tray process.
 
 The low battery notification fires once, and again only after the device has been charged.
 

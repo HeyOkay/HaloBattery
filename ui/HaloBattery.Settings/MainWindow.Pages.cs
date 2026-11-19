@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using HaloBattery.Settings.Controls;
 using Microsoft.UI.Windowing;
@@ -263,6 +264,10 @@ public sealed partial class MainWindow
     private void BuildIcons(StackPanel p)
     {
         AddPreview(p, false);
+        var openTrayPreview = Button(T("settings.open_preview"), true);
+        openTrayPreview.Click += (_, _) => OpenTrayPreview();
+        p.Children.Add(Card(T("settings.tray_preview"), T("settings.tray_preview_hint"),
+            openTrayPreview, "panel-bottom"));
         Section(p, T("settings.content"));
         p.Children.Add(Card(T("settings.content"), "", ChoiceBox(T("settings.content"), () => new() { Pick("pictogram", T("settings.pictogram")), Pick("percent", T("settings.percentage")), Pick("ring", T("settings.ring_only")) }, () => ContentMode,
             mode => Bridge.SendCommand("setIconContent", new { mode })), "circle"));
@@ -355,6 +360,66 @@ public sealed partial class MainWindow
         licenses.Click += (_, _) => RequestAllIconLicenses();
         p.Children.Add(Card(T("settings.iconify_licenses"), "", licenses, "info"));
     }
+
+    private void OpenTrayPreview()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "TrayPreview", "index.html");
+        if (!File.Exists(path))
+        {
+            ShowError(T("settings.tray_preview_unavailable"));
+            return;
+        }
+        try
+        {
+            // Give the standalone replica the devices Halo is showing right now.
+            // The URL-safe base64 keeps the snapshot out of any server or file
+            // write; the page falls back to its own demo profile when absent.
+            var states = new Dictionary<string, object>();
+            var pinned = new List<object>();
+            foreach (var device in State.Devices.Where(device => !device.Hidden))
+            {
+                var kind = TrayKind(device.Kind);
+                if (states.ContainsKey(kind)) continue;
+                var mode = device.Paused ? "paused"
+                    : !device.Online ? "sleeping"
+                    : device.Charging == true
+                        ? (device.Level is null ? "unknown_charging" : "charging")
+                        : device.Level is null ? "sleeping" : "normal";
+                states[kind] = new { mode, level = device.Level };
+                pinned.Add(new { id = "halo-" + kind, label = device.Name, icon = "halo:" + kind });
+            }
+            var snapshot = new
+            {
+                theme = State.IconLightTaskbar ? "light" : "dark",
+                dpi = 96,
+                language = State.Language == "ru" ? "ru-RU" : "en-US",
+                states,
+                pinned,
+                tray = Array.Empty<object>()
+            };
+            var json = JsonSerializer.Serialize(snapshot);
+            var packed = Uri.EscapeDataString(Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                new Uri(path).AbsoluteUri + "?state=" + packed)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine(error);
+            ShowError(T("settings.tray_preview_unavailable"));
+        }
+    }
+
+    private static string TrayKind(string kind) => kind switch
+    {
+        "controller" => "gamepad",
+        "microphone" or "speaker" or "webcam" or "health" or "smart_home" or "watch"
+            or "display" or "tracker" or "xbox" or "playstation" or "nintendo"
+            or "mouse" or "keyboard" or "headset" or "gamepad" or "bluetooth" => kind,
+        _ => "bluetooth"
+    };
 
     private void AddPreview(StackPanel p, bool devicePage)
     {

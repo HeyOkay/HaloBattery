@@ -1,0 +1,132 @@
+{
+  "source": {
+    "os_build": "26300.9974",
+    "display_version": "26H2",
+    "resource_file": "C:\\Windows\\SystemApps\\MicrosoftWindows.Client.Core_cw5n1h2txyewy\\resources.pri",
+    "sha256": "26cfc6f5c3ab12be96c605f6518ca7a144185135b92d598d0f56abbb6d840461",
+    "taskbar_module_sha256": "7340a3a3532a9daff47f824e4c5f08a3631dfca5ef98100238a6f6610abb7fd9",
+    "xbf_offsets": [
+      7961264,
+      7994784
+    ],
+    "used_xbf_offset": 7994784,
+    "reader": "https://github.com/chausner/XbfTools",
+    "reader_limit": "Research parser; reconstructed XAML can differ from original source."
+  },
+  "native_colors_argb": {
+    "Light": {
+      "ShellTaskbarItemStrokeColorTertiary": "#07000000",
+      "ShellTaskbarItemStrokeColorSecondary": "#0F000000",
+      "ShellTaskbarItemStrokeColorQuinary": "#05000000",
+      "ShellTaskbarItemStrokeColorQuarternary": "#05000000",
+      "ShellTaskbarItemStrokeColorPrimary": "#17000000",
+      "ShellTaskbarItemFillColorTransparent": "#00FFFFFF",
+      "ShellTaskbarItemFillColorTertiary": "#4CFFFFFF",
+      "ShellTaskbarItemFillColorSecondary": "#80FFFFFF",
+      "ShellTaskbarItemFillColorPrimary": "#B3FFFFFF"
+    },
+    "Dark": {
+      "ShellTaskbarItemStrokeColorTertiary": "#15FFFFFF",
+      "ShellTaskbarItemStrokeColorSecondary": "#1AFFFFFF",
+      "ShellTaskbarItemStrokeColorQuinary": "#0AFFFFFF",
+      "ShellTaskbarItemStrokeColorQuarternary": "#0FFFFFFF",
+      "ShellTaskbarItemStrokeColorPrimary": "#20FFFFFF",
+      "ShellTaskbarItemFillColorTransparent": "#00FFFFFF",
+      "ShellTaskbarItemFillColorTertiary": "#0AFFFFFF",
+      "ShellTaskbarItemFillColorSecondary": "#0FFFFFFF",
+      "ShellTaskbarItemFillColorPrimary": "#15FFFFFF"
+    }
+  },
+  "native_metrics": {
+    "brush_transition_ms": 83,
+    "icon_content_padding": 4,
+    "normal_icon_min_width": 32,
+    "language_content_width": 44,
+    "normal_icon_background_margin": "0,4",
+    "omni_items_padding": "4,0",
+    "omni_items_spacing": 4,
+    "clock_stack_margin": "0,-3,-1,-1",
+    "clock_style_reference": "CaptionTextBlockStyle",
+    "show_desktop_width": 12,
+    "show_desktop_pipe_width": 1,
+    "show_desktop_row_proportions": [
+      1,
+      2,
+      1
+    ],
+    "tooltip_offset": 12,
+    "overflow_cell": [
+      40,
+      40
+    ],
+    "overflow_grid_margin": 4,
+    "overflow_max_columns": 5,
+    "icon_orientation_rotation_ms": 300
+  },
+  "native_acrylic": {
+    "Light": {
+      "FallbackColor": "#FFF9F9F9",
+      "TintColor": "#FFFCFCFC",
+      "TintLuminosityOpacity": 0.85,
+      "TintOpacity": 0
+    },
+    "Dark": {
+      "FallbackColor": "#FF2C2C2C",
+      "TintColor": "#FF2C2C2C",
+      "TintLuminosityOpacity": 0.96,
+      "TintOpacity": 0.15
+    }
+  },
+  "web_approximations": {
+    "taskbar_height_css_px": 48,
+    "control_radius": 4,
+    "overlay_radius": 8,
+    "caption_size": 12,
+    "caption_line_height": 16,
+    "flyout_enter_duration_ms": 200,
+    "flyout_enter_translate_y": 16,
+    "tooltip_delay_ms": 700,
+    "closing_duration_ms": 120,
+    "closing_translate_y": 12,
+    "material": "CSS Acrylic blur/tint/noise approximation; one shared taskbar background",
+    "battery": "Public Segoe Fluent Icons glyph, not the private SysBatt font",
+    "popovers": "Tray overflow and input-language selector; clock and network do not open panels.",
+    "chevron_toggle_duration_ms": 200
+  },
+  "fonts": {
+    "text": [
+      "Segoe UI Variable Small",
+      "Segoe UI Variable Text",
+      "Segoe UI"
+    ],
+    "icons": [
+      "Segoe Fluent Icons",
+      "Segoe MDL2 Assets"
+    ],
+    "redistributed_font_files": false
+  },
+  "pixel_match_verified": false,
+  "web_configuration": {
+    "ui_locale": "en-US",
+    "clock_format": "HH:mm",
+    "date_format": "DD.MM.YYYY",
+    "material": "acrylic",
+    "dpi_options": [
+      96,
+      120,
+      144,
+      168,
+      192,
+      240,
+      288
+    ],
+    "device_states": "independent per published HaloBattery glyph kind",
+    "halo_renderer_blob": "724f51a91542d5f0a51d2af0d5145228739298ac",
+    "halo_artwork_blob": "7dafd7e97bf8817ef6a6e92ae89736a9d7eb5147",
+    "neutral_opacity": {
+      "dark_neutral_alpha": 255,
+      "light_neutral_alpha": 228,
+      "reason": "Match the system symbol foreground brushes; retain state colors for charge arcs."
+    }
+  }
+}

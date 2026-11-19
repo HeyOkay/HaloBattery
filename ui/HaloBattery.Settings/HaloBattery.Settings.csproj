@@ -28,6 +28,7 @@
   <Content Include="../../halo.ico" Link="Assets/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-dark.svg" Link="Assets/AppIconHeaderDark.svg" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-light.svg" Link="Assets/AppIconHeaderLight.svg" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../assets/tray-preview/**/*" Link="Assets/TrayPreview/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
  </ItemGroup>
  <!-- Keep application DTO/anonymous JSON properties and WinUI reflection paths.
       Rooting only the app can produce a successful build that fails at startup. -->

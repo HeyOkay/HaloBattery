@@ -1,0 +1,84 @@
+{
+  "source": "https://github.com/HeyOkay/HaloBattery/blob/pre-release/halo/icons.py",
+  "renderer_blob_sha": "724f51a91542d5f0a51d2af0d5145228739298ac",
+  "artwork_blob_sha": "7dafd7e97bf8817ef6a6e92ae89736a9d7eb5147",
+  "sizes": [
+    16,
+    20,
+    24,
+    25,
+    28,
+    30,
+    32,
+    35,
+    36,
+    40,
+    42,
+    48,
+    49,
+    50,
+    56,
+    60,
+    64,
+    70,
+    72,
+    80,
+    84,
+    96,
+    100,
+    120,
+    144
+  ],
+  "columns": 16,
+  "frames": {
+    "normal": [
+      0,
+      100
+    ],
+    "charging_pulse_0": [
+      101,
+      201
+    ],
+    "charging_pulse_1": [
+      202,
+      302
+    ],
+    "charging_unknown": [
+      303,
+      392
+    ],
+    "sleeping": 393,
+    "paused": 394
+  },
+  "kinds": [
+    "mouse",
+    "keyboard",
+    "headset",
+    "gamepad",
+    "bluetooth",
+    "microphone",
+    "speaker",
+    "webcam",
+    "health",
+    "smart_home",
+    "watch",
+    "display",
+    "tracker",
+    "xbox",
+    "playstation",
+    "nintendo"
+  ],
+  "native_parameters": {
+    "low": 15,
+    "ring_style": "thin",
+    "filled": false,
+    "period_seconds": 3,
+    "unknown_charging_frames": 90
+  },
+  "requested_color_adjustment": {
+    "dark_neutral_alpha": 255,
+    "light_neutral_alpha": 228,
+    "reason": "Match the system symbol foreground brushes; retain state colors for charge arcs."
+  },
+  "playback": "Native PNG ring tiles; charging opacity interpolates the two native endpoint tiles; glyph tiles use native artwork. Common physical DPI sizes are rendered directly. No battery data is read by the page."
+}

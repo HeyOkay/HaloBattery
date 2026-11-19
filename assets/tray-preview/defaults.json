@@ -1,0 +1,78 @@
+{
+  "deviceStates": {
+    "mouse": {
+      "mode": "full",
+      "level": 50
+    },
+    "keyboard": {
+      "mode": "charging",
+      "level": 65
+    },
+    "headset": {
+      "mode": "warning",
+      "level": 69
+    },
+    "gamepad": {
+      "mode": "low",
+      "level": 100
+    },
+    "bluetooth": {
+      "mode": "normal",
+      "level": 75
+    },
+    "microphone": {
+      "mode": "normal",
+      "level": 75
+    },
+    "speaker": {
+      "mode": "normal",
+      "level": 75
+    },
+    "webcam": {
+      "mode": "normal",
+      "level": 75
+    },
+    "health": {
+      "mode": "normal",
+      "level": 75
+    },
+    "smart_home": {
+      "mode": "normal",
+      "level": 75
+    },
+    "watch": {
+      "mode": "normal",
+      "level": 75
+    },
+    "display": {
+      "mode": "normal",
+      "level": 75
+    },
+    "tracker": {
+      "mode": "normal",
+      "level": 75
+    },
+    "xbox": {
+      "mode": "normal",
+      "level": 75
+    },
+    "playstation": {
+      "mode": "normal",
+      "level": 75
+    },
+    "nintendo": {
+      "mode": "normal",
+      "level": 75
+    }
+  },
+  "dpi": 192,
+  "language": "en-US",
+  "pinned": [
+    "mouse",
+    "keyboard",
+    "headset",
+    "gamepad"
+  ],
+  "selectedDevice": "keyboard",
+  "theme": "dark"
+}

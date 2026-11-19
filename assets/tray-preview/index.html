@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Windows 11 — System Tray</title><meta name="description" content="Windows 11 Acrylic taskbar tray with native HaloBattery device states."><style>
+*{box-sizing:border-box}body{display:flow-root;margin:0;min-height:100dvh;font:14px 'Segoe UI Variable Text','Segoe UI',sans-serif;color:#f5f5f5;background:#10131d}body:before{content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse at 72% 85%,#305b9144 0,transparent 60%),radial-gradient(ellipse at 28% 90%,#826cb930 0,transparent 55%)}main{margin:64px;max-width:590px}h1{font-size:28px;line-height:1.25;font-weight:600;margin:0 0 16px}p{line-height:1.6;color:#b4bac9;margin:0 0 24px}small{font-size:12px;color:#aeb4c4;line-height:1.6}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}button,select{font:inherit;color:inherit;background:#ffffff0c;border:1px solid #ffffff14;border-radius:4px;padding:8px 12px}button{cursor:pointer}button:hover{background:#ffffff18}button[aria-pressed=true]{border-color:#60cdff;color:#60cdff}select option{background:#222}label{display:flex;gap:8px;align-items:center}a{color:#80c8ef}.native-bar{position:fixed;bottom:0;left:0;right:0;height:calc(48px * var(--demo-scale,1));background:rgba(32,32,32,.82);backdrop-filter:blur(30px) saturate(1.25);border-top:1px solid #ffffff14;z-index:999}.readout{min-height:42px;font-size:12px;color:#9da8ba;max-width:550px}.light{background:#e8edf5;color:#191919}.light p,.light small{color:#525966}.light button,.light select{background:#ffffff50;border-color:#0002}.light button[aria-pressed=true]{border-color:#0067c0;color:#0067c0}.light select option{background:#fafafa}.light .native-bar{background:rgba(243,243,243,.85);border-color:#0000000f}.light .readout{color:#525966}@media(max-width:600px){main{margin:32px 24px}h1{font-size:24px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+
+.device-editor{border:1px solid #ffffff18;border-radius:8px;padding:18px;margin:24px 0;background:#ffffff04}.device-editor h2{font-size:16px;font-weight:600;margin:0 0 16px}.device-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}.device-grid label{display:grid;gap:6px}.device-grid select{width:100%;min-width:0}.device-level{display:flex;gap:12px;align-items:center;margin:12px 0 18px}.device-level input{flex:1;min-width:60px;accent-color:#60cdff}.device-level output{width:58px;text-align:right;font-variant-numeric:tabular-nums}.device-pin{font-size:13px}.device-editor .hint{font-size:12px;line-height:1.5;margin:14px 0 0;color:#aeb4c4}.light .device-editor{border-color:#00000014;background:#ffffff20}.light .device-editor .hint{color:#525966}.light .device-level input{accent-color:#0067c0}select{max-width:100%}@media(max-width:480px){.device-grid{grid-template-columns:1fr}}
+</style></head><body>
+<main><h1>Windows 11 System Tray</h1><p>Windows tray styling with HaloBattery device icons. Choose a theme, DPI, and independent battery states.</p>
+<div class="controls"><button id="dark" aria-pressed="true">Dark</button><button id="light" aria-pressed="false">Light</button><label>DPI <select id="dpi"><option value="96">96 · 100%</option><option value="120">120 · 125%</option><option value="144">144 · 150%</option><option value="168">168 · 175%</option><option value="192">192 · 200%</option><option value="240">240 · 250%</option><option value="288">288 · 300%</option></select></label></div>
+<section class="device-editor" aria-labelledby="device-heading"><h2 id="device-heading">Device state</h2><div class="device-grid"><label>Device<select id="device-kind"></select></label><label>State<select id="device-state"></select></label></div><label class="device-level">Charge<input id="device-level" type="range" min="0" max="100" step="1" value="47" aria-label="Charge level"><output id="device-percent">47%</output></label><label class="device-pin"><input id="device-pinned" type="checkbox" checked>Pin to taskbar</label><p class="hint">Each device keeps its own state. Click a device icon to select it here.</p></section>
+<div class="readout" id="status" aria-live="polite"></div><p>Click the tray arrow for hidden icons or the language indicator to switch input language. Press <kbd>Esc</kbd> or click outside to dismiss.</p>
+<small>System symbols use Segoe Fluent Icons; text uses Segoe UI Variable. Device artwork and rings are from HaloBattery.<br>Device values are a local preview. <a href="README-en.txt">Integration notes</a></small></main>
+<div class="native-bar" aria-hidden="true"></div><win11-tray theme="dark" language="en-US" background="none" dpi="192"></win11-tray><script type="application/json" id="tray-defaults">{"deviceStates":{"mouse":{"mode":"full","level":50},"keyboard":{"mode":"charging","level":65},"headset":{"mode":"warning","level":69},"gamepad":{"mode":"low","level":100},"bluetooth":{"mode":"normal","level":75},"microphone":{"mode":"normal","level":75},"speaker":{"mode":"normal","level":75},"webcam":{"mode":"normal","level":75},"health":{"mode":"normal","level":75},"smart_home":{"mode":"normal","level":75},"watch":{"mode":"normal","level":75},"display":{"mode":"normal","level":75},"tracker":{"mode":"normal","level":75},"xbox":{"mode":"normal","level":75},"playstation":{"mode":"normal","level":75},"nintendo":{"mode":"normal","level":75}},"dpi":192,"language":"en-US","pinned":["mouse","keyboard","headset","gamepad"],"selectedDevice":"keyboard","theme":"dark"}</script><script type="application/json" id="live-tray-settings">{"deviceStates":{"mouse":{"mode":"full","level":50},"keyboard":{"mode":"charging","level":65},"headset":{"mode":"warning","level":69},"gamepad":{"mode":"low","level":100},"bluetooth":{"mode":"normal","level":75},"microphone":{"mode":"normal","level":75},"speaker":{"mode":"normal","level":75},"webcam":{"mode":"normal","level":75},"health":{"mode":"normal","level":75},"smart_home":{"mode":"normal","level":75},"watch":{"mode":"normal","level":75},"display":{"mode":"normal","level":75},"tracker":{"mode":"normal","level":75},"xbox":{"mode":"normal","level":75},"playstation":{"mode":"normal","level":75},"nintendo":{"mode":"normal","level":75}},"dpi":192,"language":"en-US","pinned":["mouse","keyboard","headset","gamepad"],"selectedDevice":"keyboard","theme":"dark"}</script><script src="win11-tray.js"></script><script>
+const tray=document.querySelector('win11-tray');
+const initialSettings=JSON.parse(document.getElementById('tray-defaults').textContent);
+const initialNames=tray.getDeviceKinds();
+for(const [kind,settings] of Object.entries(initialSettings.deviceStates))tray.setDeviceState(kind,settings);
+tray.setPinnedIcons(initialSettings.pinned.map(kind=>({id:'halo-'+kind,label:'HaloBattery — '+initialNames[kind],icon:'halo:'+kind})));
+tray.setTrayIcons(Object.keys(initialNames).filter(kind=>!initialSettings.pinned.includes(kind)).map(kind=>({id:'halo-'+kind,label:'HaloBattery — '+initialNames[kind],icon:'halo:'+kind})));
+document.body.classList.toggle('light',initialSettings.theme==='light');
+document.documentElement.style.setProperty('--demo-scale',String(initialSettings.dpi/96));
+document.getElementById('dpi').value=String(initialSettings.dpi);
+for(const theme of ['dark','light'])document.getElementById(theme).setAttribute('aria-pressed',String(theme===initialSettings.theme));
+
+for(const theme of ['dark','light'])document.getElementById(theme).onclick=()=>{tray.setAttribute('theme',theme);document.body.classList.toggle('light',theme==='light');for(const t of ['dark','light'])document.getElementById(t).setAttribute('aria-pressed',String(t===theme))};
+document.getElementById('dpi').onchange=e=>{const dpi=Number(e.target.value);tray.setAttribute('dpi',String(dpi));document.documentElement.style.setProperty('--demo-scale',String(dpi/96))};
+const device=document.getElementById('device-kind'),state=document.getElementById('device-state'),level=document.getElementById('device-level'),percent=document.getElementById('device-percent'),pinned=document.getElementById('device-pinned');
+const deviceNames=tray.getDeviceKinds(),stateNames=tray.getDeviceModes();
+for(const [id,name] of Object.entries(deviceNames)){const o=document.createElement('option');o.value=id;o.textContent=name;device.append(o)}
+for(const [id,name] of Object.entries(stateNames)){const o=document.createElement('option');o.value=id;o.textContent=name;state.append(o)}
+function syncEditor(){const s=tray.getDeviceState(device.value);state.value=s.mode;const value=s.mode==='low'?10:s.mode==='warning'?20:s.mode==='full'?100:['sleeping','paused','unknown_charging'].includes(s.mode)?null:s.level;level.value=value===null?0:value;level.disabled=!['normal','charging'].includes(s.mode);percent.value=value===null?'Unknown':value+'%';pinned.checked=tray.isDevicePinned(device.value);document.getElementById('status').textContent=deviceNames[device.value]+' · '+stateNames[s.mode]+(value===null?'':' · '+value+'%')}
+device.onchange=syncEditor;state.onchange=()=>{tray.setDeviceState(device.value,{mode:state.value});syncEditor()};level.oninput=()=>{tray.setDeviceState(device.value,{level:Number(level.value)});syncEditor()};pinned.onchange=()=>{tray.setDevicePinned(device.value,pinned.checked);syncEditor()};
+tray.addEventListener('win11:trayclick',e=>{const kind=e.detail.id.replace(/^halo-/,'');if(deviceNames[kind]){device.value=kind;syncEditor()}});
+device.value=initialSettings.selectedDevice;
+syncEditor();
+
+function mirrorSettings(){const snapshot={theme:tray.getAttribute('theme'),dpi:Number(tray.getAttribute('dpi')),language:tray.getAttribute('language'),selectedDevice:device.value,pinned:[...tray.shadowRoot.querySelectorAll('.pinned-icons [data-halo-kind]')].map(x=>x.dataset.haloKind),deviceStates:Object.fromEntries(Object.keys(deviceNames).map(kind=>[kind,tray.getDeviceState(kind)]))};document.getElementById('live-tray-settings').textContent=JSON.stringify(snapshot)}
+for(const event of ['win11:devicechange','win11:devicepinchange','win11:languagechange'])tray.addEventListener(event,()=>queueMicrotask(mirrorSettings));
+for(const event of ['change','input','click'])document.body.addEventListener(event,()=>queueMicrotask(mirrorSettings));
+mirrorSettings();
+
+// Optional live snapshot from HaloBattery: ?state=<base64 UTF-8 JSON>.
+// The standalone page keeps its captured demo profile when no snapshot is given.
+try {
+  const packed = new URLSearchParams(location.search).get('state');
+  if (packed) {
+    const bytes = Uint8Array.from(atob(packed), c => c.charCodeAt(0));
+    const live = JSON.parse(new TextDecoder().decode(bytes));
+    if (live.theme) tray.setAttribute('theme', live.theme);
+    if (live.dpi) tray.setAttribute('dpi', String(live.dpi));
+    if (live.language) tray.setAttribute('language', live.language);
+    for (const [kind, state] of Object.entries(live.states || {})) {
+      if (tray.getDeviceKinds()[kind]) tray.setDeviceState(kind, state);
+    }
+    if (Array.isArray(live.pinned)) tray.setPinnedIcons(live.pinned);
+    if (Array.isArray(live.tray)) tray.setTrayIcons(live.tray);
+  }
+} catch (error) {
+  console.warn('HaloBattery tray snapshot was ignored', error);
+}
+
+</script></body></html>

@@ -13,6 +13,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- A Windows 11 system-tray preview on the Tray icons page. It opens an
+  interactive taskbar replica with a snapshot of the current HaloBattery
+  devices, states, theme and taskbar colour, while the standalone demo keeps
+  its captured sample profile.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Open the existing What's new window from About, directly below the version.
