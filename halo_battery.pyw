@@ -3091,9 +3091,20 @@ class App:
         self.after_update()
         if self.stop_evt.wait(30):               # let the icons come up first
             return
-        staging = self.cfg.pop("update_staging", None)
-        if getattr(sys, "frozen", False):            # never in a source folder
-            updates.cleanup(BASE_DIR, staging)
+        # Serialize with a user-triggered installation: cleanup must not consume
+        # the staging path of a new attempt while its download/runner is starting.
+        if getattr(sys, "frozen", False) and self.update_lock.acquire(blocking=False):
+            try:                                    # never in a source folder
+                with self.lock:
+                    staging = self.cfg.get("update_staging")
+                if updates.cleanup(BASE_DIR, staging):
+                    install_ok, install_why = updates.can_install(True, BASE_DIR)
+                    with self.lock:
+                        self.cfg.pop("update_staging", None)
+                        self.install_ok, self.install_why = install_ok, install_why
+                        save_config(self.cfg)
+            finally:
+                self.update_lock.release()
         while not self.stop_evt.is_set():
             # cleared before the check: a click on "Check for updates now" during the
             # check wakes the next round instead of being lost

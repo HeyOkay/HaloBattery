@@ -20,8 +20,9 @@ Installing (the built app only; from source the item opens the release page):
    HaloBattery.exe and _internal folder aside (*.old), copies the new ones in, and starts
    the app from its usual folder. If anything fails on the way, the old files are put
    back and the old app is started again.
-4. The updated app removes the *.old leftovers and the staging folder (cleanup()) and
-   shows the "What's new" window (whatsnew.py).
+4. A durable transaction record protects the old files before replacement. Startup
+   cleanup removes only that transaction's backups after a completed swap or complete
+   rollback is verified. Interrupted/failed recovery keeps its backups and staging.
 
 Only the program files are replaced; settings, the log, the battery history and
 portable.txt (portable mode keeps them in the app folder) are never touched.
@@ -33,6 +34,7 @@ import json
 import logging
 import ntpath
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -81,9 +83,12 @@ INTERNAL = "_internal"           # PyInstaller's folder with Python and the libr
 OLD_SUFFIX = ".old"
 STAGING_NAME = "HaloBattery-update"
 FINISH_FLAG = "--finish-update"
+UPDATE_STATE = ".halobattery-update.json"
+STAGE_STATE = ".halobattery-stage.json"
 # in the app folder, never copied over or removed: the user's own files
 KEEP = {"portable.txt", "config.json", "config.json.bad", "history.json", "status.json",
-        "halo_battery.log", "halo_battery.log.1", "diagnostics.txt", "notification_icon.png"}
+        "halo_battery.log", "halo_battery.log.1", "diagnostics.txt", "notification_icon.png",
+        "iconify", "settings-window.json", UPDATE_STATE, STAGE_STATE}
 WAIT_EXIT_S = 30                 # how long the staged copy waits for the old app to end
 RETRY_S = 10                     # antivirus scanners can hold a file for a moment
 
@@ -243,6 +248,10 @@ def can_install(frozen: bool, app_dir: str) -> Tuple[bool, str]:
         return False, "running from source"
     if not os.path.isfile(os.path.join(app_dir, EXE_NAME)):
         return False, f"{EXE_NAME} not found in {app_dir}"
+    # Do not download over the recovery staging folder, or replace the only
+    # previous copy, while startup cleanup/recovery still owns a transaction.
+    if os.path.lexists(os.path.join(app_dir, UPDATE_STATE)):
+        return False, "previous update cleanup or recovery is pending"
     # On Windows tempfile retries PermissionError when os.access says the directory
     # is writable, even if its ACL denies creating/deleting files (Program Files).
     # One exclusive open gives the real answer without blocking application startup.
@@ -561,7 +570,45 @@ def swap_files(new_app: str, app_dir: str, sleep=time.sleep,
     moved aside as *.old first; on any error they are moved back and the error raised.
     When supplied, start launches the new app before committing the swap, so a launch
     refusal restores the old files too."""
+    if os.path.lexists(os.path.join(app_dir, UPDATE_STATE)):
+        raise OSError("previous update cleanup or recovery is pending")
     entries = [e for e in os.listdir(new_app) if e.lower() not in KEEP]
+    if not _update_names(entries) or EXE_NAME not in entries:
+        raise ValueError("invalid update program files")
+    backups = [e for e in entries if os.path.lexists(os.path.join(app_dir, e))]
+    if any(os.path.lexists(os.path.join(app_dir, e + OLD_SUFFIX)) for e in entries):
+        raise OSError("previous update backup must be recovered before replacing files")
+    previous_hash = (_exe_hash(app_dir) if EXE_NAME in backups else None)
+    new_path = os.path.abspath(new_app)
+    parent = os.path.dirname(new_path)
+    staging = ([parent, new_path] if os.path.basename(parent).casefold() == STAGING_NAME.casefold()
+               else [new_path])
+    state = dict(schema=1, state="pending", backups=backups, files=entries,
+                 exe_sha256=_exe_hash(new_app), staging=staging, stage_token=uuid.uuid4().hex)
+    # Cleanup needs independent evidence in the staged tree, not merely a path
+    # read from the app's editable recovery record or settings.
+    stage_marker = os.path.join(staging[0], STAGE_STATE)
+    try:
+        with open(stage_marker, "x", encoding="utf-8") as marker:
+            json.dump(dict(schema=1, owner=os.path.normcase(os.path.realpath(app_dir)),
+                           root=os.path.normcase(os.path.abspath(staging[0])),
+                           token=state["stage_token"], files=entries, backups=backups,
+                           installed_exe_sha256=state["exe_sha256"],
+                           rollback_exe_sha256=previous_hash), marker)
+            marker.flush()
+            os.fsync(marker.fileno())
+    except FileExistsError:
+        raise OSError("previous staging ownership must be resolved before replacing files") from None
+    except BaseException:
+        _remove(stage_marker)
+        raise
+    # This must be durable BEFORE the first rename. An interrupted runner leaves
+    # pending evidence, never an apparently successful transaction to clean up.
+    try:
+        _write_update_state(app_dir, state, sleep=sleep)
+    except BaseException:
+        _remove(stage_marker)
+        raise
     moved: List[Tuple[str, str]] = []
     copied: List[str] = []
     try:
@@ -569,7 +616,6 @@ def swap_files(new_app: str, app_dir: str, sleep=time.sleep,
             dst = os.path.join(app_dir, e)
             if os.path.exists(dst):
                 old = dst + OLD_SUFFIX
-                _remove(old)
                 _retry(os.replace, dst, old, sleep=sleep)
                 moved.append((dst, old))
         for e in entries:
@@ -582,14 +628,34 @@ def swap_files(new_app: str, app_dir: str, sleep=time.sleep,
         if start is not None:
             start()
     except Exception:
+        restored = True
         for dst in copied:
-            _remove(dst)
+            try:
+                _remove_checked(dst)
+            except OSError as e:
+                restored = False
+                log.error("update: could not remove partial replacement %s: %s", dst, e)
         for dst, old in reversed(moved):
             try:
                 _retry(os.replace, old, dst, sleep=sleep)
             except OSError as e:
+                restored = False
                 log.error("update: could not restore %s: %s", dst, e)
+        state.update(state="rolled_back" if restored and previous_hash else "failed",
+                     files=backups, exe_sha256=previous_hash or state["exe_sha256"])
+        try:
+            _write_update_state(app_dir, state, sleep=sleep)
+        except OSError:
+            # The prewritten pending record still protects every backup.
+            log.exception("update: recovery result could not be saved; backups retained")
         raise
+    state["state"] = "installed"
+    try:
+        _write_update_state(app_dir, state, sleep=sleep)
+    except OSError:
+        # The new process may already own the replacement. Do not roll it back
+        # merely because saving completion failed: pending evidence keeps backups.
+        log.exception("update: completion could not be saved; backups retained")
 
 
 def finish_update(app_dir: str, pid: int, new_app: str,
@@ -623,14 +689,171 @@ def finish_update(app_dir: str, pid: int, new_app: str,
     return False
 
 
-def cleanup(app_dir: str, staging: Optional[str] = None) -> None:
-    """After an update: remove the *.old program files and the staging folder."""
+def _exe_hash(folder: str) -> str:
+    digest = hashlib.sha256()
+    with open(os.path.join(folder, EXE_NAME), "rb") as source:
+        for chunk in iter(lambda: source.read(CHUNK), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _update_names(names) -> bool:
+    return (type(names) is list and len(names) <= 256
+            and len({n.casefold() for n in names if isinstance(n, str)}) == len(names)
+            and all(isinstance(n, str) and n and n not in (".", "..")
+                    and not any(c in n for c in ("/", "\\", "\0", ":"))
+                    and n.casefold() not in KEEP and not n.casefold().endswith(OLD_SUFFIX)
+                    and not n.startswith(UPDATE_STATE + ".") for n in names))
+
+
+def _paths_overlap(first: str, second: str) -> bool:
+    first, second = (os.path.normcase(os.path.realpath(p)) for p in (first, second))
     try:
-        names = os.listdir(app_dir)
+        return os.path.commonpath((first, second)) in (first, second)
+    except ValueError:  # Different Windows volumes cannot contain each other.
+        return False
+
+
+def _write_update_state(app_dir: str, state: dict, *, sleep=time.sleep) -> None:
+    payload = json.dumps(state, separators=(",", ":"))
+    if len(payload.encode("utf-8")) > 65536:
+        raise ValueError("update recovery record is too large")
+    descriptor, temporary = tempfile.mkstemp(prefix=UPDATE_STATE + ".", suffix=".tmp", dir=app_dir)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as target:
+            target.write(payload)
+            target.flush()
+            os.fsync(target.fileno())
+        _retry(os.replace, temporary, os.path.join(app_dir, UPDATE_STATE), sleep=sleep)
+    finally:
+        _remove(temporary)
+
+
+def _read_update_state(app_dir: str):
+    try:
+        with open(os.path.join(app_dir, UPDATE_STATE), encoding="utf-8") as source:
+            raw = source.read(65537)
+    except FileNotFoundError:
+        return None
+    if len(raw) > 65536:
+        raise ValueError("oversized update recovery record")
+    state = json.loads(raw)
+    if (type(state) is not dict or set(state) !=
+            {"schema", "state", "backups", "files", "exe_sha256", "staging", "stage_token"}
+            or type(state["schema"]) is not int or state["schema"] != 1
+            or state["state"] not in ("pending", "installed", "rolled_back", "failed")
+            or not _update_names(state["backups"]) or not _update_names(state["files"])
+            or not set(state["backups"]).issubset(state["files"])
+            or (state["state"] in ("installed", "rolled_back") and EXE_NAME not in state["files"])
+            or not isinstance(state["exe_sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", state["exe_sha256"]) is None
+            or not isinstance(state["stage_token"], str)
+            or re.fullmatch(r"[0-9a-f]{32}", state["stage_token"]) is None
+            or type(state["staging"]) is not list or not 1 <= len(state["staging"]) <= 2
+            or not all(isinstance(p, str) and p and "\0" not in p and os.path.isabs(p)
+                       and not _paths_overlap(p, app_dir) for p in state["staging"])):
+        raise ValueError("invalid update recovery record")
+    return state
+
+
+def _owns_staging(app_dir: str, state: dict) -> bool:
+    root = state["staging"][0]
+    if not os.path.lexists(root):
+        # A prior cleanup removes backups BEFORE staging. Without the receipt,
+        # only an already empty transaction can finish removing its app marker.
+        return not any(os.path.lexists(os.path.join(app_dir, n + OLD_SUFFIX))
+                       for n in state["backups"])
+    marker = os.path.join(root, STAGE_STATE)
+    if not os.path.isdir(root) or not os.path.lexists(marker):
+        return False
+    # On Windows junctions are reparse points even when islink() is false.
+    # Refuse every reparse component rather than treating its resolved target
+    # as an independently owned cleanup tree.
+    for path in (marker, *tuple(Path(root).parents), root):
+        if os.path.islink(path) or getattr(os.lstat(path), "st_file_attributes", 0) & 0x400:
+            return False
+    with open(marker, encoding="utf-8") as source:
+        raw = source.read(65537)
+    if len(raw) > 65536:
+        return False
+    owner = json.loads(raw)
+    if (type(owner) is not dict or set(owner) != {
+            "schema", "owner", "root", "token", "files", "backups",
+            "installed_exe_sha256", "rollback_exe_sha256"}
+            or type(owner["schema"]) is not int or owner["schema"] != 1
+            or owner["owner"] != os.path.normcase(os.path.realpath(app_dir))
+            or owner["root"] != os.path.normcase(os.path.abspath(root))
+            or owner["token"] != state["stage_token"]
+            or not _update_names(owner["files"]) or not _update_names(owner["backups"])
+            or not set(owner["backups"]).issubset(owner["files"])
+            or owner["backups"] != state["backups"]):
+        return False
+    expected_files = owner["files"] if state["state"] == "installed" else owner["backups"]
+    expected_hash = owner[("installed" if state["state"] == "installed" else "rollback") + "_exe_sha256"]
+    return state["files"] == expected_files and state["exe_sha256"] == expected_hash
+
+
+def _remove_checked(path: str) -> None:
+    _remove(path)
+    if os.path.lexists(path):
+        raise OSError("update recovery file is still in use: " + path)
+
+
+def _clear_owned_staging(root: str) -> None:
+    if not os.path.lexists(root):
+        return
+    # Keep the independent receipt while any downloaded/runner file remains.
+    # A locked child must not turn a safely retryable cleanup into an unowned
+    # directory. Do not use one rmtree(root), whose traversal can delete the
+    # receipt first and then fail on a different child.
+    for name in os.listdir(root):
+        if name != STAGE_STATE:
+            _remove_checked(os.path.join(root, name))
+    _remove_checked(os.path.join(root, STAGE_STATE))
+    try:
+        os.rmdir(root)
     except OSError:
-        names = []
-    for n in names:
-        if n.endswith(OLD_SUFFIX):
-            _remove(os.path.join(app_dir, n))
-    if staging and os.path.isdir(staging):
-        _remove(staging)
+        # A new/locked entry may race the final empty-directory removal. Leave
+        # that remainder untouched; program backups were already verified and
+        # cleaned. Do not recursively delete an ownerless directory.
+        log.info("update: completed staging cleanup left a directory for manual inspection")
+
+
+def cleanup(app_dir: str, staging: Optional[str] = None) -> bool:
+    """Delete only verified terminal transaction backups; False retains recovery.
+
+    Missing/old-format evidence never authorizes deleting arbitrary *.old files.
+    Interrupted/malformed/failed records preserve both backups and staging. The
+    marker is removed last, making partial cleanup safe to retry after a crash.
+    """
+    try:
+        state = _read_update_state(app_dir)
+        if state is None:
+            return True  # No owned transaction: leave legacy backups/staging alone.
+        if state["state"] not in ("installed", "rolled_back"):
+            return False
+        if (not all(os.path.exists(os.path.join(app_dir, name)) for name in state["files"])
+                or _exe_hash(app_dir) != state["exe_sha256"]):
+            return False
+        allowed = {os.path.normcase(os.path.realpath(p)) for p in state["staging"]}
+        if staging is not None and (not isinstance(staging, str) or
+                os.path.normcase(os.path.realpath(staging)) not in allowed):
+            return False
+        if not _owns_staging(app_dir, state):
+            if any(os.path.lexists(os.path.join(app_dir, name + OLD_SUFFIX))
+                   for name in state["backups"]):
+                return False
+            # Cleanup may have crashed after removing its receipt and backups.
+            # Finalize only the app record; no unowned staging path is removed.
+            _remove_checked(os.path.join(app_dir, UPDATE_STATE))
+            return True
+        for name in state["backups"]:
+            _remove_checked(os.path.join(app_dir, name + OLD_SUFFIX))
+        # Use the persisted path when a prior startup already consumed config,
+        # but never accept an unrelated directory from hand-edited settings.
+        _clear_owned_staging(state["staging"][0])
+        _remove_checked(os.path.join(app_dir, UPDATE_STATE))
+        return True
+    except (OSError, TypeError, ValueError, RecursionError):
+        log.warning("update: recovery evidence could not be verified; backups retained", exc_info=True)
+        return False
