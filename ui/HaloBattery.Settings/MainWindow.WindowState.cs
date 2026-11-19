@@ -172,7 +172,7 @@ public sealed partial class MainWindow
 
     private async Task SendUiCommandAsync(string command)
     {
-        if(command!="quit") { Bridge.SendCommand(command,new { });return; }
+        if(command!="quit") { Bridge.SendCommand(command,SettingsJson.Object());return; }
         if(quittingApplication || closing || closingWindowState) return;
         CaptureWindowState();
         quittingApplication=true;
@@ -180,7 +180,7 @@ public sealed partial class MainWindow
         try
         {
             await FlushWindowStateAsync();
-            if(!closing && !closingWindowState) Bridge.SendCommand("quit",new { });
+            if(!closing && !closingWindowState) Bridge.SendCommand("quit",SettingsJson.Object());
         }
         finally
         {

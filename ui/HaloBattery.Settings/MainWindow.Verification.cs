@@ -46,6 +46,12 @@ public sealed partial class MainWindow
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                var nativePresenter=AppWindow.Presenter as OverlappedPresenter;
+                checks.Add(new { name="native overlapped presenter is available",passed=nativePresenter is not null });
+                if(nativePresenter is null)throw new InvalidOperationException("Fixture requires an overlapped presenter.");
+                var customChrome=!nativePresenter.HasTitleBar && nativePresenter.HasBorder;
+                checks.Add(new { name="native caption is hidden and resize border retained",passed=customChrome });
+                if(!customChrome)throw new InvalidOperationException("Fixture custom chrome is unavailable.");
                 if (Arg("--verify-scope") == "window-activation")
                 {
                     await VerifySettingsActivation(checks);

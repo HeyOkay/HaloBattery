@@ -20,8 +20,10 @@ physical icon size and one at 80 physical pixels.
 
 Search is opt-in. Normal device polling, tray animation and startup with current
 caches never contact Iconify. Old selected white-only masks receive one cancellable
-background source upgrade to recover original colors; the saved fallback remains
-visible immediately if offline. Unchanged built-in Lucide profiles need no fetch. A selected PNG and its attribution are stored under `iconify/` in the
+background upgrade only when their verified source is already stored locally.
+Without it, the saved fallback remains visible; opening the catalog and choosing
+an icon can download its current verified source. The collapsed catalog card
+states that search downloads icons from `api.iconify.design` before browsing begins. Unchanged built-in Lucide profiles need no fetch. A selected PNG and its attribution are stored under `iconify/` in the
 same data directory as `config.json`. This follows the existing portable-mode
 data directory. Previously applied selections work without the network. Search, source and
 preview caches exist only for the settings-window session and are discarded
@@ -134,11 +136,22 @@ cache; it is never run during startup or tests.
 
 Each asset saves the author, collection, icon source, source hash, acquisition
 time, upstream revisions, full license/NOTICE and a modification statement
-(theme recoloring only for monochrome icons, preserved fixed colors, scaling and rasterization). A cached asset is accepted
-only when its metadata and PNG integrity match the reviewed registry. A future
-registry revision that changes its source or legal evidence deliberately fails
-closed; retaining previous selections across such an update requires retaining
-and auditing their historical evidence as part of that update.
+(theme recoloring only for monochrome icons, preserved fixed colors, scaling and
+rasterization). New selections must match the current reviewed registry. Saved
+v2 selections instead bind their complete selection-time evidence and PNG hash
+to the immutable ID in `config.json`. They remain usable offline if a later
+registry changes or removes the artwork or its metadata. Browsing lookup files
+are disposable and are not needed to load a selected icon.
+
+Older selections are sealed locally into this format only while their original
+evidence still matches the reviewed registry. Their pixels are preserved. If an
+older selection is already unverifiable, or its files are missing or damaged,
+the configured choice and remaining files are retained. A localized startup
+warning and the device's catalog card explain the temporary default icon and
+offer choosing the icon again or restoring the default. A read-only profile
+keeps any still-verifiable old selection even if migration cannot be saved.
+These integrity checks do not protect against an attacker replacing both the
+configuration and the saved asset.
 
 ## SVG limits and rendering
 

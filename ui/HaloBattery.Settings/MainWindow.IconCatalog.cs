@@ -28,6 +28,7 @@ public sealed partial class MainWindow
         public ImageSource? Image { get; set; }
         public Task<BitmapImage>? Decode { get; set; }
     }
+#if HALO_BATTERY_VERIFICATION
     private sealed class CatalogMetrics
     {
         public long Lookups, LookupComparisons, ContainsComparisons;
@@ -49,14 +50,19 @@ public sealed partial class MainWindow
             else ActiveDecodes[id]--;
         }
     }
+#endif
     private static CatalogTile? FindCatalogTile(IconCatalogView view, string id)
     {
+#if HALO_BATTERY_VERIFICATION
         if (view.Metrics is { } metrics) { metrics.Lookups++; metrics.LookupComparisons++; }
+#endif
         return view.ById.GetValueOrDefault(id);
     }
     private static bool ContainsCatalogTile(IconCatalogView view, CatalogTile tile)
     {
+#if HALO_BATTERY_VERIFICATION
         if (view.Metrics is { } metrics) metrics.ContainsComparisons++;
+#endif
         return view.ById.TryGetValue(tile.Id, out var current) && ReferenceEquals(current, tile);
     }
     private const int CatalogPageSize = 50;
@@ -76,21 +82,29 @@ public sealed partial class MainWindow
     }
     private static async Task<BitmapImage> DecodeCatalogThumbnail(IconCatalogView view, CatalogTile tile)
     {
+#if HALO_BATTERY_VERIFICATION
         var metrics = view.Metrics;
         metrics?.StartDecode(tile.Id);
         try { return await CatalogBitmap(tile.Preview); }
         finally { metrics?.FinishDecode(tile.Id); }
+#else
+        return await CatalogBitmap(tile.Preview);
+#endif
     }
     private async Task<ImageSource> GetCatalogThumbnail(IconCatalogView view, CatalogTile tile)
     {
         if (tile.Image is { } cached)
         {
+#if HALO_BATTERY_VERIFICATION
             if (view.Metrics is { } metrics) metrics.CacheHits++;
+#endif
             CacheCatalogThumbnail(view, tile, cached);
             return cached;
         }
         if (tile.Decode is null) tile.Decode = DecodeCatalogThumbnail(view, tile);
+#if HALO_BATTERY_VERIFICATION
         else if (view.Metrics is { } metrics) metrics.SharedDecodeWaiters++;
+#endif
         var pending = tile.Decode;
         try
         {
@@ -126,7 +140,9 @@ public sealed partial class MainWindow
         public readonly Dictionary<string, CatalogTile> ById = new();
         public readonly LinkedList<string> ThumbnailOrder = new();
         public readonly Dictionary<string, LinkedListNode<string>> ThumbnailNodes = new();
+#if HALO_BATTERY_VERIFICATION
         public CatalogMetrics? Metrics;
+#endif
         public readonly Dictionary<long, CatalogRequest> Requests = new();
         public readonly Dictionary<long, long> PrefetchAnchors = new();
         public CancellationTokenSource? Debounce;
@@ -169,6 +185,13 @@ public sealed partial class MainWindow
         Section(parent, T("settings.iconify_title"));
         var browse = Button(T("settings.iconify_browse"), true);
         var catalog = Expander(T("settings.iconify_title"), T("settings.iconify_hint"), browse, "palette");
+        void RefreshSavedIconHint()
+        {
+            if (catalog.DescriptionElement is TextBlock hint)
+                hint.Text = T("settings.iconify_hint") + (SelectedDevice?.CustomIconUnavailable == true
+                    ? "\n\n" + T("settings.iconify_saved_unavailable") : "");
+        }
+        RefreshSavedIconHint();
         parent.Children.Add(catalog);
         var body = new StackPanel { Spacing = 12, Margin = new(24, 16, 24, 20) };
         catalog.AddBody(body);
@@ -282,10 +305,14 @@ public sealed partial class MainWindow
         };
         async void UpdateCatalogContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
         {
+#if HALO_BATTERY_VERIFICATION
             if (view.Metrics is { } metrics) metrics.ContainerUpdates++;
+#endif
             if (args.InRecycleQueue)
             {
+#if HALO_BATTERY_VERIFICATION
                 if (view.Metrics is { } recycledMetrics) recycledMetrics.Recycles++;
+#endif
                 // Keep recently decoded thumbnails in the bounded cache.
                 if (args.ItemContainer.ContentTemplateRoot is Grid recycledPanel)
                 {
@@ -324,8 +351,11 @@ public sealed partial class MainWindow
         pageBindings.Add(() =>
         {
             if (!CatalogActive(view)) return;
+            // Explain an unavailable saved selection outside the collapsed
+            // gallery; do not silently clear the user's configured choice.
             view.Current.Text = SelectedDevice?.CustomIconName is { Length: > 0 } id
                 ? T("settings.iconify_current") + ": " + id : T("settings.iconify_default");
+            RefreshSavedIconHint();
             view.PreviewBackground.Background = Brush(State.IconLightTaskbar ? "#F3F3F3" : "#202020");
             RefreshCatalogScale(view);
         });
