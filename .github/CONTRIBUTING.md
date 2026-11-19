@@ -113,9 +113,17 @@ Look at the open issues and pull requests first, so that two people do not do th
 - `main`: stable, released code only. Tags `vX.Y.Z` are cut from `main`; `.github/workflows/release.yml` builds and publishes on a tag. The app's updater uses `/releases/latest`, so only `main` releases reach users.
 - `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI (no approval required); any maintainer with write access merges them. Squash merge.
 - Release: a maintainer opens a "Release X.Y.Z" pull request from `pre-release` into `main`. It bumps `VERSION` in `halo_battery.pyw` and moves the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit (not squash), then tag on `main`.
+- Stable publication requires repository release immutability and the owner-set
+  `STABLE_RELEASE_IMMUTABILITY_ENABLED=true` variable. The workflow uploads to a
+  new draft, verifies asset digests and provenance attestations, then publishes.
+  It refuses existing releases/drafts; inspect a partial failure before recovery.
+  See [Building](../docs/building.md#stable-release-publication).
 - Hotfix: branch `hotfix/<name>` from `main`, pull request into `main` (code-owner approval).
 - After **every** release or hotfix, merge `main` back into `pre-release` (fast-forward when possible), so the two never drift apart.
 - **Test builds**: every merge into `pre-release` publishes the [Pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) (`.github/workflows/prerelease.yml`). It is one rolling GitHub release, marked as a pre-release, so the app's updater never offers it. Testers download it there and report bugs with its commit id.
+  The tag stays fixed to avoid tag-fetch conflicts. Use the exact build commit
+  linked in the release notes for source; GitHub's automatic source archives
+  reflect the fixed tag and may differ from the latest binaries.
 
 ```
 feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--> main --tag vX.Y.Z--> release

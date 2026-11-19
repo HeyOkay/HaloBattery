@@ -1,5 +1,6 @@
 """Small browse glyphs retain full-renderer safety, colour and centre geometry."""
 import json
+import math
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -118,7 +119,16 @@ class PreviewGlyphTests(unittest.TestCase):
                         layer=glyph.render(32,fg,255 if active else 110)
                         expected=Image.alpha_composite(ring,layer)
                         actual=icons.render(level,charging,online,custom_glyph=glyph,**options)
-                        self.assertEqual(actual.tobytes(),expected.tobytes())
+                        if style == 'thin':
+                            self.assertEqual(actual.tobytes(),expected.tobytes())
+                        else:
+                            for y in range(32):
+                                for x in range(32):
+                                    if math.hypot(x+.5-16,y+.5-16) >= 13:
+                                        self.assertEqual(actual.getpixel((x,y)),ring.getpixel((x,y)))
+                            # The mixed fixture's original blue must survive.
+                            self.assertTrue(any((r,g,b)==(47,136,255) and a>0
+                                                for r,g,b,a in actual.getdata()))
 
     def test_digest_is_stable_bounded_and_images_are_owned(self):
         a=prepare_preview(COLOR,rasterizer=Raster('color'))

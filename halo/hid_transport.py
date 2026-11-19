@@ -26,6 +26,25 @@ from halo.native_io import (
 
 IOCTL_HID_GET_INPUT_REPORT = (0x0B << 16) | (104 << 2) | 2
 _WAIT = object()
+# A positive read timeout longer than the transport limit gets its own limit:
+# the read runs to the caller's timeout and returns [] like hidapi, plus this margin.
+READ_TIMEOUT_MARGIN = 0.5
+
+
+def _native_error(code):
+    """OSError for a failed native request, worded like hidapi's Windows text.
+
+    hidapi reports e.g. "WriteFile: (0x00000001) Incorrect function." through
+    device.error(). hyperx_cloud3 and mchose_v9 look for "0x00000001" or
+    "incorrect function" there to retry an output report as a feature report,
+    so the code and the system message must both be in the text.
+    """
+    code = int(code) & 0xFFFFFFFF
+    try:
+        text = ctypes.FormatError(code).strip()
+    except (AttributeError, OSError, ValueError):  # FormatError is Windows-only
+        text = ""
+    return OSError(code, f"native I/O failed: (0x{code:08X}) {text}".rstrip())
 
 
 @dataclass
@@ -402,7 +421,7 @@ class TransportRuntime:
             if completion is None:
                 return _WAIT
             if not completion.success:
-                raise OSError(completion.error, "native I/O failed")
+                raise _native_error(completion.error)
             self.check_cancelled()
             return transform(completion, request)
         return _Pending(probe)
@@ -581,9 +600,9 @@ class HidDevice:
         """Cached HIDAPI-compatible diagnostic text; never perform native work."""
         return self._last_error
 
-    def _invoke(self, callback, *, _cleanup=False):
+    def _invoke(self, callback, *, timeout=None, _cleanup=False):
         try:
-            result = self.runtime.invoke(callback, self._key, _cleanup=_cleanup)
+            result = self.runtime.invoke(callback, self._key, timeout, _cleanup=_cleanup)
         except OSError as exc:
             # Retain text only, not an exception/traceback or native resource.
             self._last_error = str(exc)
@@ -760,7 +779,12 @@ class HidDevice:
                     data = data[1:]
                 return list(data[:max_length])
             return _Pending(probe)
-        return self._invoke(operation)
+        # hyperx_cloud_flight reads with 2000 ms; under the fixed 1.5 s limit a
+        # silent headset became a transport failure instead of an empty read.
+        limit = None
+        if delay is not None and delay + READ_TIMEOUT_MARGIN > self.runtime.timeout:
+            limit = delay + READ_TIMEOUT_MARGIN
+        return self._invoke(operation, timeout=limit)
 
     def _string(self, name):
         self._require_open()
