@@ -6,10 +6,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
-- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
-
 ### Changed
 
 - Keep the SignPath TEST credential in the protected signing jobs only; build
@@ -94,6 +90,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
 - Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
