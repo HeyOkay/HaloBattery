@@ -107,6 +107,7 @@ MESSAGES = {
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Ratones MCHOSE",
+    "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Mandos Nintendo Switch",
     "provider.playstation": "Mandos PlayStation",
     "provider.plantronics": "Auriculares Plantronics (adaptador BT600)",

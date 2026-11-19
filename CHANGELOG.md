@@ -46,6 +46,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
   `AA 10 18` query (#379); level and charging measured by the reporter. Byte
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
+- ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
+  33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth

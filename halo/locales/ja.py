@@ -99,6 +99,7 @@ MESSAGES = {
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "MCHOSE マウス",
+    "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Nintendo Switch コントローラー",
     "provider.playstation": "PlayStation コントローラー",
     "provider.plantronics": "Plantronics ヘッドセット（BT600 アダプター）",
