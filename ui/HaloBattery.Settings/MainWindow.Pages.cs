@@ -448,8 +448,8 @@ public sealed partial class MainWindow
             pinned,
             tray = Array.Empty<object>()
         };
-        return Uri.EscapeDataString(Convert.ToBase64String(
-            Encoding.UTF8.GetBytes(JsonSerializer.Serialize(snapshot))));
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(snapshot)))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     private static string TrayKind(string kind) => kind switch

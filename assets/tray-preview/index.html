@@ -43,7 +43,9 @@ mirrorSettings();
 try {
   const packed = new URLSearchParams(location.search).get('state');
   if (packed) {
-    const bytes = Uint8Array.from(atob(packed), c => c.charCodeAt(0));
+    const b64 = packed.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+    const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
     const live = JSON.parse(new TextDecoder().decode(bytes));
     if (live.theme) tray.setAttribute('theme', live.theme);
     if (live.dpi) tray.setAttribute('dpi', String(live.dpi));
