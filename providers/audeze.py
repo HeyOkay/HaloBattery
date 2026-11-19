@@ -75,9 +75,10 @@ before anything else and reports nothing while it says Dongle: a switched-off
 headset leaves the tray through the usual "two misses" path, is never reported as
 0%, and its 1.5 s battery sequence is not sent at all.
 
-Some endpoints report the placeholder serial ``0000000000000000``. That is not
+Some endpoints report placeholder serials such as ``0000000000000000``, all-F
+hex strings or ``dummy``. Those are not
 physical identity: those endpoints use stable HID-path keys and are never
-merged by the placeholder alone. Trusted nonzero serials still join the cable
+merged by the placeholder alone. Other nonempty serials still join the cable
 and dongle of one headset; unrelated headsets are polled independently.
 
 With the USB-C cable plugged in instead, a switched-off headset keeps reporting
@@ -272,7 +273,11 @@ def device_identity(info):
     """Keep real serial identities; never merge missing/placeholder identities."""
     serial = info.get("serial_number")
     serial = serial.strip() if isinstance(serial, str) else ""
-    if serial and serial.strip("0-{} "):
+    # A serial need not be a MAC address: preserve real manufacturer serials.
+    # Only empty, all-zero/all-F and explicit placeholder words are refused.
+    token = "".join(char for char in serial.casefold() if char not in " -{}:")
+    placeholders = {"dummy", "unknown", "none", "null", "n/a", "na", "default", "notavailable"}
+    if token and set(token) not in ({"0"}, {"f"}) and token not in placeholders:
         return serial, serial
     path = info.get("path")
     if isinstance(path, str):
