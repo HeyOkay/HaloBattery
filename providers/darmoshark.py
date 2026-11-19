@@ -80,7 +80,7 @@ def parse_reply(data) -> Optional[int]:
 
 
 def candidates(infos: List[dict]) -> List[dict]:
-    """Receiver first, then a wired body; only the documented vendor collection."""
+    """The wired body (073C) first, then the receiver; only the documented vendor collection."""
     mine = [d for d in infos
             if d.get("product_id") in PIDS
             and (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE)]

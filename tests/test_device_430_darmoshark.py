@@ -95,6 +95,27 @@ class PollTests(unittest.TestCase):
         out, _ = self.poll([])
         self.assertEqual(out, [])
 
+    def test_the_captured_430_exchange_reads_63_with_charging_unknown(self):
+        # #430 test build 1 diagnostics: the ack `1f 00 81 01 ...`, then the power
+        # reply `41 00 8e 01 00 00 3f 00 01 02 03 ...` (63 %, the mouse showed 63 %).
+        ack = bytes.fromhex("1f 00 81 01").ljust(64, b"\0")
+        captured = bytes.fromhex("41 00 8e 01 00 00 3f 00 01 02 03").ljust(64, b"\0")
+        out, _ = self.poll([ack, captured])
+        self.assertEqual([(s.level, s.charging, s.charging_known) for s in out],
+                         [(63, False, False)])
+
+    def test_the_state_byte_is_not_read_as_charging(self):
+        # The charging mapping of PR commit 4fac9bc (1/3 charging, 2 full) has no
+        # source and failed its only hardware test, so it is not used: whatever byte
+        # 5 holds, charging stays unknown.
+        for state in (0, 1, 2, 3):
+            with self.subTest(state=state):
+                frame = bytearray(response(55))
+                frame[5] = state
+                out, _ = self.poll([bytes(frame)])
+                self.assertEqual([(s.level, s.charging, s.charging_known) for s in out],
+                                 [(55, False, False)])
+
     def test_wrong_collection_is_not_opened(self):
         out, dev = self.poll([], [dict(INFO[0], usage_page=0x0001, usage=0x0002)])
         self.assertEqual(out, [])
