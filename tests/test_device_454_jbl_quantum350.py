@@ -96,6 +96,22 @@ class PollTest(unittest.TestCase):
         self.assertEqual(res[0].level, 50)
         self.assertEqual(len(dev.calls), 2)
 
+    def test_windows_hidapi_without_feature_length_is_still_read(self):
+        # hidapi 0.15's enumerate() has no feature_report_byte_length; the
+        # reporter's diagnostic is exactly this shape.
+        e = entry()
+        e.pop("feature_report_byte_length")
+        dev = FakeDevice({0x68: [[0x68, 1]], 0x49: [[0x49, 95]]})
+        res = self.poll([e], dev)
+        self.assertEqual([(r.level, r.online) for r in res], [(95, True)])
+
+    def test_a_reported_short_feature_length_is_skipped(self):
+        e = entry()
+        e["feature_report_byte_length"] = 1
+        dev = FakeDevice({0x68: [[0x68, 1]], 0x49: [[0x49, 50]]})
+        self.assertEqual(self.poll([e], dev), [])
+        self.assertEqual(dev.calls, [])
+
     def test_wrong_pid_is_not_claimed(self):
         dev = FakeDevice({0x68: [[0x68, 1]], 0x49: [[0x49, 50]]})
         self.assertEqual(self.poll([entry(pid=0x2088)], dev), [])

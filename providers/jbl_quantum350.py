@@ -95,8 +95,13 @@ class JblQuantum350Provider(Provider):
         for d in infos:
             if (d.get("product_id") == PID
                     and d.get("interface_number") == INTERFACE
-                    and (d.get("usage_page"), d.get("usage")) == (PAGE, USAGE)
-                    and d.get("feature_report_byte_length", 0) >= REPORT_LEN):
+                    and (d.get("usage_page"), d.get("usage")) == (PAGE, USAGE)):
+                # Windows hidapi 0.15 does not return feature_report_byte_length,
+                # so an absent value is unknown, not zero. A reported value below
+                # the two-byte report is still a reason to skip the collection.
+                feat = d.get("feature_report_byte_length")
+                if feat is not None and feat < REPORT_LEN:
+                    continue
                 return d
         return None
 
