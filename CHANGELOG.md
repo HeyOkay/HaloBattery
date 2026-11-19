@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Keep the SignPath TEST credential in the protected signing jobs only; build
+  and packaging jobs do not receive or forward it.
+
 - Add isolated, opt-in SignPath test signing for application and installer builds.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,

@@ -1,8 +1,9 @@
 # Test signing with SignPath
 
 Test signing is an explicit mode of the existing `release.yml` manual workflow.
-It calls `signpath-test.yml` from the same commit. Normal manual builds, stable
-tag builds and the rolling pre-release retain their existing behavior.
+Its build, packaging, signing and verification jobs live in the same workflow.
+Normal manual builds, stable tag builds and the rolling pre-release retain their
+existing behavior.
 
 The job chain is:
 
@@ -56,9 +57,23 @@ broader token to this test workflow. Create a separate test CI user or explicitl
 remove its production role before generating/storing the test credential.
 Enter the credential directly into GitHub; never put it in source, logs or chat.
 
-The caller maps only this named secret. GitHub environment secrets also need an
-explicit mapping when passed to a reusable workflow; the signing jobs select the
-environment, and a missing value fails before the signing request.
+The token must exist **only** as an environment secret: do not create a repository
+or organization secret with the same name. Only `test_sign_payload` and
+`test_sign_installer` select `environment: signpath-test` and reference it, after
+the environment approvals. Build, packaging and verification jobs have no signing
+environment, secret mapping or signing credential. There is no reusable-workflow
+secret declaration, forwarding or inheritance. A missing environment value fails
+before any signing request.
+
+Keep these jobs in the ordinary manual workflow: GitHub
+[documents secret forwarding for reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#using-inputs-and-secrets-in-a-reusable-workflow).
+Removing a reusable caller mapping alone is not a reliable credential boundary.
+The ordinary jobs use the direct
+[environment-secret boundary](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+
+Before enabling a run, verify secret **names** in the environment, repository and
+any applicable organization settings, plus the environment reviewers, branch
+restriction and administrator-bypass setting. Do not read or print secret values.
 
 Keep repository variable `SIGNPATH_TEST_ENABLED` absent or `false` until the
 source and environment are reviewed. Setting it to `true` enables the explicit
@@ -79,9 +94,9 @@ gh workflow run release.yml --repo HeyOkay/HaloBattery --ref pre-release -f sign
 ```
 
 Use the explicit CLI/API input because the Actions page on `main` may still show
-the older input form. The local reusable workflow is resolved from the same
-commit as that selected caller. This route follows GitHub's documented selected
-ref behavior; an end-to-end run still needs validation.
+the older input form. All TEST jobs come from the same selected `release.yml`
+commit. This route follows GitHub's documented selected-ref behavior; an
+end-to-end run still needs validation.
 
 Review the two signing jobs when their environment approvals appear. Download
 `HaloBattery-SELF-SIGNED-TEST-<run-id>-<attempt>` only after the final verification

@@ -42,7 +42,7 @@ class ReleasePermissionsTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
                 sections = jobs(text)
-                self.assertEqual(set(sections), {"build", "publish", "signpath_test"} if name == "release.yml" else {"build", "publish"})
+                self.assertEqual(set(sections), {"build", "publish", "test_build", "test_sign_payload", "test_package", "test_sign_installer", "test_verify"} if name == "release.yml" else {"build", "publish"})
                 self.assertRegex(text.split("\njobs:", 1)[0], r"permissions:\n  contents: read")
                 self.assertRegex(sections["build"], r"permissions:\n      contents: read")
                 self.assertNotIn("contents: write", sections["build"])
@@ -84,11 +84,7 @@ class ReleasePermissionsTests(unittest.TestCase):
         for name in WORKFLOWS:
             text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             for action in re.findall(r"(?m)^\s+uses: (\S+)", text):
-                if action.startswith("./"):
-                    self.assertEqual(name, "release.yml")
-                    self.assertEqual(action, "./.github/workflows/signpath-test.yml")
-                else:
-                    self.assertRegex(action, r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
+                self.assertRegex(action, r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
 
 
 @unittest.skipUnless(bash_path(), "Bash is required to execute the exact publisher validator")
