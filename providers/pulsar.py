@@ -145,6 +145,7 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",
         0xFA09: "Compx 2.4 GHz keyboard",
+        0xF520: "Teevolution Terra Pro (1K receiver)",
         0xF523: "Teevolution Terra Pro (2.4 GHz)",
     },
     0x1B1C: {
@@ -178,7 +179,8 @@ PIDS: Dict[int, Dict[int, str]] = {
 # ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
 # and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
 KINDS: Dict[Tuple[int, int], str] = {(0x3554, 0xFA09): "keyboard",
-                                     (0x3554, 0xF523): "keyboard",
+                                     (0x3554, 0xF520): "mouse",
+                                     (0x3554, 0xF523): "mouse",
                                      (0x1B1C, 0x2B2A): "mouse"}
 
 

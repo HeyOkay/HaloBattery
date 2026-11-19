@@ -102,7 +102,8 @@ class PollTest(unittest.TestCase):
     def test_another_channel_is_not_opened(self):
         # if only the vendor page (0xFF00) is present there is no VIA channel at all
         infos = [{"path": b"vendor", "interface_number": 2, "usage_page": 0xFF00,
-                  "usage": 0x0001, "product_id": U.PID}]
+                  "usage": 0x0001, "product_id": U.PID,
+                  "product_string": "URX Core75 Wireless"}]
         out, dev = self.poll([], infos=infos)
         self.assertEqual([], dev.opened)
         self.assertIsNone(out[0].level)
@@ -121,6 +122,13 @@ class PollTest(unittest.TestCase):
         self.now[0] += U.ASLEEP_KEEP + 1
         out = provider.poll()
         self.assertIsNone(out[0].level)
+
+    def test_the_evo75_on_the_same_ids_is_not_claimed(self):
+        evo = [{"path": b"via", "interface_number": 1, "usage_page": 0xFF60, "usage": 0x0061,
+                "product_id": U.PID, "product_string": "EVO75 2.4G"}]
+        out, dev = self.poll([CAPTURED_76], infos=evo)
+        self.assertEqual([], out)
+        self.assertEqual([], dev.opened)
 
     def test_no_receiver_reports_nothing(self):
         out, _dev = self.poll([], infos=[])

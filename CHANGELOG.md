@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- URX Core75 now checks the product string as well as `36B0:3002`, so an
+  EVO75 on the same receiver id is no longer labelled as a URX board (#448).
 - Keep the SignPath TEST credential in the protected signing jobs only; build
   and packaging jobs do not receive or forward it.
 
@@ -72,6 +74,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Corsair M65 RGB Ultra Wireless (`1B1C:1BA6` SLIPSTREAM receiver or
   `1B1C:1BB5` USB cable): battery level and charging state, confirmed on
   hardware in [#411](https://github.com/HeyOkay/HaloBattery/issues/411).
+- Teevolution Terra Pro on its 1K receiver (`3554:F520`), confirmed on
+  hardware in #448; the existing `3554:F523` reader now uses the mouse pictogram.
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
