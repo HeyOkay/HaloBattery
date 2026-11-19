@@ -10,6 +10,14 @@ answered with the same header on an input report; the level is zero-based byte
 confirmed both on hardware with test build 2: 70% over wireless and 69% with
 the charging ring on the USB cable.
 
+Source: no public project documents this query. It was identified as "the ASUS
+vendor power query, B0 12 04, on 0b05:1c92, interface 4, usage ff03:0001" by the
+controller's owner (nickfizz0208) in #269 and checked with his own local build
+against Armoury Crate (65% in both). The charging label for byte 10 comes from
+the ASUS GearLink SDK, as he reported in #269; he then confirmed the output/input
+report transport and the 0x00/0x01 charging values on his unit (72% not
+charging, 73% charging on the cable) before test build 2.
+
 The app must not show the generic Windows "Xbox 360 Controller" icon next to
 this reading, so this module is called from the XInput provider's one-slot
 pairing rather than polled as a second provider.

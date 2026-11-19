@@ -636,6 +636,11 @@ the reading to the controller's one slot and uses the ROG name, so the generic
 Windows Xbox entry is not duplicated. Test 1's feature write was refused; test
 2 uses output/input reports.
 
+Source: no public project documents this query. The controller's owner
+(@nickfizz0208) identified it as the ASUS vendor power query in #269 and checked
+it with his own build against Armoury Crate (65% in both); the charging label of
+byte 10 comes from the ASUS GearLink SDK, as he reported there.
+
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)
