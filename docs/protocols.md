@@ -38,7 +38,9 @@ pages are excluded before opening HID. The previously inferred Xbox cable ID
 measured `4B1A` cable supplies the charging inference.
 
 Multiple headsets are queried independently. Trustworthy non-zero serials retain
-their existing identity and cable preference. Missing/all-zero serials cannot
+their existing identity and cable preference. Missing, all-zero/all-F and known
+placeholder serials (`dummy`, `unknown`, `none`, `null`, `n/a`, `na`, `default`,
+`not available`) cannot
 prove that two endpoints belong to one headset, so each sourced control path has
 a stable endpoint hash. An old placeholder key is migrated only when it has one
 unambiguous target; per-device names, hiding, pictograms/custom icons, thresholds

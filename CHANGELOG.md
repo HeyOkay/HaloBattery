@@ -7,6 +7,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- Previously inferred routes now return no battery reading: Maxwell Xbox USB
+  cable (`3329:4B1E`), Harpe II receiver (`0B05:1AD0`), EWEADN wired
+  (`088D:062E`) and the unconfirmed Razer `1532:0550` BlackShark PA fallback.
+  Their verified alternative connection routes remain available.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
@@ -75,6 +79,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   until its own protocol is verified.
 - Preserve independent Audeze headsets and Keychron receivers, with safe one-time
   migration of unambiguous per-device settings and history to stable identities.
+  Audeze zero/all-F and named placeholder serials use separate stable HID paths.
 - Match the MCHOSE K87 query to the manufacturer's exact checked frame.
 - Query Keychron only on its documented battery collection; retry the captured
   status frame as an output report and decode its charging bit correctly.

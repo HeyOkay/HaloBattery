@@ -101,6 +101,32 @@ class MultipleHeadsetTests(unittest.TestCase):
         self.assertEqual(len(self.states()), 2)
         self.assertEqual(self.provider.legacy_key_aliases(), {})
 
+    def test_all_f_and_named_placeholders_keep_headsets_separate(self):
+        for serial in ("FFFFFFFFFFFFFFFF", "ff-ff-ff-ff", "dummy", " DUMMY ",
+                       "unknown", "None", "null", "n/a", "default", "{00:00}"):
+            with self.subTest(serial=serial):
+                self.infos = [endpoint(b"one", serial), endpoint(b"two", serial)]
+                self.levels = {b"one": 72, b"two": 31}
+                first = self.states()
+                self.assertEqual(len(first), 2)
+                self.assertEqual({v[0] for v in first.values()}, {72, 31})
+                self.assertTrue(all(key.startswith("audeze:hid-") for key in first))
+                self.assertEqual(self.provider.legacy_key_aliases(), {})
+                self.infos.reverse()
+                self.assertEqual(self.states(), first)
+
+    def test_real_manufacturer_serial_need_not_be_a_mac(self):
+        for serial in ("UNIT-A", "0000-A123", "FFFF-A0123", "Maxwell 123456"):
+            with self.subTest(serial=serial):
+                self.assertEqual(A.device_identity(endpoint(b"one", serial)), (serial, serial))
+
+    def test_placeholder_without_a_stable_path_is_not_queried(self):
+        for serial in ("dummy", "FFFFFFFFFFFFFFFF"):
+            with self.subTest(serial=serial):
+                self.infos = [endpoint(None, serial)]
+                self.assertEqual(self.states(), {})
+                self.assertEqual(self.reads, [])
+
     def test_unknown_cable_and_dongle_are_not_guessed_to_be_one_headset(self):
         self.infos = [endpoint(b"radio", "0000"), endpoint(b"cable", "0000", 0x4b1a)]
         self.levels = {b"radio": 21, b"cable": 87}

@@ -14,7 +14,7 @@
 | [ASUS ROG Harpe II Ace / Harpe II Extreme](protocols.md#asus-rog-harpe-ii-ace--harpe-ii-extreme) | USB cable; shared receiver mouse query held | cable unverified; receiver previously confirmed |
 | [ASUS ROG Azoth 96 HE](protocols.md#asus-rog-azoth-96-he-on-speednova) | SPEEDNOVA 8K receiver (`0B05:1AD0`), paired `1C12` | confirmed in prior test build; guarded route needs retest |
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
-| [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |
+| [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or verified USB-C cable; placeholder serials stay separate | yes |
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
 | [Corsair Virtuoso RGB Wireless SE / XT](protocols.md#corsair-virtuoso-rgb-wireless-se--xt) | Slipstream receiver or USB cable | yes for the SE on the Multi-Device receiver; XT untried |
