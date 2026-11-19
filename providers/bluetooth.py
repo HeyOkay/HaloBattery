@@ -16,6 +16,8 @@ Windows 10/11 only; on by default (toggle in the tray menu).
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import json
 import queue
 import os
@@ -201,6 +203,24 @@ def _as_list(v):
     return [v] if isinstance(v, dict) else list(v)
 
 
+def _battery_level(value) -> Optional[int]:
+    """Windows battery properties are integral percentages; never clamp them."""
+    if type(value) is int:
+        return value if 0 <= value <= 100 else None
+    if isinstance(value, str) and len(value) <= 16:
+        text = value.strip()
+        if re.fullmatch(r"[0-9]{1,3}", text):
+            level = int(text)
+            return level if 0 <= level <= 100 else None
+    return None
+
+
+def _last_known(status: DeviceStatus) -> DeviceStatus:
+    """Retain an earlier percentage without treating it as a current reading."""
+    return replace(status, online=False, charging=False, charging_known=False,
+                   polling_stale=True)
+
+
 def group_devices(data: dict, diag: List[str],
                   last_levels: Optional[Dict[str, int]] = None) -> List[DeviceStatus]:
     """last_levels - last known battery level per MAC (updated in place)."""
@@ -238,10 +258,12 @@ def group_devices(data: dict, diag: List[str],
         g = slot(mac)
         key = (p.get("key") or "").upper()
         if key == K_BAT.upper():
-            try:
-                g["level"] = int(p.get("data"))
-            except (TypeError, ValueError):
+            level = _battery_level(p.get("data"))
+            if level is None:
+                diag.append(f"[Bluetooth] {mac}: refusing invalid battery level "
+                            f"{str(p.get('data'))[:100]}")
                 continue
+            g["level"] = level
             d = info.get(p.get("id")) or {}
             g["name"] = g["name"] or d.get("name")
             g["status_ok"] = g["status_ok"] or str(d.get("status", "")).upper() == "OK"
@@ -271,7 +293,7 @@ def group_devices(data: dict, diag: List[str],
         if level is not None:
             last_levels[mac] = level
         elif mac in last_levels:
-            level, cached = last_levels[mac], True
+            level, cached = _battery_level(last_levels[mac]), True
         if level is None:
             continue
         name = (g["root_name"] or g["aep_name"] or g["name"] or f"Bluetooth {mac}").strip()
@@ -290,15 +312,17 @@ def group_devices(data: dict, diag: List[str],
                     f"connected: WinRT={g['aep_conn']} PnP={g['pnp_conn']} "
                     f"-> {'shown' if shown else 'hidden'} [{src}], kind: {kind or 'unknown'}")
         if shown:
-            out.append(DeviceStatus(f"bt:{mac}", name, level, False, True, "bluetooth", kind=kind))
+            out.append(DeviceStatus(f"bt:{mac}", name, level, False, not cached, "bluetooth",
+                                    kind=kind, charging_known=not cached,
+                                    polling_stale=cached))
     if not by_mac:
         diag.append("[Bluetooth] no Bluetooth devices found")
     return out
 
 
 # How many polls in a row (one per minute) a device may be missing before its
-# icon is removed. Smooths over brief PowerShell failures and polls where
-# Windows reports a headset as disconnected for a moment.
+# icon is removed. Only successful snapshots advance this counter; query failures
+# retain the previous reading as last known without implying disconnection.
 MISS_LIMIT = 2
 
 
@@ -325,7 +349,8 @@ class BluetoothProvider(Provider):
             if err:
                 self._diag.append(f"[Bluetooth] stderr: {err[:300]}")
             if proc.returncode != 0:
-                self._diag.append(f"[Bluetooth] PowerShell exited with code {proc.returncode}")
+                self._diag.append(f"[Bluetooth] FAILURE: PowerShell exited with code {proc.returncode}")
+                return None
             self._diag.append(f"[Bluetooth] PowerShell: {len(raw)} bytes of output")
             return raw
         except subprocess.TimeoutExpired:
@@ -356,8 +381,8 @@ class BluetoothProvider(Provider):
     def merge(self, fresh: Optional[List[DeviceStatus]]) -> List[DeviceStatus]:
         """Smoothing: a missing device is kept for MISS_LIMIT-1 more polls."""
         if fresh is None:
-            self._diag.append("[Bluetooth] poll failed, keeping the previous icons")
-            fresh = []
+            self._diag.append("[Bluetooth] poll failed, keeping the previous icons as last known")
+            return [_last_known(status) for status in self._shown.values()]
         now = {st.key: st for st in fresh}
         for key, st in now.items():
             self._shown[key] = st
@@ -370,7 +395,7 @@ class BluetoothProvider(Provider):
             if self._misses[key] < MISS_LIMIT:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: missing from the reply, "
                                   f"keeping the icon (miss {self._misses[key]}/{MISS_LIMIT})")
-                out.append(self._shown[key])
+                out.append(_last_known(self._shown[key]))
             else:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: removing the icon "
                                   f"({self._misses[key]} misses in a row)")
@@ -388,7 +413,27 @@ class BluetoothProvider(Provider):
         except ValueError:
             self._diag.append(f"[Bluetooth] FAILURE: could not parse the output: {raw[:300]}")
             return None
-        return group_devices(data, self._diag, self._levels)
+        # A failed/truncated schema is not an authoritative empty snapshot.
+        # PowerShell may serialize a singleton array as one object.
+        if not isinstance(data, dict) or "devs" not in data:
+            self._diag.append("[Bluetooth] FAILURE: invalid snapshot object")
+            return None
+        for field in ("devs", "props", "aep"):
+            values = data.get(field)
+            if (values is not None and not isinstance(values, (list, dict))
+                    or isinstance(values, list) and any(not isinstance(value, dict)
+                                                       for value in values)):
+                self._diag.append(f"[Bluetooth] FAILURE: invalid {field} collection")
+                return None
+        try:
+            levels = dict(self._levels)
+            statuses = group_devices(data, self._diag, levels)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            self._diag.append("[Bluetooth] FAILURE: invalid snapshot fields")
+            return None
+        self._levels.clear()
+        self._levels.update(levels)
+        return statuses
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

@@ -16,6 +16,23 @@
 
 The low battery notification fires once, and again only after the device has been charged.
 
+## Reading failures
+
+Windows HID reads use bounded in-process transport workers. A failed or timed-out
+query keeps any previous result marked unavailable rather than replaying it as a
+new measurement. Refresh retries a paused provider. No process is started for
+each device or protocol. Drivers that refuse cancellation can still occupy the
+fixed worker budget; Diagnostics distinguishes unavailable readings from an
+ordinary sleeping device.
+
+If the native HID module is missing or blocked, HaloBattery explains the failure
+and keeps Settings and Windows Bluetooth support available. USB/2.4 GHz support
+is not emulated; Diagnostics includes the native loader error.
+
+Full-charge notifications cannot cross a disconnect or an unavailable transport
+reading. Reconnecting at 100% is not a newly completed charge. Temporary unknown
+values from a still-connected device wait for confirmation without firing an alert.
+
 ## Tray menu
 
 Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
@@ -51,34 +68,39 @@ the actual Mica backdrop, ThemeShadow, custom cards and page transitions
 extracted from the Chrome Mica Patcher reference implementation. Mica is enabled
 on supported Windows 11 systems; Windows 10 uses an opaque theme background.
 
-Release builds publish the companion as an unpackaged x64 folder with both .NET
-and Windows App SDK runtimes bundled. Keep the entire HaloBattery folder
-together. The build references only the WinUI, input/composition and runtime
-components; unused AI, machine-learning, search and widget components are not
-included. Partial .NET trimming retains the full application and WinUI assemblies
-and enables the reflection-based JSON protocol. The separate native publish tree
-is added after Python dependency analysis to avoid collecting its DLLs twice.
+Release builds publish the companion as an unpackaged x64 NativeAOT folder with
+the Windows App SDK runtime bundled. The .NET code is compiled into the native
+executable; a managed .NET runtime installation is not required. Keep the entire
+HaloBattery folder together. The build references only WinUI, input/composition
+and runtime components; unused AI, machine-learning, search and widget components
+are not included. Generated JSON metadata and explicit roots for dynamically
+created XAML retain the protocol and UI activation paths while trimming unused
+framework code. The separate native publish tree is added after Python dependency
+analysis to avoid collecting its DLLs twice.
 Wallpaper image formats, fonts and native language resources are retained.
 Each native publish uses a clean staging directory; a failed build leaves the
 previous output in place. Release PDBs remain in intermediate build output and
 are archived separately by CI for 90 days instead of being included in the app.
 Clean-machine deployment still needs verification before a stable release.
 
-For source builds, install .NET SDK 10.0.401, generate the application icon with
+For source builds, install .NET SDK 10.0.404, generate the application icon with
 `python tools/make_icon.py halo.ico`, then run `./scripts/build_settings.ps1`
 in PowerShell. Its default output is `.build/settings-ui`; the Python host can
 find that folder during development. `-OutputDirectory`,
 `-IntermediateDirectory`, `-NuGetConfig` and `-PackagesDirectory` allow an
 isolated build cache and an explicitly configured offline package feed. The
-default publishes both runtimes; `-SelfContained $false` is available for
-development on a machine with the matching shared runtimes already installed.
+default Auto mode uses NativeAOT for self-contained Release. Debug and explicit
+verification builds remain JIT; `-PublishMode Jit` is an explicit fallback.
+`-SelfContained $false` supports development with matching shared runtimes.
+The pinned native build toolchain is cached in a dedicated build directory via
+`-ToolchainCache`; `-OfflineToolchain` requires its already verified archives.
 `scripts/build_exe.bat` and both release workflows include this publish step
 before freezing Python. No SDK or shared runtime installer is run by the script.
 
 Open **Settings** from the tray menu. Changes apply immediately and are saved;
 there is no separate Save button. Position, size, monitor and the navigation
-panel state are restored before the window is shown. Closing Settings hides
-the ready window; reopening keeps its current page and scroll position.
+panel state are restored before the window is shown. Closing Settings releases its companion process and memory. Reopening restores
+the saved page and scroll position while the app splash covers loading.
 Window preferences are stored natively in `settings-window.json` inside the
 active installed or portable profile. Settings remain available when no devices are
 connected. The interface keeps seven languages: English, Spanish,

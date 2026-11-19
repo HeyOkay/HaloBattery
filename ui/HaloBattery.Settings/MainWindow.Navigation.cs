@@ -52,12 +52,7 @@ public sealed partial class MainWindow
     private void RefreshNavigation(bool motion = true)
     {
         var pages = State.Pages.ToArray();
-        var signature = JsonSerializer.Serialize(new
-        {
-            dark,
-            language = State.Language,
-            pages = pages.Select(page => new { page.Id, page.Title })
-        });
+        var signature = SettingsJson.Navigation(dark, State.Language, pages);
         navigationHighlight.Background = Brush(NavigationHighlightColor);
         if (signature != navigationSignature)
         {

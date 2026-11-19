@@ -82,11 +82,22 @@ AI coding agents: read [AGENTS.md](../AGENTS.md) first.
   ```
 
 - Add a line to `CHANGELOG.md` under `[Unreleased]`. For a device, also add a row to the table in `docs/devices.md` and a section in `docs/protocols.md` that tells how the device is read and names the source.
-- CI installs from `requirements-build.txt` (exact versions and hashes, Python 3.12, Windows, with PyInstaller). `requirements.txt` stays the loose list. After you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
+- CI packages with Python 3.12.10 and also runs the full unit suite on Python
+  3.13.17 and 3.14.10. Ruff checks correctness errors without a formatting rewrite.
+  Both compatibility and lint must pass before the required `tests` check can
+  succeed. To run lint locally, install `requirements-lint.txt` with
+  `python -m pip install --require-hashes -r requirements-lint.txt`, then run
+  `python -m ruff check halo_battery.pyw halo providers tools tests`.
+- CI installs from `requirements-build.txt` (exact versions and hashes, Windows,
+  with PyInstaller). `requirements.txt` stays the loose source-run list. After
+  you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
 
   ```
   uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements-build.txt
   ```
+- Native dependency locks, compiler pins and verified local packaging are
+  described in [Building](../docs/building.md). Do not silently regenerate locks
+  during an ordinary build.
 - Do not change `VERSION`; only release pull requests do.
 - In the description (the template asks for it) write:
   - which issue it closes;

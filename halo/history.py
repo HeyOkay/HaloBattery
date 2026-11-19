@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
+from functools import wraps
 from typing import Dict, List, Optional
 
 MAX_GAP = 600.0          # s: the most one gap between two readings may add
@@ -47,8 +49,19 @@ def format_left(seconds: float) -> str:
     return f"about {round(hours / 24)} days of use left"
 
 
+def _synchronized(method):
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return locked
+
+
 class History:
     def __init__(self, path: Optional[str] = None):
+        # Polling, diagnostics and exit can access the same history concurrently.
+        # Keep mutations and the complete save transaction in one critical section.
+        self._lock = threading.RLock()
         self.path = path
         # key -> {"use": s used since the charge, "last": wall time of the last counted
         #         reading or None, "seen": wall time, "samples": [[use, level], ...]}
@@ -57,6 +70,7 @@ class History:
         self._saved = 0.0
 
     # ---------------- storage
+    @_synchronized
     def load(self) -> None:
         if not self.path:
             return
@@ -77,6 +91,7 @@ class History:
             if now - entry["seen"] < FORGET_AFTER:
                 self.devices[str(key)] = entry
 
+    @_synchronized
     def save(self, force: bool = False) -> None:
         """Write history.json when something changed, at most every SAVE_EVERY
         seconds unless forced (on exit)."""
@@ -95,7 +110,23 @@ class History:
         except OSError:
             pass
 
+    @_synchronized
+    def migrate_device_keys(self, aliases: dict[str, str]) -> bool:
+        """Move unambiguous legacy identities once; current histories take priority."""
+        changed = False
+        for old, new in aliases.items():
+            if old == new or old not in self.devices:
+                continue
+            previous = self.devices.pop(old)
+            if new not in self.devices:
+                previous["last"] = None  # migration is not continuous awake usage
+                self.devices[new] = previous
+            changed = True
+        self.dirty = self.dirty or changed
+        return changed
+
     # ---------------- readings
+    @_synchronized
     def record(self, key: str, level: Optional[int], charging: bool, online: bool,
                now: float, coarse: bool = False) -> None:
         """One poll's reading of one device. `coarse`: the device only reports rough
@@ -135,6 +166,7 @@ class History:
         self.dirty = True
 
     # ---------------- estimate
+    @_synchronized
     def rate(self, key: str) -> Optional[float]:
         """Percentage points used per second of use, or None when not known yet."""
         d = self.devices.get(key)
@@ -158,12 +190,14 @@ class History:
         slope = sum((p[0] - mean_t) * (p[1] - mean_l) for p in pts) / var
         return -slope if slope < 0 else None
 
+    @_synchronized
     def seconds_left(self, key: str, level: Optional[int]) -> Optional[float]:
         r = self.rate(key)
         if r is None or level is None:
             return None
         return level / r
 
+    @_synchronized
     def report(self) -> List[str]:
         """Lines for the diagnostics report."""
         lines = []

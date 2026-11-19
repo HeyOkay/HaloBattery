@@ -1,4 +1,7 @@
 """Tests for the 64-byte Pulsar X2 V3 Mini protocol."""
+
+# Independent wire fixtures: OpenMouse src/pulsar/index.ts lines 1-34 (5a4f643); jonkristian/pulsar-x3-python battery feature exchange (HaloBattery PR #213).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -31,9 +34,9 @@ class FakeDevice:
 class PulsarSonixTest(unittest.TestCase):
     def setUp(self):
         self._hid, self._hidlist = P.hid, P.hidlist
-        FakeDevice.response = [0] * P.SONIX_REPORT_LEN
-        FakeDevice.response[2:5] = P.SONIX_BATTERY_COMMAND
-        FakeDevice.response[P.SONIX_LEVEL_INDEX] = 73
+        FakeDevice.response = [0] * 65
+        FakeDevice.response[2:5] = (0x08, 0x81, 0x01)
+        FakeDevice.response[7] = 73
         FakeDevice.opened = None
         FakeDevice.sent = []
         self.infos = [
@@ -61,7 +64,7 @@ class PulsarSonixTest(unittest.TestCase):
     def test_feature_request_has_command_and_little_endian_checksum(self):
         P.PulsarProvider().poll()
         packet, = FakeDevice.sent
-        self.assertEqual(P.SONIX_REPORT_LEN, len(packet))
+        self.assertEqual(65, len(packet))
         self.assertEqual([0, 0, 0x08, 0x81, 0x01], packet[:5])
         self.assertEqual(sum(packet[1:63]) & 0xFFFF, packet[63] | packet[64] << 8)
 
@@ -73,7 +76,7 @@ class PulsarSonixTest(unittest.TestCase):
         self.assertEqual("Pulsar X2 V3 Mini (wired)", found[0].name)
 
     def test_invalid_level_is_rejected(self):
-        FakeDevice.response[P.SONIX_LEVEL_INDEX] = 255
+        FakeDevice.response[7] = 255
         self.assertEqual([], P.PulsarProvider().poll())
 
     def test_no_interface_3_is_not_queried(self):

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import queue
 import subprocess
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -145,6 +146,22 @@ class SettingsHostTests(unittest.TestCase):
         self.manager._publish(self.session)
         self.assertEqual(self.drain(), [])
         self.controller.preview.assert_not_called()
+
+    def test_unavailable_saved_icon_is_explained_for_only_its_device_and_clears(self):
+        model = self.controller.snapshot.return_value
+        model["devices"][0].update(custom_icon_id="a" * 64, custom_icon_name="")
+        model["devices"][1].update(custom_icon_id="b" * 64, custom_icon_name="test:keyboard")
+        model["custom_icon_errors"] = ["a" * 64]
+        _, state = self.hello()
+        self.assertIs(state["devices"][0]["customIconUnavailable"], True)
+        self.assertEqual(state["devices"][0]["customIconId"], "a" * 64)
+        self.assertIs(state["devices"][1]["customIconUnavailable"], False)
+        self.assertIn("settings.iconify_saved_unavailable", state["labels"])
+        model["custom_icon_errors"].clear()
+        model["devices"][0]["custom_icon_id"] = ""
+        self.manager._publish(self.session)
+        changed, = self.drain()
+        self.assertIs(changed["devices"][0]["customIconUnavailable"], False)
 
     def test_handshake_required_and_version_is_strict_integer(self):
         with self.assertRaises(ValueError):
@@ -683,6 +700,273 @@ class SettingsHostTests(unittest.TestCase):
                 self.assertTrue(state["labels"]["whatsnew.title"])
                 self.assertTrue(all(type(value) in (bool, int, str) for value in state["settings"].values()))
                 host.encode_message(state)
+
+    def test_ready_callback_waits_for_first_visible_ack_and_runs_once(self):
+        ready = Mock()
+        manager = host.SettingsHost(self.controller, on_ready=ready)
+        manager._session = self.session
+        with patch.object(manager, "_thread"):
+            manager._handle(self.session, dict(type="hello", protocol=1, uiVersion="1"))
+            manager._dispatch_notifications()
+            ready.assert_not_called()
+            for visible in (False, True, True, False, True):
+                manager._handle(self.session, dict(type="visibility", visible=visible))
+            manager._dispatch_notifications()
+        ready.assert_called_once_with()
+        self.assertTrue(self.session.first_visible.is_set())
+
+    def test_lifecycle_callbacks_run_outside_host_and_model_locks(self):
+        observed = []
+        def callback(*args):
+            def check_locks():
+                locks = (manager._lock, manager._model_lock)
+                acquired = [lock.acquire(blocking=False) for lock in locks]
+                observed.append(acquired)
+                for lock, held in zip(locks, acquired):
+                    if held:
+                        lock.release()
+            worker = threading.Thread(target=check_locks)
+            worker.start()
+            worker.join(timeout=1)
+            observed.append(not worker.is_alive())
+        manager = host.SettingsHost(self.controller, on_ready=callback, on_failure=callback)
+        manager._session = self.session
+        with patch.object(manager, "_thread"):
+            manager._handle(self.session, dict(type="hello", protocol=1, uiVersion="1"))
+            manager._handle(self.session, dict(type="visibility", visible=True))
+            manager._dispatch_notifications()
+            manager._cleanup(self.session, failure="unexpectedExit")
+            manager._dispatch_notifications()
+        self.assertEqual(observed, [[True, True], True, [True, True], True])
+
+    def test_spawn_failure_callback_runs_once_and_can_retry(self):
+        failed = []
+        def on_failure(reason):
+            failed.append(reason)
+            self.assertTrue(manager.open(page="advanced"))
+        manager = host.SettingsHost(self.controller, popen=Mock(side_effect=FileNotFoundError("missing")),
+                                    on_failure=on_failure)
+        with patch.object(manager, "_thread"):
+            manager.open()
+            old = manager._session
+            with self.assertLogs("halo_battery", level="ERROR"):
+                manager._launch(old)
+            self.assertIsNone(manager._session)
+            manager._dispatch_notifications()
+            successor = manager._session
+            manager._cleanup(old, failure="unexpectedExit")
+            manager._dispatch_notifications()
+        self.assertEqual(failed, ["launchFailed"])
+        self.assertIsNot(successor, old)
+        self.assertEqual(successor.page, "advanced")
+
+    def test_reader_reports_protocol_failure_and_unexpected_eof(self):
+        for wire, reason in (("not JSON\n", "protocolError"),
+                             ('{"type":"hello","protocol":2,"uiVersion":"1"}\n', "protocolError"),
+                             ("", "unexpectedExit")):
+            with self.subTest(reason=reason, wire=wire):
+                failed = Mock()
+                manager = host.SettingsHost(self.controller, on_failure=failed)
+                session = host._Session("general", None, process=Process())
+                session.process.stdout = io.StringIO(wire)
+                manager._session = session
+                with patch.object(manager, "_thread"):
+                    if reason == "protocolError":
+                        with self.assertLogs("halo_battery", level="WARNING"):
+                            manager._read(session)
+                    else:
+                        manager._read(session)
+                    manager._cleanup(session, failure="unexpectedExit")
+                    manager._dispatch_notifications()
+                failed.assert_called_once_with(reason)
+
+    def test_writer_failure_reports_transport_error(self):
+        failed = Mock()
+        self.manager._on_failure = failed
+        self.session.process = Process()
+        self.session.process.stdin.close()
+        self.manager._send(self.session, {"type": "welcome"})
+        with patch.object(self.manager, "_thread"):
+            self.manager._write(self.session)
+            self.manager._dispatch_notifications()
+        failed.assert_called_once_with("transportError")
+
+    def test_reaping_errors_still_report_failure_and_allow_retry(self):
+        for operation in ("wait", "kill", "wait_after_kill", "poll"):
+            with self.subTest(operation=operation):
+                failed = Mock()
+                manager = host.SettingsHost(self.controller, on_failure=failed)
+                process = Process()
+                if operation == "wait":
+                    process.wait = Mock(side_effect=OSError("invalid process handle"))
+                elif operation in ("kill", "wait_after_kill"):
+                    process.wait = Mock(side_effect=[subprocess.TimeoutExpired("settings", .1),
+                                                    OSError("invalid process handle"), 0])
+                    if operation == "kill":
+                        process.kill = Mock(side_effect=PermissionError("access denied"))
+                else:
+                    process.poll = Mock(side_effect=OSError("invalid process handle"))
+                session = host._Session("general", None, process=process)
+                manager._session = session
+                with patch.object(manager, "_thread"), self.assertLogs("halo_battery", level="WARNING"):
+                    manager._cleanup(session, failure="unexpectedExit")
+                    manager._dispatch_notifications()
+                    self.assertIsNone(manager._session)
+                    self.assertTrue(session.stop.is_set())
+                    self.assertTrue(manager.open())
+                    successor = manager._session
+                    manager._cleanup(session, failure="unexpectedExit")
+                    manager._dispatch_notifications()
+                failed.assert_called_once_with("unexpectedExit")
+                self.assertIsNot(successor, session)
+                self.assertIs(manager._session, successor)
+
+    def test_startup_watchdog_requires_hello_and_visible_ack(self):
+        for handshake, reason in ((False, "startupTimeout"), (True, "visibilityTimeout")):
+            with self.subTest(handshake=handshake):
+                failed = Mock()
+                ready = Mock()
+                manager = host.SettingsHost(self.controller, startup_timeout=0,
+                                            on_failure=failed, on_ready=ready)
+                session = host._Session("general", None, process=Process())
+                manager._session = session
+                with patch.object(manager, "_thread"):
+                    if handshake:
+                        manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+                    with self.assertLogs("halo_battery", level="WARNING"):
+                        manager._poll(session)
+                    manager._dispatch_notifications()
+                failed.assert_called_once_with(reason)
+                ready.assert_not_called()
+                self.assertTrue(session.stop.is_set())
+                self.assertIsNone(manager._session)
+
+    def test_intentional_close_and_shutdown_suppress_failure_callbacks(self):
+        for shutdown in (False, True):
+            with self.subTest(shutdown=shutdown):
+                failed = Mock()
+                manager = host.SettingsHost(self.controller, on_failure=failed)
+                session = host._Session("general", None, process=Process())
+                manager._session = session
+                with patch.object(manager, "_thread"):
+                    manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+                    manager._handle(session, dict(type="visibility", visible=True))
+                    if shutdown:
+                        manager.close()
+                    else:
+                        manager._handle(session, dict(type="closing"))
+                    manager._read(session)
+                    manager._dispatch_notifications()
+                failed.assert_not_called()
+
+    def test_shutdown_during_reap_suppresses_failure_callback(self):
+        failed = Mock()
+        self.manager._on_failure = failed
+        self.session.process = Process()
+        self.session.process.wait = Mock(side_effect=lambda timeout: self.manager.close())
+        with patch.object(self.manager, "_thread"):
+            self.manager._cleanup(self.session, failure="unexpectedExit")
+            self.manager._dispatch_notifications()
+        failed.assert_not_called()
+
+    def test_queued_callbacks_are_discarded_after_close_or_superseding_open(self):
+        for successor in (False, True):
+            for failure in (False, True):
+                with self.subTest(successor=successor, failure=failure):
+                    failed, ready = Mock(), Mock()
+                    manager = host.SettingsHost(self.controller, on_failure=failed, on_ready=ready)
+                    session = host._Session("general", None)
+                    manager._session = session
+                    with patch.object(manager, "_thread"):
+                        manager._handle(session, dict(type="hello", protocol=1, uiVersion="1"))
+                        manager._handle(session, dict(type="visibility", visible=True))
+                        if failure:
+                            manager._cleanup(session, failure="unexpectedExit")
+                        if successor:
+                            session.stop.set()
+                            manager.open()
+                        else:
+                            manager.close()
+                        manager._dispatch_notifications()
+                    failed.assert_not_called()
+                    ready.assert_not_called()
+
+    def test_pending_successor_owns_failure_reporting(self):
+        failed, ready = Mock(), Mock()
+        manager = host.SettingsHost(self.controller, on_failure=failed, on_ready=ready)
+        manager._session = self.session
+        manager._pending_open = ("advanced", None)
+        with patch.object(manager, "_thread"):
+            manager._cleanup(self.session, failure="unexpectedExit")
+            successor = manager._session
+            manager._handle(successor, dict(type="hello", protocol=1, uiVersion="1"))
+            manager._handle(successor, dict(type="visibility", visible=True))
+            manager._dispatch_notifications()
+        failed.assert_not_called()
+        ready.assert_called_once_with()
+
+    def test_ready_and_failure_are_delivered_in_order(self):
+        entered, release, completed = (threading.Event() for _ in range(3))
+        calls = []
+        def on_ready():
+            calls.append("ready")
+            entered.set()
+            release.wait(timeout=2)
+        def on_failure(reason):
+            calls.append(reason)
+            completed.set()
+        manager = host.SettingsHost(self.controller, on_ready=on_ready, on_failure=on_failure)
+        manager._session = self.session
+        manager._handle(self.session, dict(type="hello", protocol=1, uiVersion="1"))
+        manager._handle(self.session, dict(type="visibility", visible=True))
+        try:
+            self.assertTrue(entered.wait(timeout=1))
+            manager._cleanup(self.session, failure="unexpectedExit")
+            self.assertEqual(calls, ["ready"])
+        finally:
+            release.set()
+        self.assertTrue(completed.wait(timeout=1))
+        self.assertEqual(calls, ["ready", "unexpectedExit"])
+
+    def test_failed_session_cannot_notify_after_newer_visible_success(self):
+        entered, release, completed = (threading.Event() for _ in range(3))
+        calls = []
+        def on_failure(reason):
+            calls.append(reason)
+            entered.set()
+            release.wait(timeout=2)
+        def on_ready():
+            calls.append("ready")
+            completed.set()
+        manager = host.SettingsHost(self.controller, on_ready=on_ready, on_failure=on_failure)
+        manager._session = self.session
+        manager._cleanup(self.session, failure="unexpectedExit")
+        try:
+            self.assertTrue(entered.wait(timeout=1))
+            # Start the next session without launching a real process. Its ready
+            # notification must wait behind the already running failure callback.
+            with patch.object(manager, "_thread"):
+                manager.open()
+                successor = manager._session
+                manager._handle(successor, dict(type="hello", protocol=1, uiVersion="1"))
+                manager._handle(successor, dict(type="visibility", visible=True))
+            self.assertEqual(calls, ["unexpectedExit"])
+        finally:
+            release.set()
+        self.assertTrue(completed.wait(timeout=1))
+        self.assertEqual(calls, ["unexpectedExit", "ready"])
+
+    def test_throwing_callback_does_not_strand_later_notifications(self):
+        failed = Mock()
+        self.manager._on_ready = Mock(side_effect=RuntimeError("callback failed"))
+        self.manager._on_failure = failed
+        with patch.object(self.manager, "_thread"):
+            self.hello()
+            with self.assertLogs("halo_battery", level="ERROR"):
+                self.manager._dispatch_notifications()
+            self.manager._cleanup(self.session, failure="unexpectedExit")
+            self.manager._dispatch_notifications()
+        failed.assert_called_once_with("unexpectedExit")
 
     def test_paths_are_bundle_or_explicit_source_override(self):
         with patch.object(host.sys, "frozen", True, create=True), patch.object(host.sys, "_MEIPASS", "bundle", create=True):
