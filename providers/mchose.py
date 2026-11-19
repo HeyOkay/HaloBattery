@@ -92,7 +92,9 @@ written to, and the read answers ``55 65 28 02`` (40 %, discharging) within 30 m
 cable the headset drops its radio link - the dongle stops answering - and shows up as a
 second USB device, 3837:6044 'MCHOSE X9 HEADSET', which M HUB does not list: nothing is
 written to it, so a charging X9 keeps its last level greyed out (ASLEEP_KEEP) and no
-charging state is invented.
+charging state is invented. State 3 is decoded as charging the way M HUB decodes it, but it
+has never been seen: M HUB loses the cabled headset the same way. The level is confirmed on
+Windows too, by @Kolomhon with test builds carrying this code (#458).
 
 Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
@@ -588,7 +590,9 @@ class MchoseProvider(Provider):
         try:
             frames = (("AA frame", AUDIO_REQUEST, parse_audio),
                       ("65 01 frame", STATUS_REQUEST, parse_status_55))
-            for label, request, parser in frames[1:] if pid == X9_PID else frames:
+            if pid == X9_PID:
+                frames = frames[1:]       # BLK has no AA frame: the X9 never gets it
+            for label, request, parser in frames:
                 for attempt in range(HEADSET_ATTEMPTS):
                     try:
                         wrote = dev.write(bytes([AUDIO_REPORT]) + request)
@@ -679,7 +683,8 @@ class MchoseProvider(Provider):
             elif pid == X9_PID:
                 # the X9 declares report 0x55 on ff90:0001 only (measured), so nothing off
                 # that path is written to (the G7's rule)
-                cols = [d for d in cols if (d.get("usage_page") or 0) == 0xFF90]
+                cols = [d for d in cols
+                        if (d.get("usage_page"), d.get("usage")) == (0xFF90, 0x0001)]
             elif pid in HEADSET_PIDS:
                 # the dongle's 0xFF00 page first; on the headset none of its pages is
                 # known to carry the report yet, so the dump order is kept otherwise

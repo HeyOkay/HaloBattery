@@ -377,6 +377,14 @@ class HeadsetTest(unittest.TestCase):
         self.assertEqual(len(wrote[0]), 64)
         self.assertEqual(wrote[0][:3], b"\x55\x65\x01")
 
+    def test_a_second_ff90_collection_is_never_written_to(self):
+        # listed first, so a page-only match would pick it
+        other = dict(x9_entries()[0], usage_page=0xFF90, usage=0x0002, path=b"x9-ff90-2")
+        entries = [other] + x9_entries()
+        out = self.poll(entries, {e["path"]: FakeCollection([X9_REPLY]) for e in entries})
+        self.assertEqual(self.order, [b"x9-ff90"])
+        self.assertEqual([s.level for s in out], [40])
+
     def test_the_x9_charging_full_and_level_bounds(self):
         for level, state, charging in ((0, 2, False), (100, 4, False), (64, 3, True)):
             self.provider = M.MchoseProvider()
