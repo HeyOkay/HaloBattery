@@ -559,6 +559,7 @@ class HidDevice:
         self._close_requested = False
         self._owner_id = "unscoped"
         self._key = "hid-unopened:" + str(id(self))
+        self._last_error = "Success"
 
     @property
     def api(self):
@@ -575,6 +576,20 @@ class HidDevice:
     def _require_open(self):
         if self._owner is None or self._owner.closing or self._close_requested:
             raise ValueError("not open")
+
+    def error(self):
+        """Cached HIDAPI-compatible diagnostic text; never perform native work."""
+        return self._last_error
+
+    def _invoke(self, callback, *, _cleanup=False):
+        try:
+            result = self.runtime.invoke(callback, self._key, _cleanup=_cleanup)
+        except OSError as exc:
+            # Retain text only, not an exception/traceback or native resource.
+            self._last_error = str(exc)
+            raise
+        self._last_error = "Success"
+        return result
 
     def open_path(self, path):
         if self._owner is not None:
@@ -609,7 +624,7 @@ class HidDevice:
             with self.runtime._lock:
                 self.runtime._devices.add(self)
         try:
-            self.runtime.invoke(open_device, self._key)
+            self._invoke(open_device)
         except OSError as exc:
             raise OSError("open failed") from exc
 
@@ -632,6 +647,7 @@ class HidDevice:
         self._require_open()
         data = bytes(data)
         if not data:
+            self._last_error = "write data is empty"
             return -1
         _length(len(data))
         padded = data.ljust(self._caps.output, b"\0")
@@ -639,7 +655,7 @@ class HidDevice:
             return self.runtime.defer_request(self.api.create_write(self._owner, padded),
                                                lambda completion, request: completion.transferred)
         try:
-            return self.runtime.invoke(operation, self._key)
+            return self._invoke(operation)
         except OSError:
             return -1
 
@@ -647,15 +663,18 @@ class HidDevice:
         self._require_open()
         data = bytes(data)
         if not data:
+            self._last_error = "feature write data is empty"
             return -1
         _length(len(data))
         padded = data.ljust(self._caps.feature, b"\0")
         def operation():
             self.runtime.check_cancelled()
             return len(data) if self.metadata.send_feature(self._owner, padded) else -1
-        result = self.runtime.invoke(operation, self._key)
+        result = self._invoke(operation)
         if result < 0:
-            self.runtime._failure(OSError("feature write failed"))
+            error = OSError("feature write failed")
+            self._last_error = str(error)
+            self.runtime._failure(error)
         return result
 
     def _get_report(self, report, size, code):
@@ -676,12 +695,13 @@ class HidDevice:
                 return list(raw[:count])
             return self.runtime.defer_request(request, unpack)
         try:
-            return self.runtime.invoke(operation, self._key)
+            return self._invoke(operation)
         except OSError as exc:
             kind = "feature" if code == IOCTL_HID_GET_FEATURE else "input"
             expected = self._caps.feature if kind == "feature" else self._caps.input
             message = (f"HID {kind} read (report={report}, buffer={size}, collection={expected}): {exc}")
             error = type(exc)(exc.errno, message) if exc.errno is not None else type(exc)(message)
+            self._last_error = str(error)
             self.runtime._failure(error, unsafe=isinstance(exc, TimeoutError))
             raise error from exc
 
@@ -740,14 +760,14 @@ class HidDevice:
                     data = data[1:]
                 return list(data[:max_length])
             return _Pending(probe)
-        return self.runtime.invoke(operation, self._key)
+        return self._invoke(operation)
 
     def _string(self, name):
         self._require_open()
         def operation():
             self.runtime.check_cancelled()
             return self.metadata.string(self._owner, name)
-        return self.runtime.invoke(operation, self._key)
+        return self._invoke(operation)
 
     def get_manufacturer_string(self):
         return self._string("Manufacturer")
@@ -800,13 +820,14 @@ class HidDevice:
             self.runtime.scheduler.pump()
             if time.monotonic() >= deadline:
                 error = TimeoutError("native close retirement deadline exceeded")
+                self._last_error = str(error)
                 self.runtime._failure(error)
                 raise error
             time.sleep(.002)
         if self._owner is not None:
             # Cleanup is permitted after provider cancellation. It issues no
             # device commands and must run even if its owner was disabled.
-            self.runtime.invoke(self._close_operation, self._key, _cleanup=True)
+            self._invoke(self._close_operation, _cleanup=True)
 
 
 def device(runtime, **kwargs):
