@@ -63,6 +63,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   body silhouettes and compensated small details while preserving the battery ring.
 
 ### Fixed
+- Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
+  block Windows session-end cleanup after tray icons disappear.
 - Keep cached HID transport error diagnostics available without new native calls;
   preserve bounded feature-call timeout and handle-cleanup behavior.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
