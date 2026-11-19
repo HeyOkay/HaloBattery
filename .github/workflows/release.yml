@@ -25,12 +25,15 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: write # create the release and upload assets
+      contents: read
+    outputs:
+      release-artifact: ${{ steps.publish_assets.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
@@ -45,8 +48,10 @@ jobs:
       - name: Check that the tag matches VERSION
         if: github.ref_type == 'tag'
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $tag = $env:RELEASE_TAG.TrimStart("v")
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           if ($ver -ne $tag) {
@@ -123,7 +128,9 @@ jobs:
       - name: Release notes from CHANGELOG.md
         if: github.ref_type == 'tag'
         # fails if CHANGELOG.md has no section for this version
-        run: python tools/release_notes.py ${{ github.ref_name }} --out release_notes.md
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python tools/release_notes.py $env:RELEASE_TAG --out release_notes.md
 
       - name: Checksums
         id: sums
@@ -136,13 +143,173 @@ jobs:
           $lines | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
 
-      - name: Attach to release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+      - name: Stage release assets
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          ZIP: ${{ steps.zip.outputs.zip }}
+          SETUP: ${{ steps.setup.outputs.setup }}
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          Copy-Item -LiteralPath $env:ZIP, $env:SETUP, 'SHA256SUMS.txt', 'release_notes.md' -Destination release-assets
+
+      - name: Upload publish assets
+        id: publish_assets
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          files: |
-            ${{ steps.zip.outputs.zip }}
-            ${{ steps.setup.outputs.setup }}
-            SHA256SUMS.txt
-          fail_on_unmatched_files: true
-          body_path: release_notes.md
+          name: HaloBattery-release-assets-${{ github.sha }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    # A fresh runner receives files only. No project checkout, install or build
+    # step can access the release-write token. Manual runs only create artifacts.
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stable-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download publish assets
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ needs.build.outputs.release-artifact }}
+          path: release-assets
+
+      - name: Validate release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          zip="HaloBattery-$version.zip"
+          setup="HaloBattery-$version-setup.exe"
+          cd release-assets
+          # Build output is data only. Reject unexpected files and symlinks.
+          [[ "$(find . -mindepth 1 -maxdepth 1 | wc -l)" -eq 4 ]]
+          for file in "$zip" "$setup" SHA256SUMS.txt release_notes.md; do
+            [[ -f "$file" && ! -L "$file" ]]
+          done
+          # Compute hashes only for the two expected names, never paths from a manifest.
+          expected="$(mktemp "$RUNNER_TEMP/halobattery-expected.XXXXXX")"
+          actual="$(mktemp "$RUNNER_TEMP/halobattery-actual.XXXXXX")"
+          trap 'rm -f "$expected" "$actual"' EXIT
+          printf '%s *%s\n' "$(sha256sum "$zip" | cut -d ' ' -f 1)" "$zip" \
+            "$(sha256sum "$setup" | cut -d ' ' -f 1)" "$setup" > "$expected"
+          sed 's/\r$//' SHA256SUMS.txt > "$actual"
+          cmp --silent "$expected" "$actual"
+          echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
+          echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=$(sha256sum "$zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "setup-sha256=$(sha256sum "$setup" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sums-sha256=$(sha256sum SHA256SUMS.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to release
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IMMUTABILITY_ENABLED: ${{ vars.STABLE_RELEASE_IMMUTABILITY_ENABLED }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+        run: |
+          # The owner sets this acknowledgement only after enabling repository
+          # release immutability. Reading that setting requires an admin token,
+          # which this deliberately limited publisher must never receive.
+          if [[ "$IMMUTABILITY_ENABLED" != true ]]; then
+            echo "Enable repository release immutability and set STABLE_RELEASE_IMMUTABILITY_ENABLED=true before publishing." >&2
+            exit 1
+          fi
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          version="${RELEASE_TAG#v}"
+          [[ "$ZIP" == "release-assets/HaloBattery-$version.zip" ]]
+          [[ "$SETUP" == "release-assets/HaloBattery-$version-setup.exe" ]]
+          # Include every page and drafts. Reruns never overwrite old assets;
+          # partial drafts require explicit owner inspection and recovery.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")"
+          if [[ -n "$existing" ]]; then
+            echo "Refusing to modify an existing release or draft for $RELEASE_TAG." >&2
+            exit 1
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.ref')" == "refs/tags/$RELEASE_TAG" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f "tag_name=$RELEASE_TAG" -f "target_commitish=$GITHUB_SHA" -f "name=$RELEASE_TAG" \
+            -F draft=true -F body=@release-assets/release_notes.md --jq '.id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\t'"$RELEASE_TAG" ]]
+          initial_assets="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --jq '.[].id')"
+          [[ -z "$initial_assets" ]]
+          # Deliberately no replacement/delete option, including for drafts.
+          gh release upload "$RELEASE_TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attest validated release assets
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.assets.outputs.zip }}
+            ${{ steps.assets.outputs.setup }}
+          create-storage-record: false
+
+      - name: Publish attested draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$(sha256sum "$ZIP" | cut -d ' ' -f 1)" == "$ZIP_SHA256" ]]
+          [[ "$(sha256sum "$SETUP" | cut -d ' ' -f 1)" == "$SETUP_SHA256" ]]
+          [[ "$(sha256sum release-assets/SHA256SUMS.txt | cut -d ' ' -f 1)" == "$SUMS_SHA256" ]]
+          for subject in "$ZIP" "$SETUP"; do
+            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "refs/tags/$RELEASE_TAG" --source-digest "$GITHUB_SHA" \
+              --bundle "$ATTESTATION_BUNDLE"
+          done
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$RELEASE_ID"$'\ttrue\t'"$RELEASE_TAG" ]]
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          [[ "$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false --jq '.draft')" == false ]]
+          # These commands prove that the external immutable-release policy
+          # actually protected this publication and its three release assets.
+          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
+            gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done

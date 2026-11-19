@@ -6,9 +6,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
-
 ### Changed
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
@@ -67,6 +64,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
+- Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
 
