@@ -22,6 +22,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Percentage in the icon: devices that only report coarse battery steps now
+  show the same `NN` number as exact devices, without a `~` marker. The tooltip
+  and status file still say "about NN%".
 - Add pointer-following outline highlights to rounded Settings controls without
   permanent borders.
 - Show the selected Phone Link mobile device's cached battery with a phone

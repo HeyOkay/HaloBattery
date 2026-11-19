@@ -1643,7 +1643,11 @@ class App:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
         animate = self.cfg["animation"] and st.charging and st.online
-        text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
+        # Coarse levels show the same number; the tooltip and status file keep
+        # the "about" wording rather than putting a marker in the tray icon.
+        text = ""
+        if self.cfg.get("percent_in_icon") and st.level is not None:
+            text = str(st.level)
         brand, color = self.controller_style(st)
         state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,

@@ -92,10 +92,15 @@ class NumberSettingTests(HideRenameTestCase):
     def test_charging(self):
         self.assertEqual(self.texts_drawn(mouse(40, charging=True), {"percent_in_icon": True}), {"40"})
 
-    def test_rough_levels_and_no_level_keep_the_pictogram(self):
+    def test_approximate_levels_use_the_number_without_a_marker(self):
         self.assertEqual(self.texts_drawn(mouse(55, approx="about 55% (medium)"),
-                                          {"percent_in_icon": True}), {""})
+                                          {"percent_in_icon": True}), {"55"})
         self.assertEqual(self.texts_drawn(mouse(None), {"percent_in_icon": True}), {""})
+
+    def test_approximate_and_exact_levels_both_show_the_number(self):
+        self.assertEqual(self.texts_drawn(mouse(55, approx="about 55%"),
+                                          {"percent_in_icon": True}), {"55"})
+        self.assertEqual(self.texts_drawn(mouse(55), {"percent_in_icon": True}), {"55"})
 
     def test_menu_toggles(self):
         app = make_app()
