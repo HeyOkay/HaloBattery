@@ -80,6 +80,7 @@ MESSAGES = {
     "provider.barracuda": "Razer Barracuda Pro",
     "provider.barracuda_x": "Razer Barracuda X",
     "provider.blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
+    "provider.blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
     "provider.corsair": "Гарнитуры Corsair",
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Мыши G-Wolves",

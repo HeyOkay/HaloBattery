@@ -48,6 +48,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   justik13/razer-blackshark-v2-hyperspeed-webhid, with read-only implementations in
   blackshark-battery and openrazer PR #2974. **Confirmed on hardware** in #86: level
   and charging (the receiver and cable paths were not reported separately).
+- **Razer BlackShark V3 X HyperSpeed** (`1532:057D` receiver / `1532:057C`
+  cable, #280): the receiver's newer 64-byte feature-report protocol (report
+  id `0x07`, class `0x07`, battery command `0x80`, level byte 10), from
+  everyoneexe/blackshark-linux's Synapse captures. A different protocol from
+  the BlackShark V3's `0x02` frames; **confirmed on hardware** in #280 for the
+  level and charging, with the cable identity `057C` added in test build 4 and
+  the charging flag at byte 10 fixed in test build 5.
 - Open the existing What's new window from About, directly below the version.
 - Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
 - GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
