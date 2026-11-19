@@ -10,9 +10,10 @@ on an AJAZZ AK980 V2 by YellowHearth1/ajazz-ak980-v2-linux (`docs/PROTOCOL.md`,
               `20 01 00 LEVEL ... <sum>`
 
 The keyboard only answers in 2.4 GHz mode, and the first request after the
-radio sleeps may only wake it, so the request is sent twice.  Only this model's
-product string is claimed; other keyboards on the same OEM dongle need their
-own identity checks.
+radio sleeps may only wake it.  The request is still sent once per poll and is
+never re-sent after silence or after a refused write: the next poll reads the
+woken link.  Only this model's product string is claimed; other keyboards on
+the same OEM dongle need their own identity checks.
 """
 from __future__ import annotations
 
@@ -38,7 +39,6 @@ REPORT_LEN = 33
 BATTERY_COMMAND = [0x20, 0x01]
 READ_ATTEMPTS = 8
 READ_TIMEOUT_MS = 300
-REQUEST_ATTEMPTS = 2
 ASLEEP_KEEP = 300
 
 
@@ -131,22 +131,23 @@ class AttackSharkX66Provider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            for attempt in range(REQUEST_ATTEMPTS):
-                sent = dev.write(bytes(make_request()))
-                self._diag.append(f"    write {attempt + 1} -> {sent}")
-                if sent is not None and sent < 0:
+            # One write per poll: never re-sent after silence or a refused write.
+            sent = dev.write(bytes(make_request()))
+            self._diag.append(f"    write -> {sent}")
+            if sent is not None and sent < 0:
+                self._diag.append("    the write was refused")
+                return None
+            for _ in range(READ_ATTEMPTS):
+                try:
+                    r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
+                except (OSError, IOError, ValueError) as e:
+                    self._diag.append(f"    read: {e}")
                     continue
-                for _ in range(READ_ATTEMPTS):
-                    try:
-                        r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
-                    except (OSError, IOError, ValueError) as e:
-                        self._diag.append(f"    read: {e}")
-                        continue
-                    if r:
-                        self._diag.append(f"    reply: {hexdump(r, 12)}")
-                    parsed = parse_reply(r)
-                    if parsed is not None:
-                        return parsed
+                if r:
+                    self._diag.append(f"    reply: {hexdump(r, 12)}")
+                parsed = parse_reply(r)
+                if parsed is not None:
+                    return parsed
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    error: {e}")
         finally:

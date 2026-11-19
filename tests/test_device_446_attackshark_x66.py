@@ -117,10 +117,22 @@ class PollTest(unittest.TestCase):
         self.assertFalse(out[0].charging_known)
         self.assertEqual([bytes(X.make_request())], dev.writes)
 
-    def test_a_sleeping_radio_gets_one_more_request(self):
+    def test_a_receiver_that_times_out_gets_one_write(self):
         provider, dev = self.make([[]] * X.READ_ATTEMPTS + [reply(64)])
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertEqual([bytes(X.make_request())], dev.writes)
+        # The next poll sends one new request and reads the woken link.
         self.assertEqual(64, provider.poll()[0].level)
         self.assertEqual(2, len(dev.writes))
+
+    def test_a_refused_write_is_not_repeated(self):
+        provider, dev = self.make([reply(64)])
+        dev.write = lambda data: (dev.writes.append(bytes(data)), -1)[1]
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertEqual(1, len(dev.writes))
+        self.assertEqual([], dev.reads)
 
     def test_no_reply_keeps_the_last_reading_greyed(self):
         provider, dev = self.make([reply(64)])
