@@ -144,6 +144,13 @@ class AlienwareProvider(Provider):
                     return parsed
         except Exception as e:  # pragma: no cover - hidapi raises OSError
             self._diag.append(f"  read: {e}")
+        finally:
+            # hidapi closed an unreferenced device when it was collected; the native
+            # transport keeps every device it opened until close() is called.
+            try:
+                dev.close()
+            except Exception:
+                pass
         return None
 
     def diagnostics(self) -> List[str]:

@@ -65,6 +65,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
   block Windows session-end cleanup after tray icons disappear.
+- Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the
+  HyperX Cloud III and MCHOSE V9 feature-report fallback works again; let a read with its
+  own longer timeout (HyperX Cloud Flight, 2 s) end empty instead of failing; close the
+  Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
 - Keep cached HID transport error diagnostics available without new native calls;
   preserve bounded feature-call timeout and handle-cleanup behavior.
 - Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.

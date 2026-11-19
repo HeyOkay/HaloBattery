@@ -1773,7 +1773,7 @@ class App:
                     self.configure_polling()
                 save_config(self.cfg)
                 if key == "bluetooth":
-                    self.bt_cache = []
+                    self._bt_clear()
                     self.bt_wake.set()
                 if key == "update_check":
                     if self.cfg[key]:
@@ -2559,6 +2559,15 @@ class App:
             self.bt_fresh.set()
             self.wake.bluetooth()
 
+    def _bt_clear(self):
+        """Bluetooth switched off: drop its readings. The revision bump makes the next
+        poll treat Bluetooth as completed, so its icons are removed instead of kept."""
+        with self.lock:
+            if self.bt_cache:
+                self.bt_cache = []
+                self._bt_revision = getattr(self, "_bt_revision", 0) + 1
+                self.wake.bluetooth()
+
     def bt_loop(self):
         """Separate thread: PowerShell can take a few seconds and must not delay
         the mouse and headset icons. On Windows a long-lived watcher reports
@@ -2591,7 +2600,7 @@ class App:
                 log.info("bluetooth: %d device(s) in %.1f s", len(res), time.time() - t0)
                 self._bt_update(res)            # same checked path as the watcher
             else:
-                self.bt_cache = []
+                self._bt_clear()
                 self.bt_fresh.set()
             self.bt_wake.wait(60)
             self.bt_wake.clear()
