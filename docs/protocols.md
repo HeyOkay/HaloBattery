@@ -469,6 +469,25 @@ the receiver and its docs were supplied by the [#430](https://github.com/HeyOkay
 reporter. **Confirmed on hardware** in #430: the receiver's power reply read
 **63%**, matching the mouse. Charging is not decoded.
 
+### MCHOSE K87 / G98 Pro
+
+MCHOSE's own web driver (M HUB) sends a 19-byte output report
+
+    13 4A 01 00 02 <level> <flags> ... <checksum>
+
+on the `ff02:0002` vendor collection; the checksum is the low byte of the sum of
+bytes 0..18. The captured K87 answer (`41E4:2001`) had level `0x64` (100 %), and
+the byte after the level was `0x01` with the keyboard full and **not** on the
+cable, so the low nibble is a full-status flag, not "charging now".
+
+The **G98 Pro** (`41E4:2004`, product string `MCHOSE 2.4G Wireless`) publishes
+the same command collection and is queried with the identical frame. On the
+reporter's hardware it answers 94 % with flags `0x00` on 2.4 GHz and 50 % with
+flags `0x10` on the charging cable, so the high nibble is the charge state: the
+K87's `0x01` while full and off the cable stays a full status and never shows a
+ring. Level and charging confirmed in
+[#378](https://github.com/HeyOkay/HaloBattery/issues/378).
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)

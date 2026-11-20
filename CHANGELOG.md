@@ -30,6 +30,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
+  command as the K87, with the charging flag read from the reply's high
+  nibble. Level and charging confirmed on the reporter's hardware in
+  [#378](https://github.com/HeyOkay/HaloBattery/issues/378): 94 % on
+  battery, 50 % with the ring on the cable.
 - Add links to the HaloBattery website and the Discord community to Settings >
   About.
 - Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,
