@@ -430,6 +430,12 @@ source; their settings and battery history remain compatible.
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
   and charge status (plus voltage and temperature in the diagnostics). Unverified on
   hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **HyperX Cloud Core Wireless** (`0951:173f` dongle, `0951:1740` USB-C) - the
+  Cloud Core feature-report protocol from LennardKittner/HyperHeadset's `cloud-core`
+  branch: report `0xFF` on `ff00:0001`, voltage at bytes 11-12 and charging at byte
+  9. The level is approximate; the Cloud Flight voltage curve is used because the
+  Cloud Core reference curve came from a failing battery and reads a healthy 3.85 V
+  as full. Unverified on hardware; a test build is going to the reporter.
 - **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
   different transport: the request is a feature report on `ff02:0002`, the reply an
   input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because

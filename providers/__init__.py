@@ -24,6 +24,7 @@ from .dareu import DareuProvider  # noqa: F401
 from .hyperx import HyperXProvider  # noqa: F401
 from .hyperx_alpha2 import HyperXAlpha2Provider  # noqa: F401
 from .hyperx_cloud3 import HyperXCloud3Provider  # noqa: F401
+from .hyperx_cloud_core import HyperXCloudCoreProvider  # noqa: F401
 from .hyperx_cloud3s import HyperXCloud3SProvider  # noqa: F401
 from .playstation import PlayStationProvider  # noqa: F401
 from .eightbitdo import EightBitDoProvider  # noqa: F401
