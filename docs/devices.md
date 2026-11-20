@@ -9,6 +9,7 @@
 | [Endgame Gear XM2we](protocols.md#endgame-gear-xm2we) | Original 2.4 GHz receiver (3367:1961) | yes (battery and charging) |
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
 | [AM Infinity 8K (Angry Miao)](protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
+| [AJAZZ AJ159 PRO](protocols.md#ajazz-aj159-pro) | 8K receiver (3151:402d) | yes (level only; no charging flag) |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz / 8K receiver or USB cable | yes on 8K; 1K/wired untried |
 | [ASUS ROG Harpe II Ace / Harpe II Extreme](protocols.md#asus-rog-harpe-ii-ace--harpe-ii-extreme) | 2.4 GHz receiver or USB cable | Harpe II Ace on its receiver |
@@ -127,8 +128,8 @@ Is your device not in the table, or does it show a wrong level? See [Add your de
 
 ## Excluded from 1.17.0
 
-The current Endgame 4K reader (`3367:1970`), AJAZZ AJ159 PRO (`3151:402d`),
-Kysona Uranus (`3151:5031`), Turtle Beach Stealth 600X Gen 3 (`10f5:2232`), Sony INZONE H9 II (`054c:0fa8`),
+The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),
+Turtle Beach Stealth 600X Gen 3 (`10f5:2232`), Sony INZONE H9 II (`054c:0fa8`),
 Lamzu Tachi (`37b0:000c`) and Logitech PRO X 3 (`046d:0b45`)
 are disabled pending the [release holds](maintenance.md#open-investigations-and-release-holds).
 Their protocol code and simulated tests remain for follow-up development; the app

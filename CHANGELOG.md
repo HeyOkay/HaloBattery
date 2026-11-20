@@ -124,6 +124,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
+- AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
