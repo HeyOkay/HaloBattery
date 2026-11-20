@@ -163,6 +163,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   1053 reading keeps the Cyclone 2 name. **Confirmed on hardware** by the
   reporter on 2026-11-14 (86 %, charging, matching GameSir Connect).
 
+- **MCHOSE X9** headset on its 2.4 GHz dongle (`3837:6045`), read with M HUB's own
+  BLK battery query (`65 01` on report `0x55`). Confirmed on hardware, on Linux and on
+  Windows (@Kolomhon, [#458](https://github.com/HeyOkay/HaloBattery/issues/458)): the
+  level and the discharging state on the dongle. On its cable the headset leaves the
+  dongle and appears as `3837:6044`, which M HUB does not read: nothing is sent to it,
+  and no charging state is shown.
+
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
@@ -222,6 +229,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
+
+- A MCHOSE headset unplugged in the middle of a poll no longer hides the other MCHOSE
+  devices for that poll.
 
 - Bring the existing Settings window to the foreground when a tray icon is
   double-clicked, restoring it if minimized.
