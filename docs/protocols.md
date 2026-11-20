@@ -400,12 +400,15 @@ Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collect
 MonsGeek Driver v4's `resources/app/dist/js/index.bc699543.js`,
 `___dongleCheck24GStatusByF7`, defines feature report ID zero plus payload `f7`
 and zero padding. Payload byte 1 is the keyboard level; payload byte 3 is its
-online flag; payload byte 6 distinguishes keyboard (`1`), mouse (`2`) and both
-(`3`). Only online keyboard-containing replies may publish a current keyboard
-level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
+link byte, zero while the keyboard is online (the driver reads
+`isOnline: n[3] === 0`; payload byte 4 is the same for the mouse); payload
+byte 6 distinguishes keyboard (`1`), mouse (`2`) and both (`3`). Only online
+keyboard-containing replies may publish a current keyboard level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
 the last confirmed value is retained greyed for the existing cache interval.
-The original reading was confirmed by the reporter; this flag correction uses
-literal fake replies, with no new hardware commands.
+The original reading was confirmed by the reporter. The online check follows
+the driver's polarity, which a real ROYUAN receiver reply with its keyboard in
+use also shows (`00 64 00 00 01 01 01` after the report id, #372); it sends no
+new hardware commands.
 ### Inphic and Attack Shark mice (1D57 receivers)
 
 **Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)
