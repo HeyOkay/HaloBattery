@@ -56,6 +56,7 @@
 | [HyperX Cloud III Wireless](protocols.md#hyperx-cloud-iii-wireless) | 2.4 GHz dongle | no |
 | [JBL Quantum 910 Wireless](protocols.md#jbl-quantum-910-wireless) | 2.4 GHz dongle | yes |
 | [JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)](protocols.md#jbl-quantum-hidv3-520-650-850-950) | 2.4 GHz receiver or USB cable | unverified in the app (WDBM tested a 650) |
+| [JBL Quantum 350 Wireless](protocols.md#jbl-quantum-350-wireless) | 2.4 GHz receiver (`0ecb:206b`) | level only; charging not exposed |
 | [Keychron Ultra-Link 8K, Keychron M5](protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | no |
 | [LAMZU Maya X](protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
 | [LAMZU Atlantis V2](protocols.md#lamzu-atlantis-v2) | 2.4 GHz receiver (3554:F50D) or USB cable (3554:F50F) | yes (level and charging) |

@@ -241,6 +241,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
   status report, level and charging. Unverified in the app.
 
+- **JBL Quantum 350 Wireless** on its 2.4 GHz receiver (`0ecb:206b`): read with the
+  receiver's HIDV1 feature reports (`0x68` link, `0x49` level in 5 % steps), the
+  same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
+  exposed by this protocol, so the level is shown with the charger unknown.
+  Test build pending on the reporter's unit.
+
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not

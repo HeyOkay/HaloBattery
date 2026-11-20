@@ -148,7 +148,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        DeviceStatus, DjiProvider, DarmosharkProvider,
                        EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXCloudCoreProvider, HyperXProvider, JblProvider,
+                       HyperXCloudCoreProvider, HyperXProvider, JblProvider, JblQuantum350Provider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
                        LogitechCenturionProvider, LogitechG435RtkProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
@@ -327,7 +327,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), JblQuantum350Provider()]
 
 
 # ---------------------------------------------------------------- config
