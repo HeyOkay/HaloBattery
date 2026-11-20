@@ -665,6 +665,38 @@ does not represent a new hardware test of this guard.
 
 HID++ 2.0 on the receiver's vendor interface: the device name (feature 0x0005) and the first battery feature the device supports (0x1004 unified battery, 0x1000 battery status or 0x1001 battery voltage; the G502 LIGHTSPEED reports voltage, converted to % with the Li-ion curve used by Solaar, the G502 X PLUS the unified battery percentage). The icon follows the device's unit id (feature 0x0003). Works alongside G HUB
 
+### Logitech G PRO X3 SUPERSTRIKE
+
+**Connection:** LIGHTSPEED receiver (`046d:c54f`); wired mouse
+`046d:c0a9`.
+This is the **mouse**, not the PRO X 3 LIGHTSPEED headset.
+
+The mouse exposes HID++ on Logitech's alternate vendor collections
+`ff43:0301` (short, seven-byte reports) and `ff43:0302` (long, 20-byte reports).
+For these two product IDs only, the Logitech provider treats them as the
+usual short/long HID++ paths, keeping the original `ff00:0001` / `ff00:0002`
+paths preferred wherever both exist. The receiver is queried through the
+usual paired-device slots (1-6), while the wired mouse uses slot `0xff`.
+The existing HID++ 2.0 battery feature lookup and status parsing are reused;
+no new battery command or device-setting write is introduced.
+
+**Protocol sources:** [OpenLogi PRO X3 SUPERSTRIKE receiver support
+(PR #2191)](https://github.com/AprilNEA/OpenLogi/pull/2191) identifies the
+`c54f` receiver and the `ff43:0302` long collection with its `ff43:0301`
+short sibling on Windows. The short collection is recognized when present.
+This change only maps the known collections to the existing
+read-only HID++ battery requests in `providers/logitech.py`.
+
+**Prior hardware reports:** in [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465),
+the author reported a physical PRO X3 SUPERSTRIKE under Windows on build `fffb327`: the reported
+battery percentage matched Logitech G HUB; charging was detected; the tray
+icon greyed out after powering the mouse off and returned on reconnect.
+The author subsequently reported battery and charging on `c0a9` with the receiver physically unplugged.
+These are prior-build reports, not a new hardware test of this recovered branch.
+Low-battery notifications remain untested. Automated tests cover collection routing,
+charging statuses and legacy `ff00` precedence. `C54D` retains its existing route;
+it is excluded from the X3 fallback following the scope review in PR #465.
+
 ### Razer BlackWidow V3 Pro
 
 **Connection:** 2.4 GHz receiver (1532:025C), cable (1532:025A)
