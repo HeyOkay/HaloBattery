@@ -33,7 +33,6 @@ public sealed partial class MainWindow : Window
  private readonly Frame frame=new();
  private readonly Border card=new(){CornerRadius=new(12),Margin=new(0,0,8,8)};
  private readonly Border pill=new(){Height=40,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Center};
- private readonly SvgImageSource darkHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderDark.svg")),lightHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderLight.svg"));
  private const double HeaderButtonSize=40,HeaderIconSize=20,HeaderEdgeInset=12,HeaderButtonGap=4;
  private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0,0,HeaderEdgeInset,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
  private readonly ColumnDefinition rail=new(){Width=new(228)};
@@ -44,7 +43,8 @@ public sealed partial class MainWindow : Window
  private Color accent;
  private readonly FontFamily bodyFont=new("Segoe UI Variable");
  // Статичные начертания с хинтингом: вариативный Outfit по умолчанию Thin, и WinUI дорисовывал жирность сам - отсюда «лесенка».
- internal FontFamily TitleFont=>new(State.Language=="ru"?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
+ internal bool UsesCyrillicTitles=>State.Language is "ru" or "uk" or "kk";
+ internal FontFamily TitleFont=>new(UsesCyrillicTitles?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
  internal static readonly FontFamily MonoFont=new("Cascadia Mono, Consolas");
  internal bool Dark=>dark;
  internal bool AnimationsEnabled=>settings.AnimationsEnabled;
@@ -105,7 +105,6 @@ public sealed partial class MainWindow : Window
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
   BuildHeader();
-  InitializeBrandHover();
   InitializeStartupSplash();
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
@@ -201,18 +200,13 @@ public sealed partial class MainWindow : Window
  private void BuildHeader()
  {
   header.Children.Clear();
-  var textAccent=new SolidColorBrush(Desaturate(accent,0.8,dark?0.76:-1));
   hamburger=HeaderButton("menu",MenuName);hamburger.Margin=new(HeaderEdgeInset,0,0,0);hamburger.HorizontalAlignment=HorizontalAlignment.Left;hamburger.Click+=(_,_)=>ToggleRail();header.Children.Add(hamburger);
-  pill.Background=Brush("#00000000");var content=new Grid();foreach(var width in new[]{GridLength.Auto,GridLength.Auto})content.ColumnDefinitions.Add(new(){Width=width});
-  var logo=new Image{Source=dark?darkHeaderLogo:lightHeaderLogo,Width=22,Height=22,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,2,0)};content.Children.Add(logo);
-  var brand=new TextBlock{FontSize=16,FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.SemiBold,Foreground=TextBrush,CharacterSpacing=-12,VerticalAlignment=VerticalAlignment.Center,TextLineBounds=TextLineBounds.Tight};brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Halo",FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-Medium.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=TextBrush});brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Battery",Foreground=textAccent});Grid.SetColumn(brand,1);content.Children.Add(brand);
-  brandLabel=brand;brandHovered=false;brand.Opacity=RestingBrandOpacity;
-  brand.OpacityTransition=settings.AnimationsEnabled?new ScalarTransition{Duration=TimeSpan.FromMilliseconds(BrandFadeMilliseconds)}:null;
-  pill.Child=content;pill.IsHitTestVisible=false;header.Children.Add(pill);
+  pill.Background=Brush("#00000000");
+  pill.Child=BuildNativeHeaderBrand();pill.IsHitTestVisible=false;header.Children.Add(pill);
   windowButtons.Children.Clear();var minimize=HeaderButton("minus",T("settings.minimize"));maximizeButton=HeaderButton("maximize-2",T("settings.maximize"));displayedMaximized=null;var close=HeaderButton("x",T("settings.close"));foreach(var button in new[]{minimize,maximizeButton,close})windowButtons.Children.Add(button);minimize.Click+=(_,_)=>((OverlappedPresenter)AppWindow.Presenter).Minimize();maximizeButton.Click+=(_,_)=>{var p=(OverlappedPresenter)AppWindow.Presenter;if(p.State==OverlappedPresenterState.Maximized)p.Restore();else p.Maximize();UpdateMaximizeButton();};close.Click+=(_,_)=>Close();header.Children.Add(windowButtons);UpdateMaximizeButton();PositionPill();
   SetStartupChromeVisibility();
  }
- // В развёрнутом окне страница и омнибокс центрируются по всему окну, а не по области справа от панели вкладок.
+ // В развёрнутом окне страница центрируется по всему окну, а не по области справа от панели вкладок.
  // Если места не хватает - сдвигаются вправо ровно настолько, чтобы не заходить под панель и не вылезать за подложку.
  private double PageWidth(double frameWidth)=>Math.Max(0,Math.Min(contentWidth,frameWidth));
  private double PageLeft(double frameWidth)
@@ -457,7 +451,7 @@ public sealed partial class MainWindow : Window
  }
  internal StackPanel PageContent(string title)
  {
-  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
+  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,UsesCyrillicTitles?28:30);heading.FontFamily=TitleFont;heading.FontWeight=UsesCyrillicTitles?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=UsesCyrillicTitles?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
  }
  internal void Section(StackPanel parent,string name){var text=Text(name);text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;text.Margin=new(0,14,0,0);parent.Children.Add(text);}
  internal CardView Card(string title,string description,UIElement? action=null,object? icon=null)=>MakeCard(title,description,action,icon??"info",false);

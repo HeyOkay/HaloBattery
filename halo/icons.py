@@ -320,7 +320,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            pulse: float = 1.0, text: str = "", force_active: bool = False, *,
            size: int = SIZE, brand: str = "default", brand_color: bool = False,
            animation_phase: float = 0.0, filled: bool = False, custom_glyph=None,
-           ring_style: str = 'thin') -> Image.Image:
+           ring_style: str = 'thin', include_arc: bool = True) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - known-level arc brightness 0..1 (the charging "breathing" animation).
     animation_phase - clockwise turn 0..1 for unknown charging; its brightness is steady.
@@ -329,7 +329,8 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     size is the physical output width/height; the legacy default stays 64.
     brand / brand_color affect controller glyphs only, never their semantic kind.
     ring_style selects the current 1px or classic 1.625px stroke at 16px;
-    classic slightly insets the pictogram while keeping the ring unchanged."""
+    classic slightly insets the pictogram while keeping the ring unchanged.
+    include_arc=False retains only the track and center for settings transitions."""
     ring_width = _ring_width(ring_style)
     if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
         raise ValueError("icon size must be a positive integer")
@@ -348,8 +349,8 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     # ring track
     d.ellipse(box, outline=fg + (neutral_alpha(70 if active else 45),), width=_r(w))
 
-    # charge arc
-    if active:
+    # charge arc (settings can retain the exact track and center as a static layer)
+    if active and include_arc:
         color = arc_color(level, charging, low, fg)
         opacity = NEUTRAL_OPACITY if color == fg else 255
         c = color + (int(opacity * max(0.0, min(1.0, pulse))),)

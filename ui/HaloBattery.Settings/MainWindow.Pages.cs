@@ -17,6 +17,10 @@ public sealed partial class MainWindow
     private readonly List<Action> pageBindings = new();
     private DispatcherTimer? previewTimer;
     private Image? previewImage;
+    private DevicePreview? previewPresenter;
+    private CardView? previewCard;
+    private string? previewPage;
+    private long previewRequestGeneration;
     private InfoBar? pageError;
     private string? previewDeviceKey;
     private string lastError = "";
@@ -50,7 +54,7 @@ public sealed partial class MainWindow
         if (!pagesInitialized)
         {
             pagesInitialized = true;
-            Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; pageBindings.Clear(); };
+            Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; previewPresenter?.Dispose(); pageBindings.Clear(); };
             Navigate(InitialSettingsPage(pendingStartupPage,pendingStartupDeviceKey), false);
             return;
         }
@@ -89,6 +93,13 @@ public sealed partial class MainWindow
         StopIconCatalog();
         pageBindings.Clear();
         RefreshGeneralFooter(page);
+        previewCard?.DetachAction();
+        previewCard = null;
+        if (previewPage != page)
+        {
+            previewPresenter?.Dispose();
+            previewPresenter = null;
+        }
         previewImage = null;
         previewDirty = true;
         previewGeneration++;
@@ -359,14 +370,16 @@ public sealed partial class MainWindow
 
     private void AddPreview(StackPanel p, bool devicePage)
     {
-        previewImage = new Image { Stretch = Stretch.Fill, UseLayoutRounding = true, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(previewImage).IsPixelSnappingEnabled = true;
+        previewPresenter ??= new DevicePreview();
+        previewImage = previewPresenter.Image;
+        previewPage = current;
         var previewGlyph = devicePage ? DeviceKindGlyph(SelectedDevice?.Kind) : "eye";
-        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewImage, previewGlyph);
+        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewPresenter, previewGlyph);
+        previewCard = preview;
         p.Children.Add(preview);
         pageBindings.Add(() =>
         {
-            if (previewDeviceKey != selectedDeviceKey) previewDirty = true;
+            if (previewDeviceKey != selectedDeviceKey) { previewDirty = true; previewGeneration++; }
             previewDeviceKey = selectedDeviceKey;
             if (devicePage && SelectedDevice is { } d)
             {
@@ -389,7 +402,7 @@ public sealed partial class MainWindow
         var size = 80 / Scale;
         if (previewImage.Width != size || previewImage.Height != size)
         {
-            previewImage.Width = previewImage.Height = size;
+            previewPresenter?.Resize(Scale);
             previewDirty = true;
         }
     }
@@ -404,32 +417,56 @@ public sealed partial class MainWindow
                 ResizePreview();
                 var device = State.Devices.FirstOrDefault(d => d.Key == previewDeviceKey);
                 var animate = BoolCfg("animation") && device is { Charging: true, Online: true };
-                if (!previewPending && (previewDirty || animate) && Bridge.RequestPreview(previewDeviceKey))
+                if (!previewPending && (previewDirty || animate) && Bridge.RequestPreview(previewDeviceKey, previewDirty))
                 {
                     previewPending = true;
+                    previewRequestGeneration = previewGeneration;
                     previewDirty = false;
                 }
             };
         }
         previewTimer.Start();
     }
-    public async void ApplyPreview(string? deviceKey, string pngBase64)
+    private static async Task<BitmapImage> DecodePreviewAsync(string pngBase64)
     {
-        if (closing || previewImage is null || deviceKey != previewDeviceKey) { previewPending = false; return; }
-        var generation = previewGeneration;
+        var bytes = Convert.FromBase64String(pngBase64);
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(bytes); await writer.StoreAsync(); await writer.FlushAsync(); writer.DetachStream();
+        }
+        stream.Seek(0);
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        if (bitmap.PixelWidth != 80 || bitmap.PixelHeight != 80)
+            throw new InvalidDataException("Preview must be 80 physical pixels");
+        return bitmap;
+    }
+
+    public async void ApplyPreview(string? deviceKey, string pngBase64, JsonElement? transition = null)
+    {
+        // Bind a reply to the page generation in which it was requested, not the
+        // generation when its asynchronous PNG decode happens to complete.
+        var generation = previewRequestGeneration;
+        bool Current() => generation == previewGeneration && deviceKey == previewDeviceKey &&
+            !closing && previewPresenter is not null && previewImage is not null;
         try
         {
-            var bytes = Convert.FromBase64String(pngBase64);
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+            if (!Current()) return;
+            var presenter = previewPresenter!;
+            var bitmap = await DecodePreviewAsync(pngBase64);
+            BitmapImage? background = null;
+            DevicePreview.Ring? ring = null;
+            if (transition is { } data)
             {
-                writer.WriteBytes(bytes); await writer.StoreAsync(); await writer.FlushAsync(); writer.DetachStream();
+                ring = DevicePreview.Ring.Read(data);
+                background = await DecodePreviewAsync(data.GetProperty("background").GetString() ?? "");
             }
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            if (generation != previewGeneration || deviceKey != previewDeviceKey || closing || bitmap.PixelWidth != 80 || bitmap.PixelHeight != 80) return;
-            if (previewImage is not null) { ResizePreview(); previewImage.Source = bitmap; }
+            if (!Current() || !ReferenceEquals(previewPresenter, presenter)) return;
+            ResizePreview();
+            var motion = AnimationsEnabled && AppWindow.IsVisible && !pagesInitializing &&
+                AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
+            presenter.Apply(deviceKey, bitmap, background, ring, motion);
         }
         catch (Exception error) { System.Diagnostics.Debug.WriteLine(error); }
         finally { previewPending = false; startupPreviewReady?.TrySetResult(true); }

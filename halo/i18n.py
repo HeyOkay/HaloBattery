@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from halo.locales import en, es, fr, ja, ru, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, kk, ru, uk, zh_CN, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -28,8 +28,8 @@ def _french_plural(count: int) -> str:
     return "one" if count in (0, 1) else "other"
 
 
-def _russian_plural(count: int) -> str:
-    """CLDR Russian integer forms: 1 час, 2 часа, 5 часов, 21 час."""
+def _east_slavic_plural(count: int) -> str:
+    """CLDR Russian/Ukrainian integer forms: one, few and many; fractions use other."""
     if isinstance(count, bool) or not isinstance(count, int):
         return "other"
     count = abs(count)
@@ -74,7 +74,10 @@ LANGUAGES = {
                       windows_language_ids=(0x0804, 0x1004, 0x0004, 0x7804)),
     "ja": Language("日本語", ja.MESSAGES, plural_rule=other_only,
                    windows_primary_ids=(0x11,), plural_forms=("other",)),
-    "ru": Language("Русский", ru.MESSAGES, plural_rule=_russian_plural,
+    "kk": Language("Қазақша", kk.MESSAGES, windows_primary_ids=(0x3F,)),
+    "uk": Language("Українська", uk.MESSAGES, plural_rule=_east_slavic_plural,
+                   windows_primary_ids=(0x22,), plural_forms=("one", "few", "many", "other")),
+    "ru": Language("Русский", ru.MESSAGES, plural_rule=_east_slavic_plural,
                    windows_primary_ids=(0x19,), plural_forms=("one", "few", "many", "other")),
 }
 

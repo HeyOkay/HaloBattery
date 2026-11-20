@@ -52,6 +52,25 @@ public sealed partial class MainWindow
                 var customChrome=!nativePresenter.HasTitleBar && nativePresenter.HasBorder;
                 checks.Add(new { name="native caption is hidden and resize border retained",passed=customChrome });
                 if(!customChrome)throw new InvalidOperationException("Fixture custom chrome is unavailable.");
+                if (Arg("--verify-scope") == "header-branding")
+                {
+                    await VerifyHeaderBranding(destination, checks);
+                    await VerifyNavigationAndHeader(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "header-branding", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "device-preview-selection")
+                {
+                    await VerifyDevicePreviewSelection(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "device-preview-selection", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "device-preview")
+                {
+                    await VerifyDevicePreview(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "device-preview", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "expander")
                 {
                     await VerifyProviderExpander(checks);

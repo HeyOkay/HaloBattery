@@ -232,12 +232,14 @@ public sealed partial class SettingsBridge : IDisposable
         return Enqueue(message) ? id : 0;
     }
 
-    public bool RequestPreview(string? deviceKey)
+    public bool RequestPreview(string? deviceKey, bool transition = false)
     {
         if(fixture || disposed || Interlocked.Read(ref pendingPreview)!=0) return false;
         var id=Interlocked.Increment(ref nextId);
         if(Interlocked.CompareExchange(ref pendingPreview,id,0)!=0) return false;
-        if(Enqueue(SettingsJson.Object(("type", "preview"), ("id", id), ("deviceKey", deviceKey)))) return true;
+        var message=SettingsJson.Object(("type", "preview"), ("id", id), ("deviceKey", deviceKey));
+        if(transition) message["transition"]=true;
+        if(Enqueue(message)) return true;
         Interlocked.Exchange(ref pendingPreview,0);
         return false;
     }
@@ -318,7 +320,8 @@ public sealed partial class SettingsBridge : IDisposable
                     Interlocked.Exchange(ref pendingPreview,0);
                     if(message.GetProperty("size").GetInt32()!=80) throw new InvalidDataException("Preview must be 80 physical pixels");
                     var deviceKey=message.TryGetProperty("deviceKey",out var dk) && dk.ValueKind==JsonValueKind.String?dk.GetString():null;
-                    window.ApplyPreview(deviceKey,message.GetProperty("png").GetString() ?? "");
+                    window.ApplyPreview(deviceKey,message.GetProperty("png").GetString() ?? "",
+                        message.TryGetProperty("transition",out var previewTransition) ? previewTransition.Clone() : null);
                     break;
                 case "catalog":
                     window.ApplyIconCatalogResponse(message);
