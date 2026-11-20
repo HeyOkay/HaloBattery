@@ -105,6 +105,7 @@ MESSAGES = {
     "provider.lamzu_sw": "Lamzu Tachi (приёмник 8K)",
     "provider.lofree": "Клавиатуры Lofree, мыши AULA V9",
     "provider.logitech": "Logitech",
+    "provider.logitech_g325": "Logitech G325 LIGHTSPEED",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.mchose": "Мыши MCHOSE",

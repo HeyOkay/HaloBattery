@@ -35,6 +35,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   nibble. Level and charging confirmed on the reporter's hardware in
   [#378](https://github.com/HeyOkay/HaloBattery/issues/378): 94 % on
   battery, 50 % with the ring on the cable.
+- Logitech G325 LIGHTSPEED (`046D:0B21`): read its vendor `0x50`/`0x23`
+  battery report on `ffa0:0001`, including the charging state. Confirmed on
+  the reporter's hardware in [#232](https://github.com/HeyOkay/HaloBattery/issues/232):
+  the level matched G HUB and the ring followed the cable.
 - Add links to the HaloBattery website and the Discord community to Settings >
   About.
 - Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,

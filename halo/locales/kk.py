@@ -195,6 +195,7 @@ MESSAGES = {
     'provider.fractal': 'Fractal Scape',
     'provider.hyperx_cloud_core': 'HyperX Cloud Core Wireless',
     'provider.logitech_g435_rtk': 'Logitech G435 LIGHTSPEED (046D:0ACB)',
+    'provider.logitech_g325': 'Logitech G325 LIGHTSPEED',
     'provider.machenike': 'Machenike L7',
     'provider.mchose_k99': 'MCHOSE K99 V3',
     'provider.moondrop': 'MOONDROP GM01 Pro',

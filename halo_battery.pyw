@@ -150,7 +150,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
                        HyperXCloudCoreProvider, HyperXProvider, JblProvider, JblQuantum350Provider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
-                       LogitechCenturionProvider, LogitechG435RtkProvider,
+                       LogitechCenturionProvider, LogitechG325Provider, LogitechG435RtkProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
@@ -276,6 +276,7 @@ PROVIDER_LABELS = {
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
+    "logitech_g325": "Logitech G325 LIGHTSPEED",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "mchose": "MCHOSE mice",
@@ -327,7 +328,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), JblQuantum350Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), LogitechG325Provider(), JblQuantum350Provider()]
 
 
 # ---------------------------------------------------------------- config
