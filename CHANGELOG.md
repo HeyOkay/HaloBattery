@@ -383,6 +383,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
 
+- **Razer Barracuda X (2022) on its USB cable** (`1532:0536`) is no longer sent any
+  command. 1.17.0 routed it to the BlackShark headset protocol on the strength of a
+  matching `ff00:0001` collection, but it is the cable identity, not a receiver, and
+  Windows refused every write ([#256](https://github.com/HeyOkay/HaloBattery/issues/256)).
+  The 2.4 GHz dongle (`1532:0552`) is read as before.
+
 ## [1.17.0] - 2026-11-12
 
 First combined upstream release after the community fork. Includes six interface
@@ -538,6 +544,10 @@ source; their settings and battery history remain compatible.
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+  **Retracted after this release:** `0536` is the headset on its USB cable, not a
+  receiver; that collection has no output endpoint and Windows refused every write in the
+  #256 test. It never showed a battery level and is no longer sent anything (see
+  Unreleased). The 2.4 GHz dongle (`1532:0552`) is the supported path.
 
 ### Not enabled in this release
 
