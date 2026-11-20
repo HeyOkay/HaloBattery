@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark, blackshark2020, blackshark_v3, hidlist
+from . import blackshark, blackshark2020, blackshark_mtk, blackshark_v3, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -162,7 +162,16 @@ WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
                   "blackshark", "barracuda", "nari")
 
 
+# The BlackShark V3 X receiver (057d) and its USB cable identity (057c, product
+# "BlackShark V3 X USB") speak their own 0x07/08 protocol in blackshark_v3x.py;
+# the standard Razer frames get "read error" on every channel, and on the cable
+# every PA write was refused on all four collections, every poll (#280).
+BLACKSHARK_V3X_PIDS = {0x057D, 0x057C}
+
+
 def maybe_wireless(pid: int, name: str) -> bool:
+    if pid in BLACKSHARK_V3X_PIDS:
+        return False
     n = name.lower()
     return pid in KNOWN or pid in blackshark.PA_PIDS or any(w in n for w in WIRELESS_WORDS)
 
@@ -386,6 +395,11 @@ class RazerProvider(Provider):
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
+                continue
+            if pid in blackshark_mtk.PIDS:
+                # The MediaTek receiver (0565) and cable headset (056E) answer report 2
+                # on 0xFF14, not PA; providers/blackshark_mtk.py reads them (#85, #86).
+                self._diag.append("  skipped: read by the blackshark_mtk provider (MediaTek report 2)")
                 continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")

@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -177,6 +178,155 @@ class PollTests(unittest.TestCase):
         first = self.provider.poll()[0].level
         self._tx("tx1", "B3MTP6J014889X", 6)
         self.assertGreater(first, self.provider.poll()[0].level)
+
+
+HID_PATH = r"\\?\hid#vid_2ca3&pid_4011&mi_03&col01#8&1a2b3c4d&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}"
+
+
+class ReceiverPresentTests(unittest.TestCase):
+    """Presence comes from the HID interface list: no libusb, and no device is opened."""
+
+    def paths(self, *paths):
+        return mock.patch.object(dji.hidlist, "interface_paths",
+                                 return_value=None if paths == (None,) else frozenset(paths))
+
+    def test_the_receiver_is_found_by_its_hid_path(self):
+        with self.paths(HID_PATH, r"\\?\hid#vid_046d&pid_c547&mi_02#x#{4d1e55b2}"):
+            self.assertTrue(dji.receiver_present())
+
+    def test_nothing_plugged_in(self):
+        with self.paths():
+            self.assertFalse(dji.receiver_present())
+
+    def test_another_dji_product_or_another_vendor_is_not_the_receiver(self):
+        with self.paths(HID_PATH.replace("pid_4011", "pid_1020")):
+            self.assertFalse(dji.receiver_present())
+        with self.paths(HID_PATH.replace("vid_2ca3", "vid_046d")):
+            self.assertFalse(dji.receiver_present())
+
+    def test_without_the_windows_list_hidapi_is_asked(self):
+        with self.paths(None), mock.patch.object(
+                dji.hidlist, "enumerate", return_value=[{"product_id": dji.PID}]) as listed:
+            self.assertTrue(dji.receiver_present())
+        listed.assert_called_once_with(dji.VID)
+        with self.paths(None), mock.patch.object(
+                dji.hidlist, "enumerate", return_value=[{"product_id": 0x1020}]):
+            self.assertFalse(dji.receiver_present())
+
+    def test_a_failing_listing_means_not_present(self):
+        with mock.patch.object(dji.hidlist, "interface_paths", side_effect=OSError("boom")):
+            self.assertFalse(dji.receiver_present())
+
+
+class LazyStartTests(unittest.TestCase):
+    """The USB reader (and with it libusb) starts with the first poll that finds the
+    receiver, not with the provider: most PCs never have one (#397)."""
+
+    def setUp(self):
+        start = mock.patch.object(dji._Receiver, "start", autospec=True)
+        self.start = start.start()               # never a real thread, never real USB
+        self.addCleanup(start.stop)
+        wait = mock.patch.object(dji, "FIRST_PUSH_WAIT_SECONDS", 0)
+        wait.start()
+        self.addCleanup(wait.stop)
+
+    def present(self, value):
+        return mock.patch.object(dji, "receiver_present", return_value=value)
+
+    def test_creating_the_provider_starts_nothing(self):
+        dji.DjiProvider()
+        self.start.assert_not_called()
+
+    def test_no_receiver_no_reader(self):
+        provider = dji.DjiProvider()
+        with self.present(False):
+            for _ in range(3):
+                self.assertEqual([], provider.poll())
+        self.start.assert_not_called()
+        self.assertIn("not plugged in", provider.diagnostics()[0])
+
+    def test_the_first_poll_that_sees_the_receiver_starts_the_reader_once(self):
+        provider = dji.DjiProvider()
+        with self.present(False):
+            provider.poll()
+        with self.present(True) as seen:
+            provider.poll()
+            provider.poll()
+        self.start.assert_called_once()
+        self.assertEqual(1, seen.call_count)      # not asked again once the reader runs
+        with self.present(False):                 # unplugged later: the reader retries itself
+            provider.poll()
+        self.start.assert_called_once()
+
+    def test_a_reader_that_could_not_start_is_tried_again(self):
+        provider = dji.DjiProvider()
+        self.start.side_effect = [RuntimeError("cannot start thread"), None]
+        with self.present(True):
+            with self.assertRaisesRegex(RuntimeError, "cannot start thread"):
+                provider.poll()
+            self.assertFalse(provider._started)
+            provider.poll()
+        self.assertTrue(provider._started)
+        self.assertEqual(2, self.start.call_count)
+
+    def test_readings_flow_once_started(self):
+        provider = dji.DjiProvider()
+        provider._receiver._absorb(bytes.fromhex(IDENTITY))
+        provider._receiver._absorb(bytes.fromhex(STATUS))
+        with self.present(True):
+            keys = {s.key for s in provider.poll()}
+        self.assertEqual({"dji:B3MTP6J014889X", "dji:B3MTP6J014R7XH"}, keys)
+        self.assertIn("[DJI]", provider.diagnostics()[0])
+
+    def test_start_false_never_starts_and_never_asks(self):
+        provider = dji.DjiProvider(start=False)
+        with self.present(True) as seen:
+            provider.poll()
+        self.start.assert_not_called()
+        seen.assert_not_called()
+
+    def test_without_pyusb_nothing_is_started(self):
+        provider = dji.DjiProvider()
+        with mock.patch.object(dji, "usb", None), self.present(True):
+            self.assertEqual([], provider.poll())
+        self.start.assert_not_called()
+
+
+class SettledTests(unittest.TestCase):
+    """The poll that starts the reader waits for `settled`, so it must be set both when
+    the first status arrives and when the receiver cannot be opened."""
+
+    def test_the_first_status_push_settles(self):
+        rx = dji._Receiver()
+        rx._absorb(bytes.fromhex(IDENTITY))
+        self.assertFalse(rx.settled.is_set())
+        rx._absorb(bytes.fromhex(STATUS))
+        self.assertTrue(rx.settled.is_set())
+
+    def test_status_state_is_visible_before_signalling_the_waiting_poll(self):
+        rx = dji._Receiver()
+        observed = []
+
+        def settled():
+            # snapshot takes the receiver lock, just as the waiting poll does.
+            state, _, _, _, _, _, bitmask = rx.snapshot()
+            observed.append((set(state), bitmask))
+
+        rx.settled.set = settled
+        rx._absorb(bytes.fromhex(STATUS))
+        self.assertEqual([({"tx1", "tx2"}, 0x03)], observed)
+
+    def test_a_failed_open_settles(self):
+        rx = dji._Receiver()
+
+        def fail():
+            raise RuntimeError("cannot open interface 6")
+
+        rx._session = fail
+        rx._stop.wait = lambda seconds: rx._stop.set()     # one pass through the loop
+        rx.run()
+        self.assertTrue(rx.settled.is_set())
+        self.assertIn("cannot open interface 6", rx.error)
 
 
 if __name__ == "__main__":

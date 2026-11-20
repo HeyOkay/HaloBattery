@@ -28,6 +28,7 @@ public sealed partial class MainWindow
         public ImageSource? Image { get; set; }
         public Task<BitmapImage>? Decode { get; set; }
     }
+#if HALO_BATTERY_VERIFICATION
     private sealed class CatalogMetrics
     {
         public long Lookups, LookupComparisons, ContainsComparisons;
@@ -49,14 +50,19 @@ public sealed partial class MainWindow
             else ActiveDecodes[id]--;
         }
     }
+#endif
     private static CatalogTile? FindCatalogTile(IconCatalogView view, string id)
     {
+#if HALO_BATTERY_VERIFICATION
         if (view.Metrics is { } metrics) { metrics.Lookups++; metrics.LookupComparisons++; }
+#endif
         return view.ById.GetValueOrDefault(id);
     }
     private static bool ContainsCatalogTile(IconCatalogView view, CatalogTile tile)
     {
+#if HALO_BATTERY_VERIFICATION
         if (view.Metrics is { } metrics) metrics.ContainsComparisons++;
+#endif
         return view.ById.TryGetValue(tile.Id, out var current) && ReferenceEquals(current, tile);
     }
     private const int CatalogPageSize = 50;
@@ -76,21 +82,29 @@ public sealed partial class MainWindow
     }
     private static async Task<BitmapImage> DecodeCatalogThumbnail(IconCatalogView view, CatalogTile tile)
     {
+#if HALO_BATTERY_VERIFICATION
         var metrics = view.Metrics;
         metrics?.StartDecode(tile.Id);
         try { return await CatalogBitmap(tile.Preview); }
         finally { metrics?.FinishDecode(tile.Id); }
+#else
+        return await CatalogBitmap(tile.Preview);
+#endif
     }
     private async Task<ImageSource> GetCatalogThumbnail(IconCatalogView view, CatalogTile tile)
     {
         if (tile.Image is { } cached)
         {
+#if HALO_BATTERY_VERIFICATION
             if (view.Metrics is { } metrics) metrics.CacheHits++;
+#endif
             CacheCatalogThumbnail(view, tile, cached);
             return cached;
         }
         if (tile.Decode is null) tile.Decode = DecodeCatalogThumbnail(view, tile);
+#if HALO_BATTERY_VERIFICATION
         else if (view.Metrics is { } metrics) metrics.SharedDecodeWaiters++;
+#endif
         var pending = tile.Decode;
         try
         {
@@ -126,7 +140,9 @@ public sealed partial class MainWindow
         public readonly Dictionary<string, CatalogTile> ById = new();
         public readonly LinkedList<string> ThumbnailOrder = new();
         public readonly Dictionary<string, LinkedListNode<string>> ThumbnailNodes = new();
+#if HALO_BATTERY_VERIFICATION
         public CatalogMetrics? Metrics;
+#endif
         public readonly Dictionary<long, CatalogRequest> Requests = new();
         public readonly Dictionary<long, long> PrefetchAnchors = new();
         public CancellationTokenSource? Debounce;
@@ -169,6 +185,13 @@ public sealed partial class MainWindow
         Section(parent, T("settings.iconify_title"));
         var browse = Button(T("settings.iconify_browse"), true);
         var catalog = Expander(T("settings.iconify_title"), T("settings.iconify_hint"), browse, "palette");
+        void RefreshSavedIconHint()
+        {
+            if (catalog.DescriptionElement is TextBlock hint)
+                hint.Text = T("settings.iconify_hint") + (SelectedDevice?.CustomIconUnavailable == true
+                    ? "\n\n" + T("settings.iconify_saved_unavailable") : "");
+        }
+        RefreshSavedIconHint();
         parent.Children.Add(catalog);
         var body = new StackPanel { Spacing = 12, Margin = new(24, 16, 24, 20) };
         catalog.AddBody(body);
@@ -179,6 +202,7 @@ public sealed partial class MainWindow
             Height = 32, MinHeight = 32, CornerRadius = new(16), Padding = new(14, 4, 14, 4),
             Background = Brush(dark ? "#303030" : "#ECECEC"), Foreground = TextBrush, BorderThickness = new(0)
         };
+        EnableControlSpotlight(search);
         AutomationProperties.SetName(search, T("settings.iconify_search"));
         var searchButton = Button(T("settings.iconify_search_button"), true);
         var searchRow = new Grid { ColumnSpacing = 8 };
@@ -282,10 +306,14 @@ public sealed partial class MainWindow
         };
         async void UpdateCatalogContainer(ListViewBase sender, ContainerContentChangingEventArgs args)
         {
+#if HALO_BATTERY_VERIFICATION
             if (view.Metrics is { } metrics) metrics.ContainerUpdates++;
+#endif
             if (args.InRecycleQueue)
             {
+#if HALO_BATTERY_VERIFICATION
                 if (view.Metrics is { } recycledMetrics) recycledMetrics.Recycles++;
+#endif
                 // Keep recently decoded thumbnails in the bounded cache.
                 if (args.ItemContainer.ContentTemplateRoot is Grid recycledPanel)
                 {
@@ -324,8 +352,11 @@ public sealed partial class MainWindow
         pageBindings.Add(() =>
         {
             if (!CatalogActive(view)) return;
+            // Explain an unavailable saved selection outside the collapsed
+            // gallery; do not silently clear the user's configured choice.
             view.Current.Text = SelectedDevice?.CustomIconName is { Length: > 0 } id
                 ? T("settings.iconify_current") + ": " + id : T("settings.iconify_default");
+            RefreshSavedIconHint();
             view.PreviewBackground.Background = Brush(State.IconLightTaskbar ? "#F3F3F3" : "#202020");
             RefreshCatalogScale(view);
         });
@@ -428,7 +459,7 @@ public sealed partial class MainWindow
             scroll.ChangeView(null, 0, null, true);
         view.Status.Text = T(page.Offline ? "settings.iconify_offline" : page.Cached ? "settings.iconify_cached" :
             page.Items.Count == 0 ? "settings.iconify_empty" : "settings.iconify_results") +
-            (page.Items.Count > 0 ? " · " + (page.Start + 1) + "–" + (page.Start + page.Items.Count) +
+            (page.Items.Count > 0 ? " · " + (page.Start + 1) + "-" + (page.Start + page.Items.Count) +
                 (view.Total is { } count ? " / " + count : "") : "");
         RenderCatalogPager(view);
     }
@@ -571,9 +602,7 @@ public sealed partial class MainWindow
             CatalogString(message, "action") == "licenses" && iconCatalogLicenseRequests.Remove(requestId))
         {
             if (CatalogString(message, "errorCode").Length > 0) { ShowError(T("settings.iconify_error")); return; }
-            var notices = message.TryGetProperty("attributions", out var attributions) && attributions.ValueKind == JsonValueKind.Array
-                ? string.Join("\n\n", attributions.EnumerateArray().Select(CatalogNotices)) : "";
-            await ShowCatalogNotices(notices);
+            await ShowCatalogNotices(AllNotices(message));
             return;
         }
         var view = iconCatalog;
@@ -632,9 +661,7 @@ public sealed partial class MainWindow
             }
             else if (request.Action == "licenses")
             {
-                var notices = message.TryGetProperty("attributions", out var entries) && entries.ValueKind == JsonValueKind.Array
-                    ? string.Join("\n\n", entries.EnumerateArray().Select(CatalogNotices)) : "";
-                await ShowCatalogNotices(notices);
+                await ShowCatalogNotices(AllNotices(message));
             }
             else if (request.Action is "apply" or "restore")
             {
@@ -659,6 +686,13 @@ public sealed partial class MainWindow
         else ShowError(T("settings.iconify_error"));
     }
 
+    // Authors and licenses: the interface fonts and Lucide glyphs, then every downloaded icon.
+    private string AllNotices(JsonElement message)
+    {
+        var icons = message.TryGetProperty("attributions", out var entries) && entries.ValueKind == JsonValueKind.Array
+            ? string.Join("\n\n", entries.EnumerateArray().Select(CatalogNotices)) : "";
+        return T("settings.fonts") + "\nLucide · ISC / MIT\n\n" + (icons.Length > 0 ? icons : T("settings.iconify_no_licenses"));
+    }
     private static string CatalogNotices(JsonElement detail) =>
         string.Join("\n", new[] { "id", "name", "collection", "author", "license", "licenseUrl", "sourceUrl", "licenseText", "notices" }
             .Select(key => CatalogString(detail, key)).Where(value => value.Length > 0));

@@ -140,7 +140,7 @@ public sealed partial class MainWindow
         var lastRequest = SearchRequest();
         ApplyIconCatalogResponse(Response(lastRequest, 950, 49));
         Check("last page replaces the list and disables next", view.Items.Count == 49 && view.Start == 950 && !view.HasMore &&
-            !view.Pager.Children.OfType<Button>().Last().IsEnabled && view.Status.Text.Contains("951–999 / 999"));
+            !view.Pager.Children.OfType<Button>().Last().IsEnabled && view.Status.Text.Contains("951-999 / 999"));
         NavigateCatalogPage(view, 100, force: true);
         var staleRequest = SearchRequest();
         NavigateCatalogPage(view, 200, force: true);

@@ -14,20 +14,25 @@ public sealed partial class MainWindow
     private uint? spotlightDragPointer;
     private EventHandler<object>? spotlightFrame;
     private EventHandler<object>? scrollDragFrame;
+    private EventHandler<object>? pointerFrameClock;
+    private long pointerFrameUntil;
+    private int pointerFramesRemaining;
     private ScrollViewer? spotlightScroll;
     private StackPanel? spotlightGeometryContent;
     private bool spotlightGeometryDirty = true;
     private readonly List<(CardView card, Rect bounds)> spotlightBounds = new();
     private HashSet<CardView> spotlightLit = new(), spotlightNext = new();
+#if HALO_BATTERY_VERIFICATION
     private SpotlightMetrics? spotlightMetrics;
     private sealed class SpotlightMetrics
     {
-        internal long Flushes, GeometryBuilds, BrushWrites, DragFrameTicks;
+        internal long Flushes, GeometryBuilds, ControlGeometryBuilds, BrushWrites, DragFrameTicks, ControlBrushWrites, PointerClockTicks;
     }
+#endif
 
     private void InitializeCardSpotlights()
     {
-        root.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler((_, args) =>
+        PointerEventHandler observePointer = (_, args) =>
         {
             // A captured native thumb already owns this pointer. Avoid even
             // coordinate conversion while it scrolls, including outside the bar.
@@ -36,7 +41,9 @@ public sealed partial class MainWindow
             if (point.Properties.IsLeftButtonPressed && IsSpotlightScrollBarSource(args.OriginalSource))
                 BeginSpotlightScrollDrag(args.Pointer.PointerId, IsScrollBarThumbSource(args.OriginalSource));
             else QueueCardSpotlight(point.Position);
-        }), true);
+        };
+        root.AddHandler(UIElement.PointerMovedEvent, observePointer, true);
+        root.AddHandler(UIElement.PointerEnteredEvent, observePointer, true);
         root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, args) =>
         {
             if (IsSpotlightScrollBarSource(args.OriginalSource) && args.GetCurrentPoint(root).Properties.IsLeftButtonPressed)
@@ -53,10 +60,11 @@ public sealed partial class MainWindow
                 ResetCardSpotlights(preserveScrollDrag: true);
         };
         root.Unloaded += (_, _) => ResetCardSpotlights();
-        Activated += (_, args) => { if (args.WindowActivationState == WindowActivationState.Deactivated) ResetCardSpotlights(); };
+        Activated += (_, args) => { if (args.WindowActivationState == WindowActivationState.Deactivated) { ClosePopupSpotlights(); ResetCardSpotlights(); } };
         Closed += (_, _) =>
         {
             ResetCardSpotlights();
+            ClearControlSpotlights();
             ResetContentWheelObservation();
             if (spotlightScroll is not null) spotlightScroll.ViewChanged -= SpotlightViewChanged;
             spotlightScroll = null;
@@ -92,9 +100,44 @@ public sealed partial class MainWindow
         {
             // Rendering subscribers keep XAML's frame clock active. Scope this
             // to a captured native thumb; do not redraw cards or set scroll offsets.
-            scrollDragFrame = (_, _) => { if (spotlightMetrics is { } metrics) metrics.DragFrameTicks++; };
+            scrollDragFrame = (_, _) => {
+#if HALO_BATTERY_VERIFICATION
+                if (spotlightMetrics is { } metrics) metrics.DragFrameTicks++;
+#endif
+            };
             CompositionTarget.Rendering += scrollDragFrame;
         }
+    }
+
+    // Keep XAML's frame clock running through a moving pointer gesture,
+    // as for native thumb dragging. The existing coalescer still does all
+    // effect work once per frame; this callback performs no layout or drawing.
+    private void KeepPointerFrameClock()
+    {
+        if (closing || IsSettingsWindowHidden || spotlightDragPointer is not null) return;
+        pointerFrameUntil = Environment.TickCount64 + 120;
+        pointerFramesRemaining = 2;
+        if (pointerFrameClock is not null) return;
+        pointerFrameClock = (_, _) =>
+        {
+#if HALO_BATTERY_VERIFICATION
+            if (spotlightMetrics is { } metrics) metrics.PointerClockTicks++;
+#endif
+            if (closing || IsSettingsWindowHidden) { StopPointerFrameClock(); return; }
+            // A delayed first frame must not also be the final frame that
+            // flushes the brush update. Allow two completed callbacks first.
+            if (pointerFramesRemaining > 0) { pointerFramesRemaining--; return; }
+            if (Environment.TickCount64 >= pointerFrameUntil) StopPointerFrameClock();
+        };
+        CompositionTarget.Rendering += pointerFrameClock;
+    }
+
+    private void StopPointerFrameClock()
+    {
+        if (pointerFrameClock is not null) CompositionTarget.Rendering -= pointerFrameClock;
+        pointerFrameClock = null;
+        pointerFrameUntil = 0;
+        pointerFramesRemaining = 0;
     }
 
     private void StopScrollDragFrame()
@@ -123,20 +166,28 @@ public sealed partial class MainWindow
 
     internal void InvalidateCardSpotlightGeometry()
     {
+        controlSpotlightGeometryDirty = true;
+        InvalidateCardSpotlightBounds();
+    }
+
+    internal void InvalidateCardSpotlightBounds()
+    {
         spotlightGeometryDirty = true;
+        MarkPopupSpotlightGeometryDirty();
         RequestSpotlightFrame();
     }
 
     private void QueueCardSpotlight(Point point)
     {
-        if (spotlightDragPointer is not null) return;
+        if (spotlightDragPointer is not null || HasOpenPopupSpotlights) return;
         spotlightPointer = point;
+        KeepPointerFrameClock();
         RequestSpotlightFrame();
     }
 
     private void RequestSpotlightFrame()
     {
-        if (spotlightFrame is not null || spotlightPointer is null || spotlightDragPointer is not null || closing || IsSettingsWindowHidden) return;
+        if (spotlightFrame is not null || (spotlightPointer is null && !HasPopupSpotlightPointer) || spotlightDragPointer is not null || closing || IsSettingsWindowHidden) return;
         spotlightFrame = (_, _) => FlushCardSpotlights();
         CompositionTarget.Rendering += spotlightFrame;
     }
@@ -150,11 +201,16 @@ public sealed partial class MainWindow
 
     private void SetCardSpotlight(CardView card, Point? point)
     {
+#if HALO_BATTERY_VERIFICATION
         if (card.SetSpotlight(point) && spotlightMetrics is { } metrics) metrics.BrushWrites++;
+#else
+        card.SetSpotlight(point);
+#endif
     }
 
     private void ResetCardSpotlights(bool preserveScrollDrag = false)
     {
+        StopPointerFrameClock();
         StopSpotlightFrame();
         spotlightPointer = null;
         if (!preserveScrollDrag)
@@ -166,6 +222,8 @@ public sealed partial class MainWindow
         spotlightLit.Clear();
         spotlightNext.Clear();
         spotlightBounds.Clear();
+        ResetControlSpotlights();
+        ResetPopupSpotlights();
         spotlightGeometryContent = null;
         spotlightGeometryDirty = true;
     }
@@ -180,11 +238,16 @@ public sealed partial class MainWindow
     private void FlushCardSpotlights()
     {
         StopSpotlightFrame();
-        if (spotlightPointer is not { } pointer || spotlightDragPointer is not null || closing || IsSettingsWindowHidden || pageHosts.Count == 0) return;
+        if (spotlightDragPointer is not null || closing || IsSettingsWindowHidden) return;
+        FlushPopupSpotlights();
+        if (HasOpenPopupSpotlights || spotlightPointer is not { } pointer || pageHosts.Count == 0) return;
         var (content, scroll) = pageHosts[0];
         if (!content.IsLoaded || !scroll.IsLoaded) return;
+#if HALO_BATTERY_VERIFICATION
         if (spotlightMetrics is { } metrics) metrics.Flushes++;
-        if (spotlightGeometryDirty || !ReferenceEquals(content, spotlightGeometryContent))
+#endif
+        var contentChanged = !ReferenceEquals(content, spotlightGeometryContent);
+        if (spotlightGeometryDirty || contentChanged)
         {
             spotlightBounds.Clear();
             foreach (var card in cards)
@@ -192,11 +255,22 @@ public sealed partial class MainWindow
                     spotlightBounds.Add((card, card.TransformToVisual(content).TransformBounds(new Rect(0, 0, card.ActualWidth, card.ActualHeight))));
             spotlightGeometryContent = content;
             spotlightGeometryDirty = false;
+#if HALO_BATTERY_VERIFICATION
             if (spotlightMetrics is { } builds) builds.GeometryBuilds++;
+#endif
+        }
+        if (controlSpotlightGeometryDirty || contentChanged)
+        {
+            RebuildControlSpotlightGeometry(content);
+            controlSpotlightGeometryDirty = false;
+#if HALO_BATTERY_VERIFICATION
+            if (spotlightMetrics is { } controls) controls.ControlGeometryBuilds++;
+#endif
         }
         // Two transforms per frame, rather than one native coordinate lookup
         // per card per pointer packet. Cached card positions survive scrolling.
-        var local = root.TransformToVisual(content).TransformPoint(pointer);
+        var rootToContent = root.TransformToVisual(content);
+        var local = rootToContent.TransformPoint(pointer);
         var viewport = scroll.TransformToVisual(content).TransformBounds(new Rect(0, 0, scroll.ActualWidth, scroll.ActualHeight));
         foreach (var (card, bounds) in spotlightBounds)
         {
@@ -208,5 +282,6 @@ public sealed partial class MainWindow
             if (!spotlightNext.Contains(card)) SetCardSpotlight(card, null);
         (spotlightLit, spotlightNext) = (spotlightNext, spotlightLit);
         spotlightNext.Clear();
+        FlushControlSpotlights(local, pointer, viewport, rootToContent);
     }
 }

@@ -1,5 +1,5 @@
 """Edge cases for halo/updates.py: version comparison, a malformed GitHub reply, the
-update cache. No network: urlopen is replaced.
+update cache. No network: the HTTPS opener is replaced.
 
 Run from the repository root:
 
@@ -60,7 +60,7 @@ class ParseReleaseTests(unittest.TestCase):
         data = {"tag_name": "v1.17.0", "html_url": "https://example.invalid/r", "body": "Notes",
                 "published_at": "2026-10-20T10:00:00Z",
                 "assets": [{"name": "HaloBattery-1.17.0.zip", "browser_download_url": "https://x/z.zip",
-                            "size": 123, "digest": "sha256:ABCDEF"}]}
+                            "size": 123, "digest": "sha256:" + "ABCDEF" * 10 + "ABCD"}]}
         data.update(extra)
         return data
 
@@ -68,7 +68,7 @@ class ParseReleaseTests(unittest.TestCase):
         rel = updates.parse_release(self.good())
         self.assertEqual((rel.version, rel.url, rel.notes, rel.published),
                          ("1.17.0", "https://example.invalid/r", "Notes", "2026-10-20"))
-        self.assertEqual((rel.zip_url, rel.zip_size, rel.sha256), ("https://x/z.zip", 123, "abcdef"))
+        self.assertEqual((rel.zip_url, rel.zip_size, rel.sha256), ("https://x/z.zip", 123, "abcdef" * 10 + "abcd"))
 
     def test_tag_forms(self):
         for tag, version in (("v1.17.0", "1.17.0"), ("1.17.0", "1.17.0"), ("v1.17", "1.17"),
@@ -96,11 +96,13 @@ class ParseReleaseTests(unittest.TestCase):
             with self.subTest(size=size):
                 asset = {"name": "halobattery-1.17.0.ZIP", "browser_download_url": "u", "size": size}
                 self.assertEqual(updates.parse_release(self.good(assets=[asset])).zip_size, expected)
-        for digest, expected in (("sha256:", ""), ("md5:abc", ""), (None, ""), (5, ""),
-                                 ("SHA256:  AbC ", "abc")):
+        asset = {"name": "HaloBattery-1.17.0.zip", "browser_download_url": "u", "digest": None}
+        self.assertEqual(updates.parse_release(self.good(assets=[asset])).sha256, "")
+        for digest in ("sha256:", "md5:abc", 5, "SHA256:  AbC ", "sha256:" + "g" * 64):
             with self.subTest(digest=digest):
-                asset = {"name": "HaloBattery-1.17.0.zip", "browser_download_url": "u", "digest": digest}
-                self.assertEqual(updates.parse_release(self.good(assets=[asset])).sha256, expected)
+                asset["digest"] = digest
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    updates.parse_release(self.good(assets=[asset]))
 
     def test_other_assets_and_the_wrong_version_zip_are_not_used(self):
         assets = [{"name": "HaloBattery-1.16.0.zip", "browser_download_url": "old"},
@@ -138,7 +140,7 @@ class FakeResponse(io.BytesIO):
 
 class FetchTests(unittest.TestCase):
     def fetch(self, body):
-        with mock.patch.object(updates.urllib.request, "urlopen",
+        with mock.patch.object(updates, "_open_https",
                                return_value=FakeResponse(body)) as opener:
             return updates.fetch_latest("1.16.0"), opener
 
@@ -159,7 +161,7 @@ class FetchTests(unittest.TestCase):
                 self.fetch(body)
 
     def test_network_errors_propagate(self):
-        with mock.patch.object(updates.urllib.request, "urlopen", side_effect=OSError("offline")):
+        with mock.patch.object(updates, "_open_https", side_effect=OSError("offline")):
             with self.assertRaises(OSError):
                 updates.fetch_latest("1.16.0")
 

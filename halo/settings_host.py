@@ -12,6 +12,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import uuid
 
 from . import i18n
@@ -29,6 +30,23 @@ def executable_path():
         return Path(sys._MEIPASS) / "settings-ui" / "HaloBattery.Settings.exe"
     override = os.environ.get("HALOBATTERY_SETTINGS_EXE")
     return Path(override) if override else Path(__file__).resolve().parent.parent / ".build" / "settings-ui" / "HaloBattery.Settings.exe"
+
+
+def allow_companion_foreground(process_id):
+    """Transfer this user activation to our companion, never to all processes."""
+    if sys.platform != "win32" or type(process_id) is not int or not 0 < process_id < 0xFFFFFFFF:
+        return False
+    try:
+        import ctypes
+        allow = ctypes.WinDLL("user32", use_last_error=True).AllowSetForegroundWindow
+        allow.argtypes = [ctypes.c_ulong]
+        allow.restype = ctypes.c_int
+        # Called on the tray/menu caller before scheduling asynchronous refresh.
+        # https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-allowsetforegroundwindow
+        return bool(allow(process_id))
+    except (OSError, AttributeError):
+        log.debug("settings: foreground activation grant unavailable", exc_info=True)
+        return False
 
 
 def encode_message(message):
@@ -54,6 +72,7 @@ class _Session:
     outgoing: queue.Queue = field(default_factory=lambda: queue.Queue(maxsize=32))
     stop: threading.Event = field(default_factory=threading.Event)
     ready: threading.Event = field(default_factory=threading.Event)
+    first_visible: threading.Event = field(default_factory=threading.Event)
     process: object = None
     cleanup_lock: threading.Lock = field(default_factory=threading.Lock)
     revision: int = 0
@@ -64,19 +83,31 @@ class _Session:
     catalog_generation: int = 0
     visible: bool = False
     restore_view: bool = False
+    closing: bool = False
+    show_generation: int = 0
+    enqueued_show_generation: int = 0
+    startup_visibility_seen: bool = False
+    pending_show: tuple[int, str | None, str | None] | None = None
 
 
 class SettingsHost:
-    """Retain one companion until shutdown; closing its window only hides it."""
-    def __init__(self, controller, *, popen=None, poll_interval=.75, startup_timeout=15):
+    """Launch one on-demand companion and drain its commands before reopening."""
+    def __init__(self, controller, *, popen=None, poll_interval=.75, startup_timeout=15,
+                 on_failure=None, on_ready=None):
         self.controller = controller
         self._popen = popen or subprocess.Popen
         self._poll_interval = poll_interval
         self._startup_timeout = startup_timeout
+        self._on_failure = on_failure
+        self._on_ready = on_ready
         self._lock = threading.Lock()
         self._model_lock = threading.RLock()
         self._session = None
+        self._pending_open = None
         self._closed = False
+        self._generation = 0
+        self._notifications = []
+        self._notifications_running = False
 
     def open(self, device_key=None, *, page=None):
         if (page is not None and (not isinstance(page, str) or page not in PAGES) or
@@ -87,20 +118,38 @@ class SettingsHost:
             if self._closed:
                 return False
             session = self._session
+            if session is not None and session.closing:
+                # Leave the draining session current until EOF: its final edits
+                # still belong to it. A later open supersedes this request.
+                self._pending_open = (page, device_key)
+                return True
             if session is None or session.stop.is_set():
                 session = _Session(page or "general", device_key)
+                session.restore_view = preserve_view
                 self._session = session
+                self._generation += 1
+                self._request_show(session)
                 self._thread(self._launch, session, "settings-launch")
             else:
                 session.restore_view = preserve_view
                 if not preserve_view:
                     session.page, session.device_key = page or "general", device_key
+                self._request_show(session)
             # The handshake publishes the latest target before the first show.
             # Reopens refresh asynchronously, without waiting for the poll timer
             # or touching the child process on the tray/menu caller.
             if session.ready.is_set():
+                allow_companion_foreground(getattr(session.process, "pid", None))
                 self._thread(self._show, session, "settings-show")
         return True
+
+    @staticmethod
+    def _request_show(session):
+        # Caller holds the host lock. Preserve intent before a worker can run or
+        # native closing can arrive; an older visibility ack cannot consume it.
+        session.show_generation += 1
+        page, device_key = (None, None) if session.restore_view else (session.page, session.device_key)
+        session.pending_show = (session.show_generation, page, device_key)
 
     def _show(self, session):
         with self._model_lock:
@@ -118,12 +167,23 @@ class SettingsHost:
 
     def _show_window(self, session):
         with self._lock:
-            message = dict(type="show", page=session.page, deviceKey=session.device_key)
-            if session.restore_view:
+            if self._session is not session or session.stop.is_set() or session.closing:
+                return
+            if session.show_generation == 0:
+                self._request_show(session)
+            request = session.pending_show
+            if request is None or request[0] == session.enqueued_show_generation:
+                return
+            generation, page, device_key = request
+            message = dict(type="show", page=page or "general", deviceKey=device_key, requestId=generation)
+            if page is None:
                 # Native navigation may have changed since the last tray request.
-                # A generic reopen restores that retained page and selection.
+                # Restore its live or persisted page and device selection.
                 message["restoreView"] = True
-        self._send(session, message)
+            if self._send(session, message):
+                session.enqueued_show_generation = generation
+            else:
+                session.pending_show = None
 
     def _launch_args(self):
         # The context is fixed at application startup, including portable mode.
@@ -154,7 +214,7 @@ class SettingsHost:
         except queue.Full:
             log.warning("settings: companion writer queue is full")
             # Never block a caller behind a stalled native UI.
-            self._thread(self._cleanup, session, "settings-backpressure")
+            self._thread(self._transport_failed, session, "settings-backpressure")
             return False
 
     def _launch(self, session):
@@ -166,12 +226,13 @@ class SettingsHost:
             if not self._current(session):
                 self._cleanup(session)
                 return
+            allow_companion_foreground(getattr(process, "pid", None))
             for target, name in ((self._write, "settings-writer"), (self._read, "settings-commands"),
                                  (self._stderr, "settings-log"), (self._poll, "settings-state")):
                 self._thread(target, session, name)
-        except (OSError, ValueError):
+        except Exception:
             log.exception("settings: unable to start WinUI companion at %s", executable_path())
-            self._cleanup(session)
+            self._cleanup(session, failure="launchFailed")
 
     def _write(self, session):
         try:
@@ -183,9 +244,13 @@ class SettingsHost:
                 session.process.stdin.write(wire)
                 session.process.stdin.flush()
         except (OSError, ValueError):
-            self._cleanup(session)
+            self._transport_failed(session)
+
+    def _transport_failed(self, session):
+        self._cleanup(session, failure="transportError")
 
     def _read(self, session):
+        failure = "unexpectedExit"
         try:
             while self._current(session):
                 line = session.process.stdout.readline(MAX_MESSAGE + 1)
@@ -194,10 +259,11 @@ class SettingsHost:
                 if not line.endswith("\n"):
                     raise ValueError("unterminated or oversized settings message")
                 self._handle(session, decode_message(line))
-        except (OSError, UnicodeError, ValueError):
+        except Exception:
+            failure = "protocolError"
             log.warning("settings: companion protocol closed", exc_info=True)
         finally:
-            self._cleanup(session)
+            self._cleanup(session, failure=failure)
 
     def _stderr(self, session):
         try:
@@ -210,12 +276,22 @@ class SettingsHost:
             pass
 
     def _poll(self, session):
+        deadline = time.monotonic() + self._startup_timeout
         if not session.ready.wait(self._startup_timeout):
             log.warning("settings: companion handshake timed out")
-            self._cleanup(session)
+            self._cleanup(session, failure="startupTimeout")
+            return
+        # A hello only proves that the bridge started. Native XAML/window
+        # creation can still fail or hang before displaying its startup splash.
+        if not session.first_visible.wait(max(0, deadline - time.monotonic())):
+            log.warning("settings: companion visibility timed out")
+            self._cleanup(session, failure="visibilityTimeout")
             return
         while not session.stop.wait(self._poll_interval):
             if not self._current(session):
+                return
+            if session.process is not None and session.process.poll() is not None:
+                self._cleanup(session, failure="unexpectedExit")
                 return
             try:
                 with self._model_lock:
@@ -239,10 +315,13 @@ class SettingsHost:
                 level = None
             devices.append(dict(key=item["key"], name=item["name"], kind=item.get("kind", "bluetooth"), description=item.get("state", ""),
                 customIconId=item.get("custom_icon_id", ""), customIconName=item.get("custom_icon_name", ""),
+                customIconUnavailable=bool(item.get("custom_icon_id")) and
+                    item["custom_icon_id"] in state.get("custom_icon_errors", []),
                 pictogram=item.get("pictogram", ""), controller=bool(item.get("controller")),
                 brand=item.get("brand", "default"), brandColor=bool(item.get("brand_color")),
                 lowOverride=item.get("low_override"), hidden=bool(item.get("hidden")), level=level,
-                charging=status.charging if type(status.charging) is bool else None, online=bool(status.online),
+                charging=status.charging if type(status.charging) is bool and
+                    getattr(status, "charging_known", True) is not False else None, online=bool(status.online),
                 paused=bool(getattr(status, "polling_paused", False))))
         with self._lock:
             keys = [item["key"] for item in devices]
@@ -270,7 +349,7 @@ class SettingsHost:
             options=dict(languages=options((key, value.name) for key, value in i18n.LANGUAGES.items()),
                 intervals=options(intervals), thresholds=options(thresholds),
                 pictograms=options((value, tr("icon." + value) if value else tr("choice.auto")) for value in
-                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "headset", "gamepad", "bluetooth")),
+                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "phone", "headset", "gamepad", "bluetooth")),
                 brands=options((value, tr("controller." + value)) for value in ("default", "xbox", "playstation", "nintendo")), iconThemes=options(themes)),
             update=dict(version=update.get("version", ""), progress=progress, installOk=bool(state.get("install_ok")),
                         status=state.get("update_status", ""), message=state.get("update_message", "")))
@@ -292,7 +371,70 @@ class SettingsHost:
         if changed or result is not None:
             self._send(session, dict(state, revision=session.revision))
 
+    def _visibility(self, session, message):
+        if not session.ready.is_set():
+            raise ValueError("settings handshake required")
+        if (set(message) not in ({"type", "visible"}, {"type", "visible", "requestId"}) or
+                type(message["visible"]) is not bool or
+                "requestId" in message and (type(message["requestId"]) is not int or message["requestId"] < 1)):
+            raise ValueError("invalid settings visibility")
+        with self._lock:
+            if self._session is not session or session.stop.is_set() or session.closing or self._closed:
+                return
+            session.visible = message["visible"]
+            if session.visible:
+                first_visible = not session.startup_visibility_seen
+                # The startup splash appears before the first show is read.
+                # Its unversioned ack consumes only the original launch intent.
+                startup_ack = first_visible and "requestId" not in message
+                session.startup_visibility_seen = True
+                session.first_visible.set()
+                if (session.pending_show is not None and
+                        (startup_ack and session.pending_show[0] == 1 or
+                         message.get("requestId") == session.pending_show[0] and
+                         message.get("requestId") == session.enqueued_show_generation)):
+                    session.pending_show = None
+                if first_visible:
+                    self._queue_notification(session, self._on_ready)
+        if not message["visible"]:
+            self._end_browse(session)
+
+    def _queue_notification(self, session, callback, *args, failure=False):
+        # Caller holds the host lock, ordering notifications with session changes.
+        # A single worker preserves ready/failure ordering without holding any
+        # transport lock while calling application code, even on reentrant retry.
+        if callback is None:
+            return
+        self._notifications.append((session, self._generation, callback, args, failure))
+        if not self._notifications_running:
+            self._notifications_running = True
+            self._thread(self._dispatch_notifications, None, "settings-lifecycle")
+
+    def _dispatch_notifications(self, _unused=None):
+        while True:
+            with self._lock:
+                if not self._notifications:
+                    self._notifications_running = False
+                    return
+                session, generation, callback, args, failure = self._notifications.pop(0)
+                if (self._closed or generation != self._generation or
+                        not failure and (self._session is not session or session.stop.is_set() or session.closing)):
+                    continue
+            self._notify(callback, *args)
+
+    @staticmethod
+    def _notify(callback, *args):
+        if callback is not None:
+            try:
+                callback(*args)
+            except Exception:
+                log.exception("settings: lifecycle callback failed")
+
     def _handle(self, session, message):
+        if message["type"] == "visibility":
+            if self._current(session):
+                self._visibility(session, message)
+            return
         if message["type"] == "catalog":
             from .iconify_host import IconCatalogJobs, validate_request
             if not self._current(session):
@@ -324,26 +466,39 @@ class SettingsHost:
                 return
             if not session.ready.is_set():
                 raise ValueError("settings handshake required")
-            if kind == "visibility":
-                if set(message) != {"type", "visible"} or type(message["visible"]) is not bool:
-                    raise ValueError("invalid settings visibility")
-                session.visible = message["visible"]
-                if not session.visible:
-                    self._end_browse(session)
+            if kind == "closing":
+                if set(message) != {"type"}:
+                    raise ValueError("invalid settings closing")
+                with self._lock:
+                    if self._session is not session or session.stop.is_set():
+                        return
+                    session.closing = True
+                    if self._pending_open is None and session.pending_show is not None:
+                        self._pending_open = session.pending_show[1:]
+                    session.pending_show = None
                 return
             request_id = message.get("id")
             if type(request_id) is not int or not 0 <= request_id <= 2147483647:
                 raise ValueError("invalid settings request id")
             if kind == "preview":
-                if set(message) != {"type", "id", "deviceKey"} or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str):
+                if (set(message) not in ({"type", "id", "deviceKey"}, {"type", "id", "deviceKey", "transition"})
+                        or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str)
+                        or "transition" in message and type(message["transition"]) is not bool):
                     raise ValueError("invalid preview request")
-                image = self.controller.preview(message["deviceKey"], size=80)
+                transition = None
+                if message.get("transition", False):
+                    image, transition = self.controller.preview_transition(message["deviceKey"], size=80)
+                else:
+                    image = self.controller.preview(message["deviceKey"], size=80)
                 if image.size != (80, 80):
                     raise ValueError("invalid settings preview size")
                 output = io.BytesIO()
                 image.save(output, format="PNG")
-                self._send(session, dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
-                    png=base64.b64encode(output.getvalue()).decode("ascii")))
+                response = dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
+                                png=base64.b64encode(output.getvalue()).decode("ascii"))
+                if transition is not None:
+                    response["transition"] = transition
+                self._send(session, response)
                 return
             result = dict(type="result", id=request_id, ok=False)
             deferred = None
@@ -395,7 +550,8 @@ class SettingsHost:
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
             setProvider={"name", "enabled"}, setIconContent={"mode"}, selectDevice={"deviceKey"})
         actions = dict(refresh="refresh", diagnostics="diagnostics", checkUpdate="check_update", startUpdate="start_update",
-            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit", showWhatsNew="show_whats_new")
+            openData="open_data", openProject="open_project", openIssue="open_issue", openWebsite="open_website",
+            openDiscord="open_discord", quit="quit", showWhatsNew="show_whats_new")
         if not isinstance(name, str) or not isinstance(args, dict) or name not in fields and name not in actions:
             raise ValueError("unknown settings command")
         if set(args) != fields.get(name, set()):
@@ -441,7 +597,7 @@ class SettingsHost:
         except Exception:
             log.exception("settings: unable to open the existing what's new window")
 
-    def _cleanup(self, session, graceful=False):
+    def _cleanup(self, session, graceful=False, *, failure=None):
         if not session.cleanup_lock.acquire(blocking=False):
             return
         try:
@@ -454,34 +610,58 @@ class SettingsHost:
             process = session.process
             if process is not None:
                 try:
-                    process.wait(timeout=.6 if graceful else .1)
-                except subprocess.TimeoutExpired:
-                    process.kill()
                     try:
-                        process.wait(timeout=1)
+                        process.wait(timeout=.6 if graceful else .1)
                     except subprocess.TimeoutExpired:
-                        log.warning("settings: companion did not exit after termination")
+                        process.kill()
+                        try:
+                            process.wait(timeout=1)
+                        except subprocess.TimeoutExpired:
+                            log.warning("settings: companion did not exit after termination")
+                except OSError:
+                    # Security software or an invalidated process handle may
+                    # prevent reaping. Still release the session and report the
+                    # original failure so tray preferences remain reachable.
+                    log.warning("settings: unable to reap companion", exc_info=True)
                 finally:
                     session.stop.set()
                     # Once the child has exited, inherited handles cannot leave
                     # writers blocked indefinitely. Never join the calling reader.
-                    if process.poll() is not None:
+                    try:
+                        exited = process.poll() is not None
+                    except OSError:
+                        exited = False
+                        log.warning("settings: unable to check companion exit", exc_info=True)
+                    if exited:
                         for stream in (process.stdin, process.stdout, process.stderr):
                             try:
                                 stream.close()
                             except (OSError, ValueError):
                                 pass
             session.stop.set()
-            session.ready.set()  # Wake a pending startup deadline worker.
+            session.ready.set()  # Wake pending startup deadline workers.
+            session.first_visible.set()
             with self._lock:
                 if self._session is session:
                     self._session = None
+                    pending, self._pending_open = self._pending_open, None
+                    if pending is not None and not self._closed:
+                        page, device_key = pending
+                        successor = _Session(page or "general", device_key)
+                        successor.restore_view = page is None and device_key is None
+                        self._request_show(successor)
+                        self._session = successor
+                        self._generation += 1
+                        self._thread(self._launch, successor, "settings-launch")
+                    elif failure is not None and not self._closed and not session.closing:
+                        self._queue_notification(session, self._on_failure, failure, failure=True)
         finally:
             session.cleanup_lock.release()
 
     def close(self):
         with self._lock:
             self._closed = True
+            self._pending_open = None
             session = self._session
         if session is not None:
             self._cleanup(session, graceful=True)

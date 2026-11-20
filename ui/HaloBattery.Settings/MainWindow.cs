@@ -33,7 +33,6 @@ public sealed partial class MainWindow : Window
  private readonly Frame frame=new();
  private readonly Border card=new(){CornerRadius=new(12),Margin=new(0,0,8,8)};
  private readonly Border pill=new(){Height=40,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Center};
- private readonly SvgImageSource darkHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderDark.svg")),lightHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderLight.svg"));
  private const double HeaderButtonSize=40,HeaderIconSize=20,HeaderEdgeInset=12,HeaderButtonGap=4;
  private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0,0,HeaderEdgeInset,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
  private readonly ColumnDefinition rail=new(){Width=new(228)};
@@ -44,7 +43,8 @@ public sealed partial class MainWindow : Window
  private Color accent;
  private readonly FontFamily bodyFont=new("Segoe UI Variable");
  // Статичные начертания с хинтингом: вариативный Outfit по умолчанию Thin, и WinUI дорисовывал жирность сам - отсюда «лесенка».
- internal FontFamily TitleFont=>new(State.Language=="ru"?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
+ internal bool UsesCyrillicTitles=>State.Language is "ru" or "uk" or "kk";
+ internal FontFamily TitleFont=>new(UsesCyrillicTitles?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
  internal static readonly FontFamily MonoFont=new("Cascadia Mono, Consolas");
  internal bool Dark=>dark;
  internal bool AnimationsEnabled=>settings.AnimationsEnabled;
@@ -78,11 +78,17 @@ public sealed partial class MainWindow : Window
  private static string Arg(string name,string fallback="") {var args=Environment.GetCommandLineArgs();var i=Array.IndexOf(args,name);return i>=0&&i+1<args.Length?args[i+1]:fallback;}
  internal MainWindow(SettingsBridge bridge,UiState initialState,string windowStateDirectory,SettingsWindowState preferences)
  {
-  Bridge=bridge;State=initialState;
+  Bridge=bridge;State=initialState;pagesInitializing=true;
   themeOverride=Arg("--theme");diagnostics=Arg("--diagnostics");Title="HaloBattery";
   hwnd=WinRT.Interop.WindowNative.GetWindowHandle(this);
+  dark=ReadDarkTheme();
+  startupWindowBackground=new(hwnd,dark);
+  Closed+=(_,_)=>ReleaseStartupWindowBackground();
   try{AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));}catch(Exception error){Debug.WriteLine(error);}
-  if(AppWindow.Presenter is OverlappedPresenter p)p.SetBorderAndTitleBar(true,false);
+  // A missing projected presenter must fail startup, not leave duplicate chrome or broken buttons.
+  if(AppWindow.Presenter is not OverlappedPresenter p)throw new InvalidOperationException("The Settings window presenter is unavailable.");
+  p.SetBorderAndTitleBar(true,false);
+  if(p.HasTitleBar || !p.HasBorder)throw new InvalidOperationException("The Settings window frame could not be initialized.");
   InitializeWindowState(windowStateDirectory,preferences);
   root.RowDefinitions.Add(new(){Height=new(56)});root.RowDefinitions.Add(new(){Height=new(1,GridUnitType.Star)});
   body.ColumnDefinitions.Add(rail);body.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});
@@ -95,10 +101,11 @@ public sealed partial class MainWindow : Window
   InitializeCardSpotlights();
   settings.ColorValuesChanged+=OnColorsChanged;
   AppWindow.Changed+=OnWindowChanged;
-  Closed+=(_,_)=>{closing=true;settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
+  Closed+=(_,_)=>{closing=true;CancelStartupSplash();settings.ColorValuesChanged-=OnColorsChanged;AppWindow.Changed-=OnWindowChanged;DetachWindowLayoutRoot();StopRail();ResetPageEntry();};
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
-  ApplyState(initialState);
+  BuildHeader();
+  InitializeStartupSplash();
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
  private double Scale=>root.XamlRoot?.RasterizationScale??GetDpiForWindow(hwnd)/96.0;
@@ -116,8 +123,9 @@ public sealed partial class MainWindow : Window
  }
  private void OnColorsChanged(UISettings sender,object args)=>DispatcherQueue.TryEnqueue(async()=>
  {
-  if(closing||changingTheme)return;changingTheme=true;
+   if(IsClosingSettings||changingTheme)return;changingTheme=true;
   try {
+   if(pagesInitializing){ApplyTheme();return;}
    ResetPageEntry();
    if(IsSettingsWindowHidden||!settings.AnimationsEnabled){ApplyTheme();Rebuild();return;}
    var previous=new RenderTargetBitmap();await previous.RenderAsync(root);ApplyTheme();Rebuild();
@@ -127,11 +135,12 @@ public sealed partial class MainWindow : Window
  });
  private void ApplyTheme()
  {
-  dark=themeOverride.Length==0?settings.GetColorValue(UIColorType.Background).R<128:themeOverride.Equals("dark",StringComparison.OrdinalIgnoreCase);root.RequestedTheme=dark?ElementTheme.Dark:ElementTheme.Light;accent=settings.GetColorValue(dark?UIColorType.AccentLight2:UIColorType.AccentDark1);
+  dark=ReadDarkTheme();startupWindowBackground?.UpdateTheme(dark);root.RequestedTheme=dark?ElementTheme.Dark:ElementTheme.Light;accent=settings.GetColorValue(dark?UIColorType.AccentLight2:UIColorType.AccentDark1);
   Application.Current.Resources["SystemAccentColor"]=accent;Application.Current.Resources["ControlCornerRadius"]=new CornerRadius(15);Application.Current.Resources["OverlayCornerRadius"]=new CornerRadius(16);Application.Current.Resources["ContentControlThemeFontFamily"]=bodyFont;
   if(Environment.OSVersion.Version.Build>=22000&&Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported()){SystemBackdrop=new MicaBackdrop();root.Background=Brush("#00000000");}else{SystemBackdrop=null;root.Background=Brush(dark?"#202020":"#F3F3F3");}
   card.Background=Brush(dark?"#181818":"#FFFFFF");card.Shadow=new ThemeShadow();card.Translation=new(0,0,12);
  }
+ private bool ReadDarkTheme()=>themeOverride.Length==0?settings.GetColorValue(UIColorType.Background).R<128:themeOverride.Equals("dark",StringComparison.OrdinalIgnoreCase);
  private void Rebuild(){Navigate(current,false);}
  private string MenuName=>V(expanded?"paneClose":"paneOpen");
  private double HeaderControlsWidth=>HeaderEdgeInset+3*HeaderButtonSize+2*HeaderButtonGap;
@@ -140,7 +149,9 @@ public sealed partial class MainWindow : Window
  private void OnWindowChanged(AppWindow sender,AppWindowChangedEventArgs args)
  {
   if(closing)return;
+#if HALO_BATTERY_VERIFICATION
   if(args.DidPositionChange&&windowInteractionMetrics is {} metrics)metrics.NativePositionEvents++;
+#endif
   if(args.DidPositionChange||args.DidSizeChange||args.DidPresenterChange)CaptureWindowState();
   // Moving on the same display changes screen coordinates, not client layout.
   // DPI changes are handled separately after XamlRoot has its new scale.
@@ -155,7 +166,7 @@ public sealed partial class MainWindow : Window
   // These Lucide paths span 18 grid units; Close spans 12. Match their
   // visible bounds and stroke width while keeping every hit target 40 x 40.
   var glyph=(FrameworkElement)LucideIcon(maximized?"minimize-2":"maximize-2",HeaderIconSize*2/3,null,2.25);
-  glyph.Tag=maximized?"restore":"maximize";maximizeButton.Content=glyph;
+  glyph.Tag=maximized?"restore":"maximize";glyph.Opacity=ChromeGlyphOpacity(maximizeButton);maximizeButton.Content=glyph;
   var label=T(maximized?"settings.restore":"settings.maximize");
   ToolTipService.SetToolTip(maximizeButton,label);AutomationProperties.SetName(maximizeButton,label);
  }
@@ -167,26 +178,35 @@ public sealed partial class MainWindow : Window
   button.HorizontalContentAlignment=HorizontalAlignment.Center;button.VerticalContentAlignment=VerticalAlignment.Center;button.Padding=new(0);button.CornerRadius=new(10);
   if(!dark)
   {
-   button.Resources["ButtonBackgroundPointerOver"]=Brush("#1F000000");
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(NavigationHighlightColor);
    button.Resources["ButtonBackgroundPressed"]=Brush("#2C000000");
    button.Resources["ButtonForegroundPointerOver"]=TextBrush;
    button.Resources["ButtonForegroundPressed"]=TextBrush;
   }
+  if(dark)
+  {
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(DarkChromeHoverBackground);
+   button.Resources["ButtonBackgroundPressed"]=Brush(DarkChromePressedBackground);
+  }
+  if(glyph=="x")
+  {
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(ExitHoverBackground);
+   button.Resources["ButtonBackgroundPressed"]=Brush(ExitPressedBackground);
+  }
+  BindChromeGlyph(button,()=>button.Content as FrameworkElement,close:glyph=="x");
   ToolTipService.SetToolTip(button,label);AutomationProperties.SetName(button,label);
   return button;
  }
  private void BuildHeader()
  {
   header.Children.Clear();
-  var textAccent=new SolidColorBrush(Desaturate(accent,0.5,dark?0.72:-1));
   hamburger=HeaderButton("menu",MenuName);hamburger.Margin=new(HeaderEdgeInset,0,0,0);hamburger.HorizontalAlignment=HorizontalAlignment.Left;hamburger.Click+=(_,_)=>ToggleRail();header.Children.Add(hamburger);
-  pill.Background=Brush("#00000000");var content=new Grid();foreach(var width in new[]{GridLength.Auto,GridLength.Auto})content.ColumnDefinitions.Add(new(){Width=width});
-  var logo=new Image{Source=dark?darkHeaderLogo:lightHeaderLogo,Width=22,Height=22,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,2,0)};content.Children.Add(logo);
-  var brand=new TextBlock{FontSize=16,FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.SemiBold,Foreground=TextBrush,CharacterSpacing=-12,VerticalAlignment=VerticalAlignment.Center,TextLineBounds=TextLineBounds.Tight};brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Halo",FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-Medium.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=TextBrush});brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Battery",Foreground=textAccent});Grid.SetColumn(brand,1);content.Children.Add(brand);
-  pill.Child=content;pill.IsHitTestVisible=false;header.Children.Add(pill);
+  pill.Background=Brush("#00000000");
+  pill.Child=BuildNativeHeaderBrand();pill.IsHitTestVisible=false;header.Children.Add(pill);
   windowButtons.Children.Clear();var minimize=HeaderButton("minus",T("settings.minimize"));maximizeButton=HeaderButton("maximize-2",T("settings.maximize"));displayedMaximized=null;var close=HeaderButton("x",T("settings.close"));foreach(var button in new[]{minimize,maximizeButton,close})windowButtons.Children.Add(button);minimize.Click+=(_,_)=>((OverlappedPresenter)AppWindow.Presenter).Minimize();maximizeButton.Click+=(_,_)=>{var p=(OverlappedPresenter)AppWindow.Presenter;if(p.State==OverlappedPresenterState.Maximized)p.Restore();else p.Maximize();UpdateMaximizeButton();};close.Click+=(_,_)=>Close();header.Children.Add(windowButtons);UpdateMaximizeButton();PositionPill();
+  SetStartupChromeVisibility();
  }
- // В развёрнутом окне страница и омнибокс центрируются по всему окну, а не по области справа от панели вкладок.
+ // В развёрнутом окне страница центрируется по всему окну, а не по области справа от панели вкладок.
  // Если места не хватает - сдвигаются вправо ровно настолько, чтобы не заходить под панель и не вылезать за подложку.
  private double PageWidth(double frameWidth)=>Math.Max(0,Math.Min(contentWidth,frameWidth));
  private double PageLeft(double frameWidth)
@@ -201,12 +221,16 @@ public sealed partial class MainWindow : Window
  private double PageInset(double width)=>44*width/contentWidth;
  private void LayoutPage(StackPanel content,double viewport)
  {
+#if HALO_BATTERY_VERIFICATION
   if(windowInteractionMetrics is {} metrics)metrics.LayoutCalls++;
+#endif
   var width=PageWidth(viewport);var inset=PageInset(width);
   var padding=new Thickness(inset,36,inset,36);var margin=new Thickness(PageLeft(viewport),0,0,0);
   var geometryChanged=content.Width!=width||!content.Padding.Equals(padding);
   if(!geometryChanged&&content.Margin.Equals(margin)){RequestSpotlightFrame();return;}
+#if HALO_BATTERY_VERIFICATION
   if(windowInteractionMetrics is {} changed)changed.PageLayouts++;
+#endif
   content.Width=width;content.Padding=padding;content.Margin=margin;
   // Moving the content does not change card bounds relative to that content.
   if(geometryChanged)InvalidateCardSpotlightGeometry();else RequestSpotlightFrame();
@@ -227,7 +251,11 @@ public sealed partial class MainWindow : Window
   var start=rail.Width.Value;var began=Stopwatch.StartNew();var fromOpacity=navLabels.FirstOrDefault()?.Opacity??(expanded?0.0:1.0);var toOpacity=expanded?1.0:0.0;
   // The ScrollViewer's SizeChanged callback lays out the committed viewport.
   // Repeating it here would use the previous frame's viewport and force reflow.
-  railTick=(_,_)=>{if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
+  railTick=(_,_)=>{
+#if HALO_BATTERY_VERIFICATION
+   if(windowInteractionMetrics is {} metrics)metrics.RailFrames++;
+#endif
+   var t=Math.Min(1,began.Elapsed.TotalMilliseconds/250);var e=1-Math.Pow(1-t,3);rail.Width=new(start+(target-start)*e);var o=fromOpacity+(toOpacity-fromOpacity)*Math.Min(1,t*1.6);foreach(var label in navLabels)label.Opacity=o;if(t>=1){StopRail();FinishRail();}};
   CompositionTarget.Rendering+=railTick;
  }
  private void FinishRail(){BuildNavigation();PositionPill();UpdateDragRegion();UpdateMinimumWidth();}
@@ -237,10 +265,14 @@ public sealed partial class MainWindow : Window
  }
  internal void Navigate(string page,bool motion,bool enterAtEnd=false,bool preserveWheelBurst=false)
  {
+  pendingEditorCommit?.Invoke();pendingEditorCommit=null;
+  CaptureSettingsViewState();
+  if(pagesInitializing)startupNavigationVersion++;
   if(!preserveWheelBurst)wheelNavigationGuard.Reset();
   ResetContentWheelObservation();
   ResetOverscrollForNavigation();
   ResetCardSpotlights();
+  ClearControlSpotlights();
   var next=State.Pages.Any(p=>p.Id==page)?page:State.Pages.FirstOrDefault()?.Id??"general";
   var switching=frame.Content is not null&&next!=current;
   // Перестройка той же страницы (после действия, смены переключателя) сохраняет раскрытые карточки.
@@ -267,6 +299,7 @@ public sealed partial class MainWindow : Window
   }
   AttachSpotlightScroll();
   BuildNavigation();BuildHeader();
+  RestoreSettingsViewStateAfterNavigation();
   DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,UpdateMinimumWidth);
  }
  private void ResetPageEntry()
@@ -285,12 +318,17 @@ public sealed partial class MainWindow : Window
   // briefly reveal the original zero opacity / 40 DIP offset on landing.
   finished?.Stop();
  }
- // Fixture fault injection is never consulted for a live host connection.
+ #if HALO_BATTERY_VERIFICATION
+ // Fixture fault injection is absent from normal release builds.
  private Action<ScrollViewer>? fixtureEntryChangeView;
+ #endif
  private void ChangeEntryView(ScrollViewer scroll)
  {
+ #if HALO_BATTERY_VERIFICATION
   if(Bridge.FixtureMode&&fixtureEntryChangeView is {} changeView)changeView(scroll);
-  else scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
+  else
+ #endif
+   scroll.ChangeView(null,scroll.ScrollableHeight,null,true);
  }
  private void FadePageEntry(Page entered,bool animate,bool enterAtEnd)
  {
@@ -408,11 +446,12 @@ public sealed partial class MainWindow : Window
   }
   if(primary){b.Background=Brush($"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");b.Foreground=Brush(dark?"#000000":"#FFFFFF");b.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;}
   if(!enabled){ToolTipService.SetToolTip(b,Later);AutomationProperties.SetHelpText(b,Later);}
+  if(!chrome)EnableControlSpotlight(b);
   return b;
  }
  internal StackPanel PageContent(string title)
  {
-  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
+  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,UsesCyrillicTitles?28:30);heading.FontFamily=TitleFont;heading.FontWeight=UsesCyrillicTitles?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=UsesCyrillicTitles?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
  }
  internal void Section(StackPanel parent,string name){var text=Text(name);text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;text.Margin=new(0,14,0,0);parent.Children.Add(text);}
  internal CardView Card(string title,string description,UIElement? action=null,object? icon=null)=>MakeCard(title,description,action,icon??"info",false);
@@ -451,6 +490,7 @@ public sealed partial class MainWindow : Window
   var item=new Style(typeof(ComboBoxItem));item.Setters.Add(new Setter(ComboBoxItem.CornerRadiusProperty,new CornerRadius(15)));item.Setters.Add(new Setter(ComboBoxItem.MinHeightProperty,30.0));item.Setters.Add(new Setter(ComboBoxItem.FontSizeProperty,13.0));item.Setters.Add(new Setter(ComboBoxItem.PaddingProperty,new Thickness(12,0,12,0)));item.Setters.Add(new Setter(ComboBoxItem.MarginProperty,new Thickness(4,0,4,4)));box.ItemContainerStyle=item;
   box.Resources["ComboBoxDropdownContentMargin"]=new Thickness(0,4,0,0);
   ConfigureComboSelection(box);
+  EnableControlSpotlight(box);
   return box;
  }
  // Ширина поля - по самому длинному пункту (+ отступы и стрелка), чтобы пункты меню целиком помещались; потом не меняется.
@@ -469,7 +509,13 @@ public sealed partial class MainWindow : Window
  internal ScrollViewer Scroll(StackPanel content)
  {
   content.HorizontalAlignment=HorizontalAlignment.Left;content.MaxWidth=double.PositiveInfinity;
-  content.SizeChanged+=(_,_)=>InvalidateCardSpotlightGeometry();
+  content.SizeChanged+=(_,e)=>
+  {
+   // Expander rows stay in their card's Canvas while only its visible height
+   // changes. Rebase card origins without rediscovering every row's ancestry.
+   if(e.NewSize.Width==e.PreviousSize.Width && cards.Any(c=>c.IsAnimating))InvalidateCardSpotlightBounds();
+   else InvalidateCardSpotlightGeometry();
+  };
   // The content receives bubbling wheel input before its ScrollViewer parent
   // starts native scrolling. A transparent fill also catches gaps between cards.
   var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch,Background=Brush("#00000000")};host.Children.Add(content);

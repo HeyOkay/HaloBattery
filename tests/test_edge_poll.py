@@ -2,7 +2,9 @@
 descriptors. One provider that raises costs the user every device of that provider for the
 cycle (the poll loop logs it and moves on), so each must degrade to "no devices".
 
-hid.enumerate and hid.device are replaced: no real HID device is touched.
+hid.enumerate and hid.device are replaced: no real HID device is touched. The list of
+serial ports is replaced by an empty one too: the Sony INZONE provider reads its dongle
+over a COM port, and with the real list a poll here wrote to the developer's own headset.
 
 Run from the repository root:
 
@@ -14,6 +16,11 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tests/ helpers
+
+import _sandbox  # noqa: E402
+
+# Standalone execution must have the same guards as full discovery.
+_sandbox.install_guards()
 
 from test_hide_rename import hb  # noqa: E402
 
@@ -27,7 +34,7 @@ def odd_descriptors(vid=0, *args):
             "interface_number": -1, "release_number": 0}
     return [dict(base), dict(base, product_id=0xFFFF, path=b"\\\\?\\hid#vid_ffff&pid_ffff#x",
                              product_string="", usage_page=0xFFFF, usage=0xFFFF, interface_number=255),
-            dict(base, product_id=0x0001, product_string="電\U0001F3A7", serial_number="\ud800")]
+            dict(base, product_id=0x0001, product_string="\u96fb\U0001F3A7", serial_number="\ud800")]
 
 
 def raising(*args, **kwargs):
@@ -36,17 +43,24 @@ def raising(*args, **kwargs):
 
 class PollWithoutDevicesTests(unittest.TestCase):
     def check(self, enumerate_function, device_class):
-        providers = [p for p in hb.make_providers() if p.name not in NOT_HID]
-        self.assertGreater(len(providers), 40)
         with mock.patch("hid.enumerate", enumerate_function), \
                 mock.patch("providers.hidlist.enumerate", enumerate_function), \
-                mock.patch("hid.device", device_class):
+                mock.patch("hid.device", device_class), \
+                mock.patch("serial.tools.list_ports.comports", lambda *a, **k: []), \
+                mock.patch("providers.dji.receiver_present", return_value=False), \
+                mock.patch("providers.phone_link._read_snapshot", return_value=None), \
+                mock.patch("providers.dji._Receiver.start",
+                           side_effect=AssertionError("edge polling must not start a USB reader")) as start:
+            # Construction is guarded too; a background retry must never escape this scope.
+            providers = [p for p in hb.make_providers() if p.name not in NOT_HID]
+            self.assertGreater(len(providers), 40)
             for provider in providers:
                 with self.subTest(provider=provider.name):
                     result = provider.poll()
                     self.assertIsInstance(result, list)
                     self.assertEqual([], [r for r in result if r.level is not None and not 0 <= r.level <= 100])
                     self.assertIsInstance(provider.diagnostics(), list)
+            start.assert_not_called()
 
     class Unopenable:
         """What hidapi does when another app holds the device: the object exists, opening fails."""

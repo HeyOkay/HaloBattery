@@ -1,10 +1,14 @@
-"""Glorious Model O Wireless over its 2.4 GHz receiver (#281).
+"""Glorious Model O / O- / D / D- Wireless over their 2.4 GHz receivers (#281, #221).
 
-The receiver (258a:2022) publishes vendor collections on `ffa0` and `ffff`; the battery is
-read with Sinowealth's framed feature-report query, documented and confirmed on real
-hardware by Rodrigo-200/GloriousBatteryMonitor-Go (`HidDeviceService.cs`), whose comment
-credits AwesomeTy18/GloriousBatteryMonitor, glorious-mouse-battery-system-tray,
-glorious-indicator and OpenRGB's SinowealthGMOWController:
+The current models (258a:2022 Model O, 2024 Model O-, 2023 Model D, 2025 Model D-)
+publish vendor collections on `ffa0` and `ffff`; the battery is read with
+Sinowealth's framed feature-report query, documented and confirmed on real
+hardware by Rodrigo-200/GloriousBatteryMonitor-Go (`HidDeviceService.cs`), whose
+comment credits AwesomeTy18/GloriousBatteryMonitor,
+glorious-mouse-battery-system-tray, glorious-indicator and OpenRGB's
+SinowealthGMOWController. The same query, with the same DevSel, is what
+korkje/mxw sends to all four models (src/report/battery.rs, `bfr_w[3]=0x02`,
+`bfr_w[4]=0x02`, `bfr_w[6]=0x83`, level in `bfr_r[8]`), opening interface 2.
 
     request  (64-byte feature report, report id 0):
         00 | 00 00 02 02 00 83 | 00 ...
@@ -15,6 +19,14 @@ glorious-indicator and OpenRGB's SinowealthGMOWController:
         [2..5] echo, [6] 0x83, [7] charging (0 = no, non-zero = on the charger),
         [8] level %
 
+Response validation is cross-checked against korkje/mxw commit
+5b517db12b48dcbeaac9588dea73797c12bdf02b, src/report/battery.rs:26-50:
+only status A1 is a live percentage. A4 is asleep; provisional/unknown statuses
+must be retried, not recorded as zero. Offsets are also documented in
+Rodrigo-200/GloriousBatteryMonitor-Go commit
+4271ea7acee99d2569a1b97b27272fb8510e6f55,
+src/GBM.Core/Services/HidDeviceService.cs:278-302.
+
 The receiver needs ~100 ms between the write and the read: the query goes over the 2.4 GHz
 link to the mouse and back. Report id 0x00 is the one all known Glorious wireless mice
 answer on; other ids are only tried if Windows says the collection takes a different
@@ -23,7 +35,7 @@ length.
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
@@ -35,8 +47,16 @@ except Exception:  # pragma: no cover - only when the package is missing
     hid = None
 
 VID = 0x258A
-PID = 0x2022
-NAME = "Glorious Model O Wireless"
+# wireless pid -> (name, wired pid -> wired name). From mxw's SUPPORTED_MICE and
+# GloriousBatteryMonitor-Go's DeviceDatabase.cs. All four answer the same query.
+MODELS: Dict[int, Tuple[str, Dict[int, str]]] = {
+    0x2022: ("Glorious Model O Wireless", {0x2011: "Model O"}),
+    0x2024: ("Glorious Model O- Wireless", {0x2013: "Model O-"}),
+    0x2023: ("Glorious Model D Wireless", {0x2012: "Model D"}),
+    0x2025: ("Glorious Model D- Wireless", {0x2014: "Model D-"}),
+}
+PID = 0x2022                       # the confirmed model, kept for the tests and docs
+NAME = MODELS[PID][0]
 KEY = f"glorious:{PID:04x}"
 
 BATTERY_COMMAND = [0x00, 0x00, 0x02, 0x02, 0x00, 0x83]
@@ -55,7 +75,7 @@ ASLEEP_KEEP = 300
 # instead - that project reads "on the charger" from the pid change, not from the reply
 # ("Charging is detected via PID change ... not via byte[3]", HidDeviceService.cs), so the
 # same signal is used here. 0x2011 is the wired Model O.
-WIRED_PIDS = {0x2011: "Model O"}
+WIRED_PIDS = MODELS[PID][1]
 
 
 def make_request(length: int) -> List[int]:
@@ -70,9 +90,11 @@ def parse_reply(r) -> Optional[Tuple[int, bool]]:
     """(level, charging) from the receiver's answer, or None when it is not one."""
     if not r or len(r) <= LEVEL_INDEX:
         return None
-    if r[FUNC_INDEX] != 0x83:
+    if r[0] != 0x00 or r[FUNC_INDEX] != 0x83:
         return None
-    if r[1] == STATUS_ASLEEP:
+    # The outgoing request also has 0x83 at byte 6 and zero at byte 8.
+    # Require the positive awake status, rather than guessing from the level.
+    if r[1] != STATUS_AWAKE:
         return None
     level = r[LEVEL_INDEX]
     if not 0 <= level <= 100:
@@ -92,7 +114,7 @@ class GloriousProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[int, float]] = None
+        self._last: Dict[int, Tuple[int, float]] = {}
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
@@ -103,40 +125,51 @@ class GloriousProvider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(glorious): %s", e)
             return []
-        mine = [d for d in infos if d.get("product_id") == PID]
-        if not mine:
-            return []
-        self._diag.append(f"[Glorious] pid={PID:04x} '{NAME}'")
-        wired = [d for d in infos if d.get("product_id") in WIRED_PIDS]
-        if wired:
-            self._diag.append("  on the cable: " + ", ".join(
-                f"{d.get('product_id', 0):04x} ({WIRED_PIDS.get(d.get('product_id'), '?')})"
-                for d in wired))
-        parsed = None
-        for d in pick(mine):
-            length = feature_length(d["path"]) or 65
-            self._diag.append(f"  trying iface={d.get('interface_number')} "
-                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
-                              f"feature={length}")
-            parsed = self._ask(d["path"], length)
-            if parsed is not None:
-                break
-        if parsed is None:
-            self._diag.append("  no battery answer (asleep, off, or not this collection)")
+        out: List[DeviceStatus] = []
+        for pid, (name, wired_map) in MODELS.items():
+            mine = [d for d in infos if d.get("product_id") == pid]
+            if not mine:
+                continue
+            key = f"glorious:{pid:04x}"
+            self._diag.append(f"[Glorious] pid={pid:04x} '{name}'")
+            wired = [d for d in infos if d.get("product_id") in wired_map]
             if wired:
-                # The mouse is on the cable: it is present and charging, but the receiver
-                # cannot say what the level is now, so keep the last one if there is one.
-                level = self._last[0] if self._last else None
-                return [DeviceStatus(KEY, NAME, level, True, True, "glorious", kind="mouse")]
-            if self._last and time.time() - self._last[1] < ASLEEP_KEEP:
-                return [DeviceStatus(KEY, NAME, self._last[0], False, False, "glorious",
-                                     kind="mouse")]
-            return [DeviceStatus(KEY, NAME, None, False, False, "glorious", kind="mouse")]
-        level, charging = parsed
-        charging = charging or bool(wired)
-        self._last = (level, time.time())
-        self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
-        return [DeviceStatus(KEY, NAME, level, charging, True, "glorious", kind="mouse")]
+                self._diag.append("  on the cable: " + ", ".join(
+                    f"{d.get('product_id', 0):04x} ({wired_map.get(d.get('product_id') or 0, '?')})"
+                    for d in wired))
+            parsed = None
+            for d in pick(mine):
+                length = feature_length(d["path"]) or 65
+                self._diag.append(f"  trying iface={d.get('interface_number')} "
+                                  f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
+                                  f"feature={length}")
+                parsed = self._ask(d["path"], length)
+                if parsed is not None:
+                    break
+            last = self._last.get(pid)
+            if parsed is None:
+                self._diag.append("  no battery answer (asleep, off, or not this collection)")
+                if wired:
+                    # The mouse is on the cable: it is present and charging, but the
+                    # receiver cannot say what the level is now, so keep the last one if
+                    # there is one.
+                    level = last[0] if last else None
+                    out.append(DeviceStatus(key, name, level, True, True, "glorious",
+                                            kind="mouse"))
+                elif last and time.time() - last[1] < ASLEEP_KEEP:
+                    out.append(DeviceStatus(key, name, last[0], False, False, "glorious",
+                                            kind="mouse"))
+                else:
+                    out.append(DeviceStatus(key, name, None, False, False, "glorious",
+                                            kind="mouse"))
+                continue
+            level, charging = parsed
+            charging = charging or bool(wired)
+            self._last[pid] = (level, time.time())
+            self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
+            out.append(DeviceStatus(key, name, level, charging, True, "glorious",
+                                    kind="mouse"))
+        return out
 
     def _ask(self, path, length: int) -> Optional[Tuple[int, bool]]:
         dev = hid.device()  # type: ignore[union-attr]
@@ -147,9 +180,10 @@ class GloriousProvider(Provider):
             return None
         try:
             for _ in range(READ_ATTEMPTS):
-                sent = dev.send_feature_report(bytes(make_request(length)))
-                if sent is not None and sent < 0:
-                    self._diag.append(f"    feature write refused ({sent})")
+                request = bytes(make_request(length))
+                sent = dev.send_feature_report(request)
+                if sent is not None and sent != len(request):
+                    self._diag.append(f"    feature write incomplete/refused ({sent})")
                     return None
                 time.sleep(RF_DELAY_S)
                 r = dev.get_feature_report(0x00, length)
