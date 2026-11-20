@@ -144,6 +144,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   ([#221](https://github.com/HeyOkay/HaloBattery/issues/221)). The Model O- was
   confirmed by its owner in #221 (level and charging); the Model D and D- are
   **unverified** on hardware.
+- **GameSir G7 Pro 8K** (Aimlabs edition confirmed, `3537:10c6` on the dongle and
+  `3537:10c5` on the cable): reads the controller's own battery level and charging
+  state through its GameSir Connect HID collection, instead of the Windows
+  placeholder that showed a permanent 100 %. Requires one controller in both XInput
+  and Windows.Gaming.Input. The other editions use GameSir Connect's id table and
+  are unverified.
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
