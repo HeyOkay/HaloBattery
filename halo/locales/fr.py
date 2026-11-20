@@ -287,6 +287,8 @@ MESSAGES = {
     "settings.status_hint": "Pour Rainmeter, Stream Deck et les scripts. Désactiver cette option supprime le fichier.",
     "settings.data_folder": "Ouvrir le dossier de données",
     "settings.project": "Page du projet",
+    "settings.website": "Site web",
+    "settings.discord": "Communauté Discord",
     "settings.issue": "Signaler un problème",
     "settings.quit": "Quitter HaloBattery",
     "settings.saved": "Les modifications s’appliquent immédiatement",

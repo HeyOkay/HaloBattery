@@ -154,7 +154,8 @@ back, while the ring fades, slides and scales through native Composition animati
   for Rainmeter, Stream Deck and scripts. It includes device `name`, `level`,
   `charging`, `online`, `kind`, `seconds_left` and tooltip `text`, plus `running`
   and `updated_unix`. Turning the option off deletes the file.
-- **About**: version, diagnostics, the data folder, project page and issue reporting.
+- **About**: version, diagnostics, the data folder, the website, the Discord
+  community, the project page and issue reporting.
 
 ## Updates
 

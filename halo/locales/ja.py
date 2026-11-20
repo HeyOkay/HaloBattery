@@ -290,6 +290,8 @@ MESSAGES = {
     "settings.status_hint": "Rainmeter、Stream Deck、スクリプト用です。無効にするとファイルが削除されます。",
     "settings.data_folder": "データフォルダーを開く",
     "settings.project": "プロジェクトページ",
+    "settings.website": "ウェブサイト",
+    "settings.discord": "Discord コミュニティ",
     "settings.issue": "問題を報告",
     "settings.quit": "HaloBatteryを終了",
     "settings.saved": "変更はすぐに適用されます",

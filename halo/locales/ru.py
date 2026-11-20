@@ -284,6 +284,8 @@ MESSAGES = {
     "settings.status_hint": "Для Rainmeter, Stream Deck и скриптов. При отключении файл удаляется.",
     "settings.data_folder": "Открыть папку данных",
     "settings.project": "Страница проекта",
+    "settings.website": "Веб-сайт",
+    "settings.discord": "Сообщество в Discord",
     "settings.issue": "Сообщить о проблеме",
     "settings.quit": "Выйти из HaloBattery",
     "settings.saved": "Изменения применяются сразу",

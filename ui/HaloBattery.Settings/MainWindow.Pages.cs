@@ -360,6 +360,8 @@ public sealed partial class MainWindow
         Section(p, T("settings.support"));
         ActionCard(p, "menu.diagnostics", "settings.open", "diagnostics", icon: "wrench");
         ActionCard(p, "settings.data_folder", "settings.open", "openData", State.DataDir, "folder-open");
+        ActionCard(p, "settings.website", "settings.open", "openWebsite");
+        ActionCard(p, "settings.discord", "settings.open", "openDiscord");
         ActionCard(p, "settings.project", "settings.open", "openProject");
         ActionCard(p, "settings.issue", "settings.open", "openIssue");
         p.Children.Add(Card(T("settings.fonts"), "Lucide · ISC / MIT", icon: "info"));
