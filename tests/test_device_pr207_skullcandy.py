@@ -50,6 +50,8 @@ class FakeDongle:
         self.fresh = None
         self.writes = []
         self.opened = 0
+        self.irq_pending = None
+        self.irq_delivered = False
 
     def open_path(self, path):
         self.opened += 1
@@ -65,7 +67,18 @@ class FakeDongle:
         else:
             self.fresh = None
         self.pending = self.default_pending if self.mode != "silent" else None
+        self.irq_pending = self.pending
+        self.irq_delivered = False
         return len(data)
+
+    def read(self, size, timeout_ms=0):
+        if self.irq_pending is None or self.irq_delivered:
+            return []
+        if self.irq_pending > 0:
+            self.irq_pending -= 1
+            return []
+        self.irq_delivered = True
+        return list(self.fresh) if self.fresh else []
 
     def get_input_report(self, report_id, size):
         if self.pending is None:                      # before the ask (or silent)
@@ -94,6 +107,9 @@ class FakeBus:
             def get_input_report(self, report_id, size):
                 return self.m.get_input_report(report_id, size)
 
+            def read(self, size, timeout_ms=0):
+                return self.m.read(size, timeout_ms)
+
             def close(self):
                 pass
 
@@ -108,7 +124,7 @@ def dongle_entries(pid=0x3210, usage_page=0xFF13, path=b"dongle"):
 class ProviderTest(unittest.TestCase):
     def setUp(self):
         self._saved = (S.hid, S.hidlist, S.time)
-        S.time = types.SimpleNamespace(time=time.time, sleep=lambda s: None)
+        S.time = types.SimpleNamespace(time=time.time, monotonic=time.monotonic, sleep=lambda s: None)
 
     def tearDown(self):
         S.hid, S.hidlist, S.time = self._saved
@@ -147,8 +163,8 @@ class CaptureTest(ProviderTest):
                           self.poll(dongle_entries(), {b"dongle": dongle})], [70])
 
     def test_a_steady_level_is_still_reported(self):
-        # the report never changes because the level really is the same: the last
-        # read is still parsed, so a steady value cannot leave the icon empty
+        # Identical bytes are fresh only because a new interrupt event arrives
+        # after the query. An unchanged GET_REPORT snapshot is insufficient.
         dongle = FakeDongle(mode="same", before=STALE_REPORT)
         self.assertEqual([r.level for r in
                           self.poll(dongle_entries(), {b"dongle": dongle})], [65])

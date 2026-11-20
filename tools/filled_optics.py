@@ -6,7 +6,7 @@ import re
 BODY_ELEMENTS = {
     'headset': (), 'mouse': (0,), 'keyboard': (8,), 'microphone': (2,),
     'gamepad': (4,), 'speaker': (0,), 'webcam': (0,), 'health': (0,),
-    'smart_home': (1,), 'watch': (1, 2, 3), 'display': (1,),
+    'smart_home': (1,), 'watch': (1, 2, 3), 'display': (1,), 'phone': (0,),
 }
 
 

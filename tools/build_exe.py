@@ -10,8 +10,32 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import venv
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def build_process_environment() -> dict[str, str]:
+    # Build inputs come from the committed lock and the public index (or an
+    # explicitly selected offline wheelhouse), never developer pip settings.
+    env = {key: value for key, value in os.environ.items()
+           if not key.upper().startswith("PIP_")}
+    env["PIP_CONFIG_FILE"] = os.devnull
+    return env
+
+
+def install_build_requirements(python: Path, requirements: Path, wheelhouse: Path | None = None) -> None:
+    command = [str(python), "-I", "-m", "pip", "install", "--require-hashes",
+               "--only-binary=:all:", "--disable-pip-version-check", "--no-input",
+               "--no-cache-dir", "-r", str(requirements)]
+    if wheelhouse is None:
+        command += ["--index-url", "https://pypi.org/simple"]
+    else:
+        command += ["--no-index", "--find-links", str(wheelhouse.resolve())]
+    subprocess.run(command, check=True, env=build_process_environment())
 
 
 def native_payload_entries(directory: Path) -> list[tuple[str, str, str]]:
@@ -22,17 +46,12 @@ def native_payload_entries(directory: Path) -> list[tuple[str, str, str]]:
             for path in sorted(directory.rglob("*")) if path.is_file()]
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--native-ui", type=Path, default=ROOT / ".build/settings-ui")
-    parser.add_argument("--distpath", type=Path, default=ROOT / "dist")
-    parser.add_argument("--workpath", type=Path, default=ROOT / ".build/pyinstaller")
-    args = parser.parse_args()
-    payload = native_payload_entries(args.native_ui)
+def freeze_python(python: Path, native_ui: Path, distpath: Path, workpath: Path) -> None:
+    """Freeze with the caller's freshly created and hash-verified interpreter."""
+    payload = native_payload_entries(native_ui)
     for required in (ROOT / "halo.ico", ROOT / "version_info.txt"):
         if not required.is_file():
-            parser.error(f"Generate the build asset first: {required}")
-    workpath = args.workpath.resolve()
+            raise FileNotFoundError(f"Generate the build asset first: {required}")
     specpath = workpath / "spec" / "HaloBattery.spec"
     specpath.parent.mkdir(parents=True, exist_ok=True)
     # Runtime legal metadata already contains the full grants/NOTICE texts.
@@ -41,7 +60,8 @@ def main() -> None:
              (str(ROOT / "halo/iconify_data/manifests"), "halo/iconify_data/manifests"),
              (str(ROOT / "docs/licenses"), "licenses"),
              (str(ROOT / "docs/credits.md"), "licenses"),
-             (str(ROOT / "assets/app-icon.png"), "assets")]
+             (str(ROOT / "assets/app-icon.png"), "assets"),
+             (str(ROOT / "assets/app-icon-header-dark.png"), "assets")]
     spec = f"""from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis([{str(ROOT / 'halo_battery.pyw')!r}],
@@ -61,12 +81,57 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='HaloBattery',
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='HaloBattery')
 """
     specpath.write_text(spec, encoding="utf-8")
-    # Build-only dependency; importing this module for offline tests needs no
-    # PyInstaller installation and never starts a build.
-    os.environ.setdefault("PYINSTALLER_CONFIG_DIR", str(workpath / "cache"))
-    import PyInstaller.__main__
-    PyInstaller.__main__.run([str(specpath), "--noconfirm", "--clean",
-        "--distpath", str(args.distpath.resolve()), "--workpath", str(workpath)])
+    env = build_process_environment()
+    env["PYINSTALLER_CONFIG_DIR"] = str(workpath / "cache")
+    subprocess.run([str(python), "-I", "-m", "PyInstaller", str(specpath), "--noconfirm", "--clean",
+                    "--distpath", str(distpath.resolve()), "--workpath", str(workpath)],
+                   check=True, env=env)
+
+
+def prepare_local_build(python: Path, native_ui: Path, intermediate: Path) -> None:
+    env = build_process_environment()
+    for script, output in (("make_icon.py", "halo.ico"), ("make_version.py", "version_info.txt")):
+        subprocess.run([str(python), "-I", str(ROOT / "tools" / script), str(ROOT / output)],
+                       check=True, cwd=ROOT, env=env)
+    subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                    "-File", str(ROOT / "scripts/build_settings.ps1"),
+                    "-OutputDirectory", str(native_ui.resolve()),
+                    "-IntermediateDirectory", str(intermediate.resolve())],
+                   check=True, cwd=ROOT, env=env)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--native-ui", type=Path, default=ROOT / ".build/settings-ui")
+    parser.add_argument("--distpath", type=Path, default=ROOT / "dist")
+    parser.add_argument("--workpath", type=Path, default=ROOT / ".build/pyinstaller")
+    parser.add_argument("--wheelhouse", type=Path,
+                        help="Install the hashed build requirements from this offline wheel directory")
+    parser.add_argument("--prepare-local-build", action="store_true",
+                        help="Generate assets and publish native settings using the same verified build environment")
+    parser.add_argument("--native-intermediate", type=Path,
+                        help="Native build cache for --prepare-local-build (default: beside --workpath)")
+    args = parser.parse_args()
+    if not args.prepare_local_build:
+        native_payload_entries(args.native_ui)
+        for required in (ROOT / "halo.ico", ROOT / "version_info.txt"):
+            if not required.is_file():
+                parser.error(f"Generate the build asset first: {required}")
+    workpath = args.workpath.resolve()
+    workpath.mkdir(parents=True, exist_ok=True)
+    # A fresh environment forces every artifact through pip's hash checks.
+    # Installing into an existing environment can skip already installed,
+    # unverified requirements. Build environments never ship in the app.
+    print(f"Build interpreter: {sys.executable} ({sys.version.split()[0]})", flush=True)
+    with tempfile.TemporaryDirectory(prefix="build-environment-", dir=workpath) as directory:
+        environment = Path(directory)
+        venv.EnvBuilder(with_pip=True).create(environment)
+        python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        install_build_requirements(python, ROOT / "requirements-build.txt", args.wheelhouse)
+        if args.prepare_local_build:
+            prepare_local_build(python, args.native_ui,
+                                args.native_intermediate or workpath.parent / "settings-ui-obj")
+        freeze_python(python, args.native_ui, args.distpath, workpath)
 
 
 if __name__ == "__main__":

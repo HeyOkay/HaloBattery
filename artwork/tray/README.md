@@ -118,7 +118,7 @@ retained pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged 
 
 ## Filled device pictograms
 
-`filled/` contains eleven editable, locally stored Lucide 1.17.0 fill variations.
+`filled/` contains twelve editable, locally stored Lucide 1.17.0 fill variations.
 Its manifest pins each SVG hash and upstream provenance, the seven native sizes,
 and the reviewed scale, translation and stroke width. The existing outline atlas
 and controller-logo masters are independent of these sources.
@@ -159,3 +159,14 @@ the 1024px master, before downsampling to the seven physical sizes. It records
 visible-ink bounds in `manifest.json`. Every theme, battery state and animation
 frame uses that same prepositioned mask. The runtime renderer adds no translation
 or DPI-specific offset. Speaker, Watch and Tracker have no optical nudge.
+
+## Phone Link (Lucide smartphone)
+
+`tools/make_phone_artwork.py` uses the unchanged pinned `lucide-static@1.17.0`
+smartphone source (ISC; see `docs/licenses/lucide-1.17.0-LICENSE.txt`). It appends
+one seven-size phone row with the existing centered, half-scale outline pipeline.
+`filled/lucide-smartphone.svg` derives a solid body with a transparent home dot
+from the same source; the existing filled optical compensation keeps its body
+at the source centerline. Regenerate with the phone generator, then
+`tools/make_icon_artwork.py` and `tools/make_filled_artwork.py`. Existing glyph
+placements and the charge ring are unchanged.

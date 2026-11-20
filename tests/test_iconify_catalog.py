@@ -1,5 +1,6 @@
 """Offline catalog verification, cache, license and paging regression tests."""
 import copy
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -305,6 +306,111 @@ class CatalogTests(unittest.TestCase):
         metadata["license_text"] = "Fake notice"
         (folder / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
         self.assertIsNone(self.make().load(asset.id))
+
+    def test_selected_record_binds_its_complete_evidence_and_png_checksum(self):
+        asset = self.make().prepare("test:icon-0")
+        self.assertEqual(asset.metadata["asset_revision"], catalog.SELECTED_REVISION)
+        folder = Path(self.temp.name) / "iconify" / "assets" / asset.id
+        for field, value in (("license_text", "Forged license"),
+                             ("notices", []), ("author", {"name": "Other"}),
+                             ("provenance", {}), ("source_hash", "d" * 64),
+                             ("png_sha256", "e" * 64)):
+            with self.subTest(field=field):
+                metadata = dict(asset.metadata, **{field: value})
+                # Even replacing the checksum and self-declared metadata ID
+                # cannot change the ID already stored in the user's config.
+                metadata["asset_id"] = catalog._selection_id(metadata)
+                (folder / "metadata.json").write_bytes(catalog._json_bytes(metadata))
+                self.assertIsNone(self.make().load(asset.id))
+
+    def test_selected_evidence_survives_every_current_registry_change_offline(self):
+        asset = self.make().prepare("test:icon-0")
+        changes = (("name", "Renamed collection"),
+                   ("author", {"name": "New author"}),
+                   ("license", {"spdx": "CC-BY-NC-4.0", "title": "Changed license"}),
+                   ("license_text", "Changed notice"), ("notices", []),
+                   ("provenance", {"upstream_revision": "c" * 40}),
+                   ("current_policy", {"selection": "Changed review"}),
+                   ("icons", {"icon-0": "d" * 64}))
+        for field, value in changes:
+            with self.subTest(field=field):
+                registry = copy.deepcopy(self.registry)
+                registry["collections"]["test"][field] = value
+                service = self.make(registry=registry, fetch=lambda url: self.fail("network"))
+                restored = service.load(asset.id)
+                self.assertIsNotNone(restored)
+                self.assertEqual(restored.metadata, asset.metadata)
+                self.assertEqual(restored.glyph.digest, asset.glyph.digest)
+                self.assertEqual(service.attributions([asset.id]), [asset.metadata])
+                # Old local proof does not approve a NEW selection under the
+                # changed current registry, even if its source name remains.
+                with self.assertRaises(catalog.CatalogError):
+                    service.persist_selection(restored)
+
+    def test_selected_icon_survives_removed_name_collection_and_disposable_lookup(self):
+        service = self.make()
+        asset = service.prepare("test:icon-0")
+        service.pin(asset.id)
+        service.clear_browse_cache({asset.id})
+        self.assertFalse((service.root / "lookups").exists())
+        for remove_collection in (False, True):
+            with self.subTest(remove_collection=remove_collection):
+                registry = copy.deepcopy(self.registry)
+                if remove_collection:
+                    registry["collections"] = {"other": registry["collections"]["test"]}
+                else:
+                    del registry["collections"]["test"]["icons"]["icon-0"]
+                restarted = self.make(registry=registry, fetch=lambda url: self.fail("network"))
+                self.assertEqual(restarted.load(asset.id).metadata, asset.metadata)
+                self.assertEqual(restarted.attributions([asset.id]), [asset.metadata])
+                with self.assertRaises(catalog.CatalogError):
+                    restarted.prepare(asset.icon_id)
+
+    def test_changed_png_with_replaced_checksum_cannot_replace_selected_pixels(self):
+        asset = self.make().prepare("test:icon-0")
+        folder = Path(self.temp.name) / "iconify" / "assets" / asset.id
+        image = Image.new("L", (1024, 1024))
+        ImageDraw.Draw(image).ellipse((504, 504, 519, 519), fill=255)
+        output = io.BytesIO()
+        image.save(output, "PNG")
+        png = output.getvalue()
+        metadata = dict(asset.metadata, png_sha256=hashlib.sha256(png).hexdigest())
+        (folder / "glyph.png").write_bytes(png)
+        (folder / "metadata.json").write_bytes(catalog._json_bytes(metadata))
+        self.assertIsNone(self.make().load(asset.id))
+
+    def test_forged_lookup_cannot_approve_unreviewed_selection_evidence(self):
+        service = self.make()
+        asset = service.prepare("test:icon-0")
+        metadata = dict(asset.metadata, license={"spdx": "UNKNOWN", "title": "Unreviewed"})
+        metadata["asset_id"] = catalog._selection_id(metadata)
+        forged = catalog.IconifyAsset(metadata["asset_id"], asset.icon_id, asset.glyph, metadata)
+        folder = service.root / "assets" / forged.id
+        folder.mkdir()
+        (folder / "metadata.json").write_bytes(catalog._json_bytes(metadata))
+        (folder / "glyph.png").write_bytes(asset.glyph.png_bytes)
+        lookup = service.root / "lookups" / (metadata["selection_key"] + ".json")
+        lookup.write_bytes(catalog._json_bytes({"asset_id": forged.id}))
+        restarted = self.make(fetch=lambda url: self.fail("network"))
+        self.assertIsNone(restarted.cached(asset.icon_id))
+        with self.assertRaises(catalog.CatalogError) as error:
+            restarted.persist_selection(forged)
+        self.assertEqual(error.exception.code, "license_unverified")
+
+    def test_cancelled_selection_persistence_writes_neither_master_nor_lookup(self):
+        service = self.make(transient=True)
+        asset = service.prepare("test:icon-0")
+        with self.assertRaises(catalog.CatalogCancelled):
+            service.persist_selection(asset, cancel=lambda: True)
+        self.assertFalse((service.root / "assets").exists())
+        self.assertFalse((service.root / "lookups").exists())
+
+    def test_disposable_lookup_count_is_bounded(self):
+        service = self.make()
+        with patch.object(catalog, "ASSET_CACHE_LIMIT", 2):
+            for number in range(5):
+                service.prepare("test:icon-" + str(number))
+        self.assertEqual(len(list((service.root / "lookups").glob("*.json"))), 2)
 
     def test_search_ignores_legacy_capped_disk_cache_and_bounds_ram_queries(self):
         folder = Path(self.temp.name) / "iconify" / "browse"

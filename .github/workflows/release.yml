@@ -17,36 +17,53 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      signpath_test:
+        description: Build and sign TEST artifacts with the self-signed certificate
+        type: boolean
+        required: true
+        default: false
+
+# Serialize whole TEST pipelines; unrelated tag/manual builds retain independent groups.
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.signpath_test && 'signpath-test' || format('release-build-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || !inputs.signpath_test
     runs-on: windows-latest
     permissions:
-      contents: write # create the release and upload assets
+      contents: read
+    outputs:
+      release-artifact: ${{ steps.publish_assets.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.404"
 
       - name: Check that the tag matches VERSION
         if: github.ref_type == 'tag'
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $tag = $env:RELEASE_TAG.TrimStart("v")
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           if ($ver -ne $tag) {
@@ -76,14 +93,14 @@ jobs:
         run: |
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
-          ./scripts/build_settings.ps1
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
           python tools/build_exe.py
 
       - name: Archive native settings symbols
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: HaloBattery-Settings-symbols-${{ github.sha }}
-          path: .build/settings-ui-obj/**/linked/HaloBattery.Settings.pdb
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
@@ -104,8 +121,7 @@ jobs:
         id: setup
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $iscc = ./scripts/get_inno.ps1
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
@@ -124,7 +140,9 @@ jobs:
       - name: Release notes from CHANGELOG.md
         if: github.ref_type == 'tag'
         # fails if CHANGELOG.md has no section for this version
-        run: python tools/release_notes.py ${{ github.ref_name }} --out release_notes.md
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python tools/release_notes.py $env:RELEASE_TAG --out release_notes.md
 
       - name: Checksums
         id: sums
@@ -137,13 +155,589 @@ jobs:
           $lines | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
 
-      - name: Attach to release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+      - name: Stage release assets
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          ZIP: ${{ steps.zip.outputs.zip }}
+          SETUP: ${{ steps.setup.outputs.setup }}
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          Copy-Item -LiteralPath $env:ZIP, $env:SETUP, 'SHA256SUMS.txt', 'release_notes.md' -Destination release-assets
+
+      - name: Upload publish assets
+        id: publish_assets
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          files: |
-            ${{ steps.zip.outputs.zip }}
-            ${{ steps.setup.outputs.setup }}
-            SHA256SUMS.txt
-          fail_on_unmatched_files: true
-          body_path: release_notes.md
+          name: HaloBattery-release-assets-${{ github.sha }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    # A fresh runner receives files only. No project checkout, install or build
+    # step can access the release-write token. Manual runs only create artifacts.
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stable-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download publish assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.release-artifact }}
+          path: release-assets
+
+      - name: Validate release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          zip="HaloBattery-$version.zip"
+          setup="HaloBattery-$version-setup.exe"
+          cd release-assets
+          # Build output is data only. Reject unexpected files and symlinks.
+          [[ "$(find . -mindepth 1 -maxdepth 1 | wc -l)" -eq 4 ]]
+          for file in "$zip" "$setup" SHA256SUMS.txt release_notes.md; do
+            [[ -f "$file" && ! -L "$file" ]]
+          done
+          # Compute hashes only for the two expected names, never paths from a manifest.
+          expected="$(mktemp "$RUNNER_TEMP/halobattery-expected.XXXXXX")"
+          actual="$(mktemp "$RUNNER_TEMP/halobattery-actual.XXXXXX")"
+          trap 'rm -f "$expected" "$actual"' EXIT
+          printf '%s *%s\n' "$(sha256sum "$zip" | cut -d ' ' -f 1)" "$zip" \
+            "$(sha256sum "$setup" | cut -d ' ' -f 1)" "$setup" > "$expected"
+          sed 's/\r$//' SHA256SUMS.txt > "$actual"
+          cmp --silent "$expected" "$actual"
+          echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
+          echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=$(sha256sum "$zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "setup-sha256=$(sha256sum "$setup" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sums-sha256=$(sha256sum SHA256SUMS.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to release
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IMMUTABILITY_ENABLED: ${{ vars.STABLE_RELEASE_IMMUTABILITY_ENABLED }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+        run: |
+          # The owner sets this acknowledgement only after enabling repository
+          # release immutability. Reading that setting requires an admin token,
+          # which this deliberately limited publisher must never receive.
+          if [[ "$IMMUTABILITY_ENABLED" != true ]]; then
+            echo "Enable repository release immutability and set STABLE_RELEASE_IMMUTABILITY_ENABLED=true before publishing." >&2
+            exit 1
+          fi
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          version="${RELEASE_TAG#v}"
+          [[ "$ZIP" == "release-assets/HaloBattery-$version.zip" ]]
+          [[ "$SETUP" == "release-assets/HaloBattery-$version-setup.exe" ]]
+          # Include every page and drafts. Reruns never overwrite old assets;
+          # partial drafts require explicit owner inspection and recovery.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")"
+          if [[ -n "$existing" ]]; then
+            echo "Refusing to modify an existing release or draft for $RELEASE_TAG." >&2
+            exit 1
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.ref')" == "refs/tags/$RELEASE_TAG" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f "tag_name=$RELEASE_TAG" -f "target_commitish=$GITHUB_SHA" -f "name=$RELEASE_TAG" \
+            -F draft=true -F body=@release-assets/release_notes.md --jq '.id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\t'"$RELEASE_TAG" ]]
+          initial_assets="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --jq '.[].id')"
+          [[ -z "$initial_assets" ]]
+          # Deliberately no replacement/delete option, including for drafts.
+          gh release upload "$RELEASE_TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attest validated release assets
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.assets.outputs.zip }}
+            ${{ steps.assets.outputs.setup }}
+          create-storage-record: false
+
+      - name: Publish attested draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$(sha256sum "$ZIP" | cut -d ' ' -f 1)" == "$ZIP_SHA256" ]]
+          [[ "$(sha256sum "$SETUP" | cut -d ' ' -f 1)" == "$SETUP_SHA256" ]]
+          [[ "$(sha256sum release-assets/SHA256SUMS.txt | cut -d ' ' -f 1)" == "$SUMS_SHA256" ]]
+          for subject in "$ZIP" "$SETUP"; do
+            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "refs/tags/$RELEASE_TAG" --source-digest "$GITHUB_SHA" \
+              --bundle "$ATTESTATION_BUNDLE"
+          done
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$RELEASE_ID"$'\ttrue\t'"$RELEASE_TAG" ]]
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          [[ "$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false --jq '.draft')" == false ]]
+          # These commands prove that the external immutable-release policy
+          # actually protected this publication and its three release assets.
+          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
+            gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done
+
+  test_build:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEST_CERT_THUMBPRINT: 17F9F411C424674855A077F9A120A7A434990AF1
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 90
+    outputs:
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      payload-id: ${{ steps.payload.outputs.artifact-id }}
+      payload-digest: ${{ steps.payload.outputs.artifact-digest }}
+      version: ${{ steps.stage.outputs.version }}
+      icon-sha256: ${{ steps.stage.outputs.icon-sha256 }}
+    steps:
+      - name: Require an explicitly enabled pre-release test
+        env:
+          CONFIRMED: ${{ inputs.signpath_test }}
+          ENABLED: ${{ vars.SIGNPATH_TEST_ENABLED }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
+              $env:GITHUB_REPOSITORY -cne 'HeyOkay/HaloBattery' -or
+              $env:GITHUB_REF -cne 'refs/heads/pre-release' -or
+              $env:CONFIRMED -ine 'true' -or $env:ENABLED -cne 'true') {
+            throw 'Test signing requires manual confirmation, SIGNPATH_TEST_ENABLED=true and pre-release.'
+          }
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.404'
+
+      - name: Install locked build dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
+      - name: Build unsigned application
+        run: |
+          python tools/make_icon.py halo.ico
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/make_version.py version_info.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP 'halo-settings-aot-toolchain')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/build_exe.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Stage unsigned tree and exactly two own PEs
+        id: stage
+        run: |
+          $root = (Resolve-Path -LiteralPath dist/HaloBattery).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+            throw 'Reparse points are not valid package inputs.'
+          }
+          $inventory = @{}
+          foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
+            $relative = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+            $inventory[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          New-Item -ItemType Directory -Path signpath-stage/bundle | Out-Null
+          Copy-Item -LiteralPath $root -Destination signpath-stage/bundle/HaloBattery -Recurse -Force
+          Copy-Item -LiteralPath halo.ico -Destination signpath-stage/bundle/halo.ico
+          "icon-sha256=$((Get-FileHash -LiteralPath halo.ico -Algorithm SHA256).Hash)" >> $env:GITHUB_OUTPUT
+          $inventory | ConvertTo-Json | Set-Content -LiteralPath signpath-stage/bundle/unsigned-tree.json -Encoding utf8
+          foreach ($relative in @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')) {
+            $source = Join-Path $root $relative
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+                (Get-Item -LiteralPath $source).VersionInfo.ProductName -cne 'HaloBattery') {
+              throw "Missing or unexpected own PE: $relative"
+            }
+            $destination = Join-Path signpath-stage/payload $relative
+            New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+            Copy-Item -LiteralPath $source -Destination $destination
+          }
+          $matches = @(Select-String -LiteralPath halo_battery.pyw -Pattern '^VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"$')
+          if ($matches.Count -ne 1) { throw 'Expected exactly one release version.' }
+          "version=$($matches[0].Matches[0].Groups[1].Value)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload full unsigned tree and inventory
+        id: bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-unsigned-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/bundle/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload exact two-PE signing input
+        id: payload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-unsigned-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/payload/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  test_sign_payload:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    needs: test_build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEST_CERT_THUMBPRINT: 17F9F411C424674855A077F9A120A7A434990AF1
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 30
+    environment: signpath-test
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the environment signing credential
+        env:
+          SIGNPATH_TEST_API_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNPATH_TEST_API_TOKEN)) {
+            throw 'Add SIGNPATH_TEST_API_TOKEN to the protected signpath-test environment.'
+          }
+
+      - name: Submit exact artifact to the TEST policy
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: payload-test
+          github-artifact-id: ${{ needs.test_build.outputs.payload-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+
+      - name: Check returned paths and TEST signer
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+              $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+              if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+                throw 'Returned signing output contains reparse points.'
+              }
+              $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object {
+                [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+              })
+              $expected = @('HaloBattery.exe', '_internal', '_internal/settings-ui', '_internal/settings-ui/HaloBattery.Settings.exe')
+              if ($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual -CaseSensitive).Count) {
+                throw 'Unexpected returned signing paths.'
+              }
+              foreach ($relative in @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')) {
+                $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $relative)
+                if ($null -eq $signature.SignerCertificate -or
+                    $signature.SignerCertificate.Thumbprint -ine $env:TEST_CERT_THUMBPRINT -or
+                    $signature.SignatureType.ToString() -ne 'Authenticode' -or
+                    $signature.Status.ToString() -notin @('Valid', 'NotTrusted')) {
+                  throw 'Missing, changed or unexpected TEST signature.'
+                }
+              }
+
+      - name: Upload verified signing output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-sign_payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  test_package:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    needs: [test_build, test_sign_payload]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEST_CERT_THUMBPRINT: 17F9F411C424674855A077F9A120A7A434990AF1
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 30
+    outputs:
+      installer-id: ${{ steps.installer.outputs.artifact-id }}
+      installer-digest: ${{ steps.installer.outputs.artifact-digest }}
+      package-id: ${{ steps.package.outputs.artifact-id }}
+    steps:
+      - name: Check out packaging source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Download unsigned bundle from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.test_build.outputs.bundle-id }}
+          path: signpath-input/bundle
+
+      - name: Download signed payload from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.test_sign_payload.outputs.artifact-id }}
+          path: signpath-input/signed-payload
+
+      - name: Verify signatures, PE content and unchanged dependencies
+        run: |
+          ./tools/verify_test_signed_payload.ps1 -SignedDirectory signpath-input/signed-payload -DestinationDirectory signpath-input/bundle/HaloBattery -InventoryPath signpath-input/bundle/unsigned-tree.json
+
+      - name: Package signed application and compile its installer
+        env:
+          APP_VERSION: ${{ needs.test_build.outputs.version }}
+          APP_ICON_SHA256: ${{ needs.test_build.outputs.icon-sha256 }}
+        run: |
+          if ($env:APP_VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid application version.' }
+          if ($env:APP_ICON_SHA256 -notmatch '^[0-9A-Fa-f]{64}$' -or
+              (Get-FileHash -LiteralPath signpath-input/bundle/halo.ico -Algorithm SHA256).Hash -ine $env:APP_ICON_SHA256) {
+            throw 'Installer icon differs from the build input.'
+          }
+          Copy-Item -LiteralPath signpath-input/bundle/halo.ico -Destination halo.ico
+          New-Item -ItemType Directory -Path signpath-stage/packaged, signpath-stage/installer | Out-Null
+          $payload = (Resolve-Path -LiteralPath signpath-input/bundle/HaloBattery).Path
+          $zip = Join-Path $PWD "signpath-stage/packaged/HaloBattery-$env:APP_VERSION-signpath-test.zip"
+          [IO.Compression.ZipFile]::CreateFromDirectory($payload, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+          'SELF-SIGNED TEST ONLY. The generated uninstaller and redistributed DLLs are not signed by this test.' | Set-Content -LiteralPath signpath-stage/packaged/TEST-ONLY.txt -Encoding utf8
+          $iscc = ./scripts/get_inno.ps1
+          & $iscc /Q "/DAppVersion=$env:APP_VERSION" "/DSourceDir=$payload" '/FHaloBattery-test-setup' "/O$PWD/signpath-stage/installer" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Upload exact unsigned installer
+        id: installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-unsigned-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/installer/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload packaged application
+        id: package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-packaged-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/packaged/
+          if-no-files-found: error
+          retention-days: 7
+
+  test_sign_installer:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    needs: test_package
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEST_CERT_THUMBPRINT: 17F9F411C424674855A077F9A120A7A434990AF1
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 30
+    environment: signpath-test
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the environment signing credential
+        env:
+          SIGNPATH_TEST_API_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNPATH_TEST_API_TOKEN)) {
+            throw 'Add SIGNPATH_TEST_API_TOKEN to the protected signpath-test environment.'
+          }
+
+      - name: Submit exact artifact to the TEST policy
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: installer-test
+          github-artifact-id: ${{ needs.test_package.outputs.installer-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+
+      - name: Check returned paths and TEST signer
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+              $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+              if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+                throw 'Returned signing output contains reparse points.'
+              }
+              $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object {
+                [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+              })
+              $expected = @('HaloBattery-test-setup.exe')
+              if ($actual.Count -ne $expected.Count -or @(Compare-Object $expected $actual -CaseSensitive).Count) {
+                throw 'Unexpected returned signing paths.'
+              }
+              foreach ($relative in @('HaloBattery-test-setup.exe')) {
+                $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $relative)
+                if ($null -eq $signature.SignerCertificate -or
+                    $signature.SignerCertificate.Thumbprint -ine $env:TEST_CERT_THUMBPRINT -or
+                    $signature.SignatureType.ToString() -ne 'Authenticode' -or
+                    $signature.Status.ToString() -notin @('Valid', 'NotTrusted')) {
+                  throw 'Missing, changed or unexpected TEST signature.'
+                }
+              }
+
+      - name: Upload verified signing output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-TEST-sign_installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  test_verify:
+    if: github.event_name == 'workflow_dispatch' && inputs.signpath_test
+    needs: [test_build, test_sign_payload, test_package, test_sign_installer]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEST_CERT_THUMBPRINT: 17F9F411C424674855A077F9A120A7A434990AF1
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 15
+    steps:
+      - name: Check out verification helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Download unsigned installer from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.test_package.outputs.installer-id }}
+          path: signpath-input/unsigned-installer
+
+      - name: Download signed installer from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.test_sign_installer.outputs.artifact-id }}
+          path: signpath-input/signed-installer
+
+      - name: Download packaged application from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.test_package.outputs.package-id }}
+          path: signpath-test-results
+
+      - name: Verify installer signature and unchanged PE content
+        run: |
+          ./tools/verify_test_signed_payload.ps1 -InstallerPath signpath-input/signed-installer/HaloBattery-test-setup.exe -UnsignedInstallerPath signpath-input/unsigned-installer/HaloBattery-test-setup.exe
+          Copy-Item -LiteralPath signpath-input/signed-installer/HaloBattery-test-setup.exe -Destination signpath-test-results/HaloBattery-test-setup.exe
+
+      - name: Record signing evidence and final checksums
+        env:
+          APP_VERSION: ${{ needs.test_build.outputs.version }}
+          PAYLOAD_ARTIFACT: ${{ needs.test_build.outputs.payload-id }}
+          PAYLOAD_DIGEST: ${{ needs.test_build.outputs.payload-digest }}
+          PAYLOAD_REQUEST: ${{ needs.test_sign_payload.outputs.request-id }}
+          INSTALLER_ARTIFACT: ${{ needs.test_package.outputs.installer-id }}
+          INSTALLER_DIGEST: ${{ needs.test_package.outputs.installer-digest }}
+          INSTALLER_REQUEST: ${{ needs.test_sign_installer.outputs.request-id }}
+        run: |
+          if ($env:APP_VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid application version.' }
+          $files = @("HaloBattery-$env:APP_VERSION-signpath-test.zip", 'HaloBattery-test-setup.exe')
+          $expected = $files + @('TEST-ONLY.txt')
+          $entries = @(Get-ChildItem -LiteralPath signpath-test-results -Force)
+          if ($entries.Count -ne 3 -or @($entries | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count -or
+              @(Compare-Object $expected @($entries.Name) -CaseSensitive).Count) { throw 'Unexpected TEST result files.' }
+          $lines = foreach ($relative in $files) {
+            $file = Join-Path signpath-test-results $relative
+            '{0} *{1}' -f (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant(), $relative
+          }
+          $lines | Set-Content -LiteralPath signpath-test-results/SHA256SUMS.txt -Encoding ascii
+          @{
+            test_only = $true; source_commit = $env:GITHUB_SHA; run_id = $env:GITHUB_RUN_ID; run_attempt = $env:GITHUB_RUN_ATTEMPT
+            policy = 'test-signing'; certificate_thumbprint = $env:TEST_CERT_THUMBPRINT
+            payload_artifact_id = $env:PAYLOAD_ARTIFACT; payload_artifact_digest = $env:PAYLOAD_DIGEST; payload_request_id = $env:PAYLOAD_REQUEST
+            installer_artifact_id = $env:INSTALLER_ARTIFACT; installer_artifact_digest = $env:INSTALLER_DIGEST; installer_request_id = $env:INSTALLER_REQUEST
+          } | ConvertTo-Json | Set-Content -LiteralPath signpath-test-results/signing-report.json -Encoding utf8
+
+      - name: Upload final TEST files only
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-SELF-SIGNED-TEST-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-test-results/
+          if-no-files-found: error
+          retention-days: 7

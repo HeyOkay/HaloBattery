@@ -21,6 +21,7 @@ public sealed partial class MainWindow
   ["gamepad-2"]=new[]{"M6.0,11.0 L10.0,11.0","M8.0,9.0 L8.0,13.0","M15.0,12.0 L15.01,12.0","M18.0,10.0 L18.01,10.0","M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"},
   ["languages"]=new[]{"m5 8 6 6","m4 14 6-6 2-3","M2 5h12","M7 2h1","m22 22-5-10-5 10","M14 18h6"},
   ["circle-arrow-up"]=new[]{"M2.0,12.0 A10.0,10.0 0 1 0 22.0,12.0 A10.0,10.0 0 1 0 2.0,12.0","m16 12-4-4-4 4","M12 16V8"},
+  ["smartphone"]=new[]{"M7.0,2.0 H17.0 A2.0,2.0 0 0 1 19.0,4.0 V20.0 A2.0,2.0 0 0 1 17.0,22.0 H7.0 A2.0,2.0 0 0 1 5.0,20.0 V4.0 A2.0,2.0 0 0 1 7.0,2.0 Z","M12 18h.01"},
   ["smartphone-nfc"]=new[]{"M3.0,6.0 H8.0 A1.0,1.0 0 0 1 9.0,7.0 V17.0 A1.0,1.0 0 0 1 8.0,18.0 H3.0 A1.0,1.0 0 0 1 2.0,17.0 V7.0 A1.0,1.0 0 0 1 3.0,6.0 Z","M13 8.32a7.43 7.43 0 0 1 0 7.36","M16.46 6.21a11.76 11.76 0 0 1 0 11.58","M19.91 4.1a15.91 15.91 0 0 1 .01 15.8"},
   ["bluetooth"]=new[]{"m7 7 10 10-5 5V2l5 5L7 17"},
   ["circle"]=new[]{"M2.0,12.0 A10.0,10.0 0 1 0 22.0,12.0 A10.0,10.0 0 1 0 2.0,12.0"},
@@ -70,7 +71,7 @@ public sealed partial class MainWindow
   "mouse"=>"mouse", "keyboard"=>"keyboard", "headset"=>"headphones",
   "microphone"=>"mic", "speaker"=>"speaker", "webcam"=>"webcam",
   "health"=>"heart-pulse", "smart_home"=>"house", "watch"=>"watch",
-  "display"=>"tv-minimal", "tracker"=>"radar",
+  "phone"=>"smartphone", "display"=>"tv-minimal", "tracker"=>"radar",
   "gamepad" or "dualshock" or "dualsense"=>"gamepad-2", _=>"bluetooth"
  };
 }

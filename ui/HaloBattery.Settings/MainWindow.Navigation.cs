@@ -21,11 +21,13 @@ public sealed partial class MainWindow
         Visibility = Visibility.Collapsed
     };
     private readonly List<string> navigationPageIds = new();
+    private readonly Dictionary<string, (Button Button, FrameworkElement Glyph, TextBlock Label, SolidColorBrush Hover, SolidColorBrush Pressed)> navigationGlyphs = new();
     private Storyboard? navigationAnimation;
     private string navigationSignature = "";
     private string? navigationSelectionId;
     private double navigationTargetY;
     private bool navigationHostBuilt;
+    private string NavigationHighlightColor => dark ? DarkChromeHoverBackground : "#14000000";
 
     internal double NavigationHighlightY => navigationTranslation.Y;
     internal double NavigationHighlightTargetY => navigationTargetY;
@@ -50,19 +52,15 @@ public sealed partial class MainWindow
     private void RefreshNavigation(bool motion = true)
     {
         var pages = State.Pages.ToArray();
-        var signature = JsonSerializer.Serialize(new
-        {
-            dark,
-            language = State.Language,
-            pages = pages.Select(page => new { page.Id, page.Title })
-        });
-        navigationHighlight.Background = Brush(dark ? "#20FFFFFF" : "#14000000");
+        var signature = SettingsJson.Navigation(dark, State.Language, pages);
+        navigationHighlight.Background = Brush(NavigationHighlightColor);
         if (signature != navigationSignature)
         {
             navigationSignature = signature;
             nav.Children.Clear();
             navLabels.Clear();
             navigationPageIds.Clear();
+            navigationGlyphs.Clear();
             foreach (var page in pages)
             {
                 var id = page.Id;
@@ -93,13 +91,17 @@ public sealed partial class MainWindow
                     Background = Brush("#00000000"),
                     Foreground = TextBrush
                 };
+                var hover = Brush(NavigationHighlightColor);
+                button.Resources["ButtonBackgroundPointerOver"] = hover;
+                var pressed = Brush(dark ? DarkChromePressedBackground : "#2C000000");
+                button.Resources["ButtonBackgroundPressed"] = pressed;
                 if (!dark)
                 {
-                    button.Resources["ButtonBackgroundPointerOver"] = Brush("#1F000000");
-                    button.Resources["ButtonBackgroundPressed"] = Brush("#2C000000");
                     button.Resources["ButtonForegroundPointerOver"] = TextBrush;
                     button.Resources["ButtonForegroundPressed"] = TextBrush;
                 }
+                BindChromeGlyph(button, () => icon, () => id == navigationSelectionId, label: label);
+                navigationGlyphs.Add(id, (button, icon, label, hover, pressed));
                 ToolTipService.SetToolTip(button, page.Title);
                 AutomationProperties.SetName(button, page.Title);
                 button.Click += (_, _) => { if (id != current) Navigate(id, true); };
@@ -130,6 +132,19 @@ public sealed partial class MainWindow
         var first = navigationSelectionId is null;
         var reselect = navigationSelectionId == id && navigationTargetY == target;
         navigationSelectionId = id;
+        foreach (var (pageId, item) in navigationGlyphs)
+        {
+            item.Glyph.Opacity = ChromeGlyphOpacity(item.Button, pageId == id);
+            item.Label.Foreground = ChromeTextBrush(item.Button, pageId == id);
+            // The moving selection layer already paints the active row.
+            item.Hover.Color = pageId == id ? Windows.UI.Color.FromArgb(0, 0, 0, 0)
+                : ((SolidColorBrush)navigationHighlight.Background).Color;
+            // Add only the remaining white on the selected row so its final
+            // pressed shade matches the other rows instead of doubling the fill.
+            item.Pressed.Color = dark && pageId == id
+                ? Windows.UI.Color.FromArgb(18, 255, 255, 255)
+                : Brush(dark ? DarkChromePressedBackground : "#2C000000").Color;
+        }
         navigationTargetY = target;
         navigationHighlight.Visibility = Visibility.Visible;
         if (first || !motion || !settings.AnimationsEnabled || closing)

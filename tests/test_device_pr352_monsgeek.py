@@ -15,15 +15,16 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from providers import monsgeek as G  # noqa: E402
 
 
-def answer(level=54, mouse=100, kind=1):
+def answer(level=54, mouse=100, kind=1, keyboard_online=1, mouse_online=1):
     """A status reply, report id first, as hidapi returns it."""
-    return [0x00, 0x00, level, mouse, 0x01, 0x01, 0x01, kind] + [0x00] * 57
+    return [0x00, 0x00, level, mouse, keyboard_online, mouse_online, 0x01, kind] + [0x00] * 57
 
 
 class FakeDongle:
@@ -91,6 +92,22 @@ class ParseTest(unittest.TestCase):
         self.assertIsNone(G.parse_status(None))
 
 
+    def test_keyboard_online_is_independent_of_mouse_presence_or_stored_level(self):
+        for kind in (1, 3):
+            for online in (0, 2, 255):
+                with self.subTest(kind=kind, online=online):
+                    raw = [0, 0, 54, 100, online, 1, 1, kind] + [0] * 57
+                    self.assertIsNone(G.parse_status(raw))
+        self.assertIsNone(G.parse_status(answer(54, kind=2, keyboard_online=1)))
+        for level in (0, 100):
+            self.assertEqual(G.parse_status(answer(level, mouse_online=0)), (level, 100, 1))
+
+    def test_garbage_reply_does_not_raise_or_turn_into_zero(self):
+        for bad in (None, 42, "zero", {}, [None] * 65, [-1] * 65, [256] * 65):
+            with self.subTest(bad=bad):
+                self.assertIsNone(G.parse_status(bad))
+
+
 class PollTest(unittest.TestCase):
     def setUp(self):
         self._saved = (G.hid, G.hidlist)
@@ -135,6 +152,30 @@ class PollTest(unittest.TestCase):
         out, _ = self.poll(fake, ents)
         self.assertEqual(out, [])
         self.assertEqual(fake.sent, [])
+
+
+    def test_offline_keyboard_never_publishes_its_cached_level_as_live(self):
+        for kind in (1, 2, 3):
+            fake = FakeDongle(answer(54, kind=kind, keyboard_online=0), answer_path=CONFIG)
+            out, _diag = self.poll(fake, entries())
+            self.assertEqual(out, [])
+
+    def test_disconnect_retains_last_confirmed_level_grey_then_expires(self):
+        fake = FakeDongle(answer(54), answer_path=CONFIG)
+        provider = G.MonsGeekProvider()
+        clock = [1000.0]
+        G.hid = types.SimpleNamespace(device=lambda: fake)
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid: entries())
+        with mock.patch.object(G.time, "time", lambda: clock[0]):
+            first = provider.poll()
+            self.assertEqual([(s.level, s.online) for s in first], [(54, True)])
+            fake.reply = answer(77, keyboard_online=0)
+            clock[0] += 5
+            stale = provider.poll()
+            self.assertEqual([(s.level, s.online) for s in stale], [(54, False)])
+            self.assertEqual(provider._last["monsgeek:5026"][0], 54)
+            clock[0] += G.ASLEEP_KEEP + 1
+            self.assertEqual(provider.poll(), [])
 
 
 if __name__ == "__main__":

@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import datetime
 import logging
+import math
 import re
 import sys
 import threading
 import time
 from typing import Callable, List, Optional, Tuple
 
-from . import flyout
+from . import branding, flyout
 from halo import i18n
 
 log = logging.getLogger("halo_battery")
@@ -34,7 +35,9 @@ log = logging.getLogger("halo_battery")
 WIDTH = 460
 PAD = 28                      # around the content
 LOGO = 44                     # the app logo, left of the title
-LOGO_GAP = 16
+LOGO_GAP = LOGO * branding.WORDMARK_GAP_PER_ICON  # visible ink gap, scaled from Settings
+BRAND_PX, VERSION_GAP = LOGO * branding.WORDMARK_EM_PER_ICON, 8
+EYEBROW_LIFT = 4               # breathing room above the wordmark
 CLOSE_BOX = 32                # the close button (top right)
 BODY_MAX_H = 330              # the notes scroll beyond this
 SECTION_GAP = 16              # above a section heading
@@ -184,6 +187,8 @@ def colours(light: bool, accent: Optional[List[Tuple[int, int, int]]] = None) ->
     out["key"] = "#%02x%02x%02x" % (r, g, b + 1 if b < 255 else b - 1)
     out["tint_abgr"] = flyout.abgr(p["tint"])
     out["base_rgb"] = base
+    out["brand_text"] = "#1b1b1b" if light else "#ffffff"
+    out["brand_accent"] = _hex(branding.accent_colour(button_rgb, light))
     return out
 
 
@@ -325,10 +330,11 @@ def flatten(img, background: Tuple[int, int, int], key: Tuple[int, int, int], cu
     return flat
 
 
-def app_logo(size: int, background: Tuple[int, int, int], key: Tuple[int, int, int]):
+def app_logo(size: int, background: Tuple[int, int, int], key: Tuple[int, int, int], *, light=None):
     """The approved app artwork flattened for the acrylic window's colour key."""
     from . import app_icon
-    return flatten(app_icon.render(size), background, key)
+    artwork = app_icon.render(size) if light is None else app_icon.render_header(size, light)
+    return flatten(artwork, background, key)
 
 
 def button_image(w: int, h: int, radius: int, fill: Tuple[int, int, int], state: str,
@@ -611,26 +617,59 @@ class WhatsNewWindow:
 
         # header
         top = px(PAD)
-        x_text = px(PAD) + px(LOGO) + px(LOGO_GAP)
         cv = self.cv
         self._logo = None
+        logo_right = px(LOGO)
         try:
-            from PIL import ImageTk
-            self._logo = ImageTk.PhotoImage(app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"])),
-                                            master=self.win)
+            from PIL import Image, ImageChops, ImageTk
+            picture = app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"]), light=self.light)
+            painted = ImageChops.difference(picture, Image.new("RGB", picture.size, c["key"])).getbbox()
+            if painted is not None:
+                logo_right = painted[2]
+            self._logo = ImageTk.PhotoImage(picture, master=self.win)
         except Exception as e:
             log.info("what's new: no logo (%s)", e)
         label_h = self.f_label.metrics("linespace")
         eyebrow_h = self.f_eyebrow.metrics("linespace")
-        title_h = self.f_title.metrics("linespace")
+        self._wordmark = None
+        self._brand_item = None
+        brand_left = 0
+        try:
+            artwork, brand_ascent = branding.wordmark(px(BRAND_PX), c["brand_text"], c["brand_accent"])
+            brand_width, brand_height = artwork.size
+            ink = artwork.getchannel("A").point(lambda value: 255 if value >= 4 else 0).getbbox()
+            if ink is not None:
+                brand_left = ink[0]
+            brand_icon_center = branding.icon_center(px(BRAND_PX))
+            self._wordmark = ImageTk.PhotoImage(
+                flatten(artwork, c["base_rgb"], _rgb(c["key"]), cutoff=4), master=self.win)
+        except Exception as error:
+            log.info("what's new: wordmark font unavailable (%s)", error)
+            brand_width = self.f_title.measure("HaloBattery")
+            brand_height = self.f_title.metrics("linespace")
+            brand_ascent = self.f_title.metrics("ascent")
+            brand_icon_center = brand_height / 2
+        # The gap is between painted edges; neither icon nor font side bearings
+        # should add another invisible margin beside the approved SVG spacing.
+        x_text = round(px(PAD) + logo_right + LOGO_GAP * self.scale - brand_left)
+        title_ascent = max(math.ceil(brand_ascent), self.f_title.metrics("ascent"))
+        title_h = title_ascent + max(math.ceil(brand_height - brand_ascent), self.f_title.metrics("descent"))
         sub = subtitle(self.from_version, self.date, language=self.language)
         header_h = eyebrow_h + title_h + (label_h if sub else 0)
         y = top
-        cv.create_text(x_text, y, text=self.tr("whatsnew.title"), font=self.f_eyebrow, fill=c["link"], anchor="nw",
+        cv.create_text(x_text, y - px(EYEBROW_LIFT), text=self.tr("whatsnew.title"), font=self.f_eyebrow, fill=c["link"], anchor="nw",
                        tags="accent")
         y += eyebrow_h
-        cv.create_text(x_text, y - px(2), text=f"Halo Battery {self.version}", font=self.f_title,
-                       fill=c["text"], anchor="nw", tags="text")
+        title_baseline = y - px(2) + title_ascent
+        if self._wordmark is not None:
+            self._brand_item = cv.create_image(x_text, title_baseline - brand_ascent,
+                                               image=self._wordmark, anchor="nw")
+        else:
+            cv.create_text(x_text, title_baseline - brand_ascent, text="HaloBattery", font=self.f_title,
+                           fill=c["brand_text"], anchor="nw", tags="brand_text")
+        cv.create_text(x_text + brand_width + px(VERSION_GAP),
+                       title_baseline - self.f_title.metrics("ascent"), text=self.version,
+                       font=self.f_title, fill=c["text"], anchor="nw", tags="text")
         y += title_h
         if sub:
             cv.create_text(x_text, y - px(2), text=sub, font=self.f_label, fill=c["muted"], anchor="nw",
@@ -638,7 +677,7 @@ class WhatsNewWindow:
             y += label_h
         self._logo_item = None
         if self._logo is not None:
-            self._logo_item = cv.create_image(px(PAD), top + (header_h - px(LOGO)) // 2,
+            self._logo_item = cv.create_image(px(PAD), round(title_baseline - brand_ascent + brand_icon_center - px(LOGO) / 2),
                                               image=self._logo, anchor="nw")
         # the close button, top right
         cb = px(CLOSE_BOX)
@@ -1006,20 +1045,39 @@ class WhatsNewWindow:
         """Every drawn item in the colour of its role (its tag) in self.c."""
         for canvas in (self.cv, self.body):
             for role, key in (("text", "text"), ("muted", "muted"), ("accent", "link"),
-                              ("line", "line")):
+                              ("line", "line"), ("brand_text", "brand_text")):
                 canvas.itemconfigure(role, fill=self.c[key])
         self.cv.itemconfigure("border", outline=self.c["border"])
 
     def _make_logo(self) -> None:
+        self._make_wordmark()
         if self._logo_item is None:
             return
         from PIL import ImageTk
-        self._logo = ImageTk.PhotoImage(
-            app_logo(self.px(LOGO), self.c["base_rgb"], _rgb(self.c["key"])), master=self.win)
+        if self._theme_move is not None:
+            from PIL import Image
+            from . import app_icon
+            dark_amount = max(0.0, min(1.0, (_rgb(self.c["brand_text"])[0] - 27) / 228))
+            artwork = Image.blend(app_icon.render_header(self.px(LOGO), True),
+                                  app_icon.render_header(self.px(LOGO), False), dark_amount)
+            picture = flatten(artwork, self.c["base_rgb"], _rgb(self.c["key"]))
+        else:
+            picture = app_logo(self.px(LOGO), self.c["base_rgb"], _rgb(self.c["key"]), light=self.light)
+        self._logo = ImageTk.PhotoImage(picture, master=self.win)
         self.cv.itemconfigure(self._logo_item, image=self._logo)
+
+    def _make_wordmark(self) -> None:
+        if getattr(self, "_brand_item", None) is None:
+            return
+        from PIL import ImageTk
+        artwork, _ = branding.wordmark(self.px(BRAND_PX), self.c["brand_text"], self.c["brand_accent"])
+        self._wordmark = ImageTk.PhotoImage(
+            flatten(artwork, self.c["base_rgb"], _rgb(self.c["key"]), cutoff=4), master=self.win)
+        self.cv.itemconfigure(self._brand_item, image=self._wordmark)
 
     def recolour(self) -> None:
         self.c = colours(self.light, self.accent)
+        self._make_wordmark()
         self._make_buttons()
         self._pills = {}
         self._chips = {}

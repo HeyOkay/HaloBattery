@@ -1,4 +1,6 @@
 """Settings use cached statuses and the exact tray renderer, without hardware."""
+import base64
+import io
 import os
 import sys
 import threading
@@ -28,6 +30,16 @@ class SettingsControllerTests(HideRenameTestCase):
         with mock.patch.object(app, "show_whats_new") as show:
             controller.action("show_whats_new")
         show.assert_called_once_with()
+
+    def test_about_links_open_the_website_discord_and_project(self):
+        app, controller = self.setup_controller()
+        with mock.patch.object(app, "open_url") as open_url:
+            for name in ("open_website", "open_discord", "open_project", "open_issue"):
+                controller.action(name)
+        project = "https://github.com/" + controller.context["repo"]
+        self.assertEqual([c.args for c in open_url.call_args_list],
+                         [("https://halobattery.app",), ("https://discord.gg/K796KR9xtk",),
+                          (project,), (project + "/issues/new/choose",)])
 
     def test_snapshot_is_detached_and_hidden_devices_remain_editable(self):
         app, controller = self.setup_controller()
@@ -136,6 +148,84 @@ class SettingsControllerTests(HideRenameTestCase):
             for index in (0,1,25,hb.icons.BREATH_FRAMES-1):
                 self.assertEqual(controller.preview(st.key,frame=index).tobytes(),expected[index].tobytes())
 
+    def test_preview_transition_matches_canonical_and_static_layers(self):
+        from PIL import Image
+        for style in ("thin", "classic"):
+            for level, charging, online, paused in ((0, False, True, False), (1, False, True, False),
+                    (100, False, True, False), (15, True, True, False),
+                    (None, True, True, False), (None, False, True, False),
+                    (42, False, False, False), (42, False, False, True)):
+                for percent in (False, True):
+                    with self.subTest(style=style, level=level, charging=charging, online=online, percent=percent):
+                        st = replace(dev(level=level), charging=charging, online=online, polling_paused=paused)
+                        app, controller = self.setup_controller({"ring_style": style, "percent_in_icon": percent}, st)
+                        image, packet = controller.preview_transition(st.key)
+                        self.assertEqual(image.tobytes(), controller.preview(st.key).tobytes())
+                        state = app.icon_render_state(st, size=80)
+                        lvl, charge, active, low, light, badge, animate, text, pause = state[:9]
+                        phase = app.anim_tick / hb.icons.BREATH_FRAMES if animate else 0.
+                        pulse = hb.icons.breath_level(phase) if animate else 1.
+                        expected = hb.icons.render(lvl, charge, active, low, light, badge, pulse=pulse,
+                            text=text, force_active=pause if not animate else False, size=80,
+                            brand=state[10], brand_color=state[11], filled=state[12],
+                            animation_phase=phase if animate and lvl is None else 0.,
+                            ring_style=style, include_arc=False)
+                        background = Image.open(io.BytesIO(base64.b64decode(packet["background"])))
+                        self.assertEqual(background.tobytes(), expected.tobytes())
+                        eligible = active and level is not None
+                        self.assertEqual(packet["eligible"], eligible)
+                        fraction = (max(level, 2) / 100 if level else 0.) if eligible else 0.
+                        self.assertEqual(packet["level"], fraction)
+                        fg = (0, 0, 0) if light else (255, 255, 255)
+                        color = hb.icons.arc_color(level, charging, low, fg)
+                        opacity = hb.icons.NEUTRAL_OPACITY if color == fg else 255
+                        self.assertEqual(packet["color"], [*color, int(opacity * pulse)])
+                        width = 4. if style == "thin" else 6.5
+                        self.assertEqual(packet["width"], width * 80 / 64)
+                        self.assertEqual(packet["radius"], (31.5 - width / 2) * 80 / 64)
+
+    def test_retained_phone_uses_its_visible_ring_for_selection_transition(self):
+        from providers.base import DeviceStatus
+        phone = DeviceStatus("phone_link:fixture", "S24+", 65, False, False, "phone_link",
+            kind="phone", charging_known=False, ui_message="state.phone_link_last_reported",
+            ui_params={"level": 65})
+        app, controller = self.setup_controller(status=phone)
+        self.assertFalse(phone.online)
+        self.assertTrue(app.icon_render_state(phone, size=80)[2])
+        image, packet = controller.preview_transition(phone.key)
+        self.assertTrue(packet["eligible"])
+        self.assertEqual(packet["level"], .65)
+        self.assertEqual(image.tobytes(), controller.preview(phone.key).tobytes())
+        # A retained normal offline device has no visible charge arc.
+        offline = replace(phone, key="fixture:offline", source="fixture", ui_message="")
+        app.apply([offline])
+        self.assertFalse(controller.preview_transition(offline.key)[1]["eligible"])
+
+    def test_transition_custom_art_and_background_cache_follow_preview_state(self):
+        from PIL import Image
+        app, controller = self.setup_controller()
+        glyph = mock.Mock()
+        glyph.render.return_value = Image.new("RGBA", (80, 80), (50, 60, 70, 100))
+        app._custom_assets = {"custom": types.SimpleNamespace(glyph=glyph)}
+        state = (*app.icon_render_state(dev(), size=80)[:13], "custom", "classic")
+        with mock.patch.object(app, "icon_render_state", return_value=state):
+            image, first = controller.preview_transition(dev().key)
+            self.assertEqual(image.tobytes(), controller.preview(dev().key).tobytes())
+            self.assertEqual(first, controller.preview_transition(dev().key)[1])
+            self.assertEqual(glyph.render.call_count, 2)
+            expected = hb.icons.render(*state[:6], size=80, brand=state[10],
+                brand_color=state[11], filled=state[12], custom_glyph=glyph,
+                ring_style="classic", include_arc=False)
+            background = Image.open(io.BytesIO(base64.b64decode(first["background"])))
+            self.assertEqual(background.tobytes(), expected.tobytes())
+        app.icons.clear()
+        image, empty = controller.preview_transition()
+        self.assertFalse(empty["eligible"])
+        self.assertNotEqual(first["background"], empty["background"])
+        self.assertEqual(image.tobytes(), controller.preview().tobytes())
+        with self.assertRaises(ValueError):
+            controller.preview_transition(size=True)
+
     def test_no_status_preview_and_disappearance_are_safe(self):
         app, controller = self.setup_controller()
         app.icons.clear()
@@ -222,6 +312,132 @@ class CompactTrayTests(HideRenameTestCase):
         with mock.patch.object(settings_host, "SettingsHost") as manager:
             app.open_settings("mouse:1", page="devices")
             app.open_settings(page="general")
-        manager.assert_called_once_with(app.settings)
+        manager.assert_called_once_with(
+            app.settings, on_failure=app._settings_unavailable, on_ready=app._settings_available)
         self.assertEqual(manager.return_value.open.call_args_list,
                          [mock.call("mouse:1", page="devices"), mock.call(None, page="general")])
+
+
+class SettingsFailureFallbackTests(HideRenameTestCase):
+    def setup_app(self, language="en"):
+        app = make_app({"language": language})
+        app.stop_evt = threading.Event()
+        app.apply([dev()])
+        return app
+
+    def preferences(self, menu, app):
+        return next(item for item in menu.items if item.text == app.tr("menu.preferences"))
+
+    def test_companion_launch_failures_show_error_and_leave_preferences_usable(self):
+        from halo.settings_host import SettingsHost
+        errors = (FileNotFoundError("missing companion"), PermissionError("blocked companion"),
+                  OSError(193, "incompatible executable"), OSError(216, "incompatible architecture"),
+                  OSError(1150, "unsupported Windows version"))
+        for error in errors:
+            with self.subTest(error=error):
+                app = self.setup_app()
+                menu = app.build_tray_menu(None)
+                manager = SettingsHost(object(), popen=mock.Mock(side_effect=error),
+                                       on_failure=app._settings_unavailable, on_ready=app._settings_available)
+                # Launch arguments are unrelated to this simulated OS failure.
+                with mock.patch.object(manager, "_launch_args", return_value=["settings.exe"]), \
+                        mock.patch.object(manager, "_thread"), \
+                        mock.patch.object(hb, "show_settings_error") as show:
+                    manager.open()
+                    with self.assertLogs("halo_battery", level="ERROR"):
+                        manager._launch(manager._session)
+                    manager._dispatch_notifications()
+                show.assert_called_once_with(app.tr("settings.open_failed", preferences=app.tr("menu.preferences")))
+                prefs = self.preferences(menu, app)
+                self.assertTrue(prefs.visible)
+                sound = next(item for item in prefs.submenu.items if item.text == app.tr("preferences.low_sound"))
+                before = app.cfg["low_sound"]
+                sound(None)
+                self.assertEqual(app.cfg["low_sound"], not before)
+                self.assertIsNone(manager._session)
+
+    def test_existing_device_and_placeholder_menus_gain_preferences_then_recover(self):
+        app = self.setup_app()
+        owner = next(iter(app.icons.values()))
+        menus = [app.build_tray_menu(owner), app.build_tray_menu(None)]
+        with mock.patch.object(hb, "show_settings_error") as show, mock.patch.object(app, "refresh_menus") as refresh:
+            for menu in menus:
+                self.assertFalse(self.preferences(menu, app).visible)
+            app._settings_unavailable("launch")
+            refresh.assert_called_once_with()
+            show.assert_called_once_with(app.tr("settings.open_failed", preferences=app.tr("menu.preferences")))
+            for menu in menus:
+                prefs = self.preferences(menu, app)
+                self.assertTrue(prefs.visible)
+                sound = next(item for item in prefs.submenu.items if item.text == app.tr("preferences.low_sound"))
+                before = app.cfg["low_sound"]
+                sound(None)
+                self.assertEqual(app.cfg["low_sound"], not before)
+            # Merely opening Settings again keeps the fallback until visible is acknowledged.
+            app.settings = object()
+            with mock.patch("halo.settings_host.SettingsHost"):
+                app.open_settings()
+            self.assertTrue(self.preferences(menus[0], app).visible)
+            app._settings_available()
+            self.assertEqual(refresh.call_count, 2)
+            app._settings_available()
+            self.assertEqual(refresh.call_count, 2)
+            for menu in menus:
+                self.assertFalse(self.preferences(menu, app).visible)
+
+    def test_rapid_retry_does_not_stack_error_dialogs(self):
+        app = self.setup_app()
+        with mock.patch.object(hb, "show_settings_error", side_effect=lambda text: app._settings_unavailable("connection")) as show:
+            app._settings_unavailable("launch")
+        show.assert_called_once()
+        self.assertFalse(app._settings_error_pending)
+        with mock.patch.object(hb, "show_settings_error") as retry:
+            app._settings_unavailable("startup")
+        retry.assert_called_once()
+
+    def test_queued_dialog_is_suppressed_after_recovery_or_shutdown(self):
+        for shutdown in (False, True):
+            with self.subTest(shutdown=shutdown):
+                app = self.setup_app()
+                pending = []
+                with mock.patch.object(hb.threading, "Thread", side_effect=lambda target, **kw:
+                                       types.SimpleNamespace(start=lambda: pending.append(target))), \
+                        mock.patch.object(hb, "show_settings_error") as show:
+                    app._settings_unavailable("launch")
+                    self.assertEqual(len(pending), 1)
+                    if shutdown:
+                        app.stop_evt.set()
+                    else:
+                        app._settings_available()
+                    pending[0]()
+                show.assert_not_called()
+                self.assertFalse(app._settings_error_pending)
+
+    def test_shutdown_does_not_add_fallback_or_schedule_dialog(self):
+        app = self.setup_app()
+        app.stop_evt.set()
+        with mock.patch.object(hb.threading, "Thread") as thread:
+            app._settings_unavailable("connection")
+        thread.assert_not_called()
+        self.assertFalse(getattr(app, "_settings_fallback", False))
+
+    def test_message_and_fallback_are_localized_in_all_catalogs(self):
+        for language in hb.i18n.LANGUAGES:
+            with self.subTest(language=language):
+                app = self.setup_app(language)
+                with mock.patch.object(hb, "show_settings_error") as show:
+                    app._settings_unavailable("launch")
+                text = show.call_args.args[0]
+                self.assertIn(app.tr("menu.preferences"), text)
+                self.assertNotIn("{", text)
+                self.assertNotIn("settings.open_failed", text)
+                menu = app.build_tray_menu(None)
+                self.assertTrue(self.preferences(menu, app).visible)
+
+    def test_dialog_error_releases_the_retry_guard(self):
+        app = self.setup_app()
+        app._settings_fallback = app._settings_error_pending = True
+        with mock.patch.object(hb, "show_settings_error", side_effect=OSError("blocked")):
+            with self.assertRaises(OSError):
+                app._show_settings_error()
+        self.assertFalse(app._settings_error_pending)

@@ -36,6 +36,7 @@ class FakeCatalog:
         if name=='test:mouse-99':self.warm_done.set()
         return SmallGlyph()
     def prepare(self,*args,**kw):raise AssertionError('Full selected master created during browse')
+    def close_transport(self):pass
     def clear_browse_cache(self,keep):self.cleared.append(list(keep))
 
 
