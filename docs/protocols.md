@@ -553,6 +553,14 @@ The K99 V3 uses M HUB's **GLW func-config** read on the id-less 64-byte generic-
 
 The request header is flag `0x55`, command `0x05`, reserved, checksum, size and little-endian offset; for a read with no payload the checksum is size + offset = `0x38`. The reply carries the same fields and its checksum covers size + offset + payload. The battery byte is **payload offset 32**: bit 7 is charging, bits 0-6 are the percentage. The earlier `55 03 00 38 38` query returned a different info frame (52 % in the reporter's diagnostics while M HUB showed 90 %), so it is not used. Protocol from [krisgfx9/Wireless-Device-Battery-Monitor PR #1957](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/pull/1957), recovered from M HUB's own web driver and confirmed on a G75 V2 on the same `3837:3033` receiver. Confirmed on the reporter's K99 V3 (@Kolomhon, #458): the level agreed with M HUB within its 10 % display step, and the charging bit followed the cable. The query is only sent shortly after real keyboard input, like the ATK keyboard provider: on an idle keyboard the request itself can wake the keyboard, and the wake can reach the desktop as input (#458 follow-up).
 
+### Zaopin Z2 4K
+
+**Connection:** 2.4 GHz 4K receiver (`3554:F527`), USB-C (`3554:F526`), and Bluetooth LE.
+
+The 4K receiver and the mouse on USB-C both answer the same 17-byte Compx
+power query (command `0x04`) on the `ff02:0002` collection of interface 1.
+The Pulsar/ATK reader uses this frame from `andrewrabert/python-pulsar-mouse-tool`.
+
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
 **Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 3554:F506, 3710:3414)
