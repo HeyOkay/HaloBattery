@@ -1099,14 +1099,18 @@ While charging, link returned 0 but the valid charging flag kept the device onli
 Verification used the provider probe; the complete tray application has not yet
 been tested with this provider.
 
+### AJAZZ AJ159 PRO
+
+**Connection:** 8K receiver (`3151:402d`, product `AJAZZ 2.4G 8K`)
+
+The receiver publishes `ffff:0002` on interface 2 and has no interrupt-OUT report on any collection. The AJ-series exchange is used instead: a zero-payload `0xF7` feature poll wakes the 2.4G telemetry, then `GET_FEATURE 0x05` returns the charge (`05 00 00 64 ...`, level at byte 3 on Windows). The provider tries the 33-, 65- and 67-byte poll lengths reported by the reference project, reads the answer as a feature report, and never calls `read()` on this collection. The reply carries the level only, so the app deliberately shows no charging ring (`charging_known=False`). Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289): the reporter's icon shows a percentage after test build 4. The Kysona Uranus (`3151:5031`) shares the transport but remains held until its own confirmation.
+
 ## 1.17.0 release exclusions and confirmations
 
-The AJAZZ alternate targets `3151:402d` (AJ159 PRO) and `3151:5031` (Kysona Uranus)
-are disabled by the provider's release allowlist before opening a HID device. The
-AJ179-derived command `0x10` is retained only for protocol tests and further review:
-[#289](https://github.com/HeyOkay/HaloBattery/issues/289) still reports no link,
-and [#251](https://github.com/HeyOkay/HaloBattery/issues/251) has no confirmation.
-The captured, confirmed AJ179 V2 MAX exchange is unchanged.
+The Kysona Uranus target `3151:5031` is disabled by the provider's release allowlist
+before opening a HID device; [#251](https://github.com/HeyOkay/HaloBattery/issues/251)
+has no confirmation. The AJ159 PRO above is enabled after [#289](https://github.com/HeyOkay/HaloBattery/issues/289)
+confirmed its level. The captured, confirmed AJ179 V2 MAX exchange is unchanged.
 
 Turtle Beach Stealth 600X Gen 3 (`10f5:2232`, [#239](https://github.com/HeyOkay/HaloBattery/issues/239))
 is excluded from the enabled PID allowlist until its exchange is confirmed. The
