@@ -307,7 +307,9 @@ class XInputProvider(Provider):
         single_gamesir = (
             len(slots) == 1 and len(all_reports) == 1
             and all_reports[0].vid == gamesir.VENDOR_VID
-            and gamesir.is_supported(all_reports[0].pid)
+            and (gamesir.is_supported(all_reports[0].pid)
+                 or (all_reports[0].pid == gamesir.XINPUT_WIRED_PID
+                     and gamesir.has_supported_collection()))
         )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.

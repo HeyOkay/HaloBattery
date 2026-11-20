@@ -150,6 +150,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
   placeholder that showed a permanent 100 %. Requires one controller in both XInput
   and Windows.Gaming.Input. The other editions use GameSir Connect's id table and
   are unverified.
+- **GameSir Cyclone 2** (`3537:100b`): the same `fff0:0040` gamepad-state report
+  (GameSir Connect's `proxyC2.parseGamepadState()`), so the same reader is used.
+  The receiver was confirmed by the reporter on 2026-11-14 (85 %, matching
+  GameSir Connect). While charging the pad enumerates as `3537:0575` with the
+  same collection and Windows exposes it as a generic Xbox pad (`3537:1053`);
+  the XInput provider now pairs that report to the GameSir collection instead of
+  its `1000/1000` placeholder. The charging identity answers with an all-zero
+  `0x12` report before its real one, so the reader now waits for a non-zero
+  state instead of freezing at 0 %. When the charging identity answers only
+  zeros, the same pad's generic `1053` collection is read as a fallback; the
+  1053 reading keeps the Cyclone 2 name. **Confirmed on hardware** by the
+  reporter on 2026-11-14 (86 %, charging, matching GameSir Connect).
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.

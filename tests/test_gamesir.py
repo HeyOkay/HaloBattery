@@ -74,6 +74,13 @@ class GameSirTests(unittest.TestCase):
         self.assertEqual(G.parse_state(state(), 0x10B9).name, "GameSir G7 Pro 8K")
         self.assertEqual(G.parse_state(state(), 0x10FE).name, "GameSir G7 Pro 8K Golden Apple")
 
+    def test_cyclone2_uses_the_same_state_report(self):
+        for pid in (0x100B, 0x0575):
+            with self.subTest(pid=pid):
+                self.assertTrue(G.is_supported(pid))
+                r = G.parse_state(state(85, 1), pid)
+                self.assertEqual((r.level, r.charging, r.name), (85, True, "GameSir Cyclone 2"))
+
     def test_every_id_of_gamesir_connect(self):
         self.assertEqual(set(G.EDITIONS), {4279, 4281, 4299, 4300, 4301, 4302, 4293, 4294,
                                            4295, 4296, 4297, 4298, 4349, 4350})
@@ -102,6 +109,37 @@ class GameSirTests(unittest.TestCase):
         result, _ = self.read(FakePad([state(0x60, 1)]), [dict(COLLECTION, product_id=CABLE)])
         self.assertEqual((result.level, result.charging), (96, True))
 
+    def test_cyclone2_charging_identity_is_supported(self):
+        # #221: while charging the pad enumerates as 3537:0575, with the same
+        # fff0:0040 collection; the XInput identity is the generic 3537:1053.
+        result, _ = self.read(FakePad([state(0x60, 1)]),
+                              [dict(COLLECTION, product_id=0x0575,
+                                    product_string="GameSir-Cyclone 2")])
+        self.assertEqual((result.level, result.charging, result.name),
+                         (96, True, "GameSir Cyclone 2"))
+
+    def test_a_zero_state_before_the_real_one_does_not_freeze_the_level(self):
+        # #221: 3537:0575 answered 00 00 first and the old read stopped at 0 %.
+        pad = FakePad([state(0, 0), state(90, 1)])
+        result, diag = self.read(pad)
+        self.assertEqual((result.level, result.charging), (90, True))
+        self.assertTrue(any("zero state" in line for line in diag))
+
+    def test_the_generic_1053_collection_is_the_charging_fallback(self):
+        # #221: 0575 answers zeros while charging; the same pad's generic 1053
+        # collection carries the real state, so it is read next.
+        zero = FakePad([state(0, 0)])
+        real = FakePad([state(91, 1)])
+        cols = [dict(COLLECTION, product_id=0x0575, product_string="GameSir-Cyclone 2"),
+                dict(COLLECTION, product_id=G.XINPUT_WIRED_PID, path=b"xbox",
+                     product_string="Xbox 360 Controller for Windows")]
+        diag = []
+        with mock.patch.object(G.hidlist, "enumerate", return_value=cols),                 mock.patch.object(G.hid, "device", side_effect=[zero, real]):
+            result = G.read_connected(diag)
+        self.assertEqual((result.level, result.charging, result.name),
+                         (91, True, "GameSir Cyclone 2"))
+        self.assertTrue(any("pid=0575" in line for line in diag))
+
     def test_disconnect_and_silence_are_safe(self):
         for pad in (FakePad(fail="open"), FakePad(fail="write"), FakePad(fail="read"),
                     FakePad([state()], sent=-1), FakePad([state()], sent=1), FakePad()):
@@ -110,11 +148,17 @@ class GameSirTests(unittest.TestCase):
             self.assertTrue(diag)
             self.assertTrue(pad.closed)
 
+    def test_g7_idle_dongle_is_not_mistaken_for_the_cyclone_charging_pad(self):
+        result, _ = self.read(FakePad([state()]),
+                              [dict(COLLECTION, product_id=0x0575,
+                                    product_string="GameSir-G7 Pro")])
+        self.assertIsNone(result)
+
     def test_unrelated_and_ambiguous_collections_are_never_opened(self):
         # 0x0575: the idle dongle while the pad is on its cable
-        for cols in ([], [dict(COLLECTION, product_id=0x0575)],
+        for cols in ([], [dict(COLLECTION, product_id=0x0576)],
                      [dict(COLLECTION, usage_page=1)], [dict(COLLECTION, usage=1)],
-                     [COLLECTION, COLLECTION]):
+                     [dict(COLLECTION, product_id=0x0575)], [COLLECTION, COLLECTION]):
             pad = FakePad([state()])
             result, _ = self.read(pad, cols)
             self.assertIsNone(result)
@@ -150,11 +194,12 @@ AIMLABS = G.Reading(98, False, "", "GameSir G7 Pro 8K Aimlabs")
 
 
 class GameSirXInputTests(unittest.TestCase):
-    def poll(self, reports, count=1, reading=AIMLABS):
+    def poll(self, reports, count=1, reading=AIMLABS, collection=False):
         with mock.patch.object(X, "load_xinput", return_value=FakeXInput(count)), \
                 mock.patch.object(X, "hidlist", types.SimpleNamespace(
                     enumerate=lambda vid: [], interface_paths=lambda: [])), \
                 mock.patch.object(X.wgi, "query", return_value=reports), \
+                mock.patch.object(G, "has_supported_collection", return_value=collection), \
                 mock.patch.object(G, "read_connected", return_value=reading) as read:
             result = X.XInputProvider().poll()
         return result, read.call_count
@@ -168,6 +213,20 @@ class GameSirXInputTests(unittest.TestCase):
     def test_charging_comes_from_the_pad(self):
         rows, _ = self.poll([report(pid=CABLE)], reading=AIMLABS._replace(level=96, charging=True))
         self.assertEqual((rows[0].level, rows[0].charging), (96, True))
+
+    def test_cyclone2_is_paired_and_named_from_its_own_reading(self):
+        cyclone = G.Reading(85, False, "", "GameSir Cyclone 2")
+        rows, calls = self.poll([report(pid=0x100B)], reading=cyclone)
+        self.assertEqual(calls, 1)
+        self.assertEqual([(r.name, r.level) for r in rows],
+                         [("GameSir Cyclone 2", 85)])
+
+    def test_cyclone2_charging_identity_pairs_through_the_vendor_collection(self):
+        cyclone = G.Reading(96, True, "", "GameSir Cyclone 2")
+        rows, calls = self.poll([report(pid=0x1053)], reading=cyclone, collection=True)
+        self.assertEqual(calls, 1)
+        self.assertEqual([(r.name, r.level, r.charging) for r in rows],
+                         [("GameSir Cyclone 2", 96, True)])
 
     def test_no_reading_shows_no_level_rather_than_the_placeholder(self):
         rows, calls = self.poll([report()], reading=None)
