@@ -56,6 +56,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   when powered off and recovers on reconnect. The author also reported wired battery
   and charging with the receiver unplugged. See [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465).
   Low-battery notifications remain untested; this recovered branch has no new hardware run.
+- Red Square Alumix TKL (RSQ-20055) battery level over its 2.4 GHz receiver,
+  using the settings read from Red Square's web configurator ([#460](https://github.com/HeyOkay/HaloBattery/issues/460)).
+  Confirmed on reporter hardware by @fogius: the level appeared in the tray.
+  Charging is not exposed by that driver, so it stays unknown pending the
+  reporter's cable check.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.

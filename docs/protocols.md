@@ -938,6 +938,31 @@ the level only rather than inventing a charger state.
 
 The provider also requires `URX`/`Core75` in the product string. The EVO75 shares `36B0:3002` and the same `FF60:0061` collection but is not a URX Core75 and does not answer this custom value, so it is no longer claimed. **Confirmed in #448**: the false URX icon disappeared and the EVO75 is left alone.
 
+### Red Square Alumix TKL (RSQ-20055)
+
+**Connection:** 2.4 GHz receiver (342D:E411, product string `RSQ_20055_2.4G`)
+
+The receiver exposes the keyboard's config channel as usage page `0xFF60`, usage `0x61`.
+Red Square's web configurator (`conf.red-square.org`) sends a 32-byte tunnel frame on
+output report **7**:
+
+    request  07 | 05 01 01 0A 07 8B 00 ...        report id 7, settings read (0x8B)
+    reply    07 | 05 A1 01 0A 07 8B <sleep> <debounce> <battery> <module> ...
+
+The level is the ninth byte after the report id (offset 8). The same read is what the
+configurator calls `getDeviceSleepTime`; its model table does not draw a battery icon for
+this family, but the response still carries the byte. Only this product string is queried:
+`342D:E411` is shared by several Red Square models, and the receiver's DFU collection is
+never opened.
+
+The configurator's wireless-module driver has **no charging query and no charging event**
+for this family, so the app reports the level and marks charging unknown. Confirmed on the
+reporter's hardware by @fogius (#460): the tray level appeared. Whether the keyboard exposes
+a charger state at all is being checked with the reporter.
+
+Source: Red Square's public web configurator (`conf.red-square.org`, model table and
+`GskyWirelessModuleSeries` driver). Not open source; the protocol notes above are the
+independently written implementation.
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
 **Connection:** Lightspeed, Unifying or Bolt receiver

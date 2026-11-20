@@ -79,6 +79,7 @@
 | [Razer Kraken V4](protocols.md#razer-kraken-v4) | 2.4 GHz receiver (1532:056C) or USB-C cable (1532:056B) | yes (reporter confirmed) |
 | [Razer Pro Click V2 Vertical Edition](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | yes |
 | [Razer wireless mice (other OpenRazer models)](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver or USB cable | likely |
+| [Red Square Alumix TKL (RSQ-20055)](protocols.md#red-square-alumix-tkl-rsq-20055) | 2.4 GHz receiver (342D:E411) | no |
 | [Sony DualSense (PS5)](protocols.md#sony-dualsense-ps5) | USB or Bluetooth | yes |
 | [Sony DualShock 4 (PS4)](protocols.md#sony-dualshock-4-ps4) | USB cable and Bluetooth | yes |
 | [Rapoo VT9 Pro, original `24AE:185A`](protocols.md#passive-inphic--attack-shark-and-rapoo-readers) | 2.4 GHz receiver | capture confirms 100% discharging; recovered app path unverified |
