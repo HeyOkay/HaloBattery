@@ -25,10 +25,17 @@ The V9 Turbo+ headset exchanges are the ones the headset's own software uses:
 No frames were captured from the reporter's headset - it has not run against
 any of this yet.
 
+The X9 (3837:6045) is M HUB's BLK audio profile, whose battery read is the
+'65 01' frame alone; its collections and the reply ``55 65 28 02`` (40 %,
+discharging) were measured on a real X9 on its dongle.
+
 Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: z750sasr/mchose-a5-pro-max-web-driver, A5 battery page 00/command 83; HaloBattery #149.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -42,7 +49,7 @@ from providers import mchose as M  # noqa: E402
 
 def answer(level=58, charging=False):
     """A reply as the reference expects it: 0xA1, ..., page, command, charge, level."""
-    return ([0xA1, 0x00, 0x00, 0x00, M.A5_PAGE, M.A5_CMD_BATTERY,
+    return ([0xA1, 0x00, 0x00, 0x00, 0x00, 0x83,
              1 if charging else 0, level] + [0x00] * 56)
 
 
@@ -71,7 +78,7 @@ class FakeMchose:
     def get_feature_report(self, report_id, length):
         self.reads += 1
         if self.path == self.answer_path:
-            return [M.A5_REPORT_ID] + answer(self.level, self.charging)
+            return [0x00] + answer(self.level, self.charging)
         return [0x00] * length               # silent: no 0xA1 marker in it
 
 
@@ -171,6 +178,32 @@ def headset_entries(with_dongle=True):
     return out
 
 
+# the X9's collections as its own report descriptor lists them, all on interface 0
+X9_PAGES = (0xFF21, 0xFF22, 0x000C, 0x000B, 0xFF90, 0xFF82)
+X9_REPLY = list(bytes.fromhex("55 65 28 02")) + [0] * 60     # measured: 40 %, discharging
+
+
+def x9_entries():
+    return [{"vendor_id": 0x3837, "product_id": M.X9_PID, "interface_number": 0,
+             "usage_page": p, "usage": 0x01, "path": b"x9-%04x" % p,
+             "product_string": "MCHOSE X9"} for p in X9_PAGES]
+
+
+def x9_cable_entries():
+    """The X9 on its cable (3837:6044), as its own report descriptor lists it."""
+    return [{"vendor_id": 0x3837, "product_id": M.X9_CABLE_PID, "interface_number": 0,
+             "usage_page": p, "usage": 0x01, "path": b"x9c-%04x" % p,
+             "product_string": "MCHOSE X9 HEADSET"}
+            for p in (0xFF22, 0x000C, 0x000B, 0xFF90, 0xFF82)]
+
+
+class GoneCollection(FakeCollection):
+    """A collection whose device is unplugged between the write and the read."""
+
+    def read(self, n=0, timeout=0):
+        raise OSError("The device is not connected.")
+
+
 class HeadsetTest(unittest.TestCase):
     def setUp(self):
         self._saved = (M.hid, M.hidlist, M.time)
@@ -222,7 +255,7 @@ class HeadsetTest(unittest.TestCase):
         self.assertEqual(M.parse_status_55(status_reply(level=100, state=4)), (100, False))
 
     def test_a_sleeping_status_reply_is_a_none_level(self):
-        self.assertEqual(M.parse_status_55(status_reply(level=0, state=M.STATUS_ASLEEP)),
+        self.assertEqual(M.parse_status_55(status_reply(level=0, state=0x1A)),
                          (None, False))
 
     def test_an_unknown_status_state_is_refused(self):
@@ -322,6 +355,95 @@ class HeadsetTest(unittest.TestCase):
         # battery history live on them (#215 review, @ahmedkhursheed23).
         self.assertEqual(M.device_key(0xA8A5, 0x2255), "mchose:a8a5")    # G7
         self.assertEqual(M.device_key(0x3837, 0x100B), "mchose:3837")    # A7 V2 Ultra
+
+    # ---------------------------------------------------------------- X9
+
+    def x9_poll(self, ff90, others=FakeCollection):
+        entries = x9_entries()
+        cols = {e["path"]: others() for e in entries}
+        cols[b"x9-ff90"] = ff90
+        return self.poll(entries, cols), cols
+
+    def test_the_x9_reads_the_measured_reply(self):
+        out, _ = self.x9_poll(FakeCollection([X9_REPLY]))
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.source, s.kind)
+                          for s in out],
+                         [("mchose:3837:6045", "MCHOSE X9", 40, False, True,
+                           "mchose", "headset")])
+
+    def test_the_x9_is_only_sent_the_blk_battery_read_on_ff90(self):
+        _, cols = self.x9_poll(FakeCollection())          # silent everywhere
+        self.assertEqual(self.order, [b"x9-ff90"])        # no other collection is opened
+        wrote = [w for c in cols.values() for w in c.writes]
+        self.assertEqual(len(wrote), M.HEADSET_ATTEMPTS)
+        self.assertEqual(set(wrote), {bytes([M.AUDIO_REPORT]) + M.STATUS_REQUEST})
+        self.assertEqual(len(wrote[0]), 64)
+        self.assertEqual(wrote[0][:3], b"\x55\x65\x01")
+
+    def test_a_second_ff90_collection_is_never_written_to(self):
+        # listed first, so a page-only match would pick it
+        other = dict(x9_entries()[0], usage_page=0xFF90, usage=0x0002, path=b"x9-ff90-2")
+        entries = [other] + x9_entries()
+        out = self.poll(entries, {e["path"]: FakeCollection([X9_REPLY]) for e in entries})
+        self.assertEqual(self.order, [b"x9-ff90"])
+        self.assertEqual([s.level for s in out], [40])
+
+    def test_the_x9_charging_full_and_level_bounds(self):
+        for level, state, charging in ((0, 2, False), (100, 4, False), (64, 3, True)):
+            self.provider = M.MchoseProvider()
+            out, _ = self.x9_poll(FakeCollection([status_reply(level=level, state=state)]))
+            self.assertEqual([(s.level, s.charging) for s in out], [(level, charging)])
+
+    def test_an_asleep_x9_shows_nothing(self):
+        out, _ = self.x9_poll(FakeCollection([status_reply(level=0, state=M.STATUS_ASLEEP)]))
+        self.assertEqual(out, [])
+
+    def test_short_garbage_and_out_of_range_x9_replies_are_refused(self):
+        for bad in ([0x55, 0x65, 0x28], [0x55, 0x66, 0x28, 0x02], [0x41, 0x65, 0x28, 0x02],
+                    [0xFF] * 64, status_reply(level=101), status_reply(state=0)):
+            self.provider = M.MchoseProvider()
+            out, _ = self.x9_poll(FakeCollection([bad, bad]))
+            self.assertEqual(out, [], bad[:4])
+
+    def test_an_x9_unplugged_mid_poll_does_not_stop_the_poll(self):
+        entries = x9_entries() + headset_entries(with_dongle=True)
+        cols = {e["path"]: FakeCollection(refuse=True) for e in entries}
+        cols[b"x9-ff90"] = GoneCollection()
+        dongle = next(e for e in entries if e["product_id"] == M.HEADSET_DONGLE_PID)
+        cols[dongle["path"]] = FakeCollection([audio_reply(percent=55)])
+        out = self.poll(entries, cols)
+        self.assertEqual([(s.key, s.level) for s in out], [("mchose:3837:6008", 55)])
+
+    def test_an_x9_that_cannot_be_opened_shows_nothing(self):
+        class Gone(dict):
+            def __missing__(self, path):
+                raise OSError("open failed")
+        out = self.poll(x9_entries(), Gone())
+        self.assertEqual(out, [])
+
+    def test_a_charging_x9_keeps_its_level_greyed_and_its_cable_is_never_opened(self):
+        self.x9_poll(FakeCollection([X9_REPLY]))
+        self.now[0] += 60
+        # measured: on its cable the dongle goes silent and 3837:6044 appears
+        entries = x9_entries() + x9_cable_entries()
+        out = self.poll(entries, {e["path"]: FakeCollection([status_reply(state=3)] * 2)
+                                  if e["product_id"] == M.X9_CABLE_PID else FakeCollection()
+                                  for e in entries})
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in out],
+                         [("mchose:3837:6045", 40, False, False)])
+        self.assertEqual([p for p in self.order if p.startswith(b"x9c-")], [])
+
+    def test_the_x9_cable_alone_is_left_alone(self):
+        entries = x9_cable_entries()
+        out = self.poll(entries, {e["path"]: FakeCollection([status_reply()]) for e in entries})
+        self.assertEqual((out, self.order), ([], []))
+        # nor does it lend its name to the 0x3837 mice' shared key
+        self.assertNotIn("mchose:3837", self.provider._names)
+
+    def test_the_x9_keeps_a_key_apart_from_the_3837_mice(self):
+        self.assertEqual(M.device_key(0x3837, M.X9_PID), "mchose:3837:6045")
+        self.assertNotEqual(M.device_key(0x3837, M.X9_PID), M.device_key(0x3837, 0x100B))
+
 
 if __name__ == "__main__":
     unittest.main()

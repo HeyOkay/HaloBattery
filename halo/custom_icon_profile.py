@@ -29,6 +29,7 @@ _BUILTIN_PROFILES = {
     'lucide:watch': 'watch',
     'lucide:radar': 'tracker',
     'lucide:tv-minimal': 'display',
+    'lucide:smartphone': 'phone',
 }
 
 

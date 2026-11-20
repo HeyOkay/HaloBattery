@@ -67,9 +67,12 @@ class FullChargeTests(HideRenameTestCase):
         app = self.run_levels([(90, True), (100, True)], {"names": {KEY: "Work mouse"}})
         self.assertEqual(app.notes, ["Work mouse is fully charged."])
 
-    def test_asleep_or_unknown_level_changes_nothing(self):
+    def test_offline_breaks_continuity_but_unknown_online_level_waits(self):
+        # #413: an offline cached status cannot prove a continuous charge. Do
+        # not announce completion merely because that device reconnects at 100.
+        # Unknown values while still online retain the existing wait-for-proof behavior.
         app = self.run_levels([(90, True), (90, True, False), (100, True)])
-        self.assertEqual(len(app.notes), 1)
+        self.assertEqual(len(app.notes), 0)
         app = self.run_levels([(90, True), (None, True), (100, True)])
         self.assertEqual(len(app.notes), 1)
 
@@ -97,7 +100,7 @@ class PictogramTests(HideRenameTestCase):
         self.assertEqual([i.text for i in sub.items],
                          ["Automatic", "Mouse", "Keyboard", "Microphone", "Speaker", "Webcam",
                           "Health device", "Smart home", "Smartwatch", "Display / TV",
-                          "Tag / Tracker", "Headset",
+                          "Tag / Tracker", "Phone", "Headset",
                           "Controller", "Bluetooth"])
         self.assertEqual([i.text for i in sub.items if i.checked], ["Automatic"])
 

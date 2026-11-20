@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Runtime XamlReader templates/animations need activation metadata for these
+     WinUI types. Keep this list aligned with dynamically generated XAML when
+     adding controls; rooting all Microsoft.WinUI defeats release size reduction. -->
+<linker>
+  <assembly fullname="Microsoft.WinUI">
+    <type fullname="Microsoft.UI.Xaml.Controls.Border" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Canvas" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.ComboBoxItem" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.ContentPresenter" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Control" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.ControlTemplate" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Grid" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Image" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.ItemsPanelTemplate" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.ItemsWrapGrid" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Primitives.ToggleButton" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.RowDefinition" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.TextBlock" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Controls.Viewbox" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.DataTemplate" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Media.Animation.PointerDownThemeAnimation" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Media.Animation.PointerUpThemeAnimation" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Media.Animation.Storyboard" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Setter" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Shapes.Ellipse" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.Shapes.Path" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.VisualState" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.VisualStateGroup" preserve="all" />
+    <type fullname="Microsoft.UI.Xaml.VisualStateManager" preserve="all" />
+  </assembly>
+  <!-- Native AppWindow.Presenter needs its derived runtime-wrapper factory after trimming. -->
+  <assembly fullname="Microsoft.InteractiveExperiences.Projection">
+    <type fullname="Microsoft.UI.Windowing.OverlappedPresenter" preserve="all" />
+  </assembly>
+</linker>

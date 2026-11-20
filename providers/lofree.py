@@ -103,6 +103,7 @@ READ_MS = 100
 # the Flow Lite84: the Compx frame of providers/pulsar.py with the keyboard flag
 FLOW_VID, FLOW_PID = 0x05AC, 0x024F          # 'CX' '2.4G Wireless Receiver'
 FLOW_NAME = "Lofree Flow Lite84"
+FLOW_PRODUCT = "2.4G Wireless Receiver"  # captured on the confirmed Flow dongle
 FLOW_CONTROL_USAGE = (0xFF02, 0x0002)        # where the family answers (pulsar.py opens it too)
 FLOW_HEADER = 0x08                           # byte 0, which is also the report id
 FLOW_LEN = 17
@@ -314,30 +315,28 @@ class LofreeProvider(Provider):
                 pass
 
     def _flow_pick(self, infos: List[dict]) -> Optional[dict]:
-        """The collection to open for the Flow Lite84.
+        """Only the named Flow receiver's source-backed FF02:0002 endpoint.
 
-        The family's control collection (0xFF02:0x0002) is REQUIRED: the dongle shares
-        Apple's vendor and product id (05AC:024F), which Apple also uses for its wired
-        Aluminium Keyboard, and that keyboard has no such collection - without this rule
-        the frame went to its first collection on every poll (#169 review,
-        @ahmedkhursheed23). Within the collection, one whose output report cannot carry
-        the 17-byte frame is skipped: Windows refuses that write and no reply comes,
-        which is indistinguishable from a keyboard that is off. The length is only known
-        when Windows says so, and an unknown length never disqualifies a collection.
+        05AC:024F is shared with Apple keyboards and the AULA F108 Pro. A
+        different collection or physical receiver cannot borrow the control
+        collection's identity. The named web-driver source opens FF02:0002;
+        there is no sourced alternate endpoint to try when its caps reject
+        the frame. Unknown caps remain allowed on that verified endpoint.
         """
         control = [d for d in infos
-                   if (d.get("usage_page"), d.get("usage")) == FLOW_CONTROL_USAGE]
+                   if d.get("vendor_id") == FLOW_VID and d.get("product_id") == FLOW_PID
+                   and isinstance(d.get("product_string"), str)
+                   and d["product_string"].strip().casefold() == FLOW_PRODUCT.casefold()
+                   and (d.get("usage_page"), d.get("usage")) == FLOW_CONTROL_USAGE]
         if not control:
-            self._diag.append("  no FF02:0002 control collection; nothing is written")
+            self._diag.append("  no FF02:0002 control collection for a verified Flow receiver; nothing is written")
             return None
-        # A control collection exists, so this is a Flow dongle: try it first, then the
-        # rest (a Windows-reported length is a hint, and an unknown length is allowed).
-        for d in control + [x for x in infos if x not in control]:
-            if flow_output_length(d["path"]) in (None, FLOW_LEN):
+        for d in control:
+            length = flow_output_length(d["path"])
+            if length is None or (type(length) is int and length == FLOW_LEN):
                 return d
             self._diag.append(f"  {d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
-                              f"output={flow_output_length(d['path'])} cannot take a "
-                              f"{FLOW_LEN}-byte frame; skipped")
+                              f"output={length} cannot take a {FLOW_LEN}-byte frame; skipped")
         return None
 
     def _flow_command(self, dev, cmd: int) -> Optional[List[int]]:

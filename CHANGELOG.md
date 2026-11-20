@@ -7,15 +7,114 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+
+- Rename the Settings > About "Project page" link to "GitHub page", and move the
+  interface font and Lucide credits from their own card into Authors and
+  licenses.
+- Smoothly animate the Settings charge-ring preview when switching devices.
+- Align Settings and What’s new branding with the approved logo spacing and alignment.
+
+- URX Core75 now checks the product string as well as `36B0:3002`, so an
+  EVO75 on the same receiver id is no longer labelled as a URX board (#448).
+- Keep the SignPath TEST credential in the protected signing jobs only; build
+  and packaging jobs do not receive or forward it.
+
+- Add isolated, opt-in SignPath test signing for application and installer builds.
+- MCHOSE V9 no longer retries a refused output report as a feature report;
+  Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
+  can show no reading until that connection's protocol is verified. Malformed
+  battery values are refused rather than clamped to a plausible percentage.
 - Match What's new branding to Settings, with Outfit lettering, closer icon
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add links to the HaloBattery website and the Discord community to Settings >
+  About.
+- Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,
+  with Windows language detection and native Cyrillic headings.
+- Percentage in the icon: devices that only report coarse battery steps now
+  show the same `NN` number as exact devices, without a `~` marker. The tooltip
+  and status file still say "about NN%".
+- Add pointer-following outline highlights to rounded Settings controls without
+  permanent borders.
+- Show the selected Phone Link mobile device's cached battery with a phone
+  pictogram, independently of Bluetooth. Previously admitted values remain
+  explicitly last-reported; ancient cold-start caches cannot seed a level.
+  This requires a supported Windows 11 Phone Link companion cache, not a
+  real-time or all-linked-phones API. Phones classified by existing Bluetooth
+  metadata also use the phone glyph.
+- Logitech MX Revolution (`046D:C525`): name the HID++ 1.0 device and use
+  the mouse pictogram; the existing charge-register reader already returned
+  75% on the reporter's receiver. Confirmed on hardware by @breezywine in
+  [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
+- Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
+  approximate level, read at most once every 15 minutes and cached between reads
+  because each read mutes USB audio for about 0.8 s.
+
+- **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
+  (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
+  short, `ff43:0302` long) while keeping existing `ff00` paths preferred.
+  Also recognize the `046d:c0a9` wired interface. The author reported tests on a physical mouse under Windows: battery level
+  matches Logitech G HUB, charging is reported, and the tray icon greys out
+  when powered off and recovers on reconnect. The author also reported wired battery
+  and charging with the receiver unplugged. See [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465).
+  Low-battery notifications remain untested; this recovered branch has no new hardware run.
+- Red Square Alumix TKL (RSQ-20055) battery level over its 2.4 GHz receiver,
+  using the settings read from Red Square's web configurator ([#460](https://github.com/HeyOkay/HaloBattery/issues/460)).
+  Confirmed on reporter hardware by @fogius: the level appeared in the tray.
+  Charging is not exposed by that driver, so it stays unknown pending the
+  reporter's cable check.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
+- Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.
+- Razer Kraken V4 (2.4 GHz receiver `1532:056C` or USB-C cable
+  `1532:056B`): read the battery level and charging state over its MediaTek
+  channel. Confirmed on hardware by @Zireael3Z: 87% matched the receiver and
+  the charging ring followed the cable.
+- **Razer BlackShark V2 HyperSpeed** (`1532:0565` receiver, `1532:056E` cable): the
+  headset's MediaTek channel - report id 2 on `0xFF14`, a sequence, domain and XOR
+  checksum, with `0x21` for the level and `0x2A` for the charging state. The cable is
+  read first because the dongle goes quiet while it is plugged in. Protocol from
+  justik13/razer-blackshark-v2-hyperspeed-webhid, with read-only implementations in
+  blackshark-battery and openrazer PR #2974. **Confirmed on hardware** in #86: level
+  and charging (the receiver and cable paths were not reported separately).
+- **Razer BlackShark V3 X HyperSpeed** (`1532:057D` receiver / `1532:057C`
+  cable, #280): the receiver's newer 64-byte feature-report protocol (report
+  id `0x07`, class `0x07`, battery command `0x80`, level byte 10), from
+  everyoneexe/blackshark-linux's Synapse captures. A different protocol from
+  the BlackShark V3's `0x02` frames; **confirmed on hardware** in #280 for the
+  level and charging, with the cable identity `057C` added in test build 4 and
+  the charging flag at byte 10 fixed in test build 5.
+- **ASUS ROG Azoth X** (`1c25` in the OMNI receiver's pair list): the same
+  keyboard `02 12 01` read and byte-6 level as the other OMNI keyboards;
+  confirmed on the reporter's keyboard in #269.
+- **ASUS ROG Raikiri II** (`0b05:1c92`): the vendor query `B0 12 04` on
+  `ff03:0001`, level byte 5 and charging byte 10, paired to the controller's
+  one XInput slot so the generic Xbox icon is replaced rather than duplicated
+  (#269). Confirmed on the reporter's hardware: 70% wireless, 69% with the
+  charging ring on the cable; test build 2 uses output/input reports.
+- Darmoshark N5 (`1915:0723` receiver / `1915:073c` cable): the 64-byte `ff0a:0001`
+  power query, level byte 6 (legacy) or byte 11 (v2); confirmed on hardware in
+  [#430](https://github.com/HeyOkay/HaloBattery/issues/430) at 63%, matching the mouse.
+- Corsair M65 RGB Ultra Wireless (`1B1C:1BA6` SLIPSTREAM receiver or
+  `1B1C:1BB5` USB cable): battery level and charging state, confirmed on
+  hardware in [#411](https://github.com/HeyOkay/HaloBattery/issues/411).
+- Teevolution Terra Pro on its 1K receiver (`3554:F520`), confirmed on
+  hardware in #448; the existing `3554:F523` reader now uses the mouse pictogram.
+- Battery and charging support for the Ninjutso Sora V3 on its 2.4 GHz receiver
+  (`093a:eb02`) and USB cable (`093a:e010`), using the current NinjaForce
+  feature-report protocol (battery command `0x12`, charging `0x11`). Tested by
+  @Cynersi on both connections; the level matched NinjaForce and the cable
+  reported charging.
 - Open the existing What's new window from About, directly below the version.
+- Lamzu Atlantis V2 (`3554:F50D`) on the Compx 17-byte power query; confirmed on hardware in [#408](https://github.com/HeyOkay/HaloBattery/issues/408) at 70 % on the receiver and 95 % while charging on the cable. The shared wired id (`3554:F50F`) is identified by its "LAMZU Atlantis Pro" product string, so it no longer appears as a Thorn.
+- GANSS GS3075T (`0C45:FEFE`) keyboard support through the receiver's Sonix
+  `AA 10 18` query (#379); level and charging measured by the reporter. Byte
+  26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
+- ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
+  33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -61,6 +160,81 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Settings → Tray icons → Icon style → Outline / Filled**: switch all device pictograms
   immediately and keep the choice after restarting. Filled artwork uses lighter
   body silhouettes and compensated small details while preserving the battery ring.
+- Glorious Model O- / Model D / Model D- Wireless (`258a:2024`, `2023`, `2025`;
+  wired `2013`, `2012`, `2014`): the same Sinowealth battery query the Model O
+  already uses, from korkje/mxw's `SUPPORTED_MICE` table
+  ([#221](https://github.com/HeyOkay/HaloBattery/issues/221)). The Model O- was
+  confirmed by its owner in #221 (level and charging); the Model D and D- are
+  **unverified** on hardware.
+- **GameSir G7 Pro 8K** (Aimlabs edition confirmed, `3537:10c6` on the dongle and
+  `3537:10c5` on the cable): reads the controller's own battery level and charging
+  state through its GameSir Connect HID collection, instead of the Windows
+  placeholder that showed a permanent 100 %. Requires one controller in both XInput
+  and Windows.Gaming.Input. The other editions use GameSir Connect's id table and
+  are unverified.
+- **GameSir Cyclone 2** (`3537:100b`): the same `fff0:0040` gamepad-state report
+  (GameSir Connect's `proxyC2.parseGamepadState()`), so the same reader is used.
+  The receiver was confirmed by the reporter on 2026-11-14 (85 %, matching
+  GameSir Connect). While charging the pad enumerates as `3537:0575` with the
+  same collection and Windows exposes it as a generic Xbox pad (`3537:1053`);
+  the XInput provider now pairs that report to the GameSir collection instead of
+  its `1000/1000` placeholder. The charging identity answers with an all-zero
+  `0x12` report before its real one, so the reader now waits for a non-zero
+  state instead of freezing at 0 %. When the charging identity answers only
+  zeros, the same pad's generic `1053` collection is read as a fallback; the
+  1053 reading keeps the Cyclone 2 name. **Confirmed on hardware** by the
+  reporter on 2026-11-14 (86 %, charging, matching GameSir Connect).
+
+- **MCHOSE X9** headset on its 2.4 GHz dongle (`3837:6045`), read with M HUB's own
+  BLK battery query (`65 01` on report `0x55`). Confirmed on hardware, on Linux and on
+  Windows (@Kolomhon, [#458](https://github.com/HeyOkay/HaloBattery/issues/458)): the
+  level and the discharging state on the dongle. On its cable the headset leaves the
+  dongle and appears as `3837:6044`, which M HUB does not read: nothing is sent to it,
+  and no charging state is shown.
+
+- **MCHOSE K99 V3** keyboard on its 2.4 GHz receiver (`3837:3033`), read with the
+  GLW func-config query M HUB uses (`00 | 55 05 00 38 38 ...` → `AA 05 00 ...`,
+  battery at payload byte 32; bit 7 charging). The earlier `55 03 00 38 38`
+  query returned a different info frame and a wrong level (52 % while M HUB
+  showed 90 %), so it was replaced. Confirmed on hardware by @Kolomhon in #458:
+  the level agreed with M HUB within its 10 % display step, and the charging bit
+  followed the cable. Polling is now paused until real keyboard input, so an
+  idle keyboard is not woken by the battery query.
+
+- **JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)** on their 2.4 GHz
+  receiver or USB cable: HIDV3 device-info feature report `0x88`, battery feature
+  `0x000D`, level and charging in the reply. Unverified in the app; the reference
+  implementation tested a Quantum 650.
+
+- **Cooler Master MM712 / MM731** on the shared 2.4 GHz receiver or their USB
+  cables: read-only vendor status request, level and charging. Unverified in the
+  app; the MM712 was tested by the reference project, the MM731 path was not.
+
+- **Royal Kludge MG6 Pro** on its 2.4 GHz receiver or USB cable: QiWang
+  `GET_BATTER_VOL` read, percentage and charging. Unverified in the app.
+
+- **ZOWIE EC-CW, DW series and U2** wireless mice: read-only EC-CW and
+  DW/U2 battery queries, percentage and voltage-trend charging. Unverified in
+  the app.
+
+- **Fractal Design Scape** on its 2.4 GHz dongle or USB-C cable: read-only
+  `GET_DEVICE_STATE` query, percentage and cable charging. Unverified in the app.
+
+- **CHERRY MX 3.0S Wireless** on its 2.4 GHz receiver or USB cable: read-only
+  status query, percentage and USB-powered charging. Unverified in the app.
+
+- **Arbiter Akitsu, Areson/Redragon M915/M913, Machenike L7, MOONDROP GM01 Pro,
+  Ninjutso Sora V2 and Sprime PM1**: read-only battery protocols from the vendor
+  tools and community references. Unverified in the app; no hardware was available.
+
+- **Fantech Helios Go XD5 and Redragon Invader Pro** on their 2.4 GHz dongle
+  or cable: 17-byte feature request, level and charging. Unverified in the app.
+
+- **MSI VERSA 300 ELITE and Clutch GM31 / GM41** on their receivers or cables:
+  read-only status query, plus the GM41's passive raw report. Unverified in the app.
+
+- **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
+  status report, level and charging. Unverified in the app.
 
 - **JBL Quantum 350 Wireless** on its 2.4 GHz receiver (`0ecb:206b`): read with the
   receiver's HIDV1 feature reports (`0x68` link, `0x49` level in 5 % steps), the
@@ -69,6 +243,67 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Test build pending on the reporter's unit.
 
 ### Fixed
+- Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
+- Keep the last reported Phone Link charge visible when its cache does not
+  change; stop stale charging animation and do not treat it as a live reading.
+- Signal flyout shutdown on its Tk owner thread so a stopped event loop cannot
+  block Windows session-end cleanup after tray icons disappear.
+- Word native HID write errors like hidapi ("(0x00000001) Incorrect function."), so the
+  HyperX Cloud III feature-report fallback works again; let a read with its
+  own longer timeout (HyperX Cloud Flight, 2 s) end empty instead of failing; close the
+  Alienware receiver after each poll; remove Bluetooth icons when Bluetooth is turned off.
+- Keep cached HID transport error diagnostics available without new native calls;
+  preserve bounded feature-call timeout and handle-cleanup behavior.
+- Keep Settings highlights responsive during pointer movement and reuse device-family row geometry during expansion.
+- Prevent native dropdown containers from clipping Settings highlights without enlarging menus.
+- Match light-theme hover backgrounds on the hamburger and neutral title-bar
+  buttons to the active navigation background.
+- Query MCHOSE V9 Pro only through its sourced output-report transport instead
+  of retrying a refused request as an unconfirmed feature report.
+- Keep Atlas Air on its confirmed SInf/GSI exchange when the headset is silent,
+  without sending the Stealth 700 CoAP initialization command.
+- Reject malformed SteelSeries percentages and discrete battery codes before
+  conversion, retaining documented raw-scale and overreporting corrections.
+- Require fresh Skullcandy input instead of presenting an unchanged old snapshot
+  as a new battery reading, while accepting a steady level in a fresh packet.
+- Add the confirmed Turtle Beach Stealth Pro II receiver `10f5:2285`.
+- Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
+  original exchange receives no answer; mark its coarse levels and unknown charging.
+- Refuse Glorious query echoes and provisional replies without suppressing real 0%.
+- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
+  or disconnected-keyboard status as a current keyboard reading.
+- Refuse malformed percentages in AM Infinity and
+  SteelSeries Aerox instead of clamping them to a misleading 100% reading.
+- Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
+  ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Keep Lofree Flow queries on the verified receiver control collection, preventing
+  fallback writes to AULA F108 and other devices sharing its USB ID (#413).
+- Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
+  Delux M900 Pro and VGN N75 PRO support from pending device pull requests,
+  retaining their exact target and transport checks.
+- Limit generic MCHOSE `3837` mouse queries to the documented A7 receiver collection.
+  Unknown `3837` products and unsourced keyboard/collection fallbacks remain
+  excluded until exact protocol evidence is available.
+- Bound Steam's retained readings to the same 16 endpoints selected for polling.
+- Restore the original Rapoo VT9 Pro receiver's passive battery reports, keeping
+  them separate from newer Rapoo formats and accepting Windows zero padding.
+- Recover wired Steam Controller support and keep identical puck devices separate,
+  using one bounded passive listen window. Restore a current Simplified Chinese README.
+- Keep battery polling and shutdown responsive when a provider stalls; retain basic settings and saved custom icons after companion or cache failures, and keep automatic icon migration offline.
+- Limit installer cleanup to its exact executable paths and preserve portable data; verify update archives, pin process identity and report incomplete installation.
+- Keep update backups and staged files after an interrupted update or failed
+  rollback; verify a durable completed transaction before startup cleanup.
+- After an update made by 1.17.0 or earlier, remove exactly the two backups that
+  updater left (`HaloBattery.exe.old`, `_internal.old`) so the next in-app update
+  can install; setup also clears them and a stuck update record.
+- Load DJI's native USB backend only after its receiver is detected; keep unit tests isolated from real serial and USB devices.
+
+- Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
+
+- Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
+
+- A MCHOSE headset unplugged in the middle of a poll no longer hides the other MCHOSE
+  devices for that poll.
 
 - Bring the existing Settings window to the foreground when a tray icon is
   double-clicked, restoring it if minimized.
@@ -241,6 +476,12 @@ source; their settings and battery history remain compatible.
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
   and charge status (plus voltage and temperature in the diagnostics). Unverified on
   hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **HyperX Cloud Core Wireless** (`0951:173f` dongle, `0951:1740` USB-C) - the
+  Cloud Core feature-report protocol from LennardKittner/HyperHeadset's `cloud-core`
+  branch: report `0xFF` on `ff00:0001`, voltage at bytes 11-12 and charging at byte
+  9. The level is approximate; the Cloud Flight voltage curve is used because the
+  Cloud Core reference curve came from a failing battery and reads a healthy 3.85 V
+  as full. Unverified on hardware; a test build is going to the reporter.
 - **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
   different transport: the request is a feature report on `ff02:0002`, the reply an
   input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because

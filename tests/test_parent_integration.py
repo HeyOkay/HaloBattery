@@ -9,7 +9,7 @@ NEW = ["AulaProvider", "MchoseV9Provider", "DareuProvider", "ShieldProvider", "L
        "InphicProvider", "TurtleBeachProvider", "SkullcandyProvider", "RapooProvider", "AjazzProvider",
        "SonyInzoneProvider", "AtkNearlinkProvider", "FinalmouseProvider", "AtkKeyboardProvider",
        "HyperXAlphaWirelessProvider", "JabraProvider", "HyperXCloudFlightProvider", "MonsGeekProvider",
-       "EweadnProvider", "MchoseKbProvider", "JblQuantum350Provider"]
+       "EweadnProvider", "MchoseKbProvider", "NinjutsoSoraV3Provider", "MchoseK99Provider", "JblHidV3Provider", "CoolerMasterProvider", "RoyalKludgeProvider", "CherryProvider", "ZowieProvider", "FractalProvider", "JblQuantum350Provider"]
 
 
 class RegistrationTests(unittest.TestCase):

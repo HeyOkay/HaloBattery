@@ -10,7 +10,7 @@ from functools import lru_cache
 import io
 from PIL import Image
 
-KINDS = frozenset(('headset', 'mouse', 'keyboard', 'microphone', 'gamepad', 'speaker', 'webcam', 'health', 'smart_home', 'watch', 'display'))
+KINDS = frozenset(('headset', 'mouse', 'keyboard', 'microphone', 'gamepad', 'speaker', 'webcam', 'health', 'smart_home', 'watch', 'display', 'phone'))
 OPTICAL_PROFILE = {16: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.1, 'centre_growth_logical': 0.065, 'headset_cups': 'previous-filled-contour'}, 20: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.07565932872025408, 'centre_growth_logical': 0.04917856366816515, 'headset_cups': 'previous-filled-contour'}, 24: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.060240133573989656, 'centre_growth_logical': 0.03915608682309328, 'headset_cups': 'previous-filled-contour'}, 32: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.04204482076268573, 'centre_growth_logical': 0.027329133495745724, 'headset_cups': 'previous-filled-contour'}, 40: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.03181082915068203, 'centre_growth_logical': 0.02067703894794332, 'headset_cups': 'previous-filled-contour'}, 48: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.025327856188386417, 'centre_growth_logical': 0.01646310652245117, 'headset_cups': 'previous-filled-contour'}, 64: {'body_boundary': 'source-centreline', 'detail_growth_logical': 0.01767766952966369, 'centre_growth_logical': 0.0114904851942814, 'headset_cups': 'previous-filled-contour'}}
 _PNG = {
     ('headset', 16): (
@@ -487,6 +487,37 @@ _PNG = {
         'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAqElEQVR4nGNgGAWjYBSMAioBRnQBZTs5DDE4+P/o0F0CBub8JwCy'
         'CLjgAz8BGz4KoPKZULkKhPQz8CvgNUCEkH4GBmG8BpAOmMjQM2oAGmBioBAwjRrAMBoGDIMgDBhRudxfSNXBhMr9WkNIfxl+8xgY'
         'Agzw6r+wgZANIxAwYhc2c2VFE/m9+xQJxnpgq1Y9SEiJAUQLMmA3AGtkb6BnGIyCUTAKGEgFAOq6SNGA3ihTAAAAAElFTkSuQmCC'
+    ),
+    ('phone', 16): (
+        'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAA6mKC9AAAAMElEQVR4nGNgIA94fv3/////r54gNhOIMOcCkVzmcAFkQE2BC5eg'
+        'DBYo/Qanw8gAAC2nEBM0nC2UAAAAAElFTkSuQmCC'
+    ),
+    ('phone', 20): (
+        'iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAAAAACo4kLRAAAAOklEQVR4nGNgoAgwQigNCTD14gaSlMV/KLAAc5kgCmGyGkiCaIBp'
+        'kAjmFcGZLHBWFLp6NG/iCRCyAQAcPxZz2/NS6gAAAABJRU5ErkJggg=='
+    ),
+    ('phone', 24): (
+        'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAAAAADFHGIkAAAAV0lEQVR4nGNgoD1ghNJawcxg+u/aayjyor/+Q8EvUYgIE4TSZoUp'
+        'YdVGkcAETENX4s0bJA4LEjuE4QB2iWlYTJT6BwvEf5IoOp4FGkAi4P+F57icQ30AAKEnH18kfBPLAAAAAElFTkSuQmCC'
+    ),
+    ('phone', 32): (
+        'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAAASklEQVR4nGNgGF4g7MZ/OLgRhkXBDYT8//834MKMcNZ/FOVwcSZC'
+        'NjONKhigcPhtZPIfrwIWpn9/UEVIiO6byPIoHCggmOSGMgAAq0oue21q31wAAAAASUVORK5CYII='
+    ),
+    ('phone', 40): (
+        'iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAAAAACpleexAAAAhUlEQVR4nGNgGAV4ACMyR8WXH4n3cdtNHJqcfv1HAb+ccChcgaru'
+        '//8NSJJMSGxxdJ38OBTiBUyjCvEBJryySGBUIRR8SUj4woAX7Iek6+UMDMshrP1IkiyY6n3iGXwwRVkwhXgWEIqZl+iSH3EoRM50'
+        'GAKMyBIGjigFwOEz2NwwChiwAACLdz5OnBG+7wAAAABJRU5ErkJggg=='
+    ),
+    ('phone', 48): (
+        'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAAAAAByaaZbAAAAd0lEQVR4nGNgGAXDAUSd/fUfBfw6G4VPvfaf/xjgjzaKEiYUnisz'
+        'piHMrng0CGCzVgCPBiIA06gGIgATMYqQwaiGkRJKLNiF/29l8GYkxYaFvr4LSXLSDzAiwUlRYESCBr4M7OIMaE76gE3JB8qKSgoL'
+        '41EwZAAAVEVWoT6VcxAAAAAASUVORK5CYII='
+    ),
+    ('phone', 64): (
+        'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAj0lEQVR4nO2WsQ2AMAwEHw+B2ACGoWBDGAYpIzAGsEBMQQFSMEoU'
+        'GuCvi2OdrG9sgBBi0Y6zXjCPbVxmnZp0UQJnC1yUYLEFS9hdhCW9kYftgkyEAjADMAMwA2awI8hEPi8YmmZIduqBL4HKnwrJEwjg'
+        'cybQvq778/sl23m1u9cowWQLbr6ePLKQe+YR8ks2r3HWAeVC9kEAAAAASUVORK5CYII='
     ),
 }
 

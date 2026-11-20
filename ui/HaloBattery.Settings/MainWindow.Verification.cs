@@ -46,6 +46,37 @@ public sealed partial class MainWindow
                 await Task.Delay(600);
                 Directory.CreateDirectory(destination);
                 CompositionTarget.Rendering += rendering;
+                var nativePresenter=AppWindow.Presenter as OverlappedPresenter;
+                checks.Add(new { name="native overlapped presenter is available",passed=nativePresenter is not null });
+                if(nativePresenter is null)throw new InvalidOperationException("Fixture requires an overlapped presenter.");
+                var customChrome=!nativePresenter.HasTitleBar && nativePresenter.HasBorder;
+                checks.Add(new { name="native caption is hidden and resize border retained",passed=customChrome });
+                if(!customChrome)throw new InvalidOperationException("Fixture custom chrome is unavailable.");
+                if (Arg("--verify-scope") == "header-branding")
+                {
+                    await VerifyHeaderBranding(destination, checks);
+                    await VerifyNavigationAndHeader(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "header-branding", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "device-preview-selection")
+                {
+                    await VerifyDevicePreviewSelection(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "device-preview-selection", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "device-preview")
+                {
+                    await VerifyDevicePreview(destination, checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "device-preview", checks });
+                    return;
+                }
+                if (Arg("--verify-scope") == "expander")
+                {
+                    await VerifyProviderExpander(checks);
+                    WriteVerificationReport(destination, new { complete = true, scope = "expander", checks });
+                    return;
+                }
                 if (Arg("--verify-scope") == "window-activation")
                 {
                     await VerifySettingsActivation(checks);
@@ -86,6 +117,8 @@ public sealed partial class MainWindow
                 if (Arg("--verify-scope") == "spotlight")
                 {
                     await VerifyCardSpotlights(checks);
+                    await VerifyControlSpotlights(checks);
+                    await VerifyPopupBottomInset(checks);
                     WriteVerificationReport(destination, new { complete = true, scope = "spotlight", checks });
                     return;
                 }

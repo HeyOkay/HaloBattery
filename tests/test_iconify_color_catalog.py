@@ -137,6 +137,25 @@ class IconifyColorCatalogTests(unittest.TestCase):
         service.pin(asset_id)
         self.assertEqual(service.attributions([asset_id])[0]["icon_id"], self.icon_id)
 
+    def test_local_only_upgrade_keeps_legacy_selection_and_allows_later_online_choice(self):
+        old_id, _, metadata = self.legacy()
+        service = self.catalog()
+        previous = service.prepare(self.icon_id, offline=True)
+        self.assertEqual(previous.id, old_id)
+        self.assertEqual(previous.metadata, metadata)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.renders, [])
+        current = service.prepare(self.icon_id)
+        self.assertNotEqual(current.id, old_id)
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(len(self.renders), 1)
+
+    def test_local_only_missing_selection_never_fetches(self):
+        service = self.catalog(fetch=self.no_network)
+        with self.assertRaises(C.CatalogError) as refused:
+            service.prepare(self.icon_id, offline=True)
+        self.assertEqual(refused.exception.code, "offline")
+
     def test_legacy_upgrade_fetches_verified_source_and_keeps_old_pin(self):
         old_id, old_folder, _ = self.legacy()
         service = self.catalog()
@@ -173,7 +192,7 @@ class IconifyColorCatalogTests(unittest.TestCase):
     def test_verified_cached_source_can_upgrade_without_network(self):
         old_id, _, _ = self.legacy(save_source=True)
         service = self.catalog(fetch=self.no_network)
-        upgraded = service.prepare(self.icon_id)
+        upgraded = service.prepare(self.icon_id, offline=True)
         self.assertNotEqual(upgraded.id, old_id)
         self.assertTrue(upgraded.glyph.is_colored)
         self.assertEqual(len(self.renders), 1)
