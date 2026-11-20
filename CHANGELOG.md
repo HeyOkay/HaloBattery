@@ -279,8 +279,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
   original exchange receives no answer; mark its coarse levels and unknown charging.
 - Refuse Glorious query echoes and provisional replies without suppressing real 0%.
-- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
-  or disconnected-keyboard status as a current keyboard reading.
+- Honor MonsGeek's keyboard-online flag (zero while the keyboard is linked, as
+  MonsGeek's own driver reads it) instead of displaying a mouse-only or
+  disconnected-keyboard status as a current keyboard reading.
 - Refuse malformed percentages in AM Infinity and
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving

@@ -22,9 +22,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import monsgeek as G  # noqa: E402
 
 
-def answer(level=54, mouse=100, kind=1, keyboard_online=1, mouse_online=1):
-    """A status reply, report id first, as hidapi returns it."""
-    return [0x00, 0x00, level, mouse, keyboard_online, mouse_online, 0x01, kind] + [0x00] * 57
+def answer(level=54, mouse=100, kind=1, keyboard_online=True, mouse_online=True):
+    """A status reply, report id first, as hidapi returns it.
+
+    The link bytes are zero while that device is online, as MonsGeek's driver
+    reads them (`isOnline: n[3] === 0` and `n[4] === 0`).
+    """
+    return [0x00, 0x00, level, mouse, 0 if keyboard_online else 1,
+            0 if mouse_online else 1, 0x01, kind] + [0x00] * 57
 
 
 class FakeDongle:
@@ -94,13 +99,21 @@ class ParseTest(unittest.TestCase):
 
     def test_keyboard_online_is_independent_of_mouse_presence_or_stored_level(self):
         for kind in (1, 3):
-            for online in (0, 2, 255):
-                with self.subTest(kind=kind, online=online):
-                    raw = [0, 0, 54, 100, online, 1, 1, kind] + [0] * 57
+            for link in (1, 2, 255):
+                with self.subTest(kind=kind, link=link):
+                    raw = [0, 0, 54, 100, link, 0, 1, kind] + [0] * 57
                     self.assertIsNone(G.parse_status(raw))
+            linked = [0, 0, 54, 100, 0, 1, 1, kind] + [0] * 57
+            self.assertEqual(G.parse_status(linked), (54, 100, kind))
         self.assertIsNone(G.parse_status(answer(54, kind=2, keyboard_online=1)))
         for level in (0, 100):
             self.assertEqual(G.parse_status(answer(level, mouse_online=0)), (level, 100, 1))
+
+    def test_a_real_reply_from_a_linked_keyboard_is_read(self):
+        # #372: a ROYUAN receiver of the same driver family (3151:5006) answered
+        # this while its keyboard was in use; the link byte r[4] is zero.
+        raw = bytes.fromhex("000064000001010100000000") + bytes(53)
+        self.assertEqual(G.parse_status(raw), (100, 0, 1))
 
     def test_garbage_reply_does_not_raise_or_turn_into_zero(self):
         for bad in (None, 42, "zero", {}, [None] * 65, [-1] * 65, [256] * 65):
