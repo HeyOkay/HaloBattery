@@ -175,6 +175,7 @@ internal sealed partial class CardView : UserControl
         iconHost.Content = icon;
         iconHost.Margin = icon is null ? new Thickness(0) : new Thickness(0, 0, 16, 0);
     }
+    internal void DetachAction() => actionHost.Content = null;
     public void SetDescription(UIElement? description) => descriptionHost.Content = description;
     public void AddBody(UIElement element) => body.Children.Add(element);
 

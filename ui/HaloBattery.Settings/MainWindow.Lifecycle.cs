@@ -78,6 +78,7 @@ public sealed partial class MainWindow
         ResetOverscrollForNavigation();
         wheelNavigationGuard.Reset();
         StopPageEntryWheelFilter();
+        previewPresenter?.Settle();
         previewTimer?.Stop();
         previewPending=false;
         previewGeneration++;

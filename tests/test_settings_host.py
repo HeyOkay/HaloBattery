@@ -261,6 +261,30 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(image.size, (80, 80))
         self.assertEqual(image.format, "PNG")
 
+    def test_preview_transition_is_optional_and_forwarded_only_when_requested(self):
+        self.hello()
+        metadata = dict(background="png", level=.42, color=[255, 255, 255, 230],
+                        width=5., radius=36.875, eligible=True)
+        self.controller.preview_transition.return_value = (self.controller.preview.return_value, metadata)
+        self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=True))
+        self.controller.preview_transition.assert_called_once_with("b", size=80)
+        reply, = self.drain()
+        self.assertEqual(reply["transition"], metadata)
+        self.manager._handle(self.session, dict(type="preview", id=10, deviceKey="b", transition=False))
+        reply, = self.drain()
+        self.assertNotIn("transition", reply)
+        self.controller.preview.assert_called_once_with("b", size=80)
+
+    def test_preview_transition_rejects_non_boolean_and_extra_fields(self):
+        self.hello()
+        for value in (None, 0, 1, "true", [], {}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=value))
+        with self.assertRaises(ValueError):
+            self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=True, extra=1))
+        self.controller.preview.assert_not_called()
+        self.controller.preview_transition.assert_not_called()
+
     def test_selection_normalizes_missing_devices_and_refuses_bad_levels(self):
         self.session.device_key = "gone"
         for level in (-1, 101, True, "42", None):

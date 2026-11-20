@@ -35,8 +35,8 @@ log = logging.getLogger("halo_battery")
 WIDTH = 460
 PAD = 28                      # around the content
 LOGO = 44                     # the app logo, left of the title
-LOGO_GAP = 4                   # Settings uses 2 DIP beside its half-size 22 DIP icon
-BRAND_PX, VERSION_GAP = 32, 8
+LOGO_GAP = LOGO * branding.WORDMARK_GAP_PER_ICON  # visible ink gap, scaled from Settings
+BRAND_PX, VERSION_GAP = LOGO * branding.WORDMARK_EM_PER_ICON, 8
 EYEBROW_LIFT = 4               # breathing room above the wordmark
 CLOSE_BOX = 32                # the close button (top right)
 BODY_MAX_H = 330              # the notes scroll beyond this
@@ -617,22 +617,29 @@ class WhatsNewWindow:
 
         # header
         top = px(PAD)
-        x_text = px(PAD) + px(LOGO) + px(LOGO_GAP)
         cv = self.cv
         self._logo = None
+        logo_right = px(LOGO)
         try:
-            from PIL import ImageTk
-            self._logo = ImageTk.PhotoImage(app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"]), light=self.light),
-                                            master=self.win)
+            from PIL import Image, ImageChops, ImageTk
+            picture = app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"]), light=self.light)
+            painted = ImageChops.difference(picture, Image.new("RGB", picture.size, c["key"])).getbbox()
+            if painted is not None:
+                logo_right = painted[2]
+            self._logo = ImageTk.PhotoImage(picture, master=self.win)
         except Exception as e:
             log.info("what's new: no logo (%s)", e)
         label_h = self.f_label.metrics("linespace")
         eyebrow_h = self.f_eyebrow.metrics("linespace")
         self._wordmark = None
         self._brand_item = None
+        brand_left = 0
         try:
             artwork, brand_ascent = branding.wordmark(px(BRAND_PX), c["brand_text"], c["brand_accent"])
             brand_width, brand_height = artwork.size
+            ink = artwork.getchannel("A").point(lambda value: 255 if value >= 4 else 0).getbbox()
+            if ink is not None:
+                brand_left = ink[0]
             brand_icon_center = branding.icon_center(px(BRAND_PX))
             self._wordmark = ImageTk.PhotoImage(
                 flatten(artwork, c["base_rgb"], _rgb(c["key"]), cutoff=4), master=self.win)
@@ -642,6 +649,9 @@ class WhatsNewWindow:
             brand_height = self.f_title.metrics("linespace")
             brand_ascent = self.f_title.metrics("ascent")
             brand_icon_center = brand_height / 2
+        # The gap is between painted edges; neither icon nor font side bearings
+        # should add another invisible margin beside the approved SVG spacing.
+        x_text = round(px(PAD) + logo_right + LOGO_GAP * self.scale - brand_left)
         title_ascent = max(math.ceil(brand_ascent), self.f_title.metrics("ascent"))
         title_h = title_ascent + max(math.ceil(brand_height - brand_ascent), self.f_title.metrics("descent"))
         sub = subtitle(self.from_version, self.date, language=self.language)

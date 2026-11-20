@@ -481,15 +481,24 @@ class SettingsHost:
             if type(request_id) is not int or not 0 <= request_id <= 2147483647:
                 raise ValueError("invalid settings request id")
             if kind == "preview":
-                if set(message) != {"type", "id", "deviceKey"} or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str):
+                if (set(message) not in ({"type", "id", "deviceKey"}, {"type", "id", "deviceKey", "transition"})
+                        or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str)
+                        or "transition" in message and type(message["transition"]) is not bool):
                     raise ValueError("invalid preview request")
-                image = self.controller.preview(message["deviceKey"], size=80)
+                transition = None
+                if message.get("transition", False):
+                    image, transition = self.controller.preview_transition(message["deviceKey"], size=80)
+                else:
+                    image = self.controller.preview(message["deviceKey"], size=80)
                 if image.size != (80, 80):
                     raise ValueError("invalid settings preview size")
                 output = io.BytesIO()
                 image.save(output, format="PNG")
-                self._send(session, dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
-                    png=base64.b64encode(output.getvalue()).decode("ascii")))
+                response = dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
+                                png=base64.b64encode(output.getvalue()).decode("ascii"))
+                if transition is not None:
+                    response["transition"] = transition
+                self._send(session, response)
                 return
             result = dict(type="result", id=request_id, ok=False)
             deferred = None

@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Smoothly animate the Settings charge-ring preview when switching devices.
+- Align Settings and What’s new branding with the approved logo spacing and alignment.
+
 - URX Core75 now checks the product string as well as `36B0:3002`, so an
   EVO75 on the same receiver id is no longer labelled as a URX board (#448).
 - Keep the SignPath TEST credential in the protected signing jobs only; build
