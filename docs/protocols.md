@@ -42,6 +42,7 @@ Two traps: without the remote-mode switch the receiver answers locally with `102
 Bootloader mode mutes USB audio for about 0.8 s, so the provider reads at most once every 15 minutes and caches between reads. A headset switched off inside that window keeps showing its last level, still marked online, until the next read; the greyed state only appears once a read actually fails. The percentage is an estimate from a generic 3.7 V Li-ion curve, and the protocol exposes no charging flag, hence `approx` and `charging_known=False`.
 
 **Verified on hardware:** running Halo from source with the receiver plugged in and the headset switched on, `--probe` reads `about 73%` (3954 mV), consistent with the headset's LED band, which shows green (31–100%). The protocol itself was measured with an independent reader (https://github.com/fr0styJS/g435-lightspeed-battery).
+
 ### Audeze Maxwell
 
 **Connection:** 2.4 GHz dongle (3329:4B19) and USB-C cable (3329:4B1A)
@@ -148,6 +149,7 @@ The newer Quantum models expose a vendor collection on usage page `0xFF12` (`fea
     reply    86 00 DD 01 00 01 ... 0D 00 <size> <value...>
 
 The reply's status bit 15 rejects an error; the feature id must match; an empty feature is refused. The value byte has bit 7 charging and bits 0-6 the level. Only the read-only device-info query is sent. The protocol comes from JBL QuantumENGINE 2.9.4 as implemented by krisgfx9/Wireless-Device-Battery-Monitor, which tested a Quantum 650; this app has **not** run it on hardware yet.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)
@@ -517,6 +519,7 @@ The K99 V3 uses M HUB's **GLW func-config** read on the id-less 64-byte generic-
     reply    AA 05 00 <checksum> 38 00 00 00 ...  payload starts at byte 8
 
 The request header is flag `0x55`, command `0x05`, reserved, checksum, size and little-endian offset; for a read with no payload the checksum is size + offset = `0x38`. The reply carries the same fields and its checksum covers size + offset + payload. The battery byte is **payload offset 32**: bit 7 is charging, bits 0-6 are the percentage. The earlier `55 03 00 38 38` query returned a different info frame (52 % in the reporter's diagnostics while M HUB showed 90 %), so it is not used. Protocol from [krisgfx9/Wireless-Device-Battery-Monitor PR #1957](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/pull/1957), recovered from M HUB's own web driver and confirmed on a G75 V2 on the same `3837:3033` receiver. Confirmed on the reporter's K99 V3 (@Kolomhon, #458): the level agreed with M HUB within its 10 % display step, and the charging bit followed the cable. The query is only sent shortly after real keyboard input, like the ATK keyboard provider: on an idle keyboard the request itself can wake the keyboard, and the wake can reach the desktop as input (#458 follow-up).
+
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
 **Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 3554:F506, 3710:3414)
@@ -804,6 +807,7 @@ byte 10 comes from the ASUS GearLink SDK, as he reported there.
 **Connection:** 2.4 GHz dongle (`36BC:0001`) or the headset on its USB-C cable (`36BC:2001`).
 
 Both expose a 64-byte vendor collection on usage page `FF00` / usage `0001`. Output report `0x02` carries the device type and command; input report `0x02` echoes them. `GET_DEVICE_STATE` (`0x21`) is sent to the dongle type `0x11` and then the headset type `0xF1`: dongle payload byte 4 is 1 when the headset is linked, headset byte 15 is the percentage and byte 23 is 1 on the cable. From Fractal's Adjust Pro WebHID configurator. Only the state query is sent. **Unverified in this app.**
+
 ### Arbiter Studio Akitsu
 
 **Connection:** 8K receiver or USB cable, vendor 373E: Akitsu `000A`/`0009`, Akitsu 3950 `0039`/`0038`, Akitsu Medium `0067`/`0066` (receiver/cable).
@@ -839,6 +843,7 @@ Report `0x4B`, read `0x80`: command `0x27` returns link in byte 8 and percentage
 **Connection:** Sora V2 receiver `1915:AE1C` / cable `AE11`; Sprime PM1 receiver `AC1C` / `AD8C`, cable `AC11` / `AC12` / `AC13`.
 
 Collection `FFA0:0001`, feature report `0x05`, command `0x15`, 32-byte request. Reply byte 9 is the level (0 means 100), byte 10 charging, byte 11 full (Sprime), byte 12 online. Only this read is sent. **Unverified in this app.**
+
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)
@@ -1061,6 +1066,7 @@ a charger state at all is being checked with the reporter.
 Source: Red Square's public web configurator (`conf.red-square.org`, model table and
 `GskyWirelessModuleSeries` driver). Not open source; the protocol notes above are the
 independently written implementation.
+
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
 **Connection:** Lightspeed, Unifying or Bolt receiver
