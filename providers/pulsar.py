@@ -143,10 +143,16 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF505: "VGN Dragonfly 4K (receiver)",
         0xF506: "VGN Dragonfly 4K (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
+        0xF55D: "Redragon M916 Pro / M913 (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",
         0xFA09: "Compx 2.4 GHz keyboard",
         0xF520: "Teevolution Terra Pro (1K receiver)",
         0xF523: "Teevolution Terra Pro (2.4 GHz)",
+    },
+    0x35BB: {
+        0xD3FA: "HECATE mouse (wired)",
+        0xD3FC: "HECATE mouse (wired)",
+        0xD3FD: "HECATE mouse (wired)",
     },
     0x1B1C: {
         0x2B2A: "Corsair Sabre v2 Pro Ultralight",
@@ -370,6 +376,8 @@ class PulsarProvider(Provider):
                                       f"to read among {len(mine)}")
                     continue
                 name = pids[pid]
+                if (vid, pid) == (0x3554, 0xF5D5) and "TSG" in (d.get("product_string") or "").upper():
+                    name = "Taidu TSG808"
                 self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x} '{name}' "
                                   f"iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}"

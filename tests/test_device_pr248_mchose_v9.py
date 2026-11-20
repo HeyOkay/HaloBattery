@@ -306,9 +306,10 @@ class MouseProviderExclusionTest(unittest.TestCase):
 
     def test_the_mouse_provider_still_declares_the_headset_pids(self):
         from providers import mchose as MC
-        # mchose.py still skips the 3837 pair so its inverted 0x06 frame never reaches a
-        # headset. This provider does not claim those ids - the open PR #215 owns them.
-        self.assertEqual(tuple(sorted(MC.HEADSET_PIDS)), (0x6008, 0x600A))
+        # mchose.py still skips the 3837 headsets (the V9 Turbo pair and the X9) so its
+        # inverted 0x06 frame never reaches a headset. This provider does not claim those
+        # ids - mchose.py owns them.
+        self.assertEqual(tuple(sorted(MC.HEADSET_PIDS)), (0x6008, 0x600A, 0x6045))
         for pid in MC.HEADSET_PIDS:
             self.assertNotIn((0x3837, pid), M.ALLOWED)
 

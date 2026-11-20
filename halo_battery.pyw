@@ -148,15 +148,19 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        DeviceStatus, DjiProvider, DarmosharkProvider,
                        EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXProvider, JblProvider,
+                       HyperXCloudCoreProvider, HyperXProvider, JblProvider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
-                       LogitechCenturionProvider,
+                       LogitechCenturionProvider, LogitechG435RtkProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider)
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider,
+                       RedSquareProvider,
+                       MchoseK99Provider,
+                       CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -221,6 +225,8 @@ PROVIDER_LABELS = {
     "ajazz": "AJAZZ mice",
     "alienware": "Alienware Pro Wireless keyboard",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
+    "arbiter": "Arbiter Studio mice",
+    "areson": "Areson / Redragon mice",
     "astro": "Astro A50",
     "asus": "ASUS ROG / TUF mice, keyboards and headsets",
     "atk_keyboard": "ATK V75X keyboard",
@@ -232,13 +238,17 @@ PROVIDER_LABELS = {
     "barracuda_x": "Razer Barracuda X",
     "blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
     "blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
+    "cherry": "CHERRY MX 3.0S Wireless",
     "corsair": "Corsair headsets",
+    "coolermaster": "Cooler Master mice",
     "dji": "DJI Mic Mini 2",
     "darmoshark": "Darmoshark N5",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "eweadn_ydx": "EWEADN X23 Pro",
+    "fantech": "Fantech Helios Go XD5",
     "finalmouse": "Finalmouse UltralightX",
+    "fractal": "Fractal Scape",
     "glorious": "Glorious Model O Wireless",
     "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
@@ -246,6 +256,7 @@ PROVIDER_LABELS = {
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
+    "hyperx_cloud_core": "HyperX Cloud Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "hyperx_ngenuity": "HyperX Pulsefire mice",
@@ -257,15 +268,22 @@ PROVIDER_LABELS = {
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
     "lamzu_sw": "Lamzu Tachi (8K receiver)",
+    "machenike": "Machenike L7",
+    "mchose_k99": "MCHOSE K99 V3",
+    "moondrop": "MOONDROP GM01 Pro",
+    "ninjutso_sprime": "Ninjutso / Sprime mice",
+    "royal_kludge": "Royal Kludge MG6 Pro",
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
     "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
+    "logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "mchose": "MCHOSE mice",
     "attackshark_x66": "ATTACKSHARK X66",
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
+    "msi": "MSI mice",
     "nintendo": "Nintendo Switch controllers",
     "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",
@@ -275,6 +293,7 @@ PROVIDER_LABELS = {
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
+    "redsquare": "Red Square Alumix TKL keyboard",
     "razer": "Razer mice and headsets",
     "shield": "NVIDIA SHIELD controllers",
     "skullcandy": "Skullcandy headsets",
@@ -285,20 +304,22 @@ PROVIDER_LABELS = {
     "turtlebeach": "Turtle Beach headsets",
     "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
+    "wraith": "Wraith W1",
     "xinput": "Xbox-compatible controllers",
+    "zowie": "ZOWIE mice",
 }
 
 
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), BlackSharkV3XProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
-            KeychronProvider(), PulsarProvider(),
-            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXCloudCoreProvider(), HyperXProvider(),
+            KeychronProvider(), PulsarProvider(), AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), WraithProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(),
+            JblProvider(listen_first=jbl_listen_first), JblHidV3Provider(), CherryProvider(), CoolerMasterProvider(), RoyalKludgeProvider(), ZowieProvider(), FractalProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
-            SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
+            SteelSeriesEliteProvider(), LogitechCenturionProvider(), LogitechG435RtkProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
@@ -306,7 +327,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
 
 
 # ---------------------------------------------------------------- config
@@ -2466,7 +2487,7 @@ class App:
             try:
                 if isinstance(p, PlayStationProvider):
                     p.switch_bluetooth = bool(self.cfg.get("playstation_full_mode", False))
-                if isinstance(p, AtkKeyboardProvider):
+                if isinstance(p, (AtkKeyboardProvider, MchoseK99Provider)):
                     p.activity.wake = self.wake.set
                 found = refuse_bad_levels(p.poll())
                 if self.stopping():
@@ -3374,6 +3395,8 @@ class App:
             for provider in self.providers:
                 if isinstance(provider, AtkKeyboardProvider):
                     cleanup.append(("ATK", provider.close))
+                elif isinstance(provider, MchoseK99Provider):
+                    cleanup.append(("MCHOSE K99", provider.close))
             for name in ("win_events", "bt_watch"):
                 target = getattr(self, name, None)
                 if target is not None:

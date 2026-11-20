@@ -44,6 +44,23 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the mouse pictogram; the existing charge-register reader already returned
   75% on the reporter's receiver. Confirmed on hardware by @breezywine in
   [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
+- Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
+  approximate level, read at most once every 15 minutes and cached between reads
+  because each read mutes USB audio for about 0.8 s.
+
+- **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
+  (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
+  short, `ff43:0302` long) while keeping existing `ff00` paths preferred.
+  Also recognize the `046d:c0a9` wired interface. The author reported tests on a physical mouse under Windows: battery level
+  matches Logitech G HUB, charging is reported, and the tray icon greys out
+  when powered off and recovers on reconnect. The author also reported wired battery
+  and charging with the receiver unplugged. See [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465).
+  Low-battery notifications remain untested; this recovered branch has no new hardware run.
+- Red Square Alumix TKL (RSQ-20055) battery level over its 2.4 GHz receiver,
+  using the settings read from Red Square's web configurator ([#460](https://github.com/HeyOkay/HaloBattery/issues/460)).
+  Confirmed on reporter hardware by @fogius: the level appeared in the tray.
+  Charging is not exposed by that driver, so it stays unknown pending the
+  reporter's cable check.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.
@@ -144,6 +161,75 @@ and the project follows [Semantic Versioning](https://semver.org/).
   ([#221](https://github.com/HeyOkay/HaloBattery/issues/221)). The Model O- was
   confirmed by its owner in #221 (level and charging); the Model D and D- are
   **unverified** on hardware.
+- **GameSir G7 Pro 8K** (Aimlabs edition confirmed, `3537:10c6` on the dongle and
+  `3537:10c5` on the cable): reads the controller's own battery level and charging
+  state through its GameSir Connect HID collection, instead of the Windows
+  placeholder that showed a permanent 100 %. Requires one controller in both XInput
+  and Windows.Gaming.Input. The other editions use GameSir Connect's id table and
+  are unverified.
+- **GameSir Cyclone 2** (`3537:100b`): the same `fff0:0040` gamepad-state report
+  (GameSir Connect's `proxyC2.parseGamepadState()`), so the same reader is used.
+  The receiver was confirmed by the reporter on 2026-11-14 (85 %, matching
+  GameSir Connect). While charging the pad enumerates as `3537:0575` with the
+  same collection and Windows exposes it as a generic Xbox pad (`3537:1053`);
+  the XInput provider now pairs that report to the GameSir collection instead of
+  its `1000/1000` placeholder. The charging identity answers with an all-zero
+  `0x12` report before its real one, so the reader now waits for a non-zero
+  state instead of freezing at 0 %. When the charging identity answers only
+  zeros, the same pad's generic `1053` collection is read as a fallback; the
+  1053 reading keeps the Cyclone 2 name. **Confirmed on hardware** by the
+  reporter on 2026-11-14 (86 %, charging, matching GameSir Connect).
+
+- **MCHOSE X9** headset on its 2.4 GHz dongle (`3837:6045`), read with M HUB's own
+  BLK battery query (`65 01` on report `0x55`). Confirmed on hardware, on Linux and on
+  Windows (@Kolomhon, [#458](https://github.com/HeyOkay/HaloBattery/issues/458)): the
+  level and the discharging state on the dongle. On its cable the headset leaves the
+  dongle and appears as `3837:6044`, which M HUB does not read: nothing is sent to it,
+  and no charging state is shown.
+
+- **MCHOSE K99 V3** keyboard on its 2.4 GHz receiver (`3837:3033`), read with the
+  GLW func-config query M HUB uses (`00 | 55 05 00 38 38 ...` → `AA 05 00 ...`,
+  battery at payload byte 32; bit 7 charging). The earlier `55 03 00 38 38`
+  query returned a different info frame and a wrong level (52 % while M HUB
+  showed 90 %), so it was replaced. Confirmed on hardware by @Kolomhon in #458:
+  the level agreed with M HUB within its 10 % display step, and the charging bit
+  followed the cable. Polling is now paused until real keyboard input, so an
+  idle keyboard is not woken by the battery query.
+
+- **JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)** on their 2.4 GHz
+  receiver or USB cable: HIDV3 device-info feature report `0x88`, battery feature
+  `0x000D`, level and charging in the reply. Unverified in the app; the reference
+  implementation tested a Quantum 650.
+
+- **Cooler Master MM712 / MM731** on the shared 2.4 GHz receiver or their USB
+  cables: read-only vendor status request, level and charging. Unverified in the
+  app; the MM712 was tested by the reference project, the MM731 path was not.
+
+- **Royal Kludge MG6 Pro** on its 2.4 GHz receiver or USB cable: QiWang
+  `GET_BATTER_VOL` read, percentage and charging. Unverified in the app.
+
+- **ZOWIE EC-CW, DW series and U2** wireless mice: read-only EC-CW and
+  DW/U2 battery queries, percentage and voltage-trend charging. Unverified in
+  the app.
+
+- **Fractal Design Scape** on its 2.4 GHz dongle or USB-C cable: read-only
+  `GET_DEVICE_STATE` query, percentage and cable charging. Unverified in the app.
+
+- **CHERRY MX 3.0S Wireless** on its 2.4 GHz receiver or USB cable: read-only
+  status query, percentage and USB-powered charging. Unverified in the app.
+
+- **Arbiter Akitsu, Areson/Redragon M915/M913, Machenike L7, MOONDROP GM01 Pro,
+  Ninjutso Sora V2 and Sprime PM1**: read-only battery protocols from the vendor
+  tools and community references. Unverified in the app; no hardware was available.
+
+- **Fantech Helios Go XD5 and Redragon Invader Pro** on their 2.4 GHz dongle
+  or cable: 17-byte feature request, level and charging. Unverified in the app.
+
+- **MSI VERSA 300 ELITE and Clutch GM31 / GM41** on their receivers or cables:
+  read-only status query, plus the GM41's passive raw report. Unverified in the app.
+
+- **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
+  status report, level and charging. Unverified in the app.
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
@@ -204,6 +290,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Build with read-only credentials, publish validated immutable stable assets with attestations, and keep the rolling pre-release tag fixed.
 
 - Lock local and CI build inputs, publish native Settings with generated JSON and dynamic WinUI metadata, and exclude verification code from shipping releases.
+
+- A MCHOSE headset unplugged in the middle of a poll no longer hides the other MCHOSE
+  devices for that poll.
 
 - Bring the existing Settings window to the foreground when a tray icon is
   double-clicked, restoring it if minimized.
@@ -376,6 +465,12 @@ source; their settings and battery history remain compatible.
   universal HID protocol: `50 02` asks for the battery, `51 02` answers with the level
   and charge status (plus voltage and temperature in the diagnostics). Unverified on
   hardware; a test build is out for [#304](https://github.com/HeyOkay/HaloBattery/issues/304).
+- **HyperX Cloud Core Wireless** (`0951:173f` dongle, `0951:1740` USB-C) - the
+  Cloud Core feature-report protocol from LennardKittner/HyperHeadset's `cloud-core`
+  branch: report `0xFF` on `ff00:0001`, voltage at bytes 11-12 and charging at byte
+  9. The level is approximate; the Cloud Flight voltage curve is used because the
+  Cloud Core reference curve came from a failing battery and reads a healthy 3.85 V
+  as full. Unverified on hardware; a test build is going to the reporter.
 - **i-Rocks M31R** (`14a5:c009` receiver, `14a5:c010` cable) - the Compx frame over a
   different transport: the request is a feature report on `ff02:0002`, the reply an
   input report on `ff01:0000`, and the receiver is asked `0x03` (online) first because

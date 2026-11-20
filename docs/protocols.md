@@ -29,11 +29,31 @@ The prior PLYR reading was confirmed in [#104](https://github.com/HeyOkay/HaloBa
 these freshness changes were tested with fake interrupts/snapshots only and need
 Windows hardware confirmation.
 
+### Logitech G435 LIGHTSPEED (046D:0ACB, Realtek receiver)
+
+**Connection:** LIGHTSPEED receiver
+
+This is the original Realtek receiver, not the Holtek variant (`046D:0ADF`). It speaks no HID++, and it has no passive status channel: volume keys, mute, power cycles and USB-C charge events produced no frames on either vendor collection during two long listens. The battery is only reachable through the receiver's own PA command bridge, in bootloader mode.
+
+Feature report 6 on usage page `0xFFC0` (63 data bytes) carries `[06, 01, 03, 0…]` to enter bootloader, `[06, 08, 03, 0…]` to leave it, and `[06, 04, 03, 00, len, …]` to forward a PA command. The commands are `LQ 0x0E E1 01` (remote mode), `OTA 0x06 31` (get battery) and `LQ 0x0E E1 00` (local mode). The reply is `06 80 00 <millivolts u16 LE> 00 00`.
+
+Two traps: without the remote-mode switch the receiver answers locally with `102`, even with the headset switched off and even after a cold replug; and the first read after entering bootloader can arrive without the `P I` prefix, so the payload is searched for rather than indexed.
+
+Bootloader mode mutes USB audio for about 0.8 s, so the provider reads at most once every 15 minutes and caches between reads. A headset switched off inside that window keeps showing its last level, still marked online, until the next read; the greyed state only appears once a read actually fails. The percentage is an estimate from a generic 3.7 V Li-ion curve, and the protocol exposes no charging flag, hence `approx` and `charging_known=False`.
+
+**Verified on hardware:** running Halo from source with the receiver plugged in and the headset switched on, `--probe` reads `about 73%` (3954 mV), consistent with the headset's LED band, which shows green (31–100%). The protocol itself was measured with an independent reader (https://github.com/fr0styJS/g435-lightspeed-battery).
+
 ### Audeze Maxwell
 
 **Connection:** 2.4 GHz dongle (3329:4B19) and USB-C cable (3329:4B1A)
 
 The vendor collection (usage page 0xFF13): the sequence HeadsetControl uses, whose answer carries the battery as attribute 0x0CD6 (`05 5D <len> 00 D6 0C <percent>`). One packet is enough — the query for that attribute is answered with the marker on its own (0.19 s against 1.48 s for the whole sequence) — with the full sequence as the fallback. Dongle and cable are one headset and share one icon; charging is inferred from the cable answering, so the icon breathes while it sits on USB-C. With the headset switched off the dongle keeps answering with the last value it held, so the provider goes by the dongle's own product string — `"Audeze Maxwell Dongle"` with no headset linked, `"Audeze Maxwell HID"` with one — and reports nothing: the icon leaves the tray the way any switched-off device does
+
+### Cooler Master MM712 / MM731
+
+**Connection:** 2.4 GHz receiver (`2516:01B7`) or USB cable (MM712 `2516:0169`, MM731 `2516:0167`).
+
+The receiver and both cables expose a vendor collection on interface 3, usage page `FF0A`. Sending the 4-byte output request `00 46 81 00` produces a `47 81 <model> ...` status report: byte 10 is the level (1-100), byte 11 charging, byte 12 the transport (0 cable, 1 receiver). On the shared dongle model byte 50 is the MM712 and 70 the MM731. Only the status request is sent. Protocol from syntactic-spice/coolermaster-usb-protocol and riVFerd/MM731-Controller; the MM712 was tested there, the MM731 path and its model byte are not. **Unverified in this app.**
 
 ### Corsair Void Elite Wireless
 
@@ -75,6 +95,12 @@ One dongle id serves several mice - the XM2w 4K, the OP1w 4K and their v2 revisi
 
 The battery collection is picked by usage page, 0xFF13:0xFF00. A 64-byte output report `50 02 00 00 ...` is answered by the input report starting `51 02`: the level is index 2 as a plain percentage, and bit 7 of index 6 was set after a recharge and clear before it, so it is shown as charging. Both were taken from two USBPcap captures of NGENUITY attached to issue #26, at 51 % and 67 %, and matched to the percentage NGENUITY displayed at the time; the `61 02` frame is byte-identical across the two states, so it is not the battery, and a level above 100 is refused rather than shown. **Confirmed on real hardware** by @azizen12 - the percentage was right on the station's first test. With NGENUITY running the station also emits thousands of `ff 01` / `44`-`45` housekeeping frames (its diagnostics showed the app reading only those); stale reports are therefore drained before the request and the reply is read until it arrives, so the two applications can run side by side - both states confirmed by @azizen12 on the final build. Credit for the captures: @azizen12.
 
+### HyperX Cloud Core Wireless
+
+**Connection:** 2.4 GHz dongle (0951:173F) or USB-C (0951:1740); HP also lists its vendor id (03F0)
+
+The protocol from LennardKittner/HyperHeadset's `cloud-core` branch, reverse-engineered by the reporter in its [#59](https://github.com/LennardKittner/HyperHeadset/issues/59): the battery collection is `FF00:0001` on interface 3, and a 64-byte feature report `FF 07 00 FD 04 0C F1 02 01 04 F0 0C` + zeroes asks for it. The answer is a short-lived feature report starting `FF 12`; the voltage is little-endian at bytes 11..12, and byte 9 is `03` on battery / `05` wired charging. The reference polls the feature report for about 100-150 ms instead of one delayed read, so this does too. The headset reports no percentage: the reference converts voltage with a 20-point curve and a 20-sample average. Its latest Cloud Core curve was measured on a unit whose battery later failed and maps 3.6 V to 100 %, so a healthy 3.85 V reading would look full; this uses the Cloud Flight curve the same reference used before that calibration, which reads 3.85 V as about 70 %. The level is still approximate ("about NN%"), and a reply outside 2500-4500 mV or with an unknown charge byte is not shown as a valid state. Both ids share one icon. **Unverified on hardware** - the request is the reference's; no Cloud Core Wireless was available here
+
 ### HyperX Cloud II Core Wireless
 
 **Connection:** 2.4 GHz dongle (03F0:0995) or its second mode (03F0:0795)
@@ -113,6 +139,17 @@ queries are introduced. The reporter confirmed this path on hardware: detection,
 level, charging, restart and receiver replug all recovered.
 The key remains `hyperx:0fcc`; it is not merged with another receiver PID.
 
+### JBL Quantum HIDV3 (520 / 650 / 850 / 950)
+
+**Connection:** 2.4 GHz receiver or USB cable. PIDs: 520 `218D`/`218E`, 520X `21A7`/`21A9`, 650 `2125`/`2126`, 650X `213B`/`213D`, 850 `219A`/`219B`, 950 `2127`/`2128`, 950X `213E`/`2140`.
+
+The newer Quantum models expose a vendor collection on usage page `0xFF12` (`featLen` at least 11, input report at least 16 bytes). A feature report `0x88` asks for the two-byte feature id `0x000D` (battery):
+
+    request  88 00 DD 01 00 01 00 02 00 0D 00
+    reply    86 00 DD 01 00 01 ... 0D 00 <size> <value...>
+
+The reply's status bit 15 rejects an error; the feature id must match; an empty feature is refused. The value byte has bit 7 charging and bits 0-6 the level. Only the read-only device-info query is sent. The protocol comes from JBL QuantumENGINE 2.9.4 as implemented by krisgfx9/Wireless-Device-Battery-Monitor, which tested a Quantum 650; this app has **not** run it on hardware yet.
+
 ### JBL Quantum 910 Wireless
 
 **Connection:** 2.4 GHz dongle (0ECB:2088)
@@ -135,6 +172,22 @@ protocol source/capture. Confirmed PRO X 2 (`046D:0AF7`) remains enabled.
 **Connection:** the headset's Bluetooth link through the BT600 USB adapter (`047f:02ee`, `047f:02f7`)
 
 The adapter is a Bluetooth relay rather than a vendor dongle, and its settings live on the vendor collection `ffa2:0003` (interface 3), tunnelled in HID report `0x07`: `07 01 01 10 <len> <addr> 00 00 <op> <grp> <item> ...`, where `0x00` addresses the adapter and `0x20` the headset, and replies carry `0x00` or `0x02`. Nothing answers before the attach sequence - a two-byte output report `06 01`, a HELLO to the adapter, then a HELLO to the headset (`op 0x01`, group/item `01/02`, acked with `op 0x08`); it is idempotent, so it is replayed before every read, and the catalogue frames that follow each ack are skipped by the reply matcher. The battery is `GET 0A 1A`, answered by `op 0x03 0A 1A <level> <count> <charging> <minutes hi> <minutes lo> 01`; the percentage is Poly's own `level / (count - 1) * 100` (the count includes 0, so `0x0B` is ten steps), and the minutes are the remaining talk time, not the level. Only the battery is read - no setting is written. From HeadsetControl's `plantronics_bt600.hpp`. **Confirmed on hardware by @DindonOz** (#328): the level agreed with Poly's own app and the charging state was correct.
+
+### Royal Kludge MG6 Pro
+
+**Connection:** 2.4 GHz receiver (`2E3C:00A6` / `00E6`) or USB cable (`2E3C:00A5` / `00E5`).
+
+The vendor collection is `FF00:0001` on the receiver and `FFF2:0001` on the cable, with 65-byte input/output reports. RK's web driver sends a QiWang configuration frame as output report 0:
+
+    01 01 02 01 00 ...        GET_BATTER_VOL
+
+The reply keeps the first three bytes and sets access_res in bit 4 of byte 3; bytes 4-5 are millivolts, 6-7 the percentage, and byte 10 the USB-plugged flag. A zero access_res means the receiver answered for a mouse that did not, so it is not shown as a level. Only the read-only query is sent. **Unverified in this app.**
+
+### ZOWIE EC-CW, DW series and U2
+
+**Connection:** EC-CW receiver `04A5:8006` or cable `04A5:8005`; DW receiver `04A5:800A`; U2 receiver `04A5:8008`.
+
+Two read-only battery protocols. The EC-CW receiver/cable takes an unnumbered 3-byte request `00 A5 03`; the reply is millivolts (little endian) then the percentage, and zero volts means the mouse is not linked. The DW/U2 path uses command report `0x08 B4 15` on usage page `FF03` and reply report `0x09` on `FF04`, with millivolts in bytes 1-2 times 10 and byte 4 `0xC8`. Charging is inferred from the voltage trend, as in the MIT zowie-battery-tray; ZOWIE has no charging contact over USB. From yleshchuk/zowie-battery and IgnacioBarb/zowie-battery-tray. **Unverified in this app.**
 
 ### Razer Barracuda Pro (2.4 GHz)
 
@@ -278,6 +331,16 @@ The Azoth X itself was confirmed on hardware in #269 with test build 2 (100%).
 A reply of `ff aa` means the device does not know the command (a keyboard asleep on battery answers this), and an all-zero reply or a level of 0 without charging is standby: no reading rather than an empty battery. Ids absent from the pair list are skipped, as G-Helper does; the collections of one receiver are matched by the device instance in their path, so two receivers do not mix.
 
 Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile, and on a Keris II Ace and an Azoth by @comipa in [#231](https://github.com/HeyOkay/HaloBattery/issues/231).
+
+### CHERRY MX 3.0S Wireless
+
+**Connection:** 2.4 GHz receiver (`046A:00EA`) or USB cable (`046A:00E3`).
+
+A 64-byte vendor channel on `FF1C:0092`. The frame is report id `0x04`, a
+little-endian checksum of bytes 3-63, type `0x1A`, then payload `03 00 00 55`.
+The reply keeps report id and type; byte 8 is the percentage and byte 9 is
+non-zero while USB powered. From B1Chat/BatteryWatch (MIT), verified on a real
+MX 3.0S through the dongle; the cable path is assumed. **Unverified in this app.**
 
 ### Corsair Dark Core RGB Pro SE
 
@@ -439,6 +502,23 @@ A different chip from the M7 Ultra, and a different protocol: a 65-byte output r
 **Connection:** 2.4 GHz receiver (5253:1020)
 
 The vendor collection (usage page 0xFF01; the sibling 0xFF0B never answers): feature report 0x11 (the shorter report, tried first) or 0x12 with command 0x06, every payload byte inverted, which returns `53 52 31 00 02 05 07 00 09 64 00 64` — vid 0x5253, model 0x31, firmware, flags, then the level and the charging byte (1 while charging). The request has to be repeated for each read, and the receiver only relays a real value while the mouse is awake: asleep it answers with zeros, so a silent mouse keeps its last level on a greyed icon. On the cable the mouse answers on its own PID (5253:0031, the number it reports as its model id) and the receiver goes quiet: both connections share one icon, and whichever one reports charging wins
+
+### MCHOSE X9
+
+**Connection:** 2.4 GHz dongle (3837:6045, C-Media strings)
+
+MCHOSE's own web driver, M HUB (www.mchose.com.cn, `assets/main-DQZs6ZzX.js`, fetched 2026-11-17), lists the headset as `createAudioHidProduct({modelKey:"MCHOSE X9", vendorId:14391, productId:24645, protocolProfile:AUDIO_PROTOCOL_PROFILE.BLK})`. The only request sent is that BLK profile's `audio.blk.readBattery`: output report 0x55 with 63 data bytes, `65 01` and zeros. The reply on input report 0x55 carries the level in data byte 1 and the state in byte 2, decoded the way M HUB's `parseBatteryResponse` does it: 2 discharging, 3 charging, 4 full, 26 asleep (no level shown). Any other state, a level above 100 or a short reply is refused. The report lives on the vendor collection `ff90:0001`, the only one written to. Confirmed on an X9 on its dongle: `55 65 28 02`, which is 40 % and discharging, within 30 ms. On its cable the headset drops its radio link and the dongle stops answering. The headset then shows up as a second USB device, 3837:6044 "MCHOSE X9 HEADSET", which M HUB does not list, so nothing is written to it: a charging X9 keeps its last level greyed out for five minutes, like the other MCHOSE devices, and no charging state is shown. State 3 is decoded as charging, as M HUB decodes it, but has never been observed. The level is also confirmed on Windows by @Kolomhon in [#458](https://github.com/HeyOkay/HaloBattery/issues/458), with test builds carrying this code: it showed the correct percentage, and with the cable in, M HUB switched to wired mode without a charging state, as the app does.
+
+### MCHOSE K99 V3 (2.4 GHz)
+
+**Connection:** 2.4 GHz receiver (3837:3033, "MCHOSE K99 V3 2.4G"), generic-desktop HID collection `0x0001:0x0000` on interface 1.
+
+The K99 V3 uses M HUB's **GLW func-config** read on the id-less 64-byte generic-desktop collection (usage `0x0001:0x0000`, with `0xFF31:0x0074` as the fallback that answers the same frames):
+
+    request  00 | 55 05 00 38 38 00 00 00 ...     read 56 bytes at offset 0
+    reply    AA 05 00 <checksum> 38 00 00 00 ...  payload starts at byte 8
+
+The request header is flag `0x55`, command `0x05`, reserved, checksum, size and little-endian offset; for a read with no payload the checksum is size + offset = `0x38`. The reply carries the same fields and its checksum covers size + offset + payload. The battery byte is **payload offset 32**: bit 7 is charging, bits 0-6 are the percentage. The earlier `55 03 00 38 38` query returned a different info frame (52 % in the reporter's diagnostics while M HUB showed 90 %), so it is not used. Protocol from [krisgfx9/Wireless-Device-Battery-Monitor PR #1957](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/pull/1957), recovered from M HUB's own web driver and confirmed on a G75 V2 on the same `3837:3033` receiver. Confirmed on the reporter's K99 V3 (@Kolomhon, #458): the level agreed with M HUB within its 10 % display step, and the charging bit followed the cable. The query is only sent shortly after real keyboard input, like the ATK keyboard provider: on an idle keyboard the request itself can wake the keyboard, and the wake can reach the desktop as input (#458 follow-up).
 
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
@@ -646,6 +726,38 @@ does not represent a new hardware test of this guard.
 
 HID++ 2.0 on the receiver's vendor interface: the device name (feature 0x0005) and the first battery feature the device supports (0x1004 unified battery, 0x1000 battery status or 0x1001 battery voltage; the G502 LIGHTSPEED reports voltage, converted to % with the Li-ion curve used by Solaar, the G502 X PLUS the unified battery percentage). The icon follows the device's unit id (feature 0x0003). Works alongside G HUB
 
+### Logitech G PRO X3 SUPERSTRIKE
+
+**Connection:** LIGHTSPEED receiver (`046d:c54f`); wired mouse
+`046d:c0a9`.
+This is the **mouse**, not the PRO X 3 LIGHTSPEED headset.
+
+The mouse exposes HID++ on Logitech's alternate vendor collections
+`ff43:0301` (short, seven-byte reports) and `ff43:0302` (long, 20-byte reports).
+For these two product IDs only, the Logitech provider treats them as the
+usual short/long HID++ paths, keeping the original `ff00:0001` / `ff00:0002`
+paths preferred wherever both exist. The receiver is queried through the
+usual paired-device slots (1-6), while the wired mouse uses slot `0xff`.
+The existing HID++ 2.0 battery feature lookup and status parsing are reused;
+no new battery command or device-setting write is introduced.
+
+**Protocol sources:** [OpenLogi PRO X3 SUPERSTRIKE receiver support
+(PR #2191)](https://github.com/AprilNEA/OpenLogi/pull/2191) identifies the
+`c54f` receiver and the `ff43:0302` long collection with its `ff43:0301`
+short sibling on Windows. The short collection is recognized when present.
+This change only maps the known collections to the existing
+read-only HID++ battery requests in `providers/logitech.py`.
+
+**Prior hardware reports:** in [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465),
+the author reported a physical PRO X3 SUPERSTRIKE under Windows on build `fffb327`: the reported
+battery percentage matched Logitech G HUB; charging was detected; the tray
+icon greyed out after powering the mouse off and returned on reconnect.
+The author subsequently reported battery and charging on `c0a9` with the receiver physically unplugged.
+These are prior-build reports, not a new hardware test of this recovered branch.
+Low-battery notifications remain untested. Automated tests cover collection routing,
+charging statuses and legacy `ff00` precedence. `C54D` retains its existing route;
+it is excluded from the X3 fallback following the scope review in PR #465.
+
 ### Razer BlackWidow V3 Pro
 
 **Connection:** 2.4 GHz receiver (1532:025C), cable (1532:025A)
@@ -690,11 +802,61 @@ Source: no public project documents this query. The controller's owner
 it with his own build against Armoury Crate (65% in both); the charging label of
 byte 10 comes from the ASUS GearLink SDK, as he reported there.
 
+### Fractal Design Scape
+
+**Connection:** 2.4 GHz dongle (`36BC:0001`) or the headset on its USB-C cable (`36BC:2001`).
+
+Both expose a 64-byte vendor collection on usage page `FF00` / usage `0001`. Output report `0x02` carries the device type and command; input report `0x02` echoes them. `GET_DEVICE_STATE` (`0x21`) is sent to the dongle type `0x11` and then the headset type `0xF1`: dongle payload byte 4 is 1 when the headset is linked, headset byte 15 is the percentage and byte 23 is 1 on the cable. From Fractal's Adjust Pro WebHID configurator. Only the state query is sent. **Unverified in this app.**
+
+### Arbiter Studio Akitsu
+
+**Connection:** 8K receiver or USB cable, vendor 373E: Akitsu `000A`/`0009`, Akitsu 3950 `0039`/`0038`, Akitsu Medium `0067`/`0066` (receiver/cable).
+
+Vendor collection `FFFF:0000`, 65-byte feature report 0. A feature report with bytes 3=02, 4=02, 6=83 is followed by a feature read; status A1/A2 means answered, A0 means the mouse is asleep. Byte 7 is charging and byte 8 the percentage (both shifted when the report id is present). Read-only; no mode writes. **Unverified in this app.**
+
+### Areson / Redragon M915, M913
+
+**Connection:** 2.4 GHz receiver `25A7:FA07` / `FA08`.
+
+GetPower feature request on `FF02:0002` (interface 1), 17 bytes, checksum `0x55 - sum(bytes 0..15)`. The reply arrives on `FF01:0000`, starts `09 04 00`, carries a 0-10 level in byte 6 and charging in byte 7, and the whole frame sums to `0x55`. Level maps to 10 % steps. The FA7B/FA7C family uses another scale and is not claimed. **Unverified in this app.**
+
+### Machenike L7
+
+**Connection:** 2.4 GHz receiver `248A:FF4C` or USB cable `248A:FF4E`; product string must be an L7.
+
+Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24 4E FF` at bytes 4-7, link bits in byte 10, level in byte 11 and charging in byte 12. Only this read is sent; the shared 248A vendor id is why the product string is required. **Unverified in this app.**
+
+### MSI VERSA 300 ELITE, Clutch GM31 / GM41
+
+**Connection:** VERSA `0DB0:9E22`; GM31 receiver `0D3C` / cable `0D3B`; GM41 receiver `0D4C` / cable `0D4B`.
+
+VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
+
+### MOONDROP GM01 Pro
+
+**Connection:** 2.4 GHz dongle `35D8:0133`, interface 3 consumer collection; on its USB cable the headset has no control channel.
+
+Report `0x4B`, read `0x80`: command `0x27` returns link in byte 8 and percentage in byte 9; command `0x31` is answered by the dongle with link in byte 4. On the cable the last level is kept and charging is shown, because the headset drops the radio link. **Unverified in this app.**
+
+### Ninjutso Sora V2; Sprime PM1
+
+**Connection:** Sora V2 receiver `1915:AE1C` / cable `AE11`; Sprime PM1 receiver `AC1C` / `AD8C`, cable `AC11` / `AC12` / `AC13`.
+
+Collection `FFA0:0001`, feature report `0x05`, command `0x15`, 32-byte request. Reply byte 9 is the level (0 means 100), byte 10 charging, byte 11 full (Sprime), byte 12 online. Only this read is sent. **Unverified in this app.**
+
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)
 
 Windows.Gaming.Input battery report: exact percentage and charging state. XInput is the fallback (four levels only)
+
+### GameSir G7 Pro 8K
+
+**Connection:** 2.4 GHz dongle (`3537:10c6` for the Aimlabs edition), USB cable (`3537:10c5`) or the charging dock (the pad stays on its dongle). Requires exactly one controller in both XInput and Windows.Gaming.Input and one matching vendor collection; otherwise the existing XInput fallback is kept.
+
+The pad is an Xbox 360 controller for Windows: XInput says "wired" and Windows.Gaming.Input returns the `1000/1000` placeholder whatever the charge, which showed as a permanent 100 %. Its second HID collection (`fff0:0040`, the one GameSir Connect uses) carries input report `0x12` with the charge state in byte 35 (`01` charging) and the level in percent in byte 36. Source: GameSir Connect 1.11.9, `proxyG7ProCE.parseGamepadState()`, and its `G7ProCE` mode table for the product ids of the other editions (Gold, Nioh 3, NBA 2K, Golden Apple - unverified). The pad does not send report `0x12` on its own (an idle pad stayed silent for minutes); it follows any request on that collection, so the read-only "read current profile" request `0F 0B` (`getReadCurrentProfileCommand`), which GameSir Connect sends when it loads the pad's profile, is written and the report arrives within 0.01 s. Only this request is sent; levels above 100 are refused. **Confirmed on hardware on Windows** by the owner on the Aimlabs edition with GameSir Connect closed: 100 / 98 / 97 % matched GameSir Connect, charging was reported on the cable and on the dock (`01 60` = charging, 96 %), idle and in game. Right after power-on the pad reported 100 % once and 98 % two minutes later: its own estimate settling.
+
+The **GameSir Cyclone 2** (`3537:100b`, #221) exposes the same `fff0:0040` collection, and GameSir Connect's `proxyC2.parseGamepadState()` reads the charge state and level from the same bytes 35-36, so the same reader is used for it. When charging it enumerates as **`3537:0575`** with the same collection, while Windows exposes the charging identity as a generic Xbox pad (`3537:1053`); the XInput provider pairs that generic report to the GameSir collection instead of showing its `1000/1000` placeholder. The receiver was confirmed by the reporter on 2026-11-14 (85 % matching GameSir Connect); the charging identity reports an all-zero `0x12` before its real state, so the reader skips zero reports, then reads the same pad's generic `1053` collection as a fallback and keeps the Cyclone 2 name. **Confirmed on hardware** by @grimmlium on 2026-11-14: 86 %, charging, matching GameSir Connect.
 
 ### BEITONG KP40D
 
@@ -878,6 +1040,32 @@ the charging cable in returned byte-identical replies (`08 00 07 4c ...`), so th
 the level only rather than inventing a charger state.
 
 The provider also requires `URX`/`Core75` in the product string. The EVO75 shares `36B0:3002` and the same `FF60:0061` collection but is not a URX Core75 and does not answer this custom value, so it is no longer claimed. **Confirmed in #448**: the false URX icon disappeared and the EVO75 is left alone.
+
+### Red Square Alumix TKL (RSQ-20055)
+
+**Connection:** 2.4 GHz receiver (342D:E411, product string `RSQ_20055_2.4G`)
+
+The receiver exposes the keyboard's config channel as usage page `0xFF60`, usage `0x61`.
+Red Square's web configurator (`conf.red-square.org`) sends a 32-byte tunnel frame on
+output report **7**:
+
+    request  07 | 05 01 01 0A 07 8B 00 ...        report id 7, settings read (0x8B)
+    reply    07 | 05 A1 01 0A 07 8B <sleep> <debounce> <battery> <module> ...
+
+The level is the ninth byte after the report id (offset 8). The same read is what the
+configurator calls `getDeviceSleepTime`; its model table does not draw a battery icon for
+this family, but the response still carries the byte. Only this product string is queried:
+`342D:E411` is shared by several Red Square models, and the receiver's DFU collection is
+never opened.
+
+The configurator's wireless-module driver has **no charging query and no charging event**
+for this family, so the app reports the level and marks charging unknown. Confirmed on the
+reporter's hardware by @fogius (#460): the tray level appeared. Whether the keyboard exposes
+a charger state at all is being checked with the reporter.
+
+Source: Red Square's public web configurator (`conf.red-square.org`, model table and
+`GskyWirelessModuleSeries` driver). Not open source; the protocol notes above are the
+independently written implementation.
 
 ### Logitech (more HID++ 2.0 devices and G-series headsets)
 
@@ -1144,3 +1332,9 @@ keeps its last value greyed for up to five minutes; unplugging clears it.
 The capture confirms 100% discharging only. Charging and other percentages
 have source-based simulated tests; the old test build received no reporter
 confirmation, and this recovery has not been tested on hardware.
+
+### Wraith W1
+
+**Connection:** 2.4 GHz receiver `093A:522C` or USB cable `093A:622C`; the ids are shared with Incott mice.
+
+Device-info feature report `09` / command `8F`: reply byte 3 is 18 for the W1 or 20 for the Freestyle. After that, read-only `86` button queries (0, 1, 2, 4, 3) prompt the mouse to push input report `09`, whose byte 1 is charging bit 7 plus the low 7-bit percentage. A device that does not answer 8F is left to the Incott path. Protocol from the Wraith web driver and W1 Service. **Unverified in this app.**
