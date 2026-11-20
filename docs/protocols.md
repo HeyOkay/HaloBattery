@@ -127,6 +127,17 @@ Another protocol again (LennardKittner/HyperHeadset's `cloud_iii_s_wireless`, an
 
 A different protocol from the Cloud II: the vendor collection is `0xFF13:0x0001`, a 62-byte `66 <command> 00 ...` packet goes out (0x66 is the report id) and 62 bytes come back whose second byte is either the command echo or the matching response id - `0x89`/`0x0D` carries the level in byte 4 (only when byte 2 or 3 is non-zero), `0x8A`/`0x0C` carries charging in byte 2 (0 not charging, 1 charging, 2 fully charged). Taken from LennardKittner/HyperHeadset, which lists this product id; that project also documents that some HyperX dongles accept these packets as **feature reports** only on Windows (`write()` fails with "Incorrect function" and the packet is retried with `send_feature_report`, which the diagnostics say either way). **Unverified on hardware** - no Cloud III Wireless was available here
 
+### JBL Quantum 350 Wireless
+
+**Connection:** 2.4 GHz receiver (0ECB:206B), generic-desktop HID collection `0x0001:0x0000` on interface 3 with a 2-byte feature report.
+
+The receiver has no vendor collection. It answers two numbered one-byte feature reports, documented by [krisgfx9/Wireless-Device-Battery-Monitor's JBL driver](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/blob/main/src/drivers/jbl.cpp) and matching the `#454` diagnostics:
+
+    0x68  link: 1 = headset on, 0 = headset off
+    0x49  battery percentage in 5 % steps; the dongle keeps the last value while the headset is off
+
+Only read-only feature reads are sent. There is no charging byte in this protocol and no wired device is documented for the 350, so the app shows the level with the charging state unknown rather than guessing. **Test build pending** on the reporter's receiver.
+
 The `03F0:0FCC` receiver is matched separately, using the same `FF13:0001`
 collection and existing requests. Source:
 [HyperBatteryMonitor Cloud3WirelessAlternateReceiverDevice.cs](https://github.com/davidsantanaalves/HyperBatteryMonitor/blob/main/Devices/Cloud3WirelessAlternateReceiverDevice.cs),
@@ -468,6 +479,25 @@ and [ayasaki-exs/darmoshark-battery](https://github.com/ayasaki-exs/darmoshark-b
 the receiver and its docs were supplied by the [#430](https://github.com/HeyOkay/HaloBattery/issues/430)
 reporter. **Confirmed on hardware** in #430: the receiver's power reply read
 **63%**, matching the mouse. Charging is not decoded.
+
+### MCHOSE K87 / G98 Pro
+
+MCHOSE's own web driver (M HUB) sends a 19-byte output report
+
+    13 4A 01 00 02 <level> <flags> ... <checksum>
+
+on the `ff02:0002` vendor collection; the checksum is the low byte of the sum of
+bytes 0..18. The captured K87 answer (`41E4:2001`) had level `0x64` (100 %), and
+the byte after the level was `0x01` with the keyboard full and **not** on the
+cable, so the low nibble is a full-status flag, not "charging now".
+
+The **G98 Pro** (`41E4:2004`, product string `MCHOSE 2.4G Wireless`) publishes
+the same command collection and is queried with the identical frame. On the
+reporter's hardware it answers 94 % with flags `0x00` on 2.4 GHz and 50 % with
+flags `0x10` on the charging cable, so the high nibble is the charge state: the
+K87's `0x01` while full and off the cable stays a full status and never shows a
+ring. Level and charging confirmed in
+[#378](https://github.com/HeyOkay/HaloBattery/issues/378).
 
 ### MCHOSE A5 Pro Max
 

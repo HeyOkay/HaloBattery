@@ -30,6 +30,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
+  command as the K87, with the charging flag read from the reply's high
+  nibble. Level and charging confirmed on the reporter's hardware in
+  [#378](https://github.com/HeyOkay/HaloBattery/issues/378): 94 % on
+  battery, 50 % with the ring on the cable.
 - Logitech G325 LIGHTSPEED (`046D:0B21`): read its vendor `0x50`/`0x23`
   battery report on `ffa0:0001`, including the charging state. Confirmed on
   the reporter's hardware in [#232](https://github.com/HeyOkay/HaloBattery/issues/232):
@@ -239,6 +244,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
   status report, level and charging. Unverified in the app.
+
+- **JBL Quantum 350 Wireless** on its 2.4 GHz receiver (`0ecb:206b`): read with the
+  receiver's HIDV1 feature reports (`0x68` link, `0x49` level in 5 % steps), the
+  same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
+  exposed by this protocol, so the level is shown with the charger unknown.
+  Test build pending on the reporter's unit.
 
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
