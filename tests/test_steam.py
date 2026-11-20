@@ -20,6 +20,7 @@ from providers import steam as S  # noqa: E402
 
 PUCK = 0x1304        # Proteus dongle, as in issue #58
 NEREID = 0x1305
+INSTANCE_DIGEST = "152e0d858e1fc4efb01fe81f40fa515c39fc1385bf8fccfff5d83f8d30a342a4"
 
 
 def path_for(pid, iface):
@@ -108,7 +109,7 @@ class ProviderTest(unittest.TestCase):
     def setUp(self):
         self._saved = (S.hid, S.hidlist, S.time)
         self.clock = Clock()
-        S.time = types.SimpleNamespace(time=self.clock.time, sleep=self.clock.sleep)
+        S.time = types.SimpleNamespace(monotonic=self.clock.time, sleep=self.clock.sleep)
         self.provider = S.SteamProvider()
 
     def tearDown(self):
@@ -155,7 +156,7 @@ class PollTest(ProviderTest):
         self.assertEqual((st.name, st.level, st.charging, st.online),
                          ("Steam Controller", 75, False, True))
         self.assertEqual((st.key, st.kind, st.source),
-                         ("steam:1304:2", "gamepad", "steam"))
+                         (f"steam:1304:2:path-{INSTANCE_DIGEST}", "gamepad", "steam"))
         self.assertEqual((puck.opened, puck.writes), (1, []))
 
     def test_the_battery_is_waited_for_past_the_short_window(self):
@@ -305,7 +306,8 @@ class PollTest(ProviderTest):
         res = self.poll([entry(PUCK, 2), entry(NEREID, 4)],
                         {path_for(PUCK, 2): a, path_for(NEREID, 4): b})
         self.assertEqual(sorted((r.key, r.level, r.charging) for r in res),
-                         [("steam:1304:2", 80, False), ("steam:1305:4", 30, True)])
+                         [(f"steam:1304:2:path-{INSTANCE_DIGEST}", 80, False),
+                          (f"steam:1305:4:path-{INSTANCE_DIGEST}", 30, True)])
 
     def test_diagnostics_count_the_reports(self):
         puck = FakePuck([state_report(), state_report(), battery(1, 60)])
@@ -318,7 +320,7 @@ class PollTest(ProviderTest):
     def test_unopenable_slot_is_tolerated(self):
         puck = FakePuck([battery(1, 50)])
         res = self.poll([entry(PUCK, 2), entry(PUCK, 3)], {path_for(PUCK, 2): puck})
-        self.assertEqual([r.key for r in res], ["steam:1304:2"])
+        self.assertEqual([r.key for r in res], [f"steam:1304:2:path-{INSTANCE_DIGEST}"])
 
     def test_no_hid_module_is_no_crash(self):
         self._saved_hid = S.hid

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Microsoft.UI.Xaml;
 
@@ -41,6 +42,7 @@ public sealed class DeviceState
     public string Pictogram { get; set; } = "";
     public string CustomIconId { get; set; } = "";
     public string CustomIconName { get; set; } = "";
+    public bool CustomIconUnavailable { get; set; }
     public bool Controller { get; set; }
     public string Brand { get; set; } = "default";
     public bool BrandColor { get; set; }
@@ -61,7 +63,7 @@ public sealed class UiOption
 {
     public JsonElement Value { get; set; }
     public string Label { get; set; } = "";
-    public static UiOption Create(object? value,string label) => new() { Value=JsonSerializer.SerializeToElement(value), Label=label };
+    public static UiOption Create(object? value,string label) => new() { Value=SettingsJson.Element(value), Label=label };
 }
 public sealed class UiOptions
 {
@@ -82,10 +84,16 @@ public sealed class UpdateState
 }
 
 /// <summary>Asynchronous private child-process protocol; never block the XAML thread.</summary>
-public sealed class SettingsBridge : IDisposable
+public sealed partial class SettingsBridge : IDisposable
 {
+#if HALO_BATTERY_VERIFICATION
+    // The existing nonshipping QA reports contain anonymous diagnostic shapes.
+    // Keep their JIT-only serializer until that separate harness is migrated.
     public static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive=true,
         PropertyNamingPolicy=JsonNamingPolicy.CamelCase, MaxDepth=32 };
+#else
+    public static readonly JsonSerializerOptions Json = SettingsJson.Options;
+#endif
     private readonly Channel<object> outgoing = Channel.CreateBounded<object>(new BoundedChannelOptions(128) {
         SingleReader=true, SingleWriter=false, FullMode=BoundedChannelFullMode.Wait });
     private readonly CancellationTokenSource cancel = new();
@@ -118,7 +126,7 @@ public sealed class SettingsBridge : IDisposable
             var state=await Task.Run(()=>
             {
                 if(new FileInfo(fixturePath).Length>1024*1024) throw new InvalidDataException("Fixture exceeds protocol limit");
-                return JsonSerializer.Deserialize<UiState>(File.ReadAllText(fixturePath,Encoding.UTF8),Json)
+                return JsonSerializer.Deserialize(File.ReadAllText(fixturePath,Encoding.UTF8),SettingsJson.Context.UiState)
                     ?? throw new InvalidDataException("Invalid fixture state");
             });
             initialized=true;
@@ -127,7 +135,7 @@ public sealed class SettingsBridge : IDisposable
         input=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false,true));
         output=new StreamWriter(Console.OpenStandardOutput(),new UTF8Encoding(false)) { AutoFlush=false };
         _=Task.Run(WriteLoop);
-        Enqueue(new { type="hello",protocol=1,uiVersion="1" });
+        Enqueue(SettingsJson.Object(("type", "hello"), ("protocol", 1), ("uiVersion", "1")));
         using var startup=CancellationTokenSource.CreateLinkedTokenSource(cancel.Token);
         startup.CancelAfter(TimeSpan.FromSeconds(12));
         while(true)
@@ -144,7 +152,7 @@ public sealed class SettingsBridge : IDisposable
                     session=message.GetProperty("sessionId").GetString()??"";
                     break;
                 case "state":
-                    var state=message.Deserialize<UiState>(Json)??throw new InvalidDataException("Missing initial state");
+                    var state=message.Deserialize(SettingsJson.Context.UiState)??throw new InvalidDataException("Missing initial state");
                     if(state.Protocol!=1 || session.Length==0 || state.SessionId!=session) throw new InvalidDataException("Settings session mismatch");
                     lastRevision=state.Revision;
                     initialized=true;
@@ -162,7 +170,9 @@ public sealed class SettingsBridge : IDisposable
         owner.Closed+=(_,_)=>Dispose();
         if(fixture)
         {
+#if HALO_BATTERY_VERIFICATION
             owner.StartFixtureVerification(fixturePath!);
+#endif
             return;
         }
         _=Task.Run(ReadLoop);
@@ -172,14 +182,14 @@ public sealed class SettingsBridge : IDisposable
     {
         if(!fixture)
         {
-            if(requestId is {} id)Enqueue(new {type="visibility",visible,requestId=id});
-            else Enqueue(new {type="visibility",visible});
+            if(requestId is {} id)Enqueue(SettingsJson.Object(("type", "visibility"), ("visible", visible), ("requestId", id)));
+            else Enqueue(SettingsJson.Object(("type", "visibility"), ("visible", visible)));
         }
     }
 
     internal void SendClosing()
     {
-        if(!fixture)Enqueue(new {type="closing"});
+        if(!fixture)Enqueue(SettingsJson.Object(("type", "closing")));
     }
 
     internal async Task FlushAsync()
@@ -199,15 +209,16 @@ public sealed class SettingsBridge : IDisposable
         { System.Diagnostics.Debug.WriteLine(error); }
     }
 
-    public long SendCommand(string name,object args)
+    public long SendCommand(string name,JsonObject args)
     {
         var id=Interlocked.Increment(ref nextId);
+        var message=SettingsJson.Object(("type", "command"), ("protocol", 1), ("id", id), ("name", name), ("args", args));
         if(fixture)
         {
-            FixtureCommands.Add(JsonSerializer.Serialize(new { type="command",protocol=1,id,name,args },Json));
+            FixtureCommands.Add(message.ToJsonString(Json));
             return id;
         }
-        if(!Enqueue(new { type="command",protocol=1,id,name,args }))
+        if(!Enqueue(message))
             window?.ShowError("The settings connection is busy. Please try again.");
         return id;
     }
@@ -216,22 +227,24 @@ public sealed class SettingsBridge : IDisposable
     {
         if (disposed) return 0;
         var id = Interlocked.Increment(ref nextId);
-        var message = new { type = "catalog", protocol = 1, id, action, deviceKey, query, start, size, iconId };
-        if (fixture) { FixtureCommands.Add(JsonSerializer.Serialize(message, Json)); return id; }
+        var message = SettingsJson.Object(("type", "catalog"), ("protocol", 1), ("id", id), ("action", action), ("deviceKey", deviceKey), ("query", query), ("start", start), ("size", size), ("iconId", iconId));
+        if (fixture) { FixtureCommands.Add(message.ToJsonString(Json)); return id; }
         return Enqueue(message) ? id : 0;
     }
 
-    public bool RequestPreview(string? deviceKey)
+    public bool RequestPreview(string? deviceKey, bool transition = false)
     {
         if(fixture || disposed || Interlocked.Read(ref pendingPreview)!=0) return false;
         var id=Interlocked.Increment(ref nextId);
         if(Interlocked.CompareExchange(ref pendingPreview,id,0)!=0) return false;
-        if(Enqueue(new { type="preview",id,deviceKey })) return true;
+        var message=SettingsJson.Object(("type", "preview"), ("id", id), ("deviceKey", deviceKey));
+        if(transition) message["transition"]=true;
+        if(Enqueue(message)) return true;
         Interlocked.Exchange(ref pendingPreview,0);
         return false;
     }
 
-    private bool Enqueue(object message) => !disposed && outgoing.Writer.TryWrite(message);
+    private bool Enqueue(JsonObject message) => !disposed && outgoing.Writer.TryWrite(message);
 
     private async Task WriteLoop()
     {
@@ -245,7 +258,7 @@ public sealed class SettingsBridge : IDisposable
                     barrier.Completion.TrySetResult(true);
                     continue;
                 }
-                await output!.WriteLineAsync(JsonSerializer.Serialize(message,Json));
+                await output!.WriteLineAsync(((JsonObject)message).ToJsonString(Json));
                 await output.FlushAsync(cancel.Token);
             }
         }
@@ -285,7 +298,7 @@ public sealed class SettingsBridge : IDisposable
                     session=message.GetProperty("sessionId").GetString() ?? "";
                     break;
                 case "state":
-                    var state=message.Deserialize<UiState>(Json) ?? throw new InvalidDataException("Missing state");
+                    var state=message.Deserialize(SettingsJson.Context.UiState) ?? throw new InvalidDataException("Missing state");
                     if(state.Protocol!=1 || session.Length==0 || state.SessionId!=session) throw new InvalidDataException("Settings session mismatch");
                     if(state.Revision<lastRevision) return;
                     lastRevision=state.Revision;
@@ -307,7 +320,8 @@ public sealed class SettingsBridge : IDisposable
                     Interlocked.Exchange(ref pendingPreview,0);
                     if(message.GetProperty("size").GetInt32()!=80) throw new InvalidDataException("Preview must be 80 physical pixels");
                     var deviceKey=message.TryGetProperty("deviceKey",out var dk) && dk.ValueKind==JsonValueKind.String?dk.GetString():null;
-                    window.ApplyPreview(deviceKey,message.GetProperty("png").GetString() ?? "");
+                    window.ApplyPreview(deviceKey,message.GetProperty("png").GetString() ?? "",
+                        message.TryGetProperty("transition",out var previewTransition) ? previewTransition.Clone() : null);
                     break;
                 case "catalog":
                     window.ApplyIconCatalogResponse(message);

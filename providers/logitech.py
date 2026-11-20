@@ -84,7 +84,22 @@ RECEIVERS = {
     0xC52E, 0xC531, 0xC534, 0xC535, 0xC537,
     0xC539, 0xC53A, 0xC53D, 0xC53F, 0xC541, 0xC545, 0xC547,  # Lightspeed
     0xC54D,
+    0xC54F,  # PRO X3 SUPERSTRIKE LIGHTSPEED receiver
 }
+
+# HID++ 1.0 devices whose receiver product id identifies the model. The MX
+# Revolution's receiver (0xC525) reports only as "USB Receiver" and the paired
+# device has no feature table to read a name from, so without this table the
+# icon appears as the generic "Logitech device" (#449).
+HIDPP10_MODELS = {
+    0xC525: ("Logitech MX Revolution", "mouse"),
+}
+
+# Additional HID++ collections from the recovered PRO X3 support patch:
+# https://github.com/AprilNEA/OpenLogi/pull/2191 (C54F, FF43:0302)
+# Recovered patch and C54D scope review: https://github.com/HeyOkay/HaloBattery/pull/465
+# Reuse existing read-only HID++ queries; restrict collection fallback to these IDs.
+PRO_X3_HIDPP_IDS = {0xC54F, 0xC0A9}
 
 # headsets with HID++ battery (feature 0x1F20), from HeadsetControl's device list.
 # The value is the name to show when the headset does not report one.
@@ -161,7 +176,7 @@ def parse_headset_voltage(r) -> Tuple[Optional[int], bool]:
     byte 6: 0x01 discharging, 0x03 charging (HeadsetControl). A voltage outside a
     single Li-ion cell is no reading, not a percentage.
     """
-    if len(r) < 7:
+    if r is None or len(r) < 7:
         return None, False
     mv = (r[4] << 8) | r[5]
     if not 2500 <= mv <= MAX_BATTERY_MV:
@@ -172,7 +187,8 @@ def parse_headset_voltage(r) -> Tuple[Optional[int], bool]:
 def charge_complete(feature: int, p) -> bool:
     """True when a voltage-only reply says the charger finished (Solaar's ChargeStatus
     FULL: flags bit 7 charging, low bits 1). Only 0x1001 carries it."""
-    return feature == F_VOLTAGE and bool(p[2] & 0x80) and (p[2] & 0x03) == 1
+    return (feature == F_VOLTAGE and p is not None and len(p) >= 3
+            and bool(p[2] & 0x80) and (p[2] & 0x03) == 1)
 
 
 def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
@@ -180,6 +196,8 @@ def parse_battery(feature: int, p) -> Tuple[Optional[int], bool, str]:
     A full battery that is still on the charger counts as charging.
     Level None: no valid reading (for 0x1F20 also: the headset is off).
     The text is set only when the device gives an approximate level, not a percentage."""
+    if p is None or len(p) < 3:
+        return None, False, ""
     if feature == F_UNIFIED:
         charging = p[2] in ON_CHARGER
         if 0 < p[0] <= 100:
@@ -209,12 +227,18 @@ def parse_register_battery(reg: int, p) -> Tuple[Optional[int], bool, str]:
     0x0D a percentage and a status whose top nibble is 30 discharging, 50
     recharging, 90 full. Nothing is claimed when the bytes do not fit.
     """
+    if p is None:
+        return None, False, ""
     if reg == REG_BATTERY_CHARGE:
+        if len(p) < 3:
+            return None, False, ""
         charge = p[0]
         if not 0 < charge <= 100:
             return None, False, ""
         return charge, p[2] & 0xF0 in (0x50, 0x90), ""
     if reg == REG_BATTERY_STATUS:
+        if len(p) < 2:
+            return None, False, ""
         status_byte, charging_byte = p[0], p[1]
         charging = charging_byte & 0x21 == 0x21 or charging_byte & 0x22 == 0x22
         if status_byte in STATUS_LEVELS:
@@ -259,7 +283,11 @@ class _Channel:
 
     def request(self, idx: int, feat: int, func: int, params=(),
                 timeout: float = TIMEOUT) -> Optional[List[int]]:
-        """Params of the reply, or None on an error reply (self.error set) or timeout."""
+        """Received params, or None on an error reply (self.error set) or timeout.
+
+        Require the three parameters of a short reply; consumers validate any
+        additional fields they need. Do not infer missing padding from the report id.
+        """
         self.error, self.error_code = False, 0
         self._swid = (self._swid + 1) % len(SWIDS)
         fn = (func << 4) | SWIDS[self._swid]
@@ -276,8 +304,9 @@ class _Channel:
                 if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == feat and r[4] == fn:
                     self.error, self.error_code = True, r[5]
                     return None
-                if r[2] == feat and r[3] == fn:
-                    return list(r[4:]) + [0] * 16
+                if r[2] == feat and r[3] == fn and len(r) >= 7:
+                    # Three parameters fit in a short report. Missing bytes are not zeros.
+                    return list(r[4:])
             time.sleep(0.005)
         return None
 
@@ -317,7 +346,7 @@ class _Channel:
                     # one collection may refuse; the other can still answer
                     self.error, self.error_code = True, r[5] if len(r) > 5 else 0
                     continue
-                if r[2] == HEADSET_REG_SUBID and r[3] == reg:
+                if r[2] == HEADSET_REG_SUBID and r[3] == reg and len(r) >= 7:
                     return list(r)
             time.sleep(0.005)
         return None
@@ -332,7 +361,8 @@ class _Channel:
         recognised at once (review by @ahmedkhursheed23: a 2.0 device without a
         battery feature answers every register read with the 2.0 error, and
         without this it cost the full timeout per register). Registers are only
-        ever read.
+        ever read. Successful replies need three received parameters; consumers
+        validate their own fields without requiring unused long-report padding.
         """
         if len(self.devs) < 2:        # register reads go on the short collection
             return None
@@ -347,15 +377,15 @@ class _Channel:
                 if r[2] in (0x8F, 0xFF) and len(r) >= 6 and r[3] == 0x81 and r[4] == reg:
                     self.error, self.error_code = True, r[5]
                     return None
-                if r[2] == 0x81 and r[3] == reg:
-                    return list(r[4:]) + [0] * 16
+                if r[2] == 0x81 and r[3] == reg and len(r) >= 7:
+                    return list(r[4:])
             time.sleep(0.005)
         return None
 
     def feature_index(self, idx: int, feature_id: int) -> int:
         """Index of a feature on the device; 0 if the device does not have it."""
         r = self.request(idx, 0, 0, [feature_id >> 8, feature_id & 0xFF])
-        return r[0] if r else 0
+        return r[0] if r is not None and len(r) >= 3 else 0
 
     def identity(self, idx: int) -> Tuple[str, str, str]:
         """(name, kind, unit id) of the device at idx; parts it cannot read are empty."""
@@ -363,20 +393,22 @@ class _Channel:
         fi = self.feature_index(idx, F_NAME)
         if fi:
             r = self.request(idx, fi, 0)
-            length = r[0] if r else 0
+            length = r[0] if r is not None and len(r) >= 3 else 0
             raw = b""
             while len(raw) < length:
                 r = self.request(idx, fi, 1, [len(raw)])
-                if not r:
+                need = min(16, length - len(raw))
+                if r is None or len(r) < 3:
                     break
-                raw += bytes(r[:16])
-            name = raw[:length].decode("utf-8", "replace").strip()
+                raw += bytes(r[:need])
+            if len(raw) == length:
+                name = raw.decode("utf-8", "replace").strip()
             r = self.request(idx, fi, 2)
-            kind = KINDS.get(r[0], "") if r else ""
+            kind = KINDS.get(r[0], "") if r is not None and len(r) >= 3 else ""
         fi = self.feature_index(idx, F_INFO)
         if fi:
             r = self.request(idx, fi, 0)
-            if r and any(r[1:5]):
+            if r is not None and len(r) >= 5 and any(r[1:5]):
                 unit = bytes(r[1:5]).hex().upper()
         return name, kind, unit
 
@@ -429,7 +461,8 @@ class LogitechProvider(Provider):
         # ping timeout. Thus a slot that went silent gets the short timeout until it
         # answers again.
         timeout = TIMEOUT if slot in self._asleep else PING_TIMEOUT
-        if ch.request(idx, F_ROOT, 1, timeout=timeout) is not None:
+        reply = ch.request(idx, F_ROOT, 1, timeout=timeout)
+        if reply is not None and len(reply) >= 3:
             self._asleep.discard(slot)
             return True
         name = self._ids.get(slot, ("",))[0] or "paired device"
@@ -477,6 +510,8 @@ class LogitechProvider(Provider):
                 self._ids[slot] = (name, kind, unit)
         if pid in HEADSETS:
             name, kind = name or HEADSETS[pid], "headset"
+        if pid in HIDPP10_MODELS:
+            name, kind = HIDPP10_MODELS[pid]
         name = name or "Logitech device"
         for feature in BATTERY_FEATURES:
             fi = ch.feature_index(idx, feature)
@@ -576,6 +611,9 @@ class LogitechProvider(Provider):
             if level is None:
                 continue
             name = self._ids.get(slot, ("",))[0] or "Logitech device"
+            kind = ""
+            if pid in HIDPP10_MODELS:
+                name, kind = HIDPP10_MODELS[pid]
             self._diag.append(f"  idx={idx} '{name}': register {reg:02x}: "
                               f"{approx or f'{level}%'}{' (charging)' if chg else ''}")
             prefix = instance + ":" if multi else ""
@@ -585,7 +623,7 @@ class LogitechProvider(Provider):
                 self._last.pop(old, None)
             self._slot_key[slot] = key
             return DeviceStatus(key, name, level, chg, True, "logitech",
-                                approx=approx, kind="",
+                                approx=approx, kind=kind,
                                 ui_message="state.approx_grade" if approx else "",
                                 ui_params={"level": level, "grade": STATUS_LEVELS[r[0]][1]} if approx else {})
         return None
@@ -598,11 +636,14 @@ class LogitechProvider(Provider):
         groups: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         headset: Dict[Tuple[int, str], bytes] = {}
         alt: Dict[Tuple[int, str], Optional[bytes]] = {}
+        pro_x3: Dict[Tuple[int, str], Dict[int, bytes]] = {}
         for d in infos:
             pid, page, usage = d["product_id"], d.get("usage_page"), d.get("usage")
             key = (pid, _instance(d))
             if page == 0xFF00 and usage in (1, 2):
                 groups.setdefault(key, {})[usage] = d["path"]
+            elif pid in PRO_X3_HIDPP_IDS and page == 0xFF43 and usage in (0x0301, 0x0302):
+                pro_x3.setdefault(key, {})[usage - 0x0300] = d["path"]
             elif pid in HEADSETS and (page, usage) == HEADSET_COLLECTION.get(pid, (0xFF43, 0x0202)):
                 # only the headsets in the list: other devices never got a request on
                 # these collections, and must not get one now
@@ -611,6 +652,11 @@ class LogitechProvider(Provider):
                     alt[key] = next((x["path"] for x in infos
                                      if x["product_id"] == pid
                                      and (x.get("usage_page"), x.get("usage")) == (0xFF43, 0x0202)), None)
+        # Existing FF00 paths win independently of enumeration order.
+        for key, paths in pro_x3.items():
+            dest = groups.setdefault(key, {})
+            for usage, path in paths.items():
+                dest.setdefault(usage, path)
         # the ff00 collections win; the headset collection is used only without them
         for key, path in headset.items():
             if 2 not in groups.get(key, {}):

@@ -5,8 +5,8 @@ HIDService.query_status describes (mchose_qt.py lines 146-179): a 64-byte output
 report starting ``55 65 01`` is answered by a 64-byte input report whose first two
 bytes echo ``55 65``, byte 2 is the percent and byte 3 a status code. The tests
 also pin the safety rules: only the V9 Pro pair (291D:385D) is opened and only its
-vendor collection is written to, and the Windows "Incorrect function" fallback
-goes out as a feature report.
+vendor collection is written to. A failed output report never changes transport
+to an unsourced feature report.
 
 Run from the repository root:
 
@@ -43,7 +43,7 @@ class FakeHeadset:
     """
 
     def __init__(self, data=None, silent=False, write="ok", feature="ok",
-                 error_text=INCORRECT_FUNCTION):
+                 error_text=INCORRECT_FUNCTION, read_error=None):
         self.data = data if data is not None else reply()
         self.silent = silent
         self.write_mode = write
@@ -52,13 +52,16 @@ class FakeHeadset:
         self.writes = []
         self.features = []
         self.opened = 0
+        self.closed = 0
+        self.reads = 0
+        self.read_error = read_error
 
     def open_path(self, path):
         self.path = path
         self.opened += 1
 
     def close(self):
-        pass
+        self.closed += 1
 
     def error(self):
         return self.error_text
@@ -66,6 +69,8 @@ class FakeHeadset:
     def _do(self, mode, buf):
         if mode == "raise":
             raise OSError(self.error_text)
+        if mode == "valueerror":
+            raise ValueError(self.error_text)
         if mode == "-1":
             return -1
         return len(buf)
@@ -79,6 +84,9 @@ class FakeHeadset:
         return self._do(self.feature_mode, data)
 
     def read(self, size, timeout_ms=0):
+        self.reads += 1
+        if self.read_error is not None:
+            raise self.read_error
         return [] if self.silent else list(self.data)
 
 
@@ -105,7 +113,8 @@ class FakeBus:
                 self._d.open_path(path)
 
             def close(self):
-                pass
+                if hasattr(self, "_d"):
+                    self._d.close()
 
             def error(self):
                 return self._d.error()
@@ -151,8 +160,7 @@ class ParseStatusTest(unittest.TestCase):
     def test_the_request_is_the_source_frame(self):
         self.assertEqual(len(M.REQUEST), 64)
         self.assertEqual(M.REQUEST[:3], bytes([0x55, 0x65, 0x01]))
-        self.assertEqual(M.make_request(), M.REQUEST)
-        self.assertEqual(M.make_feature_request(), M.REQUEST)
+        self.assertEqual(M.make_request(), bytes.fromhex("55 65 01") + bytes(61))
 
 
 class PollTest(unittest.TestCase):
@@ -174,6 +182,7 @@ class PollTest(unittest.TestCase):
                          ("mchose_v9", 46, True, True, "headset", "mchose_v9"))
         self.assertEqual(st.name, "MCHOSE V9 PRO")
         self.assertEqual(bus.devices[b"v9"].writes[0], M.REQUEST)
+        self.assertEqual(bus.devices[b"v9"].features, [])
 
     def test_the_product_string_falls_back_to_the_default_name(self):
         e = entry(0x291D, 0x385D, b"v9", page=0xFF00, usage=0x0001, name="")
@@ -249,14 +258,37 @@ class PollTest(unittest.TestCase):
         self.assertEqual(out, [])
         self.assertTrue(any("no 55 65 reply" in line for line in diag))
 
-    def test_incorrect_function_retries_as_a_feature_report(self):
+    def test_failed_output_reports_never_retry_as_feature_reports(self):
         e = entry(0x291D, 0x385D, b"v9", page=0xFF00, usage=0x0001)
-        dev = FakeHeadset(reply(46, 0), write="raise")
+        for mode in ("raise", "-1", "valueerror"):
+            for error in (INCORRECT_FUNCTION, "device disconnected", "access denied"):
+                with self.subTest(mode=mode, error=error):
+                    dev = FakeHeadset(reply(46, 0), write=mode, error_text=error)
+                    bus = FakeBus([e], {b"v9": dev})
+                    out, diag = bus.poll()
+                    self.assertEqual(out, [])
+                    self.assertEqual(dev.writes, [bytes.fromhex("55 65 01") + bytes(61)])
+                    self.assertEqual(dev.features, [])
+                    self.assertEqual(dev.reads, 0)
+                    self.assertEqual(dev.closed, 1)
+                    self.assertTrue(any(error in line for line in diag))
+
+    def test_disappearance_during_read_never_changes_transport(self):
+        e = entry(0x291D, 0x385D, b"v9", page=0xFF00, usage=0x0001)
+        dev = FakeHeadset(read_error=OSError("device disconnected"))
         bus = FakeBus([e], {b"v9": dev})
         out, diag = bus.poll()
-        self.assertEqual(out[0].level, 46)
-        self.assertEqual(dev.features[0], M.make_feature_request())
-        self.assertTrue(any("feature report accepted" in line for line in diag))
+        self.assertEqual(out, [])
+        self.assertEqual(dev.writes, [bytes.fromhex("55 65 01") + bytes(61)])
+        self.assertEqual(dev.features, [])
+        self.assertEqual(dev.closed, 1)
+        self.assertTrue(any("device disconnected" in line for line in diag))
+
+    def test_disappearance_before_open_sends_no_reports(self):
+        e = entry(0x291D, 0x385D, b"gone", page=0xFF00, usage=0x0001)
+        out, diag = FakeBus([e], {}).poll()
+        self.assertEqual(out, [])
+        self.assertTrue(any("cannot open" in line for line in diag))
 
     def test_an_unrelated_write_error_is_not_retried_as_a_feature_report(self):
         e = entry(0x291D, 0x385D, b"v9", page=0xFF00, usage=0x0001)
@@ -274,9 +306,10 @@ class MouseProviderExclusionTest(unittest.TestCase):
 
     def test_the_mouse_provider_still_declares_the_headset_pids(self):
         from providers import mchose as MC
-        # mchose.py still skips the 3837 pair so its inverted 0x06 frame never reaches a
-        # headset. This provider does not claim those ids - the open PR #215 owns them.
-        self.assertEqual(tuple(sorted(MC.HEADSET_PIDS)), (0x6008, 0x600A))
+        # mchose.py still skips the 3837 headsets (the V9 Turbo pair and the X9) so its
+        # inverted 0x06 frame never reaches a headset. This provider does not claim those
+        # ids - mchose.py owns them.
+        self.assertEqual(tuple(sorted(MC.HEADSET_PIDS)), (0x6008, 0x600A, 0x6045))
         for pid in MC.HEADSET_PIDS:
             self.assertNotIn((0x3837, pid), M.ALLOWED)
 

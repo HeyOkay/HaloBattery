@@ -1,4 +1,4 @@
-"""Render the reviewed filled SVGs at native tray sizes and embed 77 masks.
+"""Render the reviewed filled SVGs at native tray sizes and embed 84 masks.
 
 Usage: python tools/make_filled_artwork.py [--browser PATH] [--check]
 Requires Pillow and a local Chromium browser; neither SVG nor Chromium is used
@@ -39,8 +39,8 @@ def prepare_sources():
     if manifest.get("format") != 1 or manifest.get("sizes") != list(SIZES):
         raise ValueError("unsupported filled artwork manifest format or sizes")
     glyphs = manifest["glyphs"]
-    if len(glyphs) != 11:
-        raise ValueError("expected eleven filled glyph sources")
+    if len(glyphs) != 12:
+        raise ValueError("expected twelve filled glyph sources")
     ET.register_namespace("", NAMESPACE)
     cells = []
     for kind, specification in glyphs.items():
@@ -73,7 +73,7 @@ def prepare_sources():
             svg = ET.tostring(wrapper, encoding="unicode")
             svg = svg.replace("fill-" + kind, "fill-" + kind + "-" + str(size))
             cells.append('<div class="cell">' + svg + "</div>")
-    html = ('<style>html,body{margin:0;width:512px;height:704px;background:transparent}'
+    html = ('<style>html,body{margin:0;width:512px;height:768px;background:transparent}'
             '.grid{display:grid;grid-template-columns:repeat(7,64px);grid-auto-rows:64px}'
             '.cell{width:64px;height:64px}</style><div class="grid">'
             + "".join(cells) + "</div>")
@@ -94,7 +94,7 @@ def render_masks(browser, kinds, html):
                    "--disable-component-update", "--disable-sync", "--disable-extensions",
                    "--disable-default-apps", "--host-resolver-rules=MAP * ~NOTFOUND",
                    "--force-device-scale-factor=1", "--default-background-color=00000000",
-                   "--hide-scrollbars", "--window-size=512,704",
+                   "--hide-scrollbars", "--window-size=512,768",
                    "--user-data-dir=" + str(scratch / "profile"),
                    "--screenshot=" + str(screenshot), source.as_uri()]
         completed = subprocess.run(command, capture_output=True, timeout=60,
@@ -103,8 +103,8 @@ def render_masks(browser, kinds, html):
         if completed.returncode:
             raise RuntimeError(f"headless renderer failed ({completed.returncode}); see {work}")
         with Image.open(screenshot) as source_image:
-            if source_image.mode != "RGBA" or source_image.size != (512, 704):
-                raise ValueError("native renderer must produce a transparent 512 x 704 RGBA atlas")
+            if source_image.mode != "RGBA" or source_image.size != (512, 768):
+                raise ValueError("native renderer must produce a transparent 512 x 768 RGBA atlas")
             atlas = source_image.copy()
     masks = {}
     for row, kind in enumerate(kinds):
@@ -138,8 +138,8 @@ def replace_assignment(source, name, expression):
 def check_sources(source, kinds, masks):
     expected = {(kind, size) for kind in kinds for size in SIZES}
     embedded = literal(source, "_PNG")
-    if len(expected) != 77 or set(embedded) != expected or set(masks) != expected:
-        raise ValueError("filled mask keys differ from the 77 reviewed kind/size pairs")
+    if len(expected) != 84 or set(embedded) != expected or set(masks) != expected:
+        raise ValueError("filled mask keys differ from the 84 reviewed kind/size pairs")
     if literal(source, "KINDS") != frozenset(kinds):
         raise ValueError("filled KINDS differs from source manifest")
     if literal(source, "OPTICAL_PROFILE") != {size: profile(size) for size in SIZES}:
@@ -174,7 +174,7 @@ def main():
         except ValueError as error:
             print(error)
             return 1
-        print("77 filled masks: decoded pixels, KINDS and OPTICAL_PROFILE match")
+        print("84 filled masks: decoded pixels, KINDS and OPTICAL_PROFILE match")
         return 0
     pngs = {}
     for key, mask in masks.items():
@@ -187,7 +187,7 @@ def main():
     check_sources(generated, kinds, masks)
     if generated != source:
         MODULE.write_text(generated, encoding="utf-8", newline="")
-    print("Generated 77 native-size filled masks in halo/icon_artwork_filled.py")
+    print("Generated 84 native-size filled masks in halo/icon_artwork_filled.py")
     return 0
 
 

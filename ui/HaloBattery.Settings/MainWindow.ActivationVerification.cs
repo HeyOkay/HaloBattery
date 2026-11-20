@@ -7,6 +7,9 @@ namespace HaloBattery.Settings;
 
 public sealed partial class MainWindow
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
+
     private async Task VerifySettingsActivation(List<object> checks)
     {
         void Check(string name,bool passed)

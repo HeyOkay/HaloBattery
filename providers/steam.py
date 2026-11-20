@@ -1,5 +1,15 @@
-"""Steam Controller (2025) over its puck: the battery from the controller's own
+"""Steam Controller over its puck or USB: the battery from the controller's own
 input reports.
+
+USB recovery from PR #265 retains the existing provider and bounded scheduler.
+SDL revision 742645fe283a0a724bb85da0e247c4ad14fc2329:
+src/joystick/controller_list.h:682-685 identifies 28DE:1302 as wired Triton;
+src/joystick/hidapi/SDL_hidapi_steam_triton.c:444-486 distinguishes wired
+controllers from puck slots, and :557-561 validates the same battery report.
+https://github.com/HeyOkay/HaloBattery/pull/265
+Only the wired controller's FF00:0001 collection is read. Bluetooth 1303 and
+the older 2015 protocol remain excluded. Nothing is written on either transport.
+All selected slots share one bounded listen window; no provider threads are added.
 
 The puck (dongle) relays one controller per slot: interfaces 2 to 5, one
 interface per slot, the way SDL's HIDAPI driver reads it
@@ -35,6 +45,7 @@ once, and the puck leaving the USB tree clears the value.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -54,6 +65,7 @@ PUCKS = {
     0x1304: "Steam Controller Puck (Proteus)",
     0x1305: "Steam Controller Puck (Nereid)",
 }
+USB_CONTROLLER = 0x1302
 NAME = "Steam Controller"
 
 # One controller slot per interface (SDL's driver matches the interface alone).
@@ -87,6 +99,7 @@ WINDOW = 0.4
 BATTERY_WINDOW = 5.0
 MAX_REPORTS = 4096   # a safety valve against a pathological stream (5 s of the
                      # ~266 Hz state stream is ~1300 reports)
+MAX_SLOTS = 16        # fixed native transport capacity; no unbounded handle fanout
 
 NOT_REPORTED = "connected, battery level not reported yet"
 
@@ -94,6 +107,8 @@ NOT_REPORTED = "connected, battery level not reported yet"
 def parse_charge(byte: int) -> Optional[bool]:
     """The charge state byte -> charging, or None for the states that mean
     nothing (0 reset, 3 source validate, anything else)."""
+    if type(byte) is not int:
+        return None
     if byte == CHARGE_DISCHARGING:
         return False
     if byte in (CHARGE_CHARGING, CHARGE_DONE):
@@ -104,11 +119,11 @@ def parse_charge(byte: int) -> Optional[bool]:
 def parse_battery(data) -> Optional[Tuple[int, bool]]:
     """Input report 0x43 -> (level %, charging), or None when the frame carries
     no usable level. SDL wants the full battery struct: 1 + 14 bytes."""
-    if len(data) < 15 or data[0] != REPORT_BATTERY:
+    if not isinstance(data, (bytes, bytearray, list, tuple)) or len(data) < 15 or data[0] != REPORT_BATTERY:
         return None
     charging = parse_charge(data[1])
     level = data[2]
-    if charging is None or level > 100:
+    if charging is None or type(level) is not int or not 0 <= level <= 100:
         return None
     return level, charging
 
@@ -119,67 +134,98 @@ class SteamProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Dict[str, Tuple[int, bool]] = {}   # key -> level, charging
+        self._legacy_aliases = {}
+        # Lifetime retirement is intentional: once two endpoints claim an old
+        # slot key, removing one does not prove which owned its saved settings.
+        # Never guess that ownership later in this provider's run.
+        self._ambiguous_legacy = set()
 
-    def _read(self, path) -> dict:
-        """Listen on one slot -> {"battery": (level, charging) or None,
-        "state": bool, "wireless": 1 / 2 / None, "seen": {report id: [count, bytes]}}"""
-        res: dict = {"battery": None, "state": False, "wireless": None, "seen": {}}
-        dev = hid.device()
+    def legacy_key_aliases(self):
+        return dict(self._legacy_aliases)
+
+    @staticmethod
+    def _endpoint(path):
+        """USB instance identity; a port move is a new endpoint, never a serial guess."""
+        raw = path.encode("utf-8", "surrogatepass") if isinstance(path, str) else bytes(path)
+        parts = raw.lower().split(b"#")
+        instance = parts[2].rsplit(b"&", 1)[0] if len(parts) > 2 else raw.lower()
+        return hashlib.sha256(instance).hexdigest()
+
+    def _listen(self, paths):
+        """Round-robin passive reads within ONE budget, including handle opens.
+
+        The app's existing provider deadline is 20 s. Keep this observation at
+        most 5 s rather than spending 5 s on every controller in turn.
+        """
+        start = time.monotonic()
+        results = {path: {"battery": None, "state": False, "wireless": None, "seen": {}}
+                   for path in paths}
+        opened = []
+        pending = {}
         try:
-            dev.open_path(path)
-        except (OSError, IOError) as e:
-            self._diag.append(f"    open: {e}")
-            return res
-        try:
-            try:
-                dev.set_nonblocking(True)
-            except Exception:
-                pass
-            start = time.time()
-            limit = start + WINDOW
-            count = 0
-            while count < MAX_REPORTS:
-                if res["wireless"] == 1:
-                    break                # the link dropped: nothing more will come
-                if (res["state"] or res["wireless"] == 2) \
-                        and limit < start + BATTERY_WINDOW:
-                    # a live controller: its battery report comes ~every 2.5 s
-                    limit = start + BATTERY_WINDOW
-                if time.time() >= limit:
+            for path in paths:
+                if time.monotonic() >= start + BATTERY_WINDOW:
                     break
+                dev = None
                 try:
-                    data = dev.read(64)
-                except (OSError, ValueError) as e:
-                    self._diag.append(f"    read: {e}")
-                    break
-                if not data:
-                    time.sleep(0.005)
-                    continue
-                count += 1
-                entry = res["seen"].setdefault(data[0], [0, list(data)])
-                entry[0] += 1
-                if data[0] in REPORTS_STATE:
-                    res["state"] = True
-                elif data[0] in REPORTS_WIRELESS:
-                    if len(data) >= 2:
+                    dev = hid.device()
+                    opened.append(dev)
+                    dev.open_path(path)
+                    # A failed nonblocking setup is not permission to make an
+                    # unbounded read and occupy a shared provider worker.
+                    dev.set_nonblocking(True)
+                    pending[path] = (dev, 0, False)
+                except (OSError, ValueError) as error:
+                    self._diag.append(f"    open/nonblocking: {error}")
+            while pending and time.monotonic() < start + BATTERY_WINDOW:
+                received = False
+                for path, (dev, count, tried) in list(pending.items()):
+                    res = results[path]
+                    limit = BATTERY_WINDOW if res["state"] or res["wireless"] == 2 else WINDOW
+                    if (count >= MAX_REPORTS or time.monotonic() >= start + BATTERY_WINDOW
+                            or tried and time.monotonic() >= start + limit):
+                        pending.pop(path)
+                        continue
+                    try:
+                        pending[path] = (dev, count, True)
+                        data = dev.read(64)
+                    except (OSError, ValueError) as error:
+                        self._diag.append(f"    read: {error}")
+                        res["state"], res["wireless"] = False, None
+                        pending.pop(path)
+                        continue
+                    if not data:
+                        continue
+                    received = True
+                    pending[path] = (dev, count + 1, True)
+                    entry = res["seen"].setdefault(data[0], [0, list(data)])
+                    entry[0] += 1
+                    if data[0] in REPORTS_STATE:
+                        res["state"] = True
+                    elif data[0] in REPORTS_WIRELESS and len(data) >= 2:
                         res["wireless"] = data[1]
-                elif data[0] == REPORT_BATTERY:
-                    parsed = parse_battery(data)
-                    if parsed is not None:
-                        res["battery"] = parsed
-                        break            # what the long window is for: stop here
-                    else:
-                        self._diag.append(f"    report 0x43 carries no level: "
-                                          f"{hexdump(data, 16)}")
-            return res
+                        if data[1] == 1:
+                            pending.pop(path)
+                    elif data[0] == REPORT_BATTERY:
+                        parsed = parse_battery(data)
+                        if parsed is not None:
+                            res["battery"] = parsed
+                            pending.pop(path)
+                        else:
+                            self._diag.append(f"    report 0x43 carries no level: {hexdump(data, 16)}")
+                if pending and not received:
+                    time.sleep(0.005)
+            return results
         finally:
-            try:
-                dev.close()
-            except Exception:
-                pass
+            for dev in opened:
+                try:
+                    dev.close()
+                except Exception:
+                    pass
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
+        self._legacy_aliases = {}
         if hid is None:
             return []
         try:
@@ -188,19 +234,28 @@ class SteamProvider(Provider):
             log.warning("hid.enumerate(steam): %s", e)
             return []
 
-        by_iface: Dict[int, List[dict]] = {}
+        by_iface: Dict[tuple, List[dict]] = {}
         puck_seen: List[dict] = []
         for d in infos:
-            if d.get("product_id") not in PUCKS:
+            pid, iface, path = d.get("product_id"), d.get("interface_number"), d.get("path")
+            if (d.get("vendor_id", VENDOR_VALVE) != VENDOR_VALVE
+                    or type(pid) is not int or type(iface) is not int
+                    or pid not in (*PUCKS, USB_CONTROLLER)
+                    or d.get("bus_type") == 2
+                    or not isinstance(path, (bytes, str)) or not path):
                 continue
             puck_seen.append(d)
-            iface = d.get("interface_number")
-            if iface in SLOT_INTERFACES:
-                by_iface.setdefault(iface, []).append(d)
+            if pid == USB_CONTROLLER:
+                if (iface < 0
+                        or (d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE)):
+                    continue
+            elif iface not in SLOT_INTERFACES:
+                continue
+            by_iface.setdefault((pid, iface, self._endpoint(path)), []).append(d)
 
-        slots = []                       # (pid, interface, path, how), one per slot
-        for iface in sorted(by_iface):
-            cols = sorted(by_iface[iface],
+        slots = []                       # (pid, interface, path, how, key), one per endpoint/slot
+        for pid, iface, endpoint in sorted(by_iface):
+            cols = sorted(by_iface[(pid, iface, endpoint)],
                           key=lambda d: (d.get("usage_page") or 0, d.get("usage") or 0))
             pick, how = None, ""
             for d in cols:
@@ -223,7 +278,22 @@ class SteamProvider(Provider):
             if how != "usage ff00:0001":
                 self._diag.append(f"[Steam] iface={iface}: no usage ff00:0001 on this "
                                   f"interface; picked {how}")
-            slots.append((pick["product_id"], iface, pick["path"], how))
+            key = f"steam:{pid:04x}:{iface}:path-{endpoint}"
+            slots.append((pid, iface, pick["path"], how, key))
+
+        if len(slots) > MAX_SLOTS:
+            self._diag.append(f"[Steam] more than {MAX_SLOTS} slot endpoints; listen capacity reached")
+        eligible = slots
+        slots = slots[:MAX_SLOTS]
+        legacy_targets = {}
+        for pid, iface, path, how, key in eligible:
+            if pid in PUCKS:
+                legacy_targets.setdefault(f"steam:{pid:04x}:{iface}", set()).add(key)
+        for old, targets in legacy_targets.items():
+            if len(targets) != 1:
+                self._ambiguous_legacy.add(old)
+            elif old not in self._ambiguous_legacy:
+                self._legacy_aliases[old] = next(iter(targets))
 
         if not slots and puck_seen:
             self._diag.append("[Steam] the puck is present but no slot collection was "
@@ -236,11 +306,12 @@ class SteamProvider(Provider):
                                   f"{(d.get('usage') or 0):04x}")
 
         out: List[DeviceStatus] = []
-        for pid, iface, path, how in slots:
-            key = f"steam:{pid:04x}:{iface}"
+        observations = self._listen([path for _, _, path, _, _ in slots])
+        for pid, iface, path, how, key in slots:
+            via = "usb" if pid == USB_CONTROLLER else "dongle"
             self._diag.append(f"[Steam] {NAME} slot iface={iface} pid={pid:04x}: "
-                              f"{PUCKS[pid]}, listening on {how}")
-            res = self._read(path)
+                              f"{PUCKS.get(pid, 'USB controller')}, listening on {how}")
+            res = observations[path]
             for rid, (n, sample) in sorted(res["seen"].items()):
                 self._diag.append(f"    report {rid:#04x} x{n} len={len(sample)}: "
                                   f"{hexdump(sample, 20)}")
@@ -259,13 +330,13 @@ class SteamProvider(Provider):
                 if last is None:
                     self._diag.append(f"    -> {NOT_REPORTED}")
                     out.append(DeviceStatus(key, NAME, None, False, True, "steam",
-                                            NOT_REPORTED, kind="gamepad", ui_message="state.pending"))
+                                            NOT_REPORTED, kind="gamepad", via=via, ui_message="state.pending"))
                 else:
                     level, charging = last
                     self._diag.append(f"    -> {level}%"
                                       f"{', charging' if charging else ''}")
                     out.append(DeviceStatus(key, NAME, level, charging, True, "steam",
-                                            kind="gamepad"))
+                                            kind="gamepad", via=via))
                 continue
             last = self._last.get(key)
             if last is not None:
@@ -273,12 +344,12 @@ class SteamProvider(Provider):
                 # removed and re-created comes back at a new tray position (#87).
                 self._diag.append("    nothing in the window: keeping the last value")
                 out.append(DeviceStatus(key, NAME, last[0], False, False, "steam",
-                                        kind="gamepad"))
+                                        kind="gamepad", via=via))
             else:
                 self._diag.append("    nothing in the window (no controller in this slot)")
-        current = {f"steam:{pid:04x}:{iface}" for pid, iface, path, how in slots}
+        current = {key for pid, iface, path, how, key in slots}
         for key in list(self._last):
-            if key not in current:       # the puck left: nothing is kept for it
+            if key not in current:       # gone or outside this poll's bounded selection
                 self._last.pop(key, None)
         return out
 

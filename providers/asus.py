@@ -202,6 +202,7 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
     0x1A85: ("ROG Azoth", 6),
     0x1B42: ("ROG Azoth Extreme", 6),
     0x1CF1: ("ROG Azoth Extreme SE", 6),
+    0x1C25: ("ROG Azoth X", 6),        # #269: reporter's OMNI pair list, byte 6
     0x1AB0: ("ROG Strix Scope II 96 Wireless", 6),
     0x1B7A: ("ROG Strix Scope II 96 RX Wireless", 6),
     0x1B06: ("ROG Falchion RX Low Profile", 11),

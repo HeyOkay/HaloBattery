@@ -153,6 +153,16 @@ class TurtleBeachTests(unittest.TestCase):
                          [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II",
                            86, False, True, "headset")])
 
+    def test_the_xbox_transmitter_is_the_same_headset(self):
+        # #401: the Xbox variant enumerates as 10f5:2285 on the same ff13 collection
+        # and answers the same Swarm II asks; it shares the Pro II icon.
+        self.infos = ifaces(pid=0x2285, product="Stealth Pro II Xbox")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.charging) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II Xbox",
+                           86, False)])
+
     def test_the_asks_are_the_captures_requests_byte_for_byte(self):
         self.assertEqual(turtlebeach.ASK_SINF, CAPTURE_SINF)
         self.assertEqual(turtlebeach.ASK_GSI, CAPTURE_GSI)
@@ -165,19 +175,66 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual(turtlebeach.ASK_GSI_FRESH[12:14], bytes([0x11, 0x01]))
         self.assertEqual(turtlebeach.ASK_GSI_FRESH[14:], CAPTURE_GSI[14:])
 
+    def test_xbox_transmitter_uses_existing_family_and_capture_frames(self):
+        # #401/#423: only the confirmed PID is added; the exchange is unchanged.
+        self.infos = ifaces(pid=0x2285, product="Stealth Pro II Xbox")
+        self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
+        res = self.p.poll()
+        self.assertEqual([(s.key, s.name, s.level, s.charging) for s in res],
+                         [("turtlebeach:stealthpro2", "Turtle Beach Stealth Pro II Xbox",
+                           86, False)])
+        self.assertEqual(self.transmitter.written, [CAPTURE_SINF, CAPTURE_GSI])
+
+    def test_xbox_audio_collection_gets_no_open_or_write(self):
+        self.infos = ifaces(pid=0x2285, usage_page=0x000C, usage=0x0001)
+        self.p.poll()
+        self.assertEqual(self.transmitter.opens, 0)
+        self.assertEqual(self.transmitter.written, [])
+
+    def test_unknown_neighbor_pid_gets_no_open_or_write(self):
+        self.infos = ifaces(pid=0x2286)
+        self.assertEqual(self.p.poll(), [])
+        self.assertEqual(self.transmitter.opens, 0)
+        self.assertEqual(self.transmitter.written, [])
+
     def test_the_session_opener_is_sent_first_then_the_gsi_ask(self):
         self.p.poll()
         self.assertEqual(self.transmitter.written[:2], [CAPTURE_SINF, CAPTURE_GSI])
 
-    def test_the_atlas_air_is_read_through_the_swarm_asks_first(self):
-        # #310: the Atlas Air is on the family's ff13:0001 collection, but which of the
-        # two exchanges it speaks is unknown, so the asks go first - they send no
-        # enable frame - and the capture's own frames answer them here
+    def test_the_atlas_air_is_read_through_the_confirmed_swarm_asks(self):
+        # #310 confirmed the level and charging in e5a43e0; only SInf/GSI could
+        # report charging in that build. Keep its requests, name and key.
         self.infos = ifaces(pid=0x225E, product="Atlas Air")
         self.transmitter.queues = {(1, 1): SINF_DUMP, (1, 2): GSI_REPLY}
         res = self.p.poll()
         self.assertEqual([(s.key, s.name, s.level) for s in res],
                          [("turtlebeach:atlasair", "Turtle Beach Atlas Air", 86)])
+        self.assertEqual(self.transmitter.written, [CAPTURE_SINF, CAPTURE_GSI])
+
+    def test_silent_atlas_polls_never_enable_the_coap_client(self):
+        self.infos = ifaces(pid=0x225E, product="Atlas Air")
+        with mock.patch.object(self.p, "_read_coap") as coap:
+            for _ in range(3):
+                res = self.p.poll()
+                self.assertEqual([(s.key, s.name, s.level) for s in res],
+                                 [("turtlebeach:atlasair", "Turtle Beach Atlas Air", None)])
+        coap.assert_not_called()
+        self.assertEqual(self.transmitter.opens, 3)
+        self.assertEqual(self.transmitter.written,
+                         [CAPTURE_SINF, CAPTURE_GSI, turtlebeach.ASK_GSI_FRESH] * 3)
+
+    def test_atlas_charging_follows_sinf_replies_and_survives_silence(self):
+        self.infos = ifaces(pid=0x225E, product="Atlas Air")
+        self.transmitter.queues = {(1, 2): GSI_REPLY, (2, 2): CABLE_REPLY,
+                                   (4, 2): GSI_REPLY}
+        with mock.patch.object(self.p, "_read_coap") as coap:
+            readings = [self.p.poll()[0] for _ in range(4)]
+        self.assertEqual([(s.level, s.charging, s.online) for s in readings],
+                         [(86, False, True), (78, True, True),
+                          (78, True, False), (86, False, True)])
+        self.assertEqual({(s.key, s.name) for s in readings},
+                         {("turtlebeach:atlasair", "Turtle Beach Atlas Air")})
+        coap.assert_not_called()
 
     # Preserve the experimental exchange test; stable policy is checked separately.
     @mock.patch.object(turtlebeach, "ENABLED_PIDS", frozenset(turtlebeach.KNOWN))
@@ -190,11 +247,11 @@ class TurtleBeachTests(unittest.TestCase):
         self.assertEqual([(s.key, s.name, s.level) for s in res],
                          [("turtlebeach:stealth600x", "Turtle Beach Stealth 600X Gen 3", 86)])
 
-    def test_the_coap_tunnel_is_tried_when_the_asks_stay_silent(self):
+    def test_the_experimental_600x_tunnel_is_tried_when_the_asks_stay_silent(self):
         calls = []
         self.p._read_sinf = lambda path: (calls.append("sinf"), (None, None, None))[1]
-        self.p._read_coap = lambda path: (calls.append("coap"), (60, "Atlas Air", False))[1]
-        self.assertEqual(self.p._read_status(b"x", 0x225E), (60, "Atlas Air", False))
+        self.p._read_coap = lambda path: (calls.append("coap"), (60, "600X", None))[1]
+        self.assertEqual(self.p._read_status(b"x", 0x2232), (60, "600X", None))
         self.assertEqual(calls, ["sinf", "coap"])
         self.assertTrue(any("CoAP tunnel" in line for line in self.p.diagnostics()))
 
@@ -397,6 +454,15 @@ class CoapTests(unittest.TestCase):
         self.assertEqual(turtlebeach.race_frame(0x9942), bytes.fromhex("055a02004299"))
         self.assertEqual(turtlebeach.race_frame(0x9902, turtlebeach.coap_get("GSI")),
                          bytes.fromhex("055a0a000299") + turtlebeach.coap_get("GSI"))
+
+    def test_silent_700_still_enables_the_client_on_each_poll(self):
+        # PaulRichez's pinned protocol notes: Swarm II does this on every poll.
+        self.transmitter.queues = {}
+        for _ in range(2):
+            self.p.poll()
+        enable = bytes.fromhex("060600055a02004299") + bytes(53)
+        get = bytes.fromhex("060e00055a0a00029940010001b3475349") + bytes(45)
+        self.assertEqual(self.transmitter.written, [enable, get] * 2)
 
     def test_the_gsi_record_reads_100_from_the_tunnel(self):
         res = self.p.poll()

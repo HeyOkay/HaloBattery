@@ -38,7 +38,7 @@ class ParseTest(unittest.TestCase):
         req = G.make_request(65)
         self.assertEqual(65, len(req))
         self.assertEqual(0x00, req[0])
-        self.assertEqual(G.BATTERY_COMMAND, req[1:7])
+        self.assertEqual([0x00, 0x00, 0x02, 0x02, 0x00, 0x83], req[1:7])
         self.assertEqual([0] * 58, req[7:])
 
     def test_the_documented_reply(self):
@@ -53,15 +53,15 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(two[1])
         self.assertTrue(three[1])
 
-    def test_a_waking_mouse_is_read(self):
-        self.assertEqual((80, False), G.parse_reply(reply(80, status=0xA2)))
+    def test_a_waking_mouse_is_not_yet_a_confirmed_reading(self):
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA2)))
 
     def test_an_asleep_mouse_is_not_a_reading(self):
-        self.assertIsNone(G.parse_reply(reply(80, status=G.STATUS_ASLEEP)))
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA4)))
 
     def test_other_frames_are_refused(self):
         bad = list(CAPTURED_75)
-        bad[G.FUNC_INDEX] = 0x81
+        bad[6] = 0x81
         self.assertIsNone(G.parse_reply(bad))
         self.assertIsNone(G.parse_reply(reply(101)))
         self.assertIsNone(G.parse_reply([0x00, 0xA1, 0x00]))
@@ -158,7 +158,7 @@ class PollTest(unittest.TestCase):
         G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
         self.assertEqual(75, provider.poll()[0].level)
         # the next answer is an asleep status: no new level, the icon greys out
-        dev.replies = [reply(75, status=G.STATUS_ASLEEP)]
+        dev.replies = [reply(75, status=0xA4)]
         self.now[0] += 30
         out = provider.poll()
         self.assertEqual([(75, False, False)], [(s.level, s.charging, s.online) for s in out])
@@ -169,6 +169,31 @@ class PollTest(unittest.TestCase):
     def test_no_receiver_reports_nothing(self):
         out, _dev = self.poll([], infos=[])
         self.assertEqual([], out)
+
+
+O_MINUS = [{"path": b"ffff0", "interface_number": 2,
+            "usage_page": 0xFFFF, "usage": 0x0000,
+            "product_id": 0x2024, "product_string": "Model O- Wireless"}]
+WIRED_O_MINUS = {"path": b"wired-o-minus", "interface_number": 0,
+                 "product_id": 0x2013, "product_string": "Model O-"}
+
+
+class FamilyTest(PollTest):
+    def test_the_model_o_minus_is_read_with_its_own_key(self):
+        out, dev = self.poll([CAPTURED_75], infos=O_MINUS)
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("glorious:2024", "Glorious Model O- Wireless", 75, "mouse")])
+        self.assertEqual([bytes(G.make_request(65))], dev.sent)
+
+    def test_the_model_o_minus_cable_counts_as_charging(self):
+        out, _dev = self.poll([CAPTURED_75], infos=O_MINUS + [WIRED_O_MINUS])
+        self.assertEqual((75, True, True), (out[0].level, out[0].charging, out[0].online))
+
+    def test_two_glorious_mice_keep_separate_icons(self):
+        infos = self.INFO + O_MINUS
+        out, _dev = self.poll([CAPTURED_75, CAPTURED_75_CHARGING], infos=infos)
+        self.assertEqual([(s.key, s.level) for s in out],
+                         [("glorious:2022", 75), ("glorious:2024", 75)])
 
 
 if __name__ == "__main__":  # pragma: no cover

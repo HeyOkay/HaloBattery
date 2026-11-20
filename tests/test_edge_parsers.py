@@ -7,6 +7,15 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures:
+# G-Helper app/Peripherals/Mouse/AsusMouse.cs; berkaykrc #6067 Strix Go capture.
+# AULA HUB FEFC reply capture, HaloBattery #325/PR #327 (55 10 header).
+# HeadsetControl corsair_void_v2w.hpp; Virtuoso captures in HaloBattery #204.
+# OpenMouse5a4f643 src/pulsar/index.ts L1-34; jonkristian/pulsar-x3-python (#213).
+# Solaar e7304c4 hidpp20_constants.py L37-55,90; hidpp10_constants.py L188-190.
+# Jabra NAK: jabridge22952e2 cmd/jabridge/jabraApi.go GNP framing; PR #337.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import unittest
@@ -54,22 +63,22 @@ class LogitechTests(unittest.TestCase):
         full = [0x10, 0x5A, 0x00]                     # 4186 mV
         for flags, charging in ((0x00, False), (0x80, True), (0x81, True), (0x7F, False)):
             with self.subTest(flags=flags):
-                self.assertEqual(L.parse_battery(L.F_VOLTAGE, [0x10, 0x5A, flags]), (100, charging, ""))
-        self.assertEqual(L.parse_battery(L.F_VOLTAGE, full), (100, False, ""))
+                self.assertEqual(L.parse_battery(0x1001, [0x10, 0x5A, flags]), (100, charging, ""))
+        self.assertEqual(L.parse_battery(0x1001, full), (100, False, ""))
 
     def test_charge_complete_only_for_charging_with_low_bits_one(self):
         for flags, expected in ((0x81, True), (0x80, False), (0x01, False), (0x83, False), (0x82, False),
                                 (0xFF, False)):
             with self.subTest(flags=flags):
-                self.assertIs(L.charge_complete(L.F_VOLTAGE, [0x10, 0x5A, flags]), expected)
-        self.assertFalse(L.charge_complete(L.F_UNIFIED, [0x10, 0x5A, 0x81]))   # only 0x1001 has it
+                self.assertIs(L.charge_complete(0x1001, [0x10, 0x5A, flags]), expected)
+        self.assertFalse(L.charge_complete(0x1004, [0x10, 0x5A, 0x81]))   # only 0x1001 has it
 
     def test_voltage_that_is_not_a_battery_is_not_a_level(self):
         for p in ([0, 0, 0], [0x09, 0xC3, 0x80], [0x00, 0x01, 0x00]):             # under 2500 mV
             with self.subTest(p=p):
-                self.assertEqual(L.parse_battery(L.F_VOLTAGE, p), (None, False, ""))
+                self.assertEqual(L.parse_battery(0x1001, p), (None, False, ""))
         # a filler reply is 65535 mV, not a full, charging battery
-        for feature in (L.F_VOLTAGE, L.F_ADC):
+        for feature in (0x1001, 0x1F20):
             with self.subTest(feature=hex(feature)):
                 self.assertEqual(L.parse_battery(feature, [0xFF, 0xFF, 0xFF]), (None, False, ""))
 
@@ -82,21 +91,21 @@ class LogitechTests(unittest.TestCase):
                  ([0xFF, 0xFF, 0xFF], (None, False, "")))
         for p, expected in table:
             with self.subTest(p=p):
-                self.assertEqual(L.parse_battery(L.F_UNIFIED, p), expected)
+                self.assertEqual(L.parse_battery(0x1004, p), expected)
 
     def test_status_feature_range(self):
         for p, expected in (([0, 0, 0], (None, False, "")), ([100, 0, 2], (100, True, "")),
                             ([101, 0, 0], (None, False, "")), ([0xFF] * 3, (None, False, ""))):
             with self.subTest(p=p):
-                self.assertEqual(L.parse_battery(L.F_STATUS, p), expected)
+                self.assertEqual(L.parse_battery(0x1000, p), expected)
 
     def test_adc_headset_not_connected_is_none(self):
-        self.assertEqual(L.parse_battery(L.F_ADC, [0x0F, 0xA0, 0x00]), (None, False, ""))
-        level, charging, _ = L.parse_battery(L.F_ADC, [0x0F, 0xA0, 0x03])
+        self.assertEqual(L.parse_battery(0x1F20, [0x0F, 0xA0, 0x00]), (None, False, ""))
+        level, charging, _ = L.parse_battery(0x1F20, [0x0F, 0xA0, 0x03])
         self.assertEqual((level, charging), (L.voltage_to_percent(0x0FA0), True))
 
     def test_unknown_feature_and_garbage_padding_never_raise_or_overflow(self):
-        for feature in (0x0000, 0x1234, L.F_UNIFIED, L.F_STATUS, L.F_VOLTAGE, L.F_ADC):
+        for feature in (0x0000, 0x1234, 0x1004, 0x1000, 0x1001, 0x1F20):
             for name, fill in (("zero", 0x00), ("ff", 0xFF), ("0x80", 0x80)):
                 with self.subTest(feature=hex(feature), fill=name):
                     level, charging, approx = L.parse_battery(feature, [fill] * 16)
@@ -105,19 +114,19 @@ class LogitechTests(unittest.TestCase):
                     self.assertIsInstance(approx, str)
 
     def test_register_replies(self):
-        table = ((L.REG_BATTERY_CHARGE, [50, 0, 0x50], (50, True, "")),
-                 (L.REG_BATTERY_CHARGE, [100, 0, 0x90], (100, True, "")),
-                 (L.REG_BATTERY_CHARGE, [60, 0, 0x30], (60, False, "")),
-                 (L.REG_BATTERY_CHARGE, [0, 0, 0x50], (None, False, "")),
-                 (L.REG_BATTERY_CHARGE, [101, 0, 0x50], (None, False, "")),
-                 (L.REG_BATTERY_STATUS, [7, 0x00, 0], (90, False, "about 90% (full)")),
-                 (L.REG_BATTERY_STATUS, [1, 0x21, 0], (5, True, "about 5% (critical)")),
-                 (L.REG_BATTERY_STATUS, [9, 0x00, 0], (None, False, "")),
+        table = ((0x0D, [50, 0, 0x50], (50, True, "")),
+                 (0x0D, [100, 0, 0x90], (100, True, "")),
+                 (0x0D, [60, 0, 0x30], (60, False, "")),
+                 (0x0D, [0, 0, 0x50], (None, False, "")),
+                 (0x0D, [101, 0, 0x50], (None, False, "")),
+                 (0x07, [7, 0x00, 0], (90, False, "about 90% (full)")),
+                 (0x07, [1, 0x21, 0], (5, True, "about 5% (critical)")),
+                 (0x07, [9, 0x00, 0], (None, False, "")),
                  (0x99, [50, 0, 0], (None, False, "")))
         for reg, p, expected in table:
             with self.subTest(reg=hex(reg), p=p):
                 self.assertEqual(L.parse_register_battery(reg, p), expected)
-        for reg in (L.REG_BATTERY_CHARGE, L.REG_BATTERY_STATUS):
+        for reg in (0x0D, 0x07):
             level, _, _ = L.parse_register_battery(reg, [0xFF] * 16)
             self.assertIsNone(level)
 
@@ -148,11 +157,12 @@ class SteelSeriesTests(unittest.TestCase):
                     self.assertTrue(level is None or n >= 4)
                     sane_level(self, level)
 
-    def test_levels_above_100_are_clamped_not_shown(self):
-        self.assertEqual(steelseries.parse_nova7([0xB0, 0x03, 0xFF, 0x01]), (100, True, True))
-        self.assertEqual(steelseries.parse_nova5([0xB0, 0x01, 0, 0xFF, 0x00]), (100, False, True))
-        self.assertEqual(steelseries.parse_arctis7_plus([0xB0, 0x00, 0xFF, 0x00]), (100, False, True))
-        self.assertEqual(steelseries.parse_nova7_discrete([0xB0, 0x03, 0xFF, 0x01]), (100, True, True))
+    def test_out_of_range_percentages_and_steps_are_refused(self):
+        # These are percentages / 0..4 steps, not the classic raw-scale quirks.
+        self.assertEqual(steelseries.parse_nova7([0xB0, 0x03, 0xFF, 0x01]), (None, False, False))
+        self.assertEqual(steelseries.parse_nova5([0xB0, 0x01, 0, 0xFF, 0x00]), (None, False, False))
+        self.assertEqual(steelseries.parse_arctis7_plus([0xB0, 0x00, 0xFF, 0x00]), (None, False, False))
+        self.assertEqual(steelseries.parse_nova7_discrete([0xB0, 0x03, 0xFF, 0x01]), (None, False, False))
 
     def test_headset_off_is_offline_not_a_stale_level(self):
         self.assertEqual(steelseries.parse_nova7([0xB0, 0x03, 55, 0x00]), (None, False, False))
@@ -169,10 +179,10 @@ class CorsairTests(unittest.TestCase):
     @staticmethod
     def bragi(value, shape="dark"):
         lo, hi = value & 0xFF, value >> 8
-        head = ([corsair.BRAGI_ROUTE_CHILD, corsair.BRAGI_CMD_GET, 0x00, lo, hi] if shape == "dark"
-                else [corsair.BRAGI_ROUTE_CHILD, corsair.BRAGI_ROUTE_CHILD, corsair.BRAGI_CMD_GET,
+        head = ([0x01, 0x02, 0x00, lo, hi] if shape == "dark"
+                else [0x01, 0x01, 0x02,
                       0x00, lo, hi])
-        return head + [0] * (corsair.BRAGI_MSG_SIZE - len(head))
+        return head + [0] * (64 - len(head))
 
     def test_bragi_levels_and_limits(self):
         for shape in ("dark", "virtuoso"):
@@ -203,7 +213,7 @@ class CorsairTests(unittest.TestCase):
     def test_legacy_level(self):
         def reply(value, size=33):
             r = [0] * size
-            r[corsair.LEVEL_INDEX], r[corsair.LEVEL_INDEX + 1] = value & 0xFF, value >> 8
+            r[4], r[4 + 1] = value & 0xFF, value >> 8
             return r
         for value, expected in ((765, 76), (1000, 100), (0, None), (1001, None), (0xFFFF, None)):
             with self.subTest(value=value):
@@ -211,15 +221,15 @@ class CorsairTests(unittest.TestCase):
         for name, r in dict(GARBAGE, none=None).items():
             with self.subTest(reply=name):
                 sane_level(self, corsair.parse_level(r))
-        self.assertIsNone(corsair.parse_level([0] * (corsair.LEVEL_INDEX + 1)))   # one byte short
+        self.assertIsNone(corsair.parse_level([0] * (4 + 1)))   # one byte short
 
 
 class PulsarTests(unittest.TestCase):
     @staticmethod
-    def reply(level, size=65, command=pulsar.SONIX_BATTERY_COMMAND):
+    def reply(level, size=65, command=(0x08, 0x81, 0x01)):
         r = [0] * size
         r[2:5] = command
-        r[pulsar.SONIX_LEVEL_INDEX] = level
+        r[7] = level
         return r
 
     def test_levels(self):
@@ -229,7 +239,7 @@ class PulsarTests(unittest.TestCase):
 
     def test_other_command_or_short_reply_is_none(self):
         self.assertIsNone(pulsar.parse_sonix_power(self.reply(50, command=(0x08, 0x81, 0x02))))
-        for n in range(0, pulsar.SONIX_LEVEL_INDEX + 1):
+        for n in range(0, 7 + 1):
             self.assertIsNone(pulsar.parse_sonix_power(self.reply(50)[:n]), n)
         for name, r in dict(GARBAGE, none=None).items():
             with self.subTest(reply=name):
@@ -255,9 +265,9 @@ class AsusTests(unittest.TestCase):
 
     def echo_reply(self, level, charging=0, report_id=False):
         r = [0] * 16
-        r[0:2] = asus.ECHO
-        r[asus.LEVEL_BYTE] = level
-        r[asus.CHARGING_BYTE] = charging
+        r[0:2] = (0x12, 0x07)
+        r[4] = level
+        r[9] = charging
         return ([0x00] + r) if report_id else r
 
     def test_reply_levels_and_standby(self):
@@ -277,28 +287,28 @@ class AsusTests(unittest.TestCase):
 
     def test_truncated_reply_is_none(self):
         frame = self.echo_reply(50)
-        for n in range(0, asus.CHARGING_BYTE + 1):
+        for n in range(0, 9 + 1):
             self.assertIsNone(asus.parse_reply(frame[:n], asus.PERCENT), n)
 
     def test_pair_list_stops_at_the_first_empty_slot_and_ignores_a_truncated_tail(self):
-        r = list(asus.OMNI_PAIRS) + [0] * 60
+        r = list([0x01, 0xA0, 0x00, 0x00]) + [0] * 60
         self.assertEqual(asus.parse_pairs(r), [])
-        r = list(asus.OMNI_PAIRS) + [0] * 60
-        r[asus.OMNI_FIRST_SLOT:asus.OMNI_FIRST_SLOT + 2] = [0xCE, 0x1A]
+        r = list([0x01, 0xA0, 0x00, 0x00]) + [0] * 60
+        r[5:5 + 2] = [0xCE, 0x1A]
         self.assertEqual(asus.parse_pairs(r), [0x1ACE])
-        self.assertEqual(asus.parse_pairs(r[:asus.OMNI_FIRST_SLOT + 1]), [])   # half a pid
+        self.assertEqual(asus.parse_pairs(r[:5 + 1]), [])   # half a pid
         self.assertEqual(asus.parse_pairs([]), [])
 
     def test_headset_reply_known_garbage_is_none(self):
         for r in ([], [0xFF], [0xFF, 0x1B], [0x00] * 64, [0xFF] * 64,
-                  [0xFF, asus.HEADSET_ERROR[0], asus.HEADSET_ERROR[1]] + [0] * 61):
+                  [0xFF, (0xFF, 0xAA)[0], (0xFF, 0xAA)[1]] + [0] * 61):
             with self.subTest(r=r[:4]):
                 self.assertIsNone(asus.parse_headset_reply(r))
 
     def test_headset_reply_truncation_never_raises(self):
         frame = [0] * 64
-        frame[0], frame[1] = asus.HEADSET_REPORT_ID, asus.HEADSET_HEADER
-        frame[asus.HEADSET_VOLTAGE_LSB], frame[asus.HEADSET_VOLTAGE_MSB] = 0xA0, 0x0F   # 4000 mV
+        frame[0], frame[1] = 0xFF, 0x1B
+        frame[11], frame[12] = 0xA0, 0x0F   # 4000 mV
         self.assertEqual(asus.parse_headset_reply(frame)[0], 75)
         for n in range(len(frame)):
             with self.subTest(length=n):
@@ -310,7 +320,7 @@ class AulaTests(unittest.TestCase):
     @staticmethod
     def frame(level, lead):
         r = [0] * 33
-        r[lead], r[lead + 1] = aula.HEADER, aula.CMD_BATTERY
+        r[lead], r[lead + 1] = 0x55, 0x10
         r[25 + lead] = level
         return r
 
@@ -348,10 +358,10 @@ class JabraTests(unittest.TestCase):
     def test_reply_payload_short_or_foreign_frames_are_not_replies(self):
         for r in (None, [], [0x05], [0x05, 0, 4, 0x20, 0xC0]):
             with self.subTest(r=r):
-                self.assertIsNone(jabra.reply_payload(r, 0x20, jabra.CLASS_STATUS, jabra.OP_BATTERY))
-        nak = [jabra.REPORT_ID, 0x00, jabra.DST_HEADSET, 0x20, jabra.FLAG_REPLY, jabra.CLASS_NAK]
-        self.assertEqual(jabra.reply_payload(nak, 0x20, jabra.CLASS_STATUS, jabra.OP_BATTERY), b"")
-        self.assertIsNone(jabra.reply_payload(nak, 0x21, jabra.CLASS_STATUS, jabra.OP_BATTERY))
+                self.assertIsNone(jabra.reply_payload(r, 0x20, 0x12, 0x02))
+        nak = [0x05, 0x00, 0x04, 0x20, 0xC0, 0xFE]
+        self.assertEqual(jabra.reply_payload(nak, 0x20, 0x12, 0x02), b"")
+        self.assertIsNone(jabra.reply_payload(nak, 0x21, 0x12, 0x02))
 
 
 if __name__ == "__main__":

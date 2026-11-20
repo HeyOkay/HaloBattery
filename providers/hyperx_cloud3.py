@@ -20,6 +20,13 @@ product ids and was written from the vendor's own traffic):
     to send_feature_report, so this does too. The diagnostics say which path was used,
     because that is the difference between a reading and none at all.
 
+Receiver 03F0:0FCC is also registered by davidsantanaalves/HyperBatteryMonitor,
+Devices/Cloud3WirelessAlternateReceiverDevice.cs (Definition, QueryBatteryAsync,
+QueryChargeStatusAsync, ProcessInputReport): the same 66 89 / 66 8A requests and
+battery validation. Hid/HidConnection.cs pads output to descriptor length; the
+reporter confirmed our existing 62-byte transport on this receiver.
+Keep its identity separate from 05B7: simultaneous/alternate-mode behavior is unknown.
+
 The Cloud II Core Wireless (03F0:0995 its dongle, 03F0:0795 the second mode the same
 reporter's diagnostics show) speaks the same exchange, decoded from his own USBPcap
 capture of NGENUITY in #155: NGENUITY wrote `66 89` to interface 3 as a 62-byte output
@@ -69,6 +76,7 @@ WRITE_PAUSE = 0.1                  # the reference waits between request and rea
 # second mode the reporter's diagnostics show - same vendor collection, same exchange.
 PIDS = {
     0x05B7: "HyperX Cloud III Wireless",
+    0x0FCC: "HyperX Cloud III Wireless",
     0x0C9D: "HyperX Cloud III Wireless",
     0x0795: "HyperX Cloud II Core Wireless",
     0x0995: "HyperX Cloud II Core Wireless",

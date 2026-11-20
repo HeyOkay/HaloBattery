@@ -40,7 +40,7 @@ KINDS = {"H": "headset", "M": "mouse", "B": "bluetooth", "G": "gamepad", "K": "k
          "C": "microphone",
          "headset": "headset", "mouse": "mouse", "bluetooth": "bluetooth", "gamepad": "gamepad",
          "keyboard": "keyboard", "microphone": "microphone", "mic": "microphone",
-         "speaker": "speaker", "webcam": "webcam", "health": "health",
+         "speaker": "speaker", "webcam": "webcam", "health": "health", "phone": "phone",
          "smart_home": "smart_home",
          "watch": "watch", "display": "display", "tracker": "tracker",
          "dualshock": "dualshock", "dualsense": "dualsense",
@@ -279,6 +279,34 @@ def _number(d: ImageDraw.ImageDraw, text: str, col) -> None:
 
 # ---------------------------------------------------------------- icon
 RING_STYLES = frozenset(('thin', 'classic'))
+CLASSIC_GLYPH_REDUCTION = .5  # total longest-axis reduction in logical16 pixels
+
+
+def _classic_glyph(image: Image.Image) -> Image.Image:
+    """Inset the existing per-DPI pixels without re-fitting or translating them.
+
+    Ignore faint antialias fringes when measuring the longest painted axis.
+    A bounded supersampled area pass represents the fractional-pixel reduction;
+    nearest expansion retains the reviewed small-size pixel coverage first.
+    """
+    alpha = image.getchannel('A')
+    peak = alpha.getextrema()[1]
+    if not peak:
+        return image.copy()
+    threshold = max(1, round(peak / 8))
+    bounds = alpha.point(lambda value: 255 if value >= threshold else 0).getbbox()
+    extent = max(bounds[2] - bounds[0], bounds[3] - bounds[1])
+    size = image.width
+    reduction = min(CLASSIC_GLYPH_REDUCTION * size / 16, extent / 2)
+    scale = 1 - reduction / extent
+    samples = max(1, min(16, 512 // size))
+    work = size * samples
+    inner = max(2, 2 * round(work * scale / 2))
+    enlarged = image.resize((work, work), Image.Resampling.NEAREST)
+    canvas = Image.new('RGBA', (work, work))
+    canvas.paste(enlarged.resize((inner, inner), Image.Resampling.BOX),
+                 ((work - inner) // 2, (work - inner) // 2))
+    return canvas.resize(image.size, Image.Resampling.BOX)
 
 
 def _ring_width(ring_style):
@@ -292,7 +320,7 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
            pulse: float = 1.0, text: str = "", force_active: bool = False, *,
            size: int = SIZE, brand: str = "default", brand_color: bool = False,
            animation_phase: float = 0.0, filled: bool = False, custom_glyph=None,
-           ring_style: str = 'thin') -> Image.Image:
+           ring_style: str = 'thin', include_arc: bool = True) -> Image.Image:
     """badge - device kind: headset / mouse / keyboard / bluetooth (or H / M / K / B).
     pulse - known-level arc brightness 0..1 (the charging "breathing" animation).
     animation_phase - clockwise turn 0..1 for unknown charging; its brightness is steady.
@@ -301,7 +329,8 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     size is the physical output width/height; the legacy default stays 64.
     brand / brand_color affect controller glyphs only, never their semantic kind.
     ring_style selects the current 1px or classic 1.625px stroke at 16px;
-    both retain the same outer radius and centre artwork."""
+    classic slightly insets the pictogram while keeping the ring unchanged.
+    include_arc=False retains only the track and center for settings transitions."""
     ring_width = _ring_width(ring_style)
     if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
         raise ValueError("icon size must be a positive integer")
@@ -320,8 +349,8 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     # ring track
     d.ellipse(box, outline=fg + (neutral_alpha(70 if active else 45),), width=_r(w))
 
-    # charge arc
-    if active:
+    # charge arc (settings can retain the exact track and center as a static layer)
+    if active and include_arc:
         color = arc_color(level, charging, low, fg)
         opacity = NEUTRAL_OPACITY if color == fg else 255
         c = color + (int(opacity * max(0.0, min(1.0, pulse))),)
@@ -363,13 +392,22 @@ def render(level: Optional[int], charging: bool, online: bool, low: int = 20,
     # overshoot clips negative alpha to zero, making small rings visibly heavier.
     sampling = Image.Resampling.BOX if size < S else Image.Resampling.LANCZOS
     img = img.resize((size, size), sampling)
-    if custom_glyph is not None and not text:
-        img = Image.alpha_composite(img, custom_glyph.render(
-            size, fg, alpha, foreground_opacity=NEUTRAL_OPACITY / 255))
-    elif kind and not text:
-        img = Image.alpha_composite(img, icon_artwork.glyph(
-            kind, size, fg, alpha, brand, brand_color,
-            foreground_opacity=NEUTRAL_OPACITY, filled=filled))
+    if not text and (custom_glyph is not None or kind):
+        # Measure Classic before state dimming. Reuse the existing physical-size
+        # artwork instead of choosing another resolution or optical placement.
+        glyph_alpha = 255 if ring_style == 'classic' else alpha
+        if custom_glyph is not None:
+            layer = custom_glyph.render(
+                size, fg, glyph_alpha, foreground_opacity=NEUTRAL_OPACITY / 255)
+        else:
+            layer = icon_artwork.glyph(
+                kind, size, fg, glyph_alpha, brand, brand_color,
+                foreground_opacity=NEUTRAL_OPACITY, filled=filled)
+        if ring_style == 'classic':
+            layer = _classic_glyph(layer)
+            if alpha != 255:
+                layer.putalpha(layer.getchannel('A').point(lambda value: round(value * alpha / 255)))
+        img = Image.alpha_composite(img, layer)
     return img
 
 

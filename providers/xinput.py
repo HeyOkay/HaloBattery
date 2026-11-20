@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, hidlist, wgi
+from . import beitong, flydigi, gamesir, hidlist, raikiri, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -302,8 +302,23 @@ class XInputProvider(Provider):
             len(slots) == 1 and len(all_reports) == 1
             and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
         )
+        # The GameSir G7 Pro 8K, likewise: its Windows level is the 1000/1000 placeholder
+        # and its XInput type "wired" on the dongle; the pad's own report has the level.
+        single_gamesir = (
+            len(slots) == 1 and len(all_reports) == 1
+            and all_reports[0].vid == gamesir.VENDOR_VID
+            and (gamesir.is_supported(all_reports[0].pid)
+                 or (all_reports[0].pid == gamesir.XINPUT_WIRED_PID
+                     and gamesir.has_supported_collection()))
+        )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
+        # The Raikiri II's own query is paired to its one XInput slot; its WGI
+        # report is not in NAMED_VIDS, so the generic Xbox entry is not shown.
+        single_raikiri = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == (raikiri.VID, raikiri.PID)
+        )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         if len(reports) != len(slots):
@@ -328,7 +343,12 @@ class XInputProvider(Provider):
         vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
-            if only_vid == FLYDIGI_VID:
+            if single_raikiri:
+                try:
+                    vendor_reading = raikiri.read_connected(self._diag)
+                except Exception as e:     # a broken vendor path must not blind XInput
+                    self._diag.append(f"[Raikiri] {e}")
+            elif only_vid == FLYDIGI_VID:
                 try:
                     vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput
@@ -338,6 +358,11 @@ class XInputProvider(Provider):
                     vendor_reading = beitong.read_connected(self._diag)
                 except Exception as e:
                     self._diag.append(f"[Beitong] {e}")
+            elif single_gamesir:
+                try:
+                    vendor_reading = gamesir.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[GameSir] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -371,7 +396,7 @@ class XInputProvider(Provider):
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
-            if single_beitong:
+            if single_beitong or single_gamesir:
                 if rep is not None and rep.placeholder:
                     rep = None
                 if res is not None and res[1]:

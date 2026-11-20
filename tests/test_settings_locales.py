@@ -32,10 +32,12 @@ class SettingsCatalogTests(unittest.TestCase):
                 self.assertEqual(module.MESSAGES["preferences.language"], expected)
 
     def test_settings_placeholders_render_in_every_language(self):
-        values = {"level": "25%", "error": "Example failure", "version": "1.2.3", "page": "24"}
+        values = {"level": "25%", "error": "Example failure", "version": "1.2.3", "page": "24",
+                  "preferences": "Basic preferences"}
         expected_fields = {
             "settings.default_low": {"level"},
             "settings.error": {"error"},
+            "settings.open_failed": {"preferences"},
             "settings.version": {"version"},
             "settings.iconify_page": {"page"},
         }

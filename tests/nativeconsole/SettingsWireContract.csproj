@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode><NuGetAudit>false</NuGetAudit>
+    <RollForward>Disable</RollForward>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.15" TargetingPackVersion="10.0.15" />
+    <Compile Include="Program.cs;WindowStub.cs;../../ui/HaloBattery.Settings/SettingsProtocol.cs;../../ui/HaloBattery.Settings/SettingsJson.cs;../../ui/HaloBattery.Settings/WindowStateStore.cs" />
+    <Content Include="wire-goldens.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

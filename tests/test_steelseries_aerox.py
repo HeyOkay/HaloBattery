@@ -102,6 +102,37 @@ class AeroxTest(unittest.TestCase):
         res, _ = self.poll(0x1858, 0x00)
         self.assertEqual(res, [])
 
+    def test_literal_step_percent_and_charging_boundaries(self):
+        for payload, expected in (
+                ("d2 00", (None, False, False)),
+                ("d2 80", (None, False, False)),
+                ("d2 01", (0, False, True)),
+                ("d2 81", (0, True, True)),
+                ("d2 15", (100, False, True)),
+                ("d2 95", (100, True, True)),
+                ("d2 64", (100, False, True)),
+                ("d2 e4", (100, True, True)),
+                ("d2 65", (None, False, False)),
+                ("d2 e5", (None, False, False)),
+                ("d2 7f", (None, False, False)),
+                ("d2 ff", (None, False, False))):
+            frame = bytes.fromhex(payload)
+            with self.subTest(payload=payload):
+                self.assertEqual(S.parse_aerox3(frame), expected)
+                self.assertEqual(S.parse_aerox3(b"\x00" + frame), expected)
+
+    def test_invalid_level_is_not_emitted_and_next_good_reply_recovers(self):
+        rx = FakeReceiver(0x65)
+        S.hid = types.SimpleNamespace(device=rx.device_class())
+        S.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: issue_79_entries(0x1858))
+        provider = S.SteelSeriesProvider()
+        for value in (0x65, 0xE5, 0xFF):
+            with self.subTest(value=value):
+                rx.level_byte = value
+                self.assertEqual(provider.poll(), [])
+        rx.level_byte = 0x8B  # valid charging flag + step 11 = 50%
+        self.assertEqual([(s.level, s.charging) for s in provider.poll()], [(50, True)])
+
     def test_every_aerox_5_and_9_model_uses_the_d2_exchange(self):
         for pid, name in AEROX_5_9.items():
             self.assertEqual(S.MOUSE_MODELS[pid], (name, S.parse_aerox3), hex(pid))

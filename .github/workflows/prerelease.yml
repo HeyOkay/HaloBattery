@@ -1,8 +1,8 @@
 name: Pre-release build
 
 # Every push to pre-release (each merged pull request) builds Halo Battery and
-# replaces the single rolling GitHub release "prerelease-build" with the new zip
-# and installer, so testers always download the latest integration build from one place.
+# updates the single rolling GitHub release "prerelease-build" with the new zip
+# and installer while leaving the source tag fixed, so testers use one download URL.
 # It is marked as a pre-release: the app's updater only reads /releases/latest,
 # which never returns pre-releases, so normal users are not offered it.
 
@@ -25,20 +25,25 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: write # replace the rolling pre-release
+      contents: read
+    outputs:
+      release-artifact: ${{ steps.publish_assets.outputs.artifact-id }}
+      version: ${{ steps.package.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.404"
 
       - name: Install dependencies
         run: python -m pip install --require-hashes -r requirements-build.txt
@@ -53,19 +58,20 @@ jobs:
         run: |
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
-          ./scripts/build_settings.ps1
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
           python tools/build_exe.py
 
       - name: Archive native settings symbols
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: HaloBattery-Settings-symbols-${{ github.sha }}
-          path: .build/settings-ui-obj/**/linked/HaloBattery.Settings.pdb
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
 
       - name: Zip, installer and notes
+        id: package
         shell: pwsh
         run: |
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
@@ -74,12 +80,12 @@ jobs:
           $zip = "HaloBattery-$ver-pre-$sha.zip"
           Compress-Archive -Path dist/HaloBattery -DestinationPath $zip
           "ZIP=$zip" >> $env:GITHUB_ENV
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $iscc = ./scripts/get_inno.ps1
           & $iscc /Q "/DAppVersion=$ver" "/FHaloBattery-$ver-pre-$sha-setup" installer/HaloBattery.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "SETUP=dist/HaloBattery-$ver-pre-$sha-setup.exe" >> $env:GITHUB_ENV
           "SHORT=$sha" >> $env:GITHUB_ENV
+          "version=$ver" >> $env:GITHUB_OUTPUT
           $lines = foreach ($f in @($zip, "dist/HaloBattery-$ver-pre-$sha-setup.exe")) { "{0} *{1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
           $lines | Out-File -Encoding ascii SHA256SUMS.txt
           @"
@@ -90,12 +96,101 @@ jobs:
           It still calls itself v$ver, so please write **pre-release $sha** in any bug report.
           "@ | Out-File -Encoding utf8 notes.md
 
+      - name: Stage release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          Copy-Item -LiteralPath $env:ZIP, $env:SETUP, 'SHA256SUMS.txt' -Destination release-assets
+          Copy-Item -LiteralPath notes.md -Destination release-assets/release_notes.md
+
+      - name: Upload publish assets
+        id: publish_assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-pre-release-assets-${{ github.sha }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    # Keep building/testing on a read-only runner; never execute downloaded data.
+    # workflow_dispatch is a build-only check and cannot replace the public build.
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/pre-release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download publish assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.release-artifact }}
+          path: release-assets
+
+      - name: Validate release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          version="$RELEASE_VERSION"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          short="${GITHUB_SHA:0:7}"
+          zip="HaloBattery-$version-pre-$short.zip"
+          setup="HaloBattery-$version-pre-$short-setup.exe"
+          cd release-assets
+          # Build output is data only. Reject unexpected files and symlinks.
+          [[ "$(find . -mindepth 1 -maxdepth 1 | wc -l)" -eq 4 ]]
+          for file in "$zip" "$setup" SHA256SUMS.txt release_notes.md; do
+            [[ -f "$file" && ! -L "$file" ]]
+          done
+          # Compute hashes only for the two expected names, never paths from a manifest.
+          expected="$(mktemp "$RUNNER_TEMP/halobattery-expected.XXXXXX")"
+          actual="$(mktemp "$RUNNER_TEMP/halobattery-actual.XXXXXX")"
+          trap 'rm -f "$expected" "$actual"' EXIT
+          printf '%s *%s\n' "$(sha256sum "$zip" | cut -d ' ' -f 1)" "$zip" \
+            "$(sha256sum "$setup" | cut -d ' ' -f 1)" "$setup" > "$expected"
+          sed 's/\r$//' SHA256SUMS.txt > "$actual"
+          cmp --silent "$expected" "$actual"
+          echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
+          echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
       - name: Replace the rolling pre-release
         env:
           GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          SHORT: ${{ steps.assets.outputs.short }}
         shell: bash
         run: |
-          gh release delete "$TAG" --cleanup-tag --yes || true
-          git push origin ":refs/tags/$TAG" 2>/dev/null || true
-          gh release create "$TAG" "$ZIP" "$SETUP" SHA256SUMS.txt --prerelease --target "$GITHUB_SHA" \
-            --title "Pre-release build ($SHORT)" --notes-file notes.md
+          # Keep the public URL and tag anchor; update only release metadata/assets.
+          notes="$(mktemp "$RUNNER_TEMP/halobattery-prerelease-notes.XXXXXX")"
+          trap 'rm -f "$notes"' EXIT
+          cat release-assets/release_notes.md > "$notes"
+          printf '\n\nThe `%s` tag is a fixed source-archive anchor. GitHub\047s automatic Source code archives stay at that tag and may differ from these build assets. Exact build source: [%s](https://github.com/%s/commit/%s).\n' \
+            "$TAG" "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_SHA" >> "$notes"
+          # JSON-quoted names keep embedded newlines/control characters on one line.
+          if old_assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name | @json')"; then
+            gh release upload "$TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "Pre-release build ($SHORT)" --notes-file "$notes"
+            # Cleanup runs only after successful uploads and metadata update. Preserve
+            # unknown attachments and the current build, including on a rerun.
+            pattern='^"HaloBattery-[0-9]+\.[0-9]+\.[0-9]+-pre-[0-9a-f]{7}(-setup\.exe|\.zip)"$'
+            while IFS= read -r quoted; do
+              [[ "$quoted" =~ $pattern ]] || continue
+              asset="${quoted:1:${#quoted}-2}"
+              if [[ "$asset" != "${ZIP##*/}" && "$asset" != "${SETUP##*/}" ]]; then
+                gh release delete-asset "$TAG" "$asset" --yes --repo "$GITHUB_REPOSITORY"
+              fi
+            done <<< "$old_assets"
+          else
+            # gh creates a missing tag at this commit; an existing tag stays put.
+            gh release create "$TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt \
+              --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "Pre-release build ($SHORT)" --notes-file "$notes"
+          fi

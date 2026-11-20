@@ -19,6 +19,8 @@ The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prer
 
 <img src="docs/icons.png" alt="Every icon state: headset, mouse, keyboard, controllers and Bluetooth at 100 % down to 15 %, charging and asleep" width="560">
 
+**English** | [简体中文](README.zh-CN.md)
+
 </div>
 
 ## Features
@@ -29,7 +31,7 @@ The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prer
 - **Stays out of the way.** Alerts wait until your full-screen game closes, and devices are polled less often while you play.
 - **Native look.** A Windows 11 style menu, sharp at any display scale, light or dark.
 - **Autoupdates.** A new release installs from the tray menu in one click.
-- **Seven languages.** English, Spanish, French, Japanese, Russian and Simplified / Traditional Chinese, chosen from Windows at first start and changeable in Preferences.
+- **Nine languages.** English, Spanish, French, Japanese, Kazakh, Ukrainian, Russian and Simplified / Traditional Chinese, chosen from Windows at first start and changeable in Preferences.
 
 <p align="center"><img src="docs/charging.gif" alt="The charging animation: the green arc slowly breathes" width="300"></p>
 
@@ -80,4 +82,6 @@ Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in
 
 Device protocols come from OpenRazer, HeadsetControl, Solaar, rivalcfg, G-Helper and other open projects, and from captures and test runs sent by the community. **[Full credits →](docs/credits.md)**
 
-MIT licensed, see [LICENSE](LICENSE).
+MIT licensed, see [LICENSE](LICENSE). [Code-signing policy](docs/code-signing.md).
+
+[Privacy](docs/privacy.md)

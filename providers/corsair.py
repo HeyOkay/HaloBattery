@@ -92,6 +92,20 @@ exchange as the Dark Core's dongle: route 0x09 asks the paired keyboard for prop
 as a little-endian uint16 from the reply's bytes 3-4, so this id mirrors that; no
 charge property is read, because that handler reports none. Confirmed on the
 reporter's own unit (#154): his test build run showed 100 % (`01 02 00 e8 03`).
+
+The M65 RGB Ultra Wireless's SLIPSTREAM receiver (1b1c:1ba6, #411) publishes the
+same ff42:0001/0002 pair and answers the same routed get-property exchange as
+the Dark Core's dongle. Its level is property 0x0F and its charge state is
+property 0x10, matching OpenLinkHub's m65rgbultraW package (state 1 charging,
+2 on battery, 3 full). When the mouse is plugged in, it moves to its cable
+identity 1b1c:1bb5, which publishes the same pair and answers level on target
+0x08 plus charge property 0x10 (the exchange OpenLinkHub's m65rgbultraWU
+package uses). The cable and receiver share one icon; the cable's charging
+reading wins while it is connected. Confirmed on the reporter's mouse in #411
+(test builds 4 and 5): receiver replies 01 02 00 d4 03 (98 %) and charge state 2; cable
+replies 00 02 00 3e 03 (83 %) with charge state 1, and 00 02 00 e8 03 (100 %)
+with state 3 (full). Both identities answered on ff42:0001 only, so the M65 ids
+are asked there and nowhere else, and the cable is asked on target 0x08 only.
 """
 from __future__ import annotations
 
@@ -269,6 +283,11 @@ def make_software_mode(endpoint: int) -> List[int]:
 # dongle is read.
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
+    # The M65's cable identity is listed before the receiver: while charging both
+    # can be present, and the receiver then has no battery answer. Asking the
+    # cable first avoids waiting out the receiver's read budget before the level.
+    0x1BB5: "Corsair M65 RGB Ultra Wireless",   # #411 the same mouse on its cable
+    0x1BA6: "Corsair M65 RGB Ultra Wireless",   # #411 SLIPSTREAM receiver
     0x2B07: "Corsair K65 PLUS Wireless",
     0x1BDC: "Corsair M75 Wireless",
     0x0A40: "Corsair Virtuoso RGB Wireless SE",
@@ -279,10 +298,13 @@ BRAGI_PIDS = {
 }
 # the pictogram each family member draws: the Dark Core is a mouse, the K65 PLUS a
 # keyboard; the Virtuoso ids are headsets
-BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard", 0x1BDC: "mouse"}
+BRAGI_KINDS = {0x1B7F: "mouse", 0x1BA6: "mouse", 0x1BB5: "mouse",
+               0x2B07: "keyboard", 0x1BDC: "mouse"}
 # one icon per product: a headset's receiver and cable ids share the key
 BRAGI_KEYS = {
     0x1B7F: "corsair:1b7f",
+    0x1BA6: "corsair:m65",
+    0x1BB5: "corsair:m65",
     0x2B07: "corsair:2b07",
     0x1BDC: "corsair:1bdc",
     0x0A40: "corsair:virtuoso-se",
@@ -313,7 +335,7 @@ BRAGI_ROUTE_MOUSE = 0x09         # 0x08 | child 1: the paired mouse
 BRAGI_ROUTE_CHILD = 0x01         # the route the mouse's answers come back with
 BRAGI_CMD_GET = 0x02             # ckb-next: CMD_GET
 BRAGI_PROP_BATTERY = 0x0F        # ckb-next: BRAGI_BATTERY_LEVEL
-BRAGI_PROP_CHARGE = 0x10         # 1 = charging, 2 = on battery (#204, measured)
+BRAGI_PROP_CHARGE = 0x10         # 1 = charging, 2 = on battery, 3 = full (OpenLinkHub)
 BRAGI_PROP_HEARTBEAT = 0x12      # the session heartbeats (#204)
 BRAGI_PROP_FIRMWARE = 0x13       # the session's firmware query (#204)
 BRAGI_LEVEL_MAX = 1000           # tenths of a percent (765 -> 76 %)
@@ -335,8 +357,20 @@ BRAGI_BARE_PIDS = {0x0A40, 0x0A3E, 0x0A3D, 0x0A64, 0x0A62}
 BRAGI_SESSION_PIDS = {0x0A40}
 # the wired ids resolve their target the other way round: HeadsetControl's
 # resolveTarget tries 0x08 first on a wired id and 0x09 on a receiver, with the
-# other as the fallback (#570)
+# other as the fallback (#570).
 BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62}
+# The M65 RGB Ultra Wireless on its cable (1b1c:1bb5) uses the same Bragi
+# battery/charge properties as OpenLinkHub's m65rgbultraWU package, on target
+# 0x08 only: that package sends nothing to 0x09, and in #411 the 0x09 fallback
+# only ever got the error 01 02 06. So the cable has no fallback target.
+M65_CABLE_PID = 0x1BB5
+# The M65 ids answered only on ff42:0001 (#411, receiver and cable); they are
+# never asked on ff42:0002 or on any other collection.
+BRAGI_EXACT_PIDS = {0x1BA6, M65_CABLE_PID}
+# ids that answer the charge property 0x10. The Virtuoso family was measured in
+# #204; the wired M65 uses the same property in OpenLinkHub's m65rgbultraWU
+# package, and its Slipstream receiver uses m65rgbultraW's charge query (#411).
+BRAGI_CHARGE_PIDS = set(BRAGI_BARE_PIDS) | {0x1BB5, 0x1BA6}
 
 
 def bragi_request(prop: int = BRAGI_PROP_BATTERY,
@@ -379,7 +413,9 @@ def parse_bragi_raw(reply) -> Optional[int]:
     data = list(reply)
     if len(data) >= BRAGI_MSG_SIZE + 1:      # hidapi may hand the report id back
         data = data[1:]
-    if len(data) < 5 or data[0] != BRAGI_ROUTE_CHILD:
+    if len(data) < 5:
+        return None
+    if data[0] != BRAGI_ROUTE_CHILD:
         return None
     if data[1] == BRAGI_CMD_GET and data[2] == 0x00:            # the Dark Core
         return data[3] | (data[4] << 8)
@@ -395,6 +431,53 @@ def parse_bragi(reply) -> Optional[int]:
     if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
         return None
     return value // 10
+
+
+def _parse_bragi_cable_raw(reply) -> Optional[int]:
+    """The wired M65 answer: report id 0, then ``02 00 <value LE16>``.
+
+    OpenLinkHub's m65rgbultraWU transfer reads the level at bytes 3..4 of
+    this buffer; the same shape is kept separate from the routed replies so
+    a receiver's own answer cannot be mistaken for the mouse's.
+    """
+    if not reply:
+        return None
+    data = list(reply)
+    if len(data) >= 5 and data[0] == 0x00 and data[1] == BRAGI_CMD_GET and data[2] == 0x00:
+        return data[3] | (data[4] << 8)
+    if len(data) >= 4 and data[0] == BRAGI_CMD_GET and data[1] == 0x00:
+        # Some Windows reads hand the report id back as a separate first byte.
+        return data[2] | (data[3] << 8)
+    return None
+
+
+def parse_bragi_cable(reply) -> Optional[int]:
+    """The battery level from a wired-M65 answer, or None."""
+    value = _parse_bragi_cable_raw(reply)
+    if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
+        return None
+    return value // 10
+
+
+def parse_bragi_charge_cable_state(reply) -> Optional[int]:
+    """The wired M65's property 0x10 state, or None.
+
+    OpenLinkHub's m65rgbultraWU package treats byte 3 as a state code:
+    1 charging, 2 on battery, 3 full, 0 not charging. The value is kept
+    separate from the level shape because it is a state, not a percentage.
+    """
+    value = _parse_bragi_cable_raw(reply)
+    if value in (0, 1, 2, 3):
+        return value
+    return None
+
+
+def parse_bragi_charge_cable(reply) -> Optional[bool]:
+    """The charge state from the wired M65's property 0x10 answer, or None."""
+    state = parse_bragi_charge_cable_state(reply)
+    if state is None:
+        return None
+    return state == 1
 
 
 def void_request() -> List[int]:
@@ -513,6 +596,15 @@ class CorsairProvider(Provider):
         is not asked. When 0xFF42 is missing, the remaining collections are tried,
         which then costs one read window.
         """
+        if any(d.get("product_id") in BRAGI_EXACT_PIDS for d in infos):
+            # The M65 ids (#411): only the collection both identities answered on.
+            exact = [d for d in infos
+                     if (d.get("usage_page"), d.get("usage")) == (BRAGI_VENDOR_PAGE,
+                                                                  BRAGI_USAGE)]
+            if not exact:
+                self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} "
+                                  "collection; nothing sent")
+            return sorted(exact, key=lambda d: d.get("interface_number") or 99)
         vend = [d for d in infos if d.get("usage_page") == BRAGI_VENDOR_PAGE]
         if not vend:
             self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x} collection; trying all "
@@ -598,6 +690,8 @@ class CorsairProvider(Provider):
     @staticmethod
     def _routes(pid: int) -> Tuple[int, ...]:
         """The target order for a pid: the wired ids try themselves first (HSC #570)."""
+        if pid == M65_CABLE_PID:
+            return (BRAGI_ROUTE_DONGLE,)
         if pid in BRAGI_WIRED_PIDS:
             return (BRAGI_ROUTE_DONGLE, BRAGI_ROUTE_MOUSE)
         if pid in (0x0A3E, 0x0A64):
@@ -608,13 +702,25 @@ class CorsairProvider(Provider):
                       route: int = BRAGI_ROUTE_MOUSE) -> Optional[bool]:
         """The charge state on the receivers that report one (property 0x10),
         or None."""
-        if pid not in BRAGI_BARE_PIDS or time.monotonic() >= deadline:
+        if pid not in BRAGI_CHARGE_PIDS or time.monotonic() >= deadline:
             return None
         if not self._write_bragi(dev, BRAGI_PROP_CHARGE, route=route, pid=pid):
             return None
+        if pid == 0x1BB5:
+            state = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
+                                             deadline - time.monotonic()),
+                                    parse=parse_bragi_charge_cable_state)
+            if state is None:
+                self._diag.append("  no charge-state answer")
+                return None
+            self._diag.append("  charge state: " +
+                              {1: "charging", 2: "on battery", 3: "full"}
+                              .get(state, "not charging"))
+            return state == 1
+        charge_parse = parse_bragi_charge
         value = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                          deadline - time.monotonic()),
-                                parse=parse_bragi_charge)
+                                parse=charge_parse)
         if value is None:
             self._diag.append("  no charge-state answer")
             return None
@@ -647,6 +753,7 @@ class CorsairProvider(Provider):
             self._drain(dev)
             if pid in BRAGI_SESSION_PIDS:
                 self._bragi_session(dev, deadline, pid)
+            parse = parse_bragi_cable if pid == 0x1BB5 else parse_bragi
             routes = self._routes(pid)
             first = None
             route = routes[0]
@@ -654,7 +761,7 @@ class CorsairProvider(Provider):
                 if not self._write_bragi(dev, route=route, pid=pid):
                     return None
                 first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
-                                                 deadline - time.monotonic()))
+                                                 deadline - time.monotonic()), parse=parse)
                 if first is not None:
                     break
                 if i + 1 < len(routes):
@@ -666,7 +773,7 @@ class CorsairProvider(Provider):
             if not self._write_bragi(dev, route=route, pid=pid):
                 return None
             second = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
-                                              deadline - time.monotonic()))
+                                              deadline - time.monotonic()), parse=parse)
             if second is None:
                 self._diag.append("  (the confirming ask stayed silent; taking the "
                                   "single reading)")
@@ -1030,6 +1137,13 @@ class CorsairProvider(Provider):
         for pid, name in BRAGI_PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
+                continue
+            # The M65's cable and receiver can both be present while charging. The
+            # cable is asked first; when it answered, the receiver has no level to
+            # add and asking it would only spend its read budget.
+            if pid == 0x1BA6 and BRAGI_KEYS[0x1BB5] in found:
+                self._diag.append("[Corsair bragi] pid=1ba6 'Corsair M65 RGB Ultra "
+                                  "Wireless' - cable identity already read; receiver skipped")
                 continue
             self._diag.append(f"[Corsair bragi] pid={pid:04x} '{name}'")
             deadline = time.monotonic() + BRAGI_POLL_BUDGET_S
