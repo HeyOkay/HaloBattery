@@ -187,6 +187,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   dongle and appears as `3837:6044`, which M HUB does not read: nothing is sent to it,
   and no charging state is shown.
 
+- **MCHOSE K99 V3** keyboard on its 2.4 GHz receiver (`3837:3033`), read with the
+  GLW func-config query M HUB uses (`00 | 55 05 00 38 38 ...` → `AA 05 00 ...`,
+  battery at payload byte 32; bit 7 charging). The earlier `55 03 00 38 38`
+  query returned a different info frame and a wrong level (52 % while M HUB
+  showed 90 %), so it was replaced. Confirmed on hardware by @Kolomhon in #458:
+  the level agreed with M HUB within its 10 % display step, and the charging bit
+  followed the cable. Polling is now paused until real keyboard input, so an
+  idle keyboard is not woken by the battery query.
+
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not

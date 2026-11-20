@@ -157,7 +157,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider,
-                       RedSquareProvider)
+                       RedSquareProvider,
+                       MchoseK99Provider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -258,6 +259,7 @@ PROVIDER_LABELS = {
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
     "lamzu_sw": "Lamzu Tachi (8K receiver)",
+    "mchose_k99": "MCHOSE K99 V3",
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
@@ -309,7 +311,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider()]
 
 
 # ---------------------------------------------------------------- config
@@ -2469,7 +2471,7 @@ class App:
             try:
                 if isinstance(p, PlayStationProvider):
                     p.switch_bluetooth = bool(self.cfg.get("playstation_full_mode", False))
-                if isinstance(p, AtkKeyboardProvider):
+                if isinstance(p, (AtkKeyboardProvider, MchoseK99Provider)):
                     p.activity.wake = self.wake.set
                 found = refuse_bad_levels(p.poll())
                 if self.stopping():
@@ -3377,6 +3379,8 @@ class App:
             for provider in self.providers:
                 if isinstance(provider, AtkKeyboardProvider):
                     cleanup.append(("ATK", provider.close))
+                elif isinstance(provider, MchoseK99Provider):
+                    cleanup.append(("MCHOSE K99", provider.close))
             for name in ("win_events", "bt_watch"):
                 target = getattr(self, name, None)
                 if target is not None:

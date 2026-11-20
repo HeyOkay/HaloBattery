@@ -104,6 +104,7 @@ MESSAGES = {
     "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.mchose": "Souris MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
+    "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.nintendo": "Manettes Nintendo Switch",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.playstation": "Manettes PlayStation",
