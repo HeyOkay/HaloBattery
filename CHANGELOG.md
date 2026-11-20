@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Rename the Settings > About "Project page" link to "GitHub page", and move the
+  interface font and Lucide credits from their own card into Authors and
+  licenses.
 - Smoothly animate the Settings charge-ring preview when switching devices.
 - Align Settings and What’s new branding with the approved logo spacing and alignment.
 
@@ -27,6 +30,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add links to the HaloBattery website and the Discord community to Settings >
+  About.
 - Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,
   with Windows language detection and native Cyrillic headings.
 - Percentage in the icon: devices that only report coarse battery steps now

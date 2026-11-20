@@ -550,7 +550,8 @@ class SettingsHost:
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
             setProvider={"name", "enabled"}, setIconContent={"mode"}, selectDevice={"deviceKey"})
         actions = dict(refresh="refresh", diagnostics="diagnostics", checkUpdate="check_update", startUpdate="start_update",
-            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit", showWhatsNew="show_whats_new")
+            openData="open_data", openProject="open_project", openIssue="open_issue", openWebsite="open_website",
+            openDiscord="open_discord", quit="quit", showWhatsNew="show_whats_new")
         if not isinstance(name, str) or not isinstance(args, dict) or name not in fields and name not in actions:
             raise ValueError("unknown settings command")
         if set(args) != fields.get(name, set()):
