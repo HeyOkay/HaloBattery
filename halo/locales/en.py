@@ -147,6 +147,7 @@ MESSAGES = {
     "provider.hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "provider.hyperx_ngenuity": "HyperX Pulsefire mice",
     "provider.inphic": "Inphic / Attack Shark mice",
+    "provider.attackshark_r5": "Attack Shark R5 Ultra",
     "provider.irocks": "iRocks M31R",
     "provider.jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "provider.kraken_v4": "Razer Kraken V4",
