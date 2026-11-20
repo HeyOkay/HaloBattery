@@ -143,10 +143,16 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF505: "VGN Dragonfly 4K (receiver)",
         0xF506: "VGN Dragonfly 4K (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
+        0xF55D: "Redragon M916 Pro / M913 (2.4 GHz)",
         0xF55E: "Redragon M991 (wired)",
         0xFA09: "Compx 2.4 GHz keyboard",
         0xF520: "Teevolution Terra Pro (1K receiver)",
         0xF523: "Teevolution Terra Pro (2.4 GHz)",
+    },
+    0x35BB: {
+        0xD3FA: "HECATE mouse (wired)",
+        0xD3FC: "HECATE mouse (wired)",
+        0xD3FD: "HECATE mouse (wired)",
     },
     0x1B1C: {
         0x2B2A: "Corsair Sabre v2 Pro Ultralight",

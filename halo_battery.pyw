@@ -158,7 +158,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider,
                        RedSquareProvider,
-                       MchoseK99Provider)
+                       MchoseK99Provider,
+                       CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -234,13 +235,16 @@ PROVIDER_LABELS = {
     "barracuda_x": "Razer Barracuda X",
     "blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
     "blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
+    "cherry": "CHERRY MX 3.0S Wireless",
     "corsair": "Corsair headsets",
+    "coolermaster": "Cooler Master mice",
     "dji": "DJI Mic Mini 2",
     "darmoshark": "Darmoshark N5",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "eweadn_ydx": "EWEADN X23 Pro",
     "finalmouse": "Finalmouse UltralightX",
+    "fractal": "Fractal Scape",
     "glorious": "Glorious Model O Wireless",
     "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
@@ -261,6 +265,7 @@ PROVIDER_LABELS = {
     "lamzu": "LAMZU mice",
     "lamzu_sw": "Lamzu Tachi (8K receiver)",
     "mchose_k99": "MCHOSE K99 V3",
+    "royal_kludge": "Royal Kludge MG6 Pro",
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
@@ -292,6 +297,7 @@ PROVIDER_LABELS = {
     "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
     "xinput": "Xbox-compatible controllers",
+    "zowie": "ZOWIE mice",
 }
 
 
@@ -300,7 +306,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
     return [RazerProvider(), BlackSharkV3XProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXCloudCoreProvider(), HyperXProvider(),
             KeychronProvider(), PulsarProvider(),
-            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+            JblProvider(listen_first=jbl_listen_first), JblHidV3Provider(), CherryProvider(), CoolerMasterProvider(), RoyalKludgeProvider(), ZowieProvider(), FractalProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
