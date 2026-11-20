@@ -804,6 +804,41 @@ byte 10 comes from the ASUS GearLink SDK, as he reported there.
 **Connection:** 2.4 GHz dongle (`36BC:0001`) or the headset on its USB-C cable (`36BC:2001`).
 
 Both expose a 64-byte vendor collection on usage page `FF00` / usage `0001`. Output report `0x02` carries the device type and command; input report `0x02` echoes them. `GET_DEVICE_STATE` (`0x21`) is sent to the dongle type `0x11` and then the headset type `0xF1`: dongle payload byte 4 is 1 when the headset is linked, headset byte 15 is the percentage and byte 23 is 1 on the cable. From Fractal's Adjust Pro WebHID configurator. Only the state query is sent. **Unverified in this app.**
+### Arbiter Studio Akitsu
+
+**Connection:** 8K receiver or USB cable, vendor 373E: Akitsu `000A`/`0009`, Akitsu 3950 `0039`/`0038`, Akitsu Medium `0067`/`0066` (receiver/cable).
+
+Vendor collection `FFFF:0000`, 65-byte feature report 0. A feature report with bytes 3=02, 4=02, 6=83 is followed by a feature read; status A1/A2 means answered, A0 means the mouse is asleep. Byte 7 is charging and byte 8 the percentage (both shifted when the report id is present). Read-only; no mode writes. **Unverified in this app.**
+
+### Areson / Redragon M915, M913
+
+**Connection:** 2.4 GHz receiver `25A7:FA07` / `FA08`.
+
+GetPower feature request on `FF02:0002` (interface 1), 17 bytes, checksum `0x55 - sum(bytes 0..15)`. The reply arrives on `FF01:0000`, starts `09 04 00`, carries a 0-10 level in byte 6 and charging in byte 7, and the whole frame sums to `0x55`. Level maps to 10 % steps. The FA7B/FA7C family uses another scale and is not claimed. **Unverified in this app.**
+
+### Machenike L7
+
+**Connection:** 2.4 GHz receiver `248A:FF4C` or USB cable `248A:FF4E`; product string must be an L7.
+
+Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24 4E FF` at bytes 4-7, link bits in byte 10, level in byte 11 and charging in byte 12. Only this read is sent; the shared 248A vendor id is why the product string is required. **Unverified in this app.**
+
+### MSI VERSA 300 ELITE, Clutch GM31 / GM41
+
+**Connection:** VERSA `0DB0:9E22`; GM31 receiver `0D3C` / cable `0D3B`; GM41 receiver `0D4C` / cable `0D4B`.
+
+VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
+
+### MOONDROP GM01 Pro
+
+**Connection:** 2.4 GHz dongle `35D8:0133`, interface 3 consumer collection; on its USB cable the headset has no control channel.
+
+Report `0x4B`, read `0x80`: command `0x27` returns link in byte 8 and percentage in byte 9; command `0x31` is answered by the dongle with link in byte 4. On the cable the last level is kept and charging is shown, because the headset drops the radio link. **Unverified in this app.**
+
+### Ninjutso Sora V2; Sprime PM1
+
+**Connection:** Sora V2 receiver `1915:AE1C` / cable `AE11`; Sprime PM1 receiver `AC1C` / `AD8C`, cable `AC11` / `AC12` / `AC13`.
+
+Collection `FFA0:0001`, feature report `0x05`, command `0x15`, 32-byte request. Reply byte 9 is the level (0 means 100), byte 10 charging, byte 11 full (Sprime), byte 12 online. Only this read is sent. **Unverified in this app.**
 ### GameSir G7 Pro; FlyDigi Vader Pro
 
 **Connection:** 2.4 GHz receiver (shows up as an Xbox controller)
@@ -1291,3 +1326,9 @@ keeps its last value greyed for up to five minutes; unplugging clears it.
 The capture confirms 100% discharging only. Charging and other percentages
 have source-based simulated tests; the old test build received no reporter
 confirmation, and this recovery has not been tested on hardware.
+
+### Wraith W1
+
+**Connection:** 2.4 GHz receiver `093A:522C` or USB cable `093A:622C`; the ids are shared with Incott mice.
+
+Device-info feature report `09` / command `8F`: reply byte 3 is 18 for the W1 or 20 for the Freestyle. After that, read-only `86` button queries (0, 1, 2, 4, 3) prompt the mouse to push input report `09`, whose byte 1 is charging bit 7 plus the low 7-bit percentage. A device that does not answer 8F is left to the Incott path. Protocol from the Wraith web driver and W1 Service. **Unverified in this app.**

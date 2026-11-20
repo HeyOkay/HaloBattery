@@ -376,6 +376,8 @@ class PulsarProvider(Provider):
                                       f"to read among {len(mine)}")
                     continue
                 name = pids[pid]
+                if (vid, pid) == (0x3554, 0xF5D5) and "TSG" in (d.get("product_string") or "").upper():
+                    name = "Taidu TSG808"
                 self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x} '{name}' "
                                   f"iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}"

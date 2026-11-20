@@ -159,7 +159,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider,
                        RedSquareProvider,
                        MchoseK99Provider,
-                       CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider)
+                       CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -224,6 +225,8 @@ PROVIDER_LABELS = {
     "ajazz": "AJAZZ mice",
     "alienware": "Alienware Pro Wireless keyboard",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
+    "arbiter": "Arbiter Studio mice",
+    "areson": "Areson / Redragon mice",
     "astro": "Astro A50",
     "asus": "ASUS ROG / TUF mice, keyboards and headsets",
     "atk_keyboard": "ATK V75X keyboard",
@@ -243,6 +246,7 @@ PROVIDER_LABELS = {
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "eweadn_ydx": "EWEADN X23 Pro",
+    "fantech": "Fantech Helios Go XD5",
     "finalmouse": "Finalmouse UltralightX",
     "fractal": "Fractal Scape",
     "glorious": "Glorious Model O Wireless",
@@ -264,7 +268,10 @@ PROVIDER_LABELS = {
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
     "lamzu_sw": "Lamzu Tachi (8K receiver)",
+    "machenike": "Machenike L7",
     "mchose_k99": "MCHOSE K99 V3",
+    "moondrop": "MOONDROP GM01 Pro",
+    "ninjutso_sprime": "Ninjutso / Sprime mice",
     "royal_kludge": "Royal Kludge MG6 Pro",
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
@@ -276,6 +283,7 @@ PROVIDER_LABELS = {
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
+    "msi": "MSI mice",
     "nintendo": "Nintendo Switch controllers",
     "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",
@@ -296,6 +304,7 @@ PROVIDER_LABELS = {
     "turtlebeach": "Turtle Beach headsets",
     "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
+    "wraith": "Wraith W1",
     "xinput": "Xbox-compatible controllers",
     "zowie": "ZOWIE mice",
 }
@@ -305,7 +314,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
     return [RazerProvider(), BlackSharkV3XProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
             HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXCloudCoreProvider(), HyperXProvider(),
-            KeychronProvider(), PulsarProvider(),
+            KeychronProvider(), PulsarProvider(), AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), WraithProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(),
             JblProvider(listen_first=jbl_listen_first), JblHidV3Provider(), CherryProvider(), CoolerMasterProvider(), RoyalKludgeProvider(), ZowieProvider(), FractalProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),

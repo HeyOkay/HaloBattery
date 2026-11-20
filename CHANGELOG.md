@@ -218,6 +218,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **CHERRY MX 3.0S Wireless** on its 2.4 GHz receiver or USB cable: read-only
   status query, percentage and USB-powered charging. Unverified in the app.
 
+- **Arbiter Akitsu, Areson/Redragon M915/M913, Machenike L7, MOONDROP GM01 Pro,
+  Ninjutso Sora V2 and Sprime PM1**: read-only battery protocols from the vendor
+  tools and community references. Unverified in the app; no hardware was available.
+
+- **Fantech Helios Go XD5 and Redragon Invader Pro** on their 2.4 GHz dongle
+  or cable: 17-byte feature request, level and charging. Unverified in the app.
+
+- **MSI VERSA 300 ELITE and Clutch GM31 / GM41** on their receivers or cables:
+  read-only status query, plus the GM41's passive raw report. Unverified in the app.
+
+- **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
+  status report, level and charging. Unverified in the app.
+
 ### Fixed
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not

@@ -1,12 +1,19 @@
 from .base import DeviceStatus, Provider  # noqa: F401
 from .aula import AulaProvider  # noqa: F401
 from .aula_f108 import AulaF108Provider  # noqa: F401
+from .ninjutso_sprime import NinjutsoSprimeProvider  # noqa: F401
+from .moondrop import MoondropProvider  # noqa: F401
+from .msi import MsiProvider  # noqa: F401
+from .machenike import MachenikeProvider  # noqa: F401
+from .arbiter import ArbiterProvider  # noqa: F401
+from .areson import AresonProvider  # noqa: F401
 from .alienware import AlienwareProvider  # noqa: F401
 from .barracuda import BarracudaProvider  # noqa: F401
 from .barracuda_x import BarracudaXProvider  # noqa: F401
 from .audeze import AudezeProvider  # noqa: F401
 from .razer import RazerProvider  # noqa: F401
 from .wlmouse import WLmouseProvider  # noqa: F401
+from .wraith import WraithProvider  # noqa: F401
 from .mchose import MchoseProvider  # noqa: F401
 from .mchose_k99 import MchoseK99Provider  # noqa: F401
 from .mchose_v9 import MchoseV9Provider  # noqa: F401
@@ -61,6 +68,7 @@ from .rapoo import RapooProvider  # noqa: F401
 from .ajazz import AjazzProvider  # noqa: F401
 from .sony_inzone import SonyInzoneProvider  # noqa: F401
 from .atk_nearlink import AtkNearlinkProvider  # noqa: F401
+from .fantech import FantechProvider  # noqa: F401
 from .finalmouse import FinalmouseProvider  # noqa: F401
 from .fractal import FractalProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
