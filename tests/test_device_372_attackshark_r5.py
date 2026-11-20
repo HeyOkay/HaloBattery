@@ -75,6 +75,13 @@ class R5Test(unittest.TestCase):
         self.assertIsNone(A.parse_reply([0, 1, 2, 3]))
         self.assertIsNone(A.parse_reply([0xA1, 0, 0, 2, 0, 0x83, 101, 0]))
 
+    def test_the_reporters_reply_reads_91_not_charging(self):
+        # #372, test build 3 on the reporter's receiver (interface 2, ffff:0000):
+        # 00 a1 00 02 02 00 83 00 5b -> 91 %, not charging. This firmware sends
+        # the charge byte before the level, which _normalize accepts.
+        raw = bytes.fromhex("00a10002020083005b000000") + bytes(53)
+        self.assertEqual(A.parse_reply(list(raw)), (91, False))
+
     def test_no_reply_shows_nothing(self):
         provider = self.poll(FakeDev([]))
         self.assertEqual(provider.poll(), [])

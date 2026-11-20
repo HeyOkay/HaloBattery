@@ -181,6 +181,15 @@ class PollTest(unittest.TestCase):
         self.assertEqual(fake.sent[0][1][8], 0x08)
         self.assertTrue(any("pid=5006" in line for line in diag))
 
+    def test_the_x820_receivers_real_reply_is_read(self):
+        # #372, test build 3 on the reporter's PC with the X820 Ultra in use:
+        # 100 %. The keyboard link byte (r[4]) is zero while it is online.
+        real = bytes.fromhex("000064000001010100000000") + bytes(53)
+        fake = FakeDongle(real, answer_path=CONFIG)
+        out, _diag = self.poll(fake, entries(pid=0x5006))
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("monsgeek:5006", 100, True)])
+
 
     def test_offline_keyboard_never_publishes_its_cached_level_as_live(self):
         for kind in (1, 2, 3):

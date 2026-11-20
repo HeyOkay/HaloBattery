@@ -107,6 +107,7 @@ MESSAGES = {
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
     "provider.mchose": "Миші MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
+    "provider.attackshark_r5": "Attack Shark R5 Ultra",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.nintendo": "Контролери Nintendo Switch",
     "provider.playstation": "Контролери PlayStation",
