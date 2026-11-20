@@ -411,12 +411,15 @@ Claimed from [#304](https://github.com/HeyOkay/HaloBattery/issues/304)'s collect
 MonsGeek Driver v4's `resources/app/dist/js/index.bc699543.js`,
 `___dongleCheck24GStatusByF7`, defines feature report ID zero plus payload `f7`
 and zero padding. Payload byte 1 is the keyboard level; payload byte 3 is its
-online flag; payload byte 6 distinguishes keyboard (`1`), mouse (`2`) and both
-(`3`). Only online keyboard-containing replies may publish a current keyboard
-level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
+link byte, zero while the keyboard is online (the driver reads
+`isOnline: n[3] === 0`; payload byte 4 is the same for the mouse); payload
+byte 6 distinguishes keyboard (`1`), mouse (`2`) and both (`3`). Only online
+keyboard-containing replies may publish a current keyboard level. A mouse-only frame or a disconnected keyboard cannot refresh its history;
 the last confirmed value is retained greyed for the existing cache interval.
-The original reading was confirmed by the reporter; this flag correction uses
-literal fake replies, with no new hardware commands.
+The original reading was confirmed by the reporter. The online check follows
+the driver's polarity, which a real ROYUAN receiver reply with its keyboard in
+use also shows (`00 64 00 00 01 01 01` after the report id, #372); it sends no
+new hardware commands.
 ### Inphic and Attack Shark mice (1D57 receivers)
 
 **Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)
@@ -558,6 +561,23 @@ The request header is flag `0x55`, command `0x05`, reserved, checksum, size and 
 17-byte big-endian frames, report id 0x08: command 0x04 asks for the power details and answers with the level in byte 6, the on-cable flag in byte 7 and millivolts in bytes 8-9, with a checksum (0x55 minus the sum of the first 16 bytes) in byte 16. From andrewrabert/python-pulsar-mouse-tool, which also backs the "HID: pulsar" driver in review for Linux; the Kysona M600 and VXE Dragonfly R1 Pro use the same protocol but their ids are not claimed here. The ATK/VXE control panel of the OpenMouse project (@openmouse/protocol, drivers/atk) lists the R1 Pro Max receiver as 3554:f58a and reads it with the same command 0x04 frame, opening the collection with usage page 0xFF02 and usage 0x0002 - the R1 Pro Max dongle has five other interface-1 collections and the first of them is not the one that answers, so that collection is now preferred; a collection whose output report cannot carry the 17-byte frame is skipped, because Windows refuses that write and the refusal looks exactly like a device that is switched off. The framing is also in G-Wolves' own web driver (mouse.xyz), whose Compx class sends the same report-0x08 frame with a checksum of 0x55 minus the sum of the payload. The R1 Pro Max is confirmed on hardware on both of its transports, by the reporter of #87: this provider read the mouse on its stock 1 kHz receiver, on the `ff02:0002` collection, and on its cable the level agreed with ATK's own panel (hub.atk.pro) with the charging flag following the cable in both directions, so the cable id (3554:F58C) is read on hardware as well rather than only claimed from their report. A frame whose checksum does not match is refused rather than shown. The X2 CrazyLight Mini (#164) was tested by its reporter on both of its transports with this same frame - the dongle and the cable both answered command 0x04 with valid checksums, the cable reporting charging - so both of its ids (3710:5406, 3710:3414) are claimed from that report; the app-side reading was confirmed on their run of this branch in #164 - the dongle read 20 %, the same raw level as their own test, and the cable read while charging. The ATK X1 Pro 1K dongle (373B:101A, #230), the ATK Fire X 8K (373B:101B) and the Compx keyboard receivers (3554:FA09 - seen on the AULA F75 in #247 and the LEOBOG Hi75C Pro in #257) list the same ff02:0002 control collection and are read with the same frame; the receiver id is shared by those keyboards, so the tray name is the receiver's, not one model's. The Corsair Sabre v2 Pro Ultralight (1B1C:2B2A, #290) is the same exchange too:
 its receiver publishes ff02:0002 and no ff42 at all, so it is read here rather than by
 the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange behind the 'RapidSync' product string, with its vendor collection on interface 2. Its 1K sibling `3554:F520` is the same reader and is now claimed too; **confirmed on hardware** by @7-1ME in #448 at 100% (4235 mV). The ATK X1 Pro is confirmed on hardware by @gnrlk3nobi in #230: it read immediately, the level stayed within about 5 % of ATK HUB in both states (the two apps sample at different moments, so the sign flips), and the charging state followed the cable. The keyboard receiver and the Fire X 8K are still waiting for their testers.
+
+### Attack Shark R5 Ultra
+
+**Connection:** 2.4 GHz receiver (373E:0047)
+
+The R5 Ultra uses the R6/R8/M5 Ultra feature-report protocol, recovered from the
+vendor WebHID driver by [mohammed-just/attack-shark-r6-cli](https://github.com/mohammed-just/attack-shark-r6-cli)
+(MIT). A 64-byte feature report with report id 0 carries `02 02 00 83` at bytes
+2-5; the reply starts with the `0xA1` marker and carries the battery percentage
+and charging flag. The provider sends only that read-only battery command, tries
+each vendor-page collection in turn, and sends no configuration, DPI, lighting or
+firmware command. **Confirmed on hardware** by the reporter of
+[#372](https://github.com/HeyOkay/HaloBattery/issues/372): the R5 read 91 % on its
+2.4 GHz receiver. The X820 Ultra on its own receiver (`3151:5006`, product
+`2.4G Wireless Keyboard`) reads through the ROYUAN/MonsGeek `0xF7` status query
+and showed 100 %; its wired id (`3151:5002`) does not carry a battery command and
+is not used.
 
 ### iRocks M31R
 

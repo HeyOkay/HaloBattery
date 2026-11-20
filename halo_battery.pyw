@@ -160,7 +160,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        RedSquareProvider,
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
-                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
+                       AttackSharkR5Provider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 
@@ -261,6 +262,7 @@ PROVIDER_LABELS = {
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
+    "attackshark_r5": "Attack Shark R5 Ultra",
     "irocks": "iRocks M31R",
     "kraken_v4": "Razer Kraken V4",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
@@ -323,7 +325,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), LogitechG435RtkProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
-            InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            InphicProvider(), AttackSharkR5Provider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             BlackSharkMtkProvider(),
             IRocksProvider(),
             SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
