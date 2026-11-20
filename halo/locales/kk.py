@@ -283,7 +283,7 @@ MESSAGES = {
     'settings.experimental': 'Тәжірибелік',
     'settings.status_hint': 'Rainmeter, Stream Deck және скрипттер үшін. Өшіргенде файл жойылады.',
     'settings.data_folder': 'Деректер қалтасын ашу',
-    'settings.project': 'Жоба беті',
+    'settings.project': 'GitHub беті',
     'settings.website': 'Веб-сайт',
     'settings.discord': 'Discord қауымдастығы',
     'settings.issue': 'Мәселе туралы хабарлау',

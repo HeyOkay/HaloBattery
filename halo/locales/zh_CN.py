@@ -289,7 +289,7 @@ MESSAGES = {
     "settings.experimental": "实验性功能",
     "settings.status_hint": "供 Rainmeter、Stream Deck 和脚本使用。关闭此选项会删除文件。",
     "settings.data_folder": "打开数据文件夹",
-    "settings.project": "项目页面",
+    "settings.project": "GitHub 页面",
     "settings.website": "官方网站",
     "settings.discord": "Discord 社区",
     "settings.issue": "报告问题",

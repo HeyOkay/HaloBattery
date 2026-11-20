@@ -364,7 +364,6 @@ public sealed partial class MainWindow
         ActionCard(p, "settings.discord", "settings.open", "openDiscord");
         ActionCard(p, "settings.project", "settings.open", "openProject");
         ActionCard(p, "settings.issue", "settings.open", "openIssue");
-        p.Children.Add(Card(T("settings.fonts"), "Lucide · ISC / MIT", icon: "info"));
         var licenses = Button(T("settings.iconify_licenses"), true);
         licenses.Click += (_, _) => RequestAllIconLicenses();
         p.Children.Add(Card(T("settings.iconify_licenses"), "", licenses, "info"));

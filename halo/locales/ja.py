@@ -289,7 +289,7 @@ MESSAGES = {
     "settings.experimental": "試験的機能",
     "settings.status_hint": "Rainmeter、Stream Deck、スクリプト用です。無効にするとファイルが削除されます。",
     "settings.data_folder": "データフォルダーを開く",
-    "settings.project": "プロジェクトページ",
+    "settings.project": "GitHub ページ",
     "settings.website": "ウェブサイト",
     "settings.discord": "Discord コミュニティ",
     "settings.issue": "問題を報告",

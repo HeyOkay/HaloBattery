@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Rename the Settings > About "Project page" link to "GitHub page", and move the
+  interface font and Lucide credits from their own card into Authors and
+  licenses.
 - Smoothly animate the Settings charge-ring preview when switching devices.
 - Align Settings and What’s new branding with the approved logo spacing and alignment.
 

@@ -299,7 +299,7 @@ MESSAGES = {
     "settings.experimental": "Experimental",
     "settings.status_hint": "Para Rainmeter, Stream Deck y scripts. Al desactivar esta opción se elimina el archivo.",
     "settings.data_folder": "Abrir carpeta de datos",
-    "settings.project": "Página del proyecto",
+    "settings.project": "Página de GitHub",
     "settings.website": "Sitio web",
     "settings.discord": "Comunidad de Discord",
     "settings.issue": "Informar de un problema",

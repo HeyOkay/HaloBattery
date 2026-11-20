@@ -284,7 +284,7 @@ MESSAGES = {
     "settings.experimental": "Experimental",
     "settings.status_hint": "For Rainmeter, Stream Deck and scripts. Turning this off deletes the file.",
     "settings.data_folder": "Open data folder",
-    "settings.project": "Project page",
+    "settings.project": "GitHub page",
     "settings.website": "Website",
     "settings.discord": "Discord community",
     "settings.issue": "Report a problem",
