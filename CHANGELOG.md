@@ -44,6 +44,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the mouse pictogram; the existing charge-register reader already returned
   75% on the reporter's receiver. Confirmed on hardware by @breezywine in
   [#449](https://github.com/HeyOkay/HaloBattery/issues/449).
+- Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
+  approximate level, read at most once every 15 minutes and cached between reads
+  because each read mutes USB audio for about 0.8 s.
 - A fading app splash with a soft icon shadow and theme-matched startup background
   while the settings window loads and restores its saved view.
 - Recognize the HyperX Cloud III Wireless 03F0:0FCC receiver using the battery protocol documented by HyperBatteryMonitor; level and charging were confirmed on the reporter's hardware.

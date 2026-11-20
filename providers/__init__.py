@@ -12,6 +12,7 @@ from .mchose_v9 import MchoseV9Provider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401
+from .logitech_g435_rtk import LogitechG435RtkProvider  # noqa: F401
 from .logitech_centurion import LogitechCenturionProvider  # noqa: F401
 from .steelseries import SteelSeriesProvider  # noqa: F401
 from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401

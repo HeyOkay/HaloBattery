@@ -102,6 +102,7 @@ MESSAGES = {
     "provider.lofree": "Lofree 鍵盤、AULA V9 滑鼠",
     "provider.logitech": "Logitech",
     "provider.logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
+    "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.mchose": "MCHOSE 滑鼠",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.nintendo": "Nintendo Switch 控制器",
