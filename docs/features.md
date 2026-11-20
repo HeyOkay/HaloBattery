@@ -111,8 +111,8 @@ panel state are restored before the window is shown. Closing Settings releases i
 the saved page and scroll position while the app splash covers loading.
 Window preferences are stored natively in `settings-window.json` inside the
 active installed or portable profile. Settings remain available when no devices are
-connected. The interface keeps seven languages: English, Spanish,
-French, Japanese, Russian, Simplified Chinese and Traditional Chinese.
+connected. The interface keeps eight languages: English, Spanish, French, Polish, Japanese,
+Russian, Simplified Chinese and Traditional Chinese.
 
 Scrolling beyond the top or bottom of a settings page fills a small neutral
 ring. Continuing past its resistance threshold opens the adjacent page; a pause
