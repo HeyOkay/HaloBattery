@@ -2,7 +2,8 @@
 
 K87 is 41E4:2001; the G98 Pro reports 41E4:2004 but exposes the same
 ff02:0002 command collection and the same 19-byte 13 4A 01 exchange, so it is
-read with the identical query. The G98 Pro path is unverified on hardware.
+read with the identical query. Confirmed on the reporter's hardware in #378:
+94 % on battery, 50 % with the charging ring on the cable.
 
 Protocol taken from MCHOSE's own web driver (M HUB): the site www.mchose.com.cn ships the
 configurator as ``assets/purify.es-*.js``, whose command table has
