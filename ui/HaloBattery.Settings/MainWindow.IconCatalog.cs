@@ -459,7 +459,7 @@ public sealed partial class MainWindow
             scroll.ChangeView(null, 0, null, true);
         view.Status.Text = T(page.Offline ? "settings.iconify_offline" : page.Cached ? "settings.iconify_cached" :
             page.Items.Count == 0 ? "settings.iconify_empty" : "settings.iconify_results") +
-            (page.Items.Count > 0 ? " · " + (page.Start + 1) + "–" + (page.Start + page.Items.Count) +
+            (page.Items.Count > 0 ? " · " + (page.Start + 1) + "-" + (page.Start + page.Items.Count) +
                 (view.Total is { } count ? " / " + count : "") : "");
         RenderCatalogPager(view);
     }

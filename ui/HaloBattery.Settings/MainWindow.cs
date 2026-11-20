@@ -43,7 +43,8 @@ public sealed partial class MainWindow : Window
  private Color accent;
  private readonly FontFamily bodyFont=new("Segoe UI Variable");
  // Статичные начертания с хинтингом: вариативный Outfit по умолчанию Thin, и WinUI дорисовывал жирность сам - отсюда «лесенка».
- internal FontFamily TitleFont=>new(State.Language=="ru"?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
+ internal bool UsesCyrillicTitles=>State.Language is "ru" or "uk" or "kk";
+ internal FontFamily TitleFont=>new(UsesCyrillicTitles?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
  internal static readonly FontFamily MonoFont=new("Cascadia Mono, Consolas");
  internal bool Dark=>dark;
  internal bool AnimationsEnabled=>settings.AnimationsEnabled;
@@ -450,7 +451,7 @@ public sealed partial class MainWindow : Window
  }
  internal StackPanel PageContent(string title)
  {
-  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
+  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,UsesCyrillicTitles?28:30);heading.FontFamily=TitleFont;heading.FontWeight=UsesCyrillicTitles?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=UsesCyrillicTitles?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
  }
  internal void Section(StackPanel parent,string name){var text=Text(name);text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;text.Margin=new(0,14,0,0);parent.Children.Add(text);}
  internal CardView Card(string title,string description,UIElement? action=null,object? icon=null)=>MakeCard(title,description,action,icon??"info",false);

@@ -27,6 +27,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,
+  with Windows language detection and native Cyrillic headings.
 - Percentage in the icon: devices that only report coarse battery steps now
   show the same `NN` number as exact devices, without a `~` marker. The tooltip
   and status file still say "about NN%".

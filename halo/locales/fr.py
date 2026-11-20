@@ -155,7 +155,7 @@ MESSAGES = {
     "state.pending": "connecté, niveau de batterie pas encore communiqué",
     "state.unreported": "connecté, niveau de batterie non communiqué",
     "state.unreadable": "connecté, batterie illisible (une autre application peut bloquer l’accès)",
-    "state.audeze_stuck": "aucune réponse du casque — débranchez puis rebranchez le dongle",
+    "state.audeze_stuck": "aucune réponse du casque - débranchez puis rebranchez le dongle",
     "state.playstation_basic": "niveau disponible en Bluetooth uniquement lorsque Steam ou un jeu utilise la manette",
     "state.8bitdo_basic": "niveau disponible uniquement lorsque Steam ou un jeu utilise la manette",
     "state.bluetooth_hint": 'connecté en Bluetooth ; activez « Périphériques Bluetooth de Windows » pour voir le niveau de batterie',
