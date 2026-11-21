@@ -118,6 +118,29 @@ class PollTest(unittest.TestCase):
                            "mouse")])
         self.assertEqual([bytes(G.make_request(65))], dev.sent)
 
+    def _provider(self, replies):
+        dev = FakeDevice(replies)
+        G.feature_length = lambda path: 65
+        G.time = types.SimpleNamespace(time=lambda: self.now[0], sleep=lambda s: None)
+        G.hid = types.SimpleNamespace(device=lambda: dev)
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
+        return G.GloriousProvider()
+
+    def test_a_foreign_reply_is_a_busy_channel_not_a_sleeping_mouse(self):
+        # #281: SignalRGB writes lighting frames to the same feature report, so the
+        # read-back is its status frame (level 0xFF) instead of the battery answer.
+        foreign = [0x00, 0xA1, 0x00, 0x02, 0x08, 0x02, 0x00, 0x01, 0xFF] + [0x00] * 56
+        provider = self._provider([foreign])
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertTrue(any("another app" in line for line in provider._diag))
+
+    def test_silence_is_reported_as_silence(self):
+        provider = self._provider([])
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertTrue(any("no battery answer" in line for line in provider._diag))
+
     def test_charging_is_reported(self):
         out, _dev = self.poll([CAPTURED_75_CHARGING])
         self.assertTrue(out[0].charging)

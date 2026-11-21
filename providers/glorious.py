@@ -115,9 +115,13 @@ class GloriousProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Dict[int, Tuple[int, float]] = {}
+        # True when a query got an answer that was not a battery frame: another app
+        # (SignalRGB, #281) is writing to the same feature report and overwrote it.
+        self._busy = False
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
+        self._busy = False
         if hid is None:
             return []
         try:
@@ -148,7 +152,12 @@ class GloriousProvider(Provider):
                     break
             last = self._last.get(pid)
             if parsed is None:
-                self._diag.append("  no battery answer (asleep, off, or not this collection)")
+                if self._busy:
+                    self._diag.append(
+                        "  the receiver answered, but not with the battery frame: another "
+                        "app (SignalRGB?) is writing to the same report and overwrote it")
+                else:
+                    self._diag.append("  no battery answer (asleep, off, or not this collection)")
                 if wired:
                     # The mouse is on the cable: it is present and charging, but the
                     # receiver cannot say what the level is now, so keep the last one if
@@ -192,6 +201,8 @@ class GloriousProvider(Provider):
                 parsed = parse_reply(r)
                 if parsed is not None:
                     return parsed
+                if r:
+                    self._busy = True
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    error: {e}")
         finally:
