@@ -118,10 +118,13 @@ class GloriousProvider(Provider):
         # True when a query got an answer that was not a battery frame: another app
         # (SignalRGB, #281) is writing to the same feature report and overwrote it.
         self._busy = False
+        # True when the write itself was refused: another app holds the report.
+        self._refused = False
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         self._busy = False
+        self._refused = False
         if hid is None:
             return []
         try:
@@ -190,7 +193,15 @@ class GloriousProvider(Provider):
         try:
             for _ in range(READ_ATTEMPTS):
                 request = bytes(make_request(length))
-                sent = dev.send_feature_report(request)
+                try:
+                    sent = dev.send_feature_report(request)
+                except (OSError, IOError) as e:
+                    # SignalRGB, while it controls this mouse, holds the feature
+                    # report: the write itself is refused, before any read (#281).
+                    self._diag.append(f"    another app holds the feature report "
+                                      f"(write refused: {e})")
+                    self._refused = True
+                    raise
                 if sent is not None and sent != len(request):
                     self._diag.append(f"    feature write incomplete/refused ({sent})")
                     return None
@@ -205,6 +216,10 @@ class GloriousProvider(Provider):
                     self._busy = True
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    error: {e}")
+            if self._refused:
+                # Let the app mark the query unavailable rather than call the mouse
+                # asleep: the last level stays, with the honest reason.
+                raise
         finally:
             try:
                 dev.close()

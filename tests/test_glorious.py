@@ -135,6 +135,19 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
         self.assertTrue(any("another app" in line for line in provider._diag))
 
+    def test_a_refused_write_names_the_app_holding_the_report(self):
+        # #281, second form: SignalRGB controlling the mouse refuses the write
+        # itself, so the app marks the query unavailable instead of the level.
+        class Refusing(FakeDevice):
+            def send_feature_report(self, data):
+                raise OSError("feature write failed")
+
+        provider = self._provider([])
+        G.hid = types.SimpleNamespace(device=lambda: Refusing([]))
+        with self.assertRaises(OSError):
+            provider.poll()
+        self.assertTrue(any("holds the feature report" in line for line in provider._diag))
+
     def test_silence_is_reported_as_silence(self):
         provider = self._provider([])
         out = provider.poll()
