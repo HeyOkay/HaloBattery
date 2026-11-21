@@ -30,6 +30,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
+  the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
+  ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). Unverified on hardware.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in

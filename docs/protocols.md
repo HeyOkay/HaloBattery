@@ -985,6 +985,23 @@ Byte 3 is the charger state: `0x00` on battery and `0x04` with the cable in, the
 
 **Confirmed on hardware by @notisv** on the second test build: the icon showed the level continuously (`reply: 0e a1 5c 00` = 92 %), agreed with Bluetooth, Windows and Command Center at the same time, and the charging state followed the cable in and out. They kept it running for over an hour before reporting.
 
+### Razer BlackShark V3, BlackShark V3 Pro
+
+**Connection:** 2.4 GHz receiver (`1532:057A` for the V3, `1532:0577` for the V3 Pro)
+
+Both publish the same four collections on interface 5 — `000c:0001`, `ff13:0001`,
+`000b:0005` and `ff14:0001` — and are read with the same frames on `ff14:0001`:
+64-byte output reports, report id `0x02`, transaction byte `0x60`, class `0x21` for the
+battery and `0x2a` for the charging state, with an XOR checksum in byte 62. The format
+comes from OpenRazer PR #2794 and the Synapse capture in
+[#292](https://github.com/HeyOkay/HaloBattery/issues/292). Three wake frames go out
+once per connection, then the charging and battery queries; the collection stays open
+so the headset's pushes arrive, and a query only goes out at connect, after a link-up
+push, or after minutes of silence, because this dongle resets its radio link when it is
+polled continuously. The V3 Pro identity was added from the identical collection shape
+in [#519](https://github.com/HeyOkay/HaloBattery/issues/519) and is **unverified on
+hardware**.
+
 ### Razer BlackShark V3 X HyperSpeed
 
 **Connection:** 2.4 GHz receiver (`1532:057D`, product `BlackShark V3 X`) or USB cable (`1532:057C`, product `BlackShark V3 X USB`)
