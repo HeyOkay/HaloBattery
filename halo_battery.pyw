@@ -141,6 +141,7 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
+from halo.working_set import release_unused_memory  # noqa: E402
 from providers import hidlist  # noqa: E402
 from providers.base import is_coarse_reading  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
@@ -688,6 +689,10 @@ QUIET_INTERVAL = 300       # s between polls while a game is full screen
 # whole poll interval (#214).
 STARTUP_RETRY_INTERVAL = 10
 STARTUP_RETRY_WINDOW = 90
+# Start-up (imports, the first polls, icon drawing, the daily update check) frees about 20 MB
+# the tray never touches again, yet it stays in the working set Task Manager shows. Hand it
+# back to Windows once, after STARTUP_RETRY_WINDOW and that work are over.
+MEMORY_RELEASE_AFTER_START = 120
 INPUT_WAKE_GAP = 5          # s between input-driven re-reads of a greyed (asleep)
                             # device: the first input re-reads it at once, and while
                             # input keeps coming (touchpad, typing) a poll every few
@@ -3463,6 +3468,10 @@ class App:
             return
         log.info("tray history: shell preference not ready; migration deferred")
 
+    def _release_startup_memory(self) -> None:
+        if not self.stop_evt.wait(MEMORY_RELEASE_AFTER_START):
+            release_unused_memory()
+
     def run(self):
         log.info("start v%s", VERSION)
         try:
@@ -3480,7 +3489,10 @@ class App:
             threading.Thread(target=self.anim_loop, daemon=True).start()
             threading.Thread(target=self.bt_loop, daemon=True).start()
             threading.Thread(target=self.update_loop, daemon=True).start()
-            self.ui_host.start()                    # tkinter is ready by the first activation
+            threading.Thread(target=self._release_startup_memory, name="memory-release", daemon=True).start()
+            # The flyout's tkinter thread starts on the first menu or window (show()/call()
+            # start it, ~70 ms): starting it here kept about 4 MB of Tcl/Tk in memory for
+            # sessions that never open the menu.
             self.report_hid_backend_failure()
             self.report_custom_icon_failure()
             stop_file = verification_stop_file()

@@ -329,18 +329,53 @@ class ShutdownTests(HideRenameTestCase):
         self.assertEqual(app.poll_once(), [])
         second.poll.assert_not_called()
 
+    def test_run_hands_start_up_memory_back_on_a_daemon_thread(self):
+        app = self.app()
+        app.start_tray_history_cleanup = mock.Mock()
+        app.show_placeholder = mock.Mock()
+        app.ui_host = mock.Mock()
+        app.report_hid_backend_failure = mock.Mock(side_effect=RuntimeError('stop after start-up'))
+        thread = mock.Mock(return_value=SimpleNamespace(start=lambda: None))
+        with mock.patch.object(hb, 'write_json'), mock.patch.object(hb.threading, 'Thread', thread):
+            with self.assertRaisesRegex(RuntimeError, 'stop after start-up'):
+                app.run()
+        releases = [call for call in thread.call_args_list
+                    if call.kwargs.get('target') == app._release_startup_memory]
+        self.assertEqual(len(releases), 1)
+        self.assertTrue(releases[0].kwargs.get('daemon'))   # never holds up quitting
+
+    def test_start_up_memory_goes_back_once_unless_the_app_quits_first(self):
+        waits = []
+
+        class Stop:
+            def __init__(self, set_before_the_delay):
+                self.result = set_before_the_delay
+
+            def wait(self, timeout):
+                waits.append(timeout)
+                return self.result
+
+        with mock.patch.object(hb, 'release_unused_memory') as release:
+            hb.App._release_startup_memory(SimpleNamespace(stop_evt=Stop(False)))
+            release.assert_called_once_with()
+            hb.App._release_startup_memory(SimpleNamespace(stop_evt=Stop(True)))
+            release.assert_called_once_with()           # quitting: nothing to tidy up
+        self.assertEqual(waits, [hb.MEMORY_RELEASE_AFTER_START] * 2)
+        self.assertGreater(hb.MEMORY_RELEASE_AFTER_START, hb.STARTUP_RETRY_WINDOW)
+
     def test_startup_failure_still_persists_and_cleans_up(self):
         app = self.app()
         app.start_tray_history_cleanup = mock.Mock()
         app.show_placeholder = mock.Mock()
         app.ui_host = mock.Mock()
-        app.ui_host.start.side_effect = RuntimeError('UI host unavailable')
+        app.report_hid_backend_failure = mock.Mock(side_effect=RuntimeError('start-up step failed'))
         with mock.patch.object(hb, 'write_json') as write, \
                 mock.patch.object(hb.threading, 'Thread', return_value=SimpleNamespace(start=lambda: None)):
-            with self.assertRaisesRegex(RuntimeError, 'UI host unavailable'):
+            with self.assertRaisesRegex(RuntimeError, 'start-up step failed'):
                 app.run()
         self.assertTrue(app.stop_evt.is_set())
         app.history.save.assert_called_once_with(force=True)
         write.assert_called_once()
         self.assertFalse(write.call_args.args[1]['running'])
         app.ui_host.stop.assert_called_once_with()
+        app.ui_host.start.assert_not_called()           # tkinter starts on first use, not at start-up

@@ -1,9 +1,12 @@
 """Session cancellation and selection lifetime, with no network or hardware."""
+import gc
 import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 import urllib.parse
+import weakref
 
 from halo.iconify_catalog import IconifyCatalog, _hash, canonical_icon
 from halo.iconify_host import IconCatalogJobs
@@ -163,9 +166,38 @@ class CatalogShutdownTests(unittest.TestCase):
     def test_unused_catalog_is_not_created_during_close(self):
         created = []
         jobs = self.jobs(Catalog(), factory=lambda: created.append(True))
-        jobs.close()
-        self.assertTrue(jobs._cleanup_done.wait(2))
+        with mock.patch("halo.iconify_host.release_unused_memory") as release:
+            jobs.close()
+            self.assertTrue(jobs._cleanup_done.wait(2))
         self.assertEqual(created, [])
+        release.assert_not_called()                 # nothing was built, nothing to give back
+
+    def test_closed_window_frees_its_catalog_then_gives_the_memory_back(self):
+        refs, seen = [], []
+
+        def factory():
+            catalog = Catalog()
+            refs.append(weakref.ref(catalog))
+            return catalog
+
+        def release():
+            gc.collect()
+            seen.append(refs[0]() is None)          # nothing in the jobs keeps it alive
+
+        jobs = self.jobs(None, factory=factory)
+        with mock.patch("halo.iconify_host.release_unused_memory", release):
+            jobs._catalog()
+            jobs.close()
+            self.assertTrue(jobs._cleanup_done.wait(2))
+        self.assertEqual(seen, [True])
+
+    def test_shared_catalog_view_close_leaves_the_working_set_alone(self):
+        jobs = self.jobs(Catalog(), owned=False)
+        with mock.patch("halo.iconify_host.release_unused_memory") as release:
+            jobs._catalog()
+            jobs.close()
+            self.assertTrue(jobs._cleanup_done.wait(2))
+        release.assert_not_called()
 
 
 if __name__ == "__main__":

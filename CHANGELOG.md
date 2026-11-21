@@ -8,6 +8,21 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Give start-up's freed memory back to Windows two minutes after start: the idle app
+  drops from about 35 MB to about 15 MB in Task Manager.
+- Give memory back to Windows when the Settings window closes. Browsing icons used to
+  leave about 30 MB of freed memory counted against the app until Windows needed it.
+- Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
+  1 MB (single colour) or 4-8 MB (colour) of raw pixels.
+- Custom Iconify tray icons no longer load the whole icon-library registry at start-up
+  (about 4 MB, with a 12 MB peak while reading it); it is read when Settings browses
+  icons or an older selection has to be checked.
+- Start the tray menu's window system when the menu (or another window) first opens,
+  not at start-up: about 4 MB less for sessions that never open the menu, at the
+  cost of about 70 ms on the first open.
+- Use less memory while running: the app no longer keeps its full-size (1024 px)
+  icon artwork in memory after drawing the small icons it needs (about 4 MB), and
+  saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
