@@ -34,7 +34,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,
   and the headset as offline while it is switched off. Confirmed on an H5:
-  50 % on battery.
+  50 % on battery, the charging state on the cable, and the icon going away
+  while the headset was off.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
