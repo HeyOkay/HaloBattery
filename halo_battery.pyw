@@ -3480,7 +3480,9 @@ class App:
             threading.Thread(target=self.anim_loop, daemon=True).start()
             threading.Thread(target=self.bt_loop, daemon=True).start()
             threading.Thread(target=self.update_loop, daemon=True).start()
-            self.ui_host.start()                    # tkinter is ready by the first activation
+            # The flyout's tkinter thread starts on the first menu or window (show()/call()
+            # start it, ~70 ms): starting it here kept about 4 MB of Tcl/Tk in memory for
+            # sessions that never open the menu.
             self.report_hid_backend_failure()
             self.report_custom_icon_failure()
             stop_file = verification_stop_file()

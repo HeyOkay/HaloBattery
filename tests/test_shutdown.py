@@ -334,13 +334,14 @@ class ShutdownTests(HideRenameTestCase):
         app.start_tray_history_cleanup = mock.Mock()
         app.show_placeholder = mock.Mock()
         app.ui_host = mock.Mock()
-        app.ui_host.start.side_effect = RuntimeError('UI host unavailable')
+        app.report_hid_backend_failure = mock.Mock(side_effect=RuntimeError('start-up step failed'))
         with mock.patch.object(hb, 'write_json') as write, \
                 mock.patch.object(hb.threading, 'Thread', return_value=SimpleNamespace(start=lambda: None)):
-            with self.assertRaisesRegex(RuntimeError, 'UI host unavailable'):
+            with self.assertRaisesRegex(RuntimeError, 'start-up step failed'):
                 app.run()
         self.assertTrue(app.stop_evt.is_set())
         app.history.save.assert_called_once_with(force=True)
         write.assert_called_once()
         self.assertFalse(write.call_args.args[1]['running'])
         app.ui_host.stop.assert_called_once_with()
+        app.ui_host.start.assert_not_called()           # tkinter starts on first use, not at start-up

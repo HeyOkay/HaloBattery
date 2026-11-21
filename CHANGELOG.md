@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Start the tray menu's window system when the menu (or another window) first opens,
+  not at start-up: about 4 MB less for sessions that never open the menu, at the
+  cost of about 70 ms on the first open.
 - Use less memory while running: the app no longer keeps its full-size (1024 px)
   icon artwork in memory after drawing the small icons it needs (about 4 MB), and
   saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
