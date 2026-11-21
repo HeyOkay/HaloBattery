@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
+  1 MB (single colour) or 4-8 MB (colour) of raw pixels.
 - Custom Iconify tray icons no longer load the whole icon-library registry at start-up
   (about 4 MB, with a 12 MB peak while reading it); it is read when Settings browses
   icons or an older selection has to be checked.
