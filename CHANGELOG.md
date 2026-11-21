@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Custom Iconify tray icons no longer load the whole icon-library registry at start-up
+  (about 4 MB, with a 12 MB peak while reading it); it is read when Settings browses
+  icons or an older selection has to be checked.
 - Start the tray menu's window system when the menu (or another window) first opens,
   not at start-up: about 4 MB less for sessions that never open the menu, at the
   cost of about 70 ms on the first open.
