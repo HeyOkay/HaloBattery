@@ -265,6 +265,14 @@ Read over that COM port at 115200 baud rather than HID: the dongle answers a fix
 
 The frame sequence and the reply signature come from [janit88/InZoneH9Tray](https://github.com/janit88/InZoneH9Tray) (`inzone_tray.py`), contributed for both the white and the black version in [#278](https://github.com/HeyOkay/HaloBattery/pull/278) by @BoringMan314. It needs `pyserial`, which the released builds bundle; a source run gets it from `requirements.txt`, and the provider says so in the diagnostics when it is missing.
 
+### Sony INZONE H5
+
+**Connection:** the headset's USB dongle (`054C:0EBF`), vendor HID collection `FF04:0001` on interface 5
+
+The same Sony frames as the H9, carried over HID instead of a COM port (the H5 dongle has none). The request is a 64-byte output report: report id `0x02`, the frame length (`0x0C`), then the battery GET frame `01 00 FC 08 96 C3 41 04 01 <tid lo> <tid hi> <sum>` - the H9 query with our own transaction id, the last byte being the low byte of the sum of `96` through the id. The reply is `02 0E` followed by the 14-byte frame that starts with the H9 signature `04 FF 0B 00 96 C3 14 04`, then the reply type `0x10`, the echoed transaction id, the charging flag (0 on battery, 1 charging, anything else unknown), the level and a checksum over the same bytes. A reply is accepted only when the id and the checksum match, since INZONE Hub shares the channel and its own replies arrive on it too. Level `0xFF` means the dongle is in but the headset is off, and is shown as offline; any other level above 100 is refused. INZONE Hub does not need to be closed.
+
+Sources: [Cinnabarz/InzoneBattery](https://github.com/Cinnabarz/InzoneBattery/blob/0a48f8b03fd91f26803756b28b3af486eb0ad642/src/InzoneHid.cs) (`InzoneHid.cs`: `BuildCommand`, `WriteCommand`, `Parse`, `GetBattery`; MIT, verified there on the H5) and [RobotRoss/linzone-hub](https://github.com/RobotRoss/linzone-hub/blob/d12fe2376193aecf9caec1a438369c75b1aa173a/kernel/hid-inzone-battery-dkms/hid_inzone_battery.c) (`inzone_send_hci_get`, `inzone_parse_battery_event`, and `0x0ebf` in its device table). Confirmed on an H5: the dongle answered `02 0e 04 ff 0b 00 96 c3 14 04 10 02 01 00 32 b6`, 50 % on battery.
+
 ### SteelSeries Arctis and GameBuds (other models)
 
 **Connection:** wireless base station or dongle

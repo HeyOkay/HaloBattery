@@ -45,7 +45,8 @@ class StableDevicePolicyTests(unittest.TestCase):
         ports = types.SimpleNamespace(comports=mock.Mock(return_value=[port]))
         serial = types.SimpleNamespace(Serial=mock.Mock())
         with mock.patch.object(sony_inzone, "list_ports", ports), \
-             mock.patch.object(sony_inzone, "serial", serial):
+             mock.patch.object(sony_inzone, "serial", serial), \
+             mock.patch.object(sony_inzone.hidlist, "enumerate", return_value=[]):
             provider = sony_inzone.SonyInzoneProvider()
             self.assertEqual(provider.poll(), [])
             serial.Serial.assert_not_called()

@@ -298,7 +298,7 @@ PROVIDER_LABELS = {
     "razer": "Razer mice and headsets",
     "shield": "NVIDIA SHIELD controllers",
     "skullcandy": "Skullcandy headsets",
-    "sony_inzone": "Sony INZONE H9",
+    "sony_inzone": "Sony INZONE H9 / H5",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
