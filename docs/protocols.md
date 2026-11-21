@@ -781,15 +781,19 @@ short sibling on Windows. The short collection is recognized when present.
 This change only maps the known collections to the existing
 read-only HID++ battery requests in `providers/logitech.py`.
 
-**Prior hardware reports:** in [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465),
+**Hardware reports:** in [PR #465](https://github.com/HeyOkay/HaloBattery/pull/465),
 the author reported a physical PRO X3 SUPERSTRIKE under Windows on build `fffb327`: the reported
 battery percentage matched Logitech G HUB; charging was detected; the tray
 icon greyed out after powering the mouse off and returned on reconnect.
 The author subsequently reported battery and charging on `c0a9` with the receiver physically unplugged.
-These are prior-build reports, not a new hardware test of this recovered branch.
-Low-battery notifications remain untested. Automated tests cover collection routing,
-charging statuses and legacy `ff00` precedence. `C54D` retains its existing route;
-it is excluded from the X3 fallback following the scope review in PR #465.
+After #512 merged, the same author tested the merged build again
+([#504 follow-up](https://github.com/HeyOkay/HaloBattery/pull/504#issuecomment-7060984742)):
+with the receiver removed and the mouse on USB-C the level still matched G HUB and the charging
+animation appeared; reconnecting the receiver stopped the animation and returned the wireless
+reading. The simulated status values (0/1/3) and low-battery notifications are still not
+exercised on hardware. Automated tests cover collection routing, charging statuses and legacy
+`ff00` precedence. `C54D` retains its existing route; it is excluded from the X3 fallback
+following the scope review in PR #465.
 
 ### Razer BlackWidow V3 Pro
 
