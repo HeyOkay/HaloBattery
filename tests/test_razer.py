@@ -208,6 +208,12 @@ class TableTest(unittest.TestCase):
         self.assertEqual(R.KNOWN[0x00A7][0], "Razer Naga V2 Pro")
         self.assertEqual(R.KNOWN[0x00A8][0], "Razer Naga V2 Pro")
 
+    def test_the_basilisk_v4_pro_receiver_is_not_skipped(self):
+        # #514: the product string has no "wireless" word, so only the table entry
+        # keeps it from being skipped as an unknown device.
+        self.assertEqual(R.KNOWN[0x00E3], ("Razer Basilisk V4 Pro", 0x1F))
+        self.assertTrue(R.maybe_wireless(0x00E3, "Razer Basilisk V4 Pro"))
+
     def test_the_blackwidow_pro_pair_is_known(self):
         # OpenRazer lists get_battery/is_charging on both the wired class (0x025A) and,
         # through inheritance, the wireless model (0x025C); the driver reads them with

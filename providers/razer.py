@@ -110,6 +110,8 @@ KNOWN = {
     0x00DF: ("Razer Viper V3 Pro SE", 0x1F),
     0x00E5: ("Razer Viper V4 Pro", 0x1F),
     0x00E6: ("Razer Viper V4 Pro", 0x1F),
+    # receiver id from the diagnostics in #514; its wired/charging id is not known yet
+    0x00E3: ("Razer Basilisk V4 Pro", 0x1F),
     0x00C2: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C3: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C4: ("Razer DeathAdder V3 HyperSpeed", 0x1F),

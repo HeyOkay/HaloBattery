@@ -99,6 +99,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   is the only controller connected (next to another pad it keeps the generic name),
   and its documentation says plainly that the 2.4 GHz dongle carries no battery
   level while Bluetooth does (#461).
+- Razer Basilisk V4 Pro (`1532:00E3` on its 2.4 GHz receiver, `1532:00E2` on
+  its USB cable): added to the Razer mice table, so the receiver is no longer
+  skipped as an unknown device; the cable identity reports charging through the
+  same read ([#514](https://github.com/HeyOkay/HaloBattery/issues/514)).
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in

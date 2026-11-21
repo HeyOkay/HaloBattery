@@ -683,7 +683,7 @@ Same mice protocol: transaction id 0x1F, command class 0x07, command 0x80 answer
 
 **Connection:** 2.4 GHz receiver or USB cable
 
-The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. Battery is only read for the models OpenRazer itself reads.
+The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. The **Basilisk V4 Pro** (`1532:00E3` on its receiver, [#514](https://github.com/HeyOkay/HaloBattery/issues/514)) is in the same table with transaction id `0x1F`; its product string does not contain a "wireless" word, so before the table entry it was skipped as an unknown device. The wired id that would report charging is not known yet, and the receiver path is **unverified on hardware**. Battery is only read for the models OpenRazer itself reads.
 
 ### Glorious Model O, O-, D and D- Wireless
 
