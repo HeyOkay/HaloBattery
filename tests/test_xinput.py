@@ -70,6 +70,23 @@ XBOX_BT_HID = {"vendor_id": 0x045E, "product_id": 0x02FD, "interface_number": -1
                "path": b"\\\\?\\HID#VID_045E&PID_02FD&IG_00#a&1b2c3d4&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}"}
 
 
+class NamingTest(unittest.TestCase):
+    def test_the_ultimate_2_is_named_from_its_product_string(self):
+        devs = [{"vendor_id": 0x2DC8, "product_id": 0x310B,
+                 "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}]
+        self.assertEqual(("8BitDo Ultimate 2", 0x2DC8), X.controller_name(devs))
+
+    def test_another_8bitdo_device_stays_generic(self):
+        devs = [{"vendor_id": 0x2DC8, "product_id": 0x9999,
+                 "product_string": "8BitDo Receiver"}]
+        self.assertEqual(("Gamepad", None), X.controller_name(devs))
+
+    def test_the_vendor_id_stays_out_of_the_trusted_wgi_set(self):
+        # NAMED_VIDS also decides whose WGI reports are trusted; the Ultimate 2's
+        # remain=full=1000 placeholder must keep being ignored (#110, #191).
+        self.assertNotIn(0x2DC8, X.NAMED_VIDS)
+
+
 class ProviderTest(unittest.TestCase):
     def setUp(self):
         self._saved = (X.load_xinput, X.hidlist, X.wgi.query)

@@ -8,6 +8,7 @@
 |---|---|---|
 | [Endgame Gear XM2we](protocols.md#endgame-gear-xm2we) | Original 2.4 GHz receiver (3367:1961) | yes (battery and charging) |
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
+| [8BitDo Ultimate 2 Wireless (XInput)](protocols.md#8bitdo-ultimate-2-wireless-xinput) | Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`) or USB for the gamepad | Bluetooth: 60 % (reporter, #461); no level over the dongle |
 | [AM Infinity 8K (Angry Miao)](protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz / 8K receiver or USB cable | yes on 8K; 1K/wired untried |

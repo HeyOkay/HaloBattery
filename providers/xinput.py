@@ -55,6 +55,10 @@ NAMED = [
     (0x3537, "", "GameSir controller"),
     (0x045E, "controller", "Xbox controller"),
 ]
+# Named from the product string, but deliberately NOT part of NAMED: NAMED_VIDS also
+# decides whose Windows.Gaming.Input reports are trusted, and trusting the Ultimate 2's
+# placeholder (remain=full=1000) would turn it into a false 100% (#110, #191, #461).
+NAMED_PIDS = {0x310B: ("8BitDo Ultimate 2", 0x2DC8)}
 
 
 # the vendors whose controllers this provider reads; Windows.Gaming.Input also reports
@@ -171,6 +175,11 @@ def bluetooth_ids(paths) -> set:
 def controller_name(hid_devices: List[dict]):
     """-> (display name, vendor id). The vendor id lets the poll tell whether the
     controller is on Bluetooth when Windows.Gaming.Input reports nothing."""
+    for d in hid_devices:
+        if d.get("vendor_id") == 0x2DC8:
+            named = NAMED_PIDS.get(d.get("product_id"))
+            if named is not None:
+                return named
     for vid, word, name in NAMED:
         for d in hid_devices:
             if d.get("vendor_id") == vid and word in (d.get("product_string") or "").lower():
@@ -259,6 +268,11 @@ class XInputProvider(Provider):
                 hid_devices += hidlist.enumerate(vid)
             except Exception:
                 pass
+        # Enumerated for its name only: this vendor's WGI reports are still ignored.
+        try:
+            hid_devices += hidlist.enumerate(0x2DC8)
+        except Exception:
+            pass
         base_name, base_vid = controller_name(hid_devices)
 
         now = time.time()
@@ -339,7 +353,7 @@ class XInputProvider(Provider):
         # would then get the Vader's name and level (#216 review, @ahmedkhursheed23).
         # The slot's vendor comes from its Windows.Gaming.Input report, which a FlyDigi
         # pad sends under its own vendor id (the placeholder), so the paired report
-        # identifies it. base_vid can only be 0x3537/0x045E, so it never allows the call.
+        # identifies it. base_vid is 0x3537/0x045E/0x2DC8, so it never allows the call.
         vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
