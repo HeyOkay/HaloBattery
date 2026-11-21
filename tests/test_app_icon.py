@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -10,6 +11,25 @@ from halo import app_icon, whatsnew
 
 
 class AppIconTests(unittest.TestCase):
+    def test_the_full_size_source_is_not_kept_in_memory(self):
+        """Each size is cached; the 1024 px source is opened per new size, never kept."""
+        app_icon._resized.cache_clear()
+        self.addCleanup(app_icon._resized.cache_clear)
+        opened = []
+        real_open = Image.open
+
+        def counting_open(path, *args, **kwargs):
+            opened.append(Path(path).name)
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch.object(app_icon.Image, "open", counting_open):
+            app_icon.render(33)
+            app_icon.render(33)
+            self.assertEqual(opened, ["app-icon.png"])          # the 33 px result is cached
+            app_icon.render(34)
+            self.assertEqual(opened, ["app-icon.png"] * 2)      # the source was not
+        self.assertFalse(hasattr(app_icon, "_source"))
+
     def test_render_preserves_approved_artwork_at_requested_sizes(self):
         path = Path(__file__).resolve().parent.parent / "assets" / "app-icon.png"
         with Image.open(path) as image:

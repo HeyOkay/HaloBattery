@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Use less memory while running: the app no longer keeps its full-size (1024 px)
+  icon artwork in memory after drawing the small icons it needs (about 4 MB), and
+  saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
