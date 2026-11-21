@@ -163,6 +163,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
+from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
 
 # Development-only escape hatch for controlled comparisons; the Windows app
 # uses the bounded native transport by default, without a bundle marker.
@@ -1559,7 +1560,7 @@ class App:
         self.history.load()
         self.held: Dict[tuple, tuple] = {}      # (device key, kind) -> English text/title + parameters
         self.was_quiet = False
-        self.bt = BluetoothProvider()
+        self.bt = BluetoothProvider(native=True)
         self.icons: Dict[str, DeviceIcon] = {}
         self.started = time.monotonic()
         self.placeholder: Optional[pystray.Icon] = None
@@ -1581,6 +1582,7 @@ class App:
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
         self.bt_watch: Optional[BluetoothWatcher] = None
         self.bt_watch_failed = False
+        self.bt_native_failed = False       # the in-process watcher gave up: use PowerShell's
         self.update: Optional[updates.Release] = None   # a newer release, when there is one
         self.update_wake = threading.Event()  # "check for updates now"
         self.update_manual = False            # the check was asked for from the menu
@@ -2618,9 +2620,10 @@ class App:
                 self.wake.bluetooth()
 
     def bt_loop(self):
-        """Separate thread: PowerShell can take a few seconds and must not delay
-        the mouse and headset icons. On Windows a long-lived watcher reports
-        connects and disconnects within a few seconds; if it cannot run, one-shot
+        """Separate thread: a Bluetooth read can take a few seconds and must not delay
+        the mouse and headset icons. On Windows a watcher reports connects and
+        disconnects within a few seconds: the in-process one first (no PowerShell
+        process), the PowerShell one if that fails; if neither can run, one-shot
         polls once a minute are the fallback."""
         while not self.stop_evt.is_set():
             if self.cfg["bluetooth"] and sys.platform == "win32" and not self.bt_watch_failed:
@@ -2628,9 +2631,15 @@ class App:
                     with self.lock:
                         if self.stopping():
                             return
-                        self.bt_watch = BluetoothWatcher(self.bt, self._bt_update).start()
+                        native = not getattr(self, "bt_native_failed", False)
+                        watcher = NativeBluetoothWatcher if native else BluetoothWatcher
+                        self.bt_watch = watcher(self.bt, self._bt_update).start()
                 if self.bt_watch.failed:
-                    self.bt_watch_failed = True
+                    if isinstance(self.bt_watch, NativeBluetoothWatcher):
+                        log.warning("bluetooth: in-process watcher failed, starting the PowerShell watcher")
+                        self.bt_native_failed = True
+                    else:
+                        self.bt_watch_failed = True
                     self.bt_watch = None
                     continue
                 self.bt_wake.wait(2)
@@ -3565,7 +3574,7 @@ def probe():
     app = App.__new__(App)
     app.cfg = load_config()
     app.providers = make_providers(jbl_listen_first=JBL_PROBE_LISTEN_S)
-    app.bt = BluetoothProvider()
+    app.bt = BluetoothProvider(native=True)
     res = []
     sections = []
     for p in app.providers + [app.bt]:

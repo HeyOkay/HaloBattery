@@ -11,7 +11,8 @@ Link:     WinRT BluetoothDevice.ConnectionStatus (BluetoothLEDevice for LE),
 One physical device is several PnP nodes in Windows: the root node
 (BTHENUM\\DEV_<MAC>, BTHLE\\DEV_<MAC>) and service nodes. Nodes of one device
 are matched by the MAC address found in every node's instance id.
-Everything is fetched with a SINGLE PowerShell call.
+Everything is fetched with a SINGLE PowerShell call - or, in the app, read in-process by
+bluetooth_native (same data, no PowerShell process; PowerShell stays the fallback).
 Windows 10/11 only; on by default (toggle in the tray menu).
 """
 from __future__ import annotations
@@ -28,6 +29,7 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
+from . import bluetooth_native
 from .base import DeviceStatus, Provider, log
 
 K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
@@ -338,14 +340,26 @@ MISS_LIMIT = 2
 class BluetoothProvider(Provider):
     name = "bluetooth"
 
-    def __init__(self):
+    def __init__(self, native: bool = False):
+        # native: read one-shot snapshots in-process (bluetooth_native) before trying PowerShell
+        self.native = native
         self._diag: List[str] = []
         self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
         self._misses: Dict[str, int] = {}
         self._levels: Dict[str, int] = {}           # MAC -> last known battery level
 
     def _query(self) -> Optional[str]:
-        """Raw JSON from PowerShell, or None on failure."""
+        """Raw JSON snapshot, or None on failure: read in-process first when `native` is on,
+        from PowerShell otherwise or when that read fails."""
+        if self.native:
+            try:
+                snap = bluetooth_native.one_shot_snapshot()
+                self._diag.append(f"[Bluetooth] native: {len(snap['devs'])} nodes, "
+                                  f"{len(snap['props'])} properties, {len(snap['roots'])} device(s)")
+                return json.dumps(snap)
+            except Exception as e:
+                self._diag.append(f"[Bluetooth] native read failed ({type(e).__name__}: "
+                                  f"{str(e)[:150]}), using PowerShell")
         try:
             flags = 0x08000000  # CREATE_NO_WINDOW
             proc = subprocess.run(
@@ -578,3 +592,112 @@ class BluetoothWatcher:
                 self.failed = True
                 return
             self._stop.wait(5)
+
+
+class NativeBluetoothWatcher:
+    """The watcher's job without PowerShell: a thread in the app reads the same snapshot through
+    bluetooth_native and keeps WATCH_SCRIPT's cadence - the WinRT connection state every 2 s, a
+    full snapshot right after a device connects or disconnects (then at +3, +8 and +15 s) and once
+    a minute. This saves the ~80 MB PowerShell process. Each snapshot goes through the provider's
+    usual parse and grouping. After FAIL_LIMIT failed rounds in a row it gives up (failed = True)
+    and the app starts the PowerShell watcher instead. A round that never returns (a Windows
+    call that hangs) counts as a failure after STALL_TIMEOUT, like the PowerShell watcher's stall."""
+
+    INTERVAL = 2.0
+    FULL_EVERY = 60.0
+    AFTER_CHANGE = (0, 3, 8, 15)
+    FAIL_LIMIT = 3
+
+    def __init__(self, provider: BluetoothProvider, on_update: Callable[[List[DeviceStatus]], None],
+                 reader_factory: Optional[Callable[[], object]] = None,
+                 clock: Callable[[], float] = time.monotonic):
+        self.provider = provider
+        self.on_update = on_update
+        self.snapshots = 0
+        self.stalls = 0
+        self._failed = False
+        self._reader_factory = reader_factory or bluetooth_native.NativeReader
+        self._clock = clock
+        self._beat = clock()                    # end of the last round: the stall check
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="bt-native-watcher", daemon=True)
+
+    def start(self) -> "NativeBluetoothWatcher":
+        self._beat = self._clock()
+        self._thread.start()
+        return self
+
+    @property
+    def failed(self) -> bool:
+        if not self._failed and self._thread.is_alive() and self._clock() - self._beat > STALL_TIMEOUT:
+            self.stalls += 1
+            log.warning("bluetooth watcher: in-process round stuck for %.0f s, using PowerShell",
+                        self._clock() - self._beat)
+            self._failed = True
+            self._stop.set()                    # the stuck thread exits if its call ever returns
+        return self._failed
+
+    def running(self) -> bool:
+        return self._thread.is_alive() and not self.failed
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _emit(self, snap: dict) -> None:
+        try:
+            devices = self.provider.handle(json.dumps(snap))
+        except Exception:
+            log.exception("bluetooth watcher")
+            return
+        self.snapshots += 1
+        self.on_update(devices)
+
+    def _run(self) -> None:
+        try:
+            reader = self._reader_factory()     # on this thread: WinRT is set up per thread
+        except Exception as e:
+            log.warning("bluetooth watcher: in-process reader unavailable (%s), using PowerShell", e)
+            self._failed = True
+            return
+        try:
+            if not reader.winrt_ok:
+                log.warning("bluetooth watcher: WinRT unavailable in-process (%s), "
+                            "using the PnP connection flag", reader.winrt_error)
+            roots: List[dict] = []
+            prev: Optional[str] = None
+            queue: List[float] = []
+            next_full = 0.0
+            first, failures = True, 0
+            while not self._stop.is_set():
+                try:
+                    now = self._clock()
+                    due = first
+                    if not first:
+                        if roots and reader.winrt_ok:
+                            key = bluetooth_native.connection_key(reader.connections(roots))
+                            if key != prev:
+                                prev = key
+                                queue = [now + s for s in self.AFTER_CHANGE]
+                        while queue and queue[0] <= now:
+                            queue.pop(0)
+                            due = True
+                    if due or now >= next_full:
+                        snap = reader.snapshot()
+                        self._emit(snap)
+                        roots = snap["roots"]
+                        prev = bluetooth_native.connection_key(snap["aep"])
+                        next_full = self._clock() + self.FULL_EVERY
+                        first = False
+                    failures = 0
+                except Exception:
+                    failures += 1
+                    log.exception("bluetooth watcher: in-process round failed (%d/%d)",
+                                  failures, self.FAIL_LIMIT)
+                    if failures >= self.FAIL_LIMIT:
+                        self._failed = True
+                        return
+                self._beat = self._clock()
+                if self._stop.wait(self.INTERVAL):
+                    break
+        finally:
+            reader.close()
