@@ -11,6 +11,8 @@ One icon per device. No vendor software.
 [![Downloads](https://img.shields.io/github/downloads/HeyOkay/HaloBattery/total?color=2ea043)](../../releases)
 [![Windows 10 / 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
 [![License: MIT](https://img.shields.io/github/license/HeyOkay/HaloBattery?color=lightgrey)](LICENSE)
+[![Website](https://img.shields.io/badge/website-halobattery.app-2ea043)](https://halobattery.app)
+[![Discord](https://img.shields.io/badge/discord-join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/K796KR9xtk)
 
 ### [⬇ Download the latest version](../../releases/latest)
 
