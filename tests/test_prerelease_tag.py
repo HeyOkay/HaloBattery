@@ -185,6 +185,8 @@ class PrereleaseTagTests(unittest.TestCase):
                 'gh() { "$FAKE_PYTHON" "$FAKE_GH" "$@"; }\n'
                 'sleep() { [[ "$*" == "5" ]] || return 1; }\n' + publisher(), encoding="utf-8")
             environment = dict(os.environ, RELEASE_VERSION=VERSION, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
+                               GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF="refs/heads/pre-release",
+                               PUBLISH_PRERELEASE="true",
                                GITHUB_SHA=SHA, GITHUB_RUN_ID=RUN_ID, GITHUB_RUN_ATTEMPT=attempt,
                                RUNNER_TEMP=root.as_posix(), GITHUB_OUTPUT=(root / "output").as_posix(),
                                GITHUB_STEP_SUMMARY=(root / "summary").as_posix(), STEP_SUMMARY=(root / "summary").as_posix(),
@@ -336,6 +338,16 @@ class PrereleaseTagTests(unittest.TestCase):
                          {"GITHUB_RUN_ID": "123;touch EXECUTED"}, {"GITHUB_RUN_ID": "0"},
                          {"GITHUB_RUN_ATTEMPT": "../2"}, {"GITHUB_RUN_ATTEMPT": "0"},
                          {"ZIP": "../../outside.zip"}, {"SETUP": "release-assets/other.exe"}):
+            with self.subTest(override=override):
+                result, final = self.run_publisher(extra_env=override)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(final["calls"], [])
+
+    def test_pushes_and_unselected_or_wrong_branch_dispatch_cannot_publish(self):
+        for override in ({"GITHUB_EVENT_NAME": "push"}, {"GITHUB_EVENT_NAME": "pull_request"},
+                         {"PUBLISH_PRERELEASE": "false"}, {"PUBLISH_PRERELEASE": ""},
+                         {"PUBLISH_PRERELEASE": "1"}, {"GITHUB_REF": "refs/heads/main"},
+                         {"GITHUB_REF": "refs/heads/fix/candidate"}, {"GITHUB_REF": "refs/tags/v1.17.0"}):
             with self.subTest(override=override):
                 result, final = self.run_publisher(extra_env=override)
                 self.assertNotEqual(result.returncode, 0)

@@ -68,10 +68,10 @@ class ReleasePermissionsTests(unittest.TestCase):
                 self.assertLess(publish.index("- name: Validate release assets"), publish.index(last_step))
                 self.assertIn("if-no-files-found: error", jobs(text)["build"])
 
-    def test_manual_runs_cannot_publish(self):
+    def test_only_explicit_pre_release_dispatch_can_publish(self):
         expected = {
             "release.yml": "github.event_name == 'push' && github.ref_type == 'tag'",
-            "prerelease.yml": "github.event_name == 'push' && github.ref == 'refs/heads/pre-release'",
+            "prerelease.yml": "github.event_name == 'workflow_dispatch' && inputs.publish_prerelease && github.ref == 'refs/heads/pre-release'",
         }
         for name, condition in expected.items():
             text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
@@ -79,6 +79,11 @@ class ReleasePermissionsTests(unittest.TestCase):
             actual = re.search(r"(?m)^    if: (.+)$", publish)[1]
             self.assertEqual(actual, condition)
             self.assertIn("  workflow_dispatch:", text)
+            if name == "prerelease.yml":
+                dispatch = text.split("  workflow_dispatch:\n", 1)[1].split("\nconcurrency:", 1)[0]
+                self.assertIn("publish_prerelease:", dispatch)
+                self.assertIn("type: boolean", dispatch)
+                self.assertIn("default: false", dispatch)
 
     def test_prerelease_reruns_keep_artifacts_and_publications_independent(self):
         text = (ROOT / ".github/workflows/prerelease.yml").read_text(encoding="utf-8")

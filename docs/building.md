@@ -124,11 +124,24 @@ and recover deliberately; there is no automated asset deletion or overwrite.
 
 ## Pre-release publication
 
-Every successful push build of `pre-release` publishes a separate pre-release
-with a tag such as `pre-1.17.0-0123456-12345-1`. The final fields are the GitHub
-run ID and attempt, so reruns never require rewriting a published release or a
+Every push to `pre-release` runs tests and builds Actions artifacts without
+publishing a release. Manual runs also build artifacts by default. To publish
+a selected candidate, open **Actions > Pre-release build > Run workflow**,
+select the `pre-release` branch and enable **Publish this candidate** (`publish_prerelease`)
+(a boolean input that defaults to false), or run:
+
+```sh
+gh workflow run prerelease.yml --ref pre-release -f publish_prerelease=true
+```
+
+If Actions still shows the older default-branch form without this input, use
+the CLI command above to pass it to the selected `pre-release` ref.
+
+Only this explicit manual selection on `pre-release` can publish a pre-release.
+It creates a tag such as `pre-1.17.0-0123456-12345-1`. The final fields are the
+GitHub run ID and attempt, so reruns never require rewriting a published release or a
 failed draft. Tags do not start with `v`, so they cannot trigger stable release
-publication. Manual dispatch remains build-only.
+publication.
 
 The fresh read-only build hands data to a separate `contents: write` publisher.
 It refuses existing tags/releases, creates an exact-commit tag and draft,

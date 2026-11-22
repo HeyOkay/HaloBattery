@@ -11,8 +11,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
 
-- Publish each successful pre-release build separately, with matching source
-  tags and immutable assets, instead of replacing one rolling release.
+- Publish selected pre-release builds manually, with matching source tags and
+  immutable assets, instead of replacing one rolling release. Automatic merge
+  builds remain available as Actions artifacts.
 
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
