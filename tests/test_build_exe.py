@@ -1,6 +1,7 @@
 """Verify complete native payload inclusion without PE dependency re-analysis."""
 from pathlib import Path
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -41,6 +42,64 @@ class NativePayloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaisesRegex(FileNotFoundError, "Publish the settings companion"):
                 native_payload_entries(Path(temp))
+
+
+class BuildChannelTests(unittest.TestCase):
+    def test_channel_is_regenerated_and_bundled_even_for_stable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "halo_battery.pyw").write_text('VERSION = "1.18.0"\n', encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("## [Unreleased]\nNew\n", encoding="utf-8")
+            for name in ("halo.ico", "version_info.txt"):
+                (root / name).write_bytes(b"fixture")
+            native = root / "native"
+            native.mkdir()
+            (native / "HaloBattery.Settings.exe").write_bytes(b"fixture")
+            work = root / "work"
+            with mock.patch.object(build_exe, "ROOT", root), \
+                    mock.patch.object(build_exe.subprocess, "run"):
+                build_exe.freeze_python(Path(sys.executable), native, root / "dist", work, "pre-release")
+                self.assertEqual(json.loads((work / "build-info.json").read_text(encoding="utf-8")),
+                                 dict(schema=1, channel="pre-release", version="1.18.0"))
+                # A stable build reusing the directory must overwrite preview identity.
+                build_exe.freeze_python(Path(sys.executable), native, root / "dist", work)
+            self.assertEqual(json.loads((work / "build-info.json").read_text(encoding="utf-8")),
+                             dict(schema=1, channel="stable", version="1.18.0"))
+            spec = (work / "spec/HaloBattery.spec").read_text(encoding="utf-8")
+            self.assertIn(repr((str(work / "build-info.json"), "halo")), spec)
+            self.assertIn(repr((str(root / "CHANGELOG.md"), ".")), spec)
+            self.assertFalse((root / "halo/build-info.json").exists())
+
+    def test_invalid_channel_or_source_version_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with mock.patch.object(build_exe, "ROOT", root):
+                with self.assertRaises(ValueError):
+                    build_exe.write_build_info(root / "work", "preview")
+                for text in ('VERSION = "1.18.0-pre"\n', 'VERSION = "1.18.0"\nVERSION = "1.19.0"\n'):
+                    (root / "halo_battery.pyw").write_text(text, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        build_exe.write_build_info(root / "work", "stable")
+
+    def test_workflow_channel_is_explicit_only_for_pre_release(self):
+        preview = (build_exe.ROOT / ".github/workflows/prerelease.yml").read_text(encoding="utf-8")
+        stable = (build_exe.ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("python tools/build_exe.py --channel pre-release", preview)
+        self.assertNotIn("--channel pre-release", stable)
+        self.assertIn("python tools/build_exe.py", stable)
+
+    def test_cli_defaults_stable_and_passes_only_an_explicit_preview(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for options, expected in (([], "stable"), (["--channel", "pre-release"], "pre-release")):
+                with self.subTest(options=options), \
+                        mock.patch.object(sys, "argv", ["build_exe.py", "--prepare-local-build",
+                            "--workpath", temp, *options]), \
+                        mock.patch.object(build_exe.venv, "EnvBuilder"), \
+                        mock.patch.object(build_exe, "install_build_requirements"), \
+                        mock.patch.object(build_exe, "prepare_local_build"), \
+                        mock.patch.object(build_exe, "freeze_python") as freeze:
+                    build_exe.main()
+                self.assertEqual(freeze.call_args.args[-1], expected)
 
 
 class HashedBuildRequirementsTests(unittest.TestCase):

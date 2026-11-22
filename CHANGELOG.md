@@ -21,6 +21,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Refuse invalid controller battery states and capacities; report Sony battery
   faults without repeatedly treating the controller as newly connected. Avoid
   assigning Windows battery reports to multiple XInput pads by list order.
+- Identify the next pre-release as 1.18.0 and allow its updater to install the
+  stable 1.18.0 when available. Preview What's new uses the bundled changelog.
 - Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
   percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of

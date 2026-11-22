@@ -112,7 +112,14 @@ Look at the open issues and pull requests first, so that two people do not do th
 
 - `main`: stable, released code only. Tags `vX.Y.Z` are cut from `main`; `.github/workflows/release.yml` builds and publishes on a tag. The app's updater uses `/releases/latest`, so only `main` releases reach users.
 - `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI (no approval required); any maintainer with write access merges them. Squash merge.
-- Release: a maintainer opens a "Release X.Y.Z" pull request from `pre-release` into `main`. It bumps `VERSION` in `halo_battery.pyw` and moves the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit (not squash), then tag on `main`.
+- Release preparation: a dedicated "Release X.Y.Z" pull request into `pre-release`
+  can set the next numeric `VERSION` before testing candidates. Keep the changelog
+  under `[Unreleased]`; the pre-release build carries its own channel metadata.
+- Stable release: a maintainer opens a "Release X.Y.Z" pull request from
+  `pre-release` into `main`. Set `VERSION` if not already prepared, and move the
+  CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and
+  approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit
+  (not squash), then tag on `main`.
 - Stable publication requires repository release immutability and the owner-set
   `STABLE_RELEASE_IMMUTABILITY_ENABLED=true` variable. The workflow uploads to a
   new draft, verifies asset digests and provenance attestations, then publishes.

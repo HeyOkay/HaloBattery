@@ -60,7 +60,7 @@ jobs:
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
           ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
-          python tools/build_exe.py
+          python tools/build_exe.py --channel pre-release
 
       - name: Archive native settings symbols
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
