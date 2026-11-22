@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
+  percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
   1 MB (single colour) or 4-8 MB (colour) of raw pixels.
 - Custom Iconify tray icons no longer load the whole icon-library registry at start-up
@@ -56,10 +58,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   from released behavior.
 
 ### Added
-
-- Add explicitly acknowledged local device diagnostics with exclusive device access,
-  bounded native cleanup and sanitized JSON reports. Unverified device protocols
-  stay disabled during normal use.
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
@@ -172,6 +170,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
+- **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
+- **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
 - Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
   control channel, using the read-only status query from
   marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test
@@ -304,6 +304,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
   exposed by this protocol, so the level is shown with the charger unknown.
   Test build pending on the reporter's unit.
+
+- Add explicitly acknowledged local device diagnostics with exclusive device access,
+  bounded native cleanup and sanitized JSON reports. Unverified device protocols
+  stay disabled during normal use.
 
 ### Fixed
 - Extend the Settings Close button hit target to the top-right corner while

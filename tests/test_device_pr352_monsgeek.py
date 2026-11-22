@@ -78,6 +78,12 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(G.make_request(), [0x00, 0xF7] + [0x00] * 63)
         self.assertEqual(len(G.make_request()), 65)
 
+    def test_the_gen2_receiver_gets_the_bit7_checksum(self):
+        req = G.make_request(0x5006)
+        self.assertEqual(req[8], 0x08)
+        self.assertEqual(req[:2], [0x00, 0xF7])
+        self.assertEqual(G.make_request(0x5026)[8], 0x00)
+
     def test_the_answer_reads_the_keyboard_level(self):
         self.assertEqual(G.parse_status(answer(54, 100, 1)), (54, 100, 1))
         self.assertEqual(G.parse_status(answer(7, 100, 3)), (7, 100, 3))
@@ -165,6 +171,25 @@ class PollTest(unittest.TestCase):
         out, _ = self.poll(fake, ents)
         self.assertEqual(out, [])
         self.assertEqual(fake.sent, [])
+
+    def test_x820_receiver_is_read_with_the_gen2_frame(self):
+        ents = entries(pid=0x5006)
+        fake = FakeDongle(answer(88, 100, 1), answer_path=CONFIG)
+        out, diag = self.poll(fake, ents)
+        self.assertEqual([(s.key, s.level, s.kind) for s in out],
+                         [("monsgeek:5006", 88, "keyboard")])
+        self.assertEqual(fake.sent[0][1][8], 0x08)
+        self.assertTrue(any("pid=5006" in line for line in diag))
+
+    def test_the_x820_receivers_real_reply_is_read(self):
+        # #372, test build 3 on the reporter's PC with the X820 Ultra in use:
+        # 100 %. The keyboard link byte (r[4]) is zero while it is online.
+        real = bytes.fromhex("000064000001010100000000") + bytes(53)
+        fake = FakeDongle(real, answer_path=CONFIG)
+        out, _diag = self.poll(fake, entries(pid=0x5006))
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("monsgeek:5006", 100, True)])
+        self.assertFalse(out[0].charging_known)
 
 
     def test_offline_keyboard_never_publishes_its_cached_level_as_live(self):

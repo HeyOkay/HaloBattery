@@ -74,6 +74,8 @@
 | [MCHOSE A5 Pro Max](protocols.md#mchose-a5-pro-max) | 2.4 GHz receiver or USB cable | yes |
 | [MCHOSE A7 V2 Ultra](protocols.md#mchose-a7-v2-ultra) | 2.4 GHz receiver | no |
 | [MCHOSE G7](protocols.md#mchose-g7) | USB (chip 'YJX-CHIP') | yes |
+| [Attack Shark R5 Ultra](protocols.md#attack-shark-r5-ultra) | 2.4 GHz receiver (373E:0047) | yes (level confirmed; charging unverified) |
+| [Attack Shark X820 Ultra](protocols.md#attack-shark-r5-ultra) | 2.4 GHz receiver (3151:5006) | yes (level confirmed; charging unknown) |
 | [MCHOSE M7 Ultra](protocols.md#mchose-m7-ultra) | 2.4 GHz receiver | yes |
 | [MCHOSE K99 V3](protocols.md#mchose-k99-v3-24-ghz) | 2.4 GHz receiver (`3837:3033`) | yes (tested by @Kolomhon) |
 | [MCHOSE X9](protocols.md#mchose-x9) | 2.4 GHz dongle | yes (level, also on Windows: #458); charging unobserved |
