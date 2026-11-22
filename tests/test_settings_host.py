@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import queue
+import re
 import subprocess
 import threading
 from types import SimpleNamespace
@@ -240,6 +241,34 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(result["errorCode"], "invalidCommand")
         worker.assert_not_called()
         self.controller.action.assert_not_called()
+
+    def test_website_and_discord_reach_the_controller_and_take_no_arguments(self):
+        self.hello()
+        result, _ = self.command("openWebsite", {}, 1)
+        self.assertTrue(result["ok"])
+        self.controller.action.assert_called_once_with("open_website")
+        result, _ = self.command("openDiscord", {}, 2)
+        self.assertTrue(result["ok"])
+        self.controller.action.assert_called_with("open_discord")
+        result, _ = self.command("openDiscord", {"url": "https://example.com"}, 3)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errorCode"], "invalidCommand")
+        self.assertEqual(self.controller.action.call_count, 2)
+
+    def test_every_command_the_settings_pages_send_is_accepted(self):
+        # A mistyped command name compiles in C# and only fails when clicked.
+        ui = Path(host.__file__).resolve().parent.parent / "ui" / "HaloBattery.Settings"
+        sent = set()
+        for path in ui.glob("MainWindow*.cs"):
+            if path.stem.endswith("Verification"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            sent |= set(re.findall(r'ActionCard\(p, "[^"]+", "[^"]+", "(\w+)"', text))
+            sent |= set(re.findall(r'ActionButton\("[^"]+", "(\w+)"', text))
+        self.assertLessEqual({"openWebsite", "openDiscord", "openProject", "openIssue"}, sent)
+        for name in sorted(sent):
+            with self.subTest(command=name):
+                self.manager._command(self.session, name, {})
 
     def test_stale_whats_new_worker_does_not_open_a_window(self):
         self.manager._session = host._Session("about", None)

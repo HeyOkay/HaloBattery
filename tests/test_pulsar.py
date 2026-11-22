@@ -333,6 +333,20 @@ class PulsarTest(unittest.TestCase):
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
+    def test_zaopin_z2_4k_is_read_over_both_transports(self):
+        cases = (
+            (0xF526, "Zaopin Z2 4K (wired)", 45, True, 3817),
+            (0xF527, "Zaopin Z2 4K (2.4 GHz)", 30, False, 3704),
+        )
+        for pid, name, level, charging, mv in cases:
+            with self.subTest(pid=pid):
+                bus = self.one_receiver(pid=pid, replies=[reply(level, int(charging), mv)])
+                [device] = P.PulsarProvider().poll()
+                self.assertEqual((f"pulsar:3554{pid:04x}", name, level, charging, "mouse"),
+                                 (device.key, device.name, device.level, device.charging,
+                                  device.kind))
+                self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
     def test_the_vgn_dragonfly_4k_receiver_is_read(self):
         # #323: the receiver is 3554:f505 with six vendor pages on interface 1, the
         # battery one (ff02:0002) among them; the same mouse on its cable is f506

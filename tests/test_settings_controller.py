@@ -31,6 +31,16 @@ class SettingsControllerTests(HideRenameTestCase):
             controller.action("show_whats_new")
         show.assert_called_once_with()
 
+    def test_about_links_open_the_website_discord_and_project(self):
+        app, controller = self.setup_controller()
+        with mock.patch.object(app, "open_url") as open_url:
+            for name in ("open_website", "open_discord", "open_project", "open_issue"):
+                controller.action(name)
+        project = "https://github.com/" + controller.context["repo"]
+        self.assertEqual([c.args for c in open_url.call_args_list],
+                         [("https://halobattery.app",), ("https://discord.gg/K796KR9xtk",),
+                          (project,), (project + "/issues/new/choose",)])
+
     def test_snapshot_is_detached_and_hidden_devices_remain_editable(self):
         app, controller = self.setup_controller()
         key = dev().key

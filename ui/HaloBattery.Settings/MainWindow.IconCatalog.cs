@@ -602,9 +602,7 @@ public sealed partial class MainWindow
             CatalogString(message, "action") == "licenses" && iconCatalogLicenseRequests.Remove(requestId))
         {
             if (CatalogString(message, "errorCode").Length > 0) { ShowError(T("settings.iconify_error")); return; }
-            var notices = message.TryGetProperty("attributions", out var attributions) && attributions.ValueKind == JsonValueKind.Array
-                ? string.Join("\n\n", attributions.EnumerateArray().Select(CatalogNotices)) : "";
-            await ShowCatalogNotices(notices);
+            await ShowCatalogNotices(AllNotices(message));
             return;
         }
         var view = iconCatalog;
@@ -663,9 +661,7 @@ public sealed partial class MainWindow
             }
             else if (request.Action == "licenses")
             {
-                var notices = message.TryGetProperty("attributions", out var entries) && entries.ValueKind == JsonValueKind.Array
-                    ? string.Join("\n\n", entries.EnumerateArray().Select(CatalogNotices)) : "";
-                await ShowCatalogNotices(notices);
+                await ShowCatalogNotices(AllNotices(message));
             }
             else if (request.Action is "apply" or "restore")
             {
@@ -690,6 +686,13 @@ public sealed partial class MainWindow
         else ShowError(T("settings.iconify_error"));
     }
 
+    // Authors and licenses: the interface fonts and Lucide glyphs, then every downloaded icon.
+    private string AllNotices(JsonElement message)
+    {
+        var icons = message.TryGetProperty("attributions", out var entries) && entries.ValueKind == JsonValueKind.Array
+            ? string.Join("\n\n", entries.EnumerateArray().Select(CatalogNotices)) : "";
+        return T("settings.fonts") + "\nLucide · ISC / MIT\n\n" + (icons.Length > 0 ? icons : T("settings.iconify_no_licenses"));
+    }
     private static string CatalogNotices(JsonElement detail) =>
         string.Join("\n", new[] { "id", "name", "collection", "author", "license", "licenseUrl", "sourceUrl", "licenseText", "notices" }
             .Select(key => CatalogString(detail, key)).Where(value => value.Length > 0));

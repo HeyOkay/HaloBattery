@@ -8,6 +8,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Wait briefly for GitHub release-attestation availability before completing
+  pre-release verification.
+
+- Publish selected pre-release builds manually, with matching source tags and
+  immutable assets, instead of replacing one rolling release. Automatic merge
+  builds remain available as Actions artifacts.
+
+- Read Bluetooth devices inside the app instead of in a background PowerShell
+  process, which used about 80 MB of memory on its own (#509). Same devices,
+  levels and connect/disconnect timing; PowerShell stays the fallback if the
+  in-app read fails.
+- Rename the Settings > About "Project page" link to "GitHub page", and move the
+  interface font and Lucide credits from their own card into Authors and
+  licenses.
 - Smoothly animate the Settings charge-ring preview when switching devices.
 - Align Settings and What’s new branding with the approved logo spacing and alignment.
 
@@ -27,6 +41,29 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
+  (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
+  dongle carries over a COM port instead. Shows the level and charging state,
+  and the headset as offline while it is switched off. Confirmed on an H5:
+  50 % on battery, the charging state on the cable, and the icon going away
+  while the headset was off.
+- Add an outline Discord shortcut at the bottom of the navigation rail, with
+  a tooltip and a native fade to Discord's brand color on hover.
+- The 8BitDo Ultimate 2 Wireless is named as such in the controller list when it
+  is the only controller connected (next to another pad it keeps the generic name),
+  and its documentation says plainly that the 2.4 GHz dongle carries no battery
+  level while Bluetooth does (#461).
+- MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
+  command as the K87, with the charging flag read from the reply's high
+  nibble. Level and charging confirmed on the reporter's hardware in
+  [#378](https://github.com/HeyOkay/HaloBattery/issues/378): 94 % on
+  battery, 50 % with the ring on the cable.
+- Logitech G325 LIGHTSPEED (`046D:0B21`): read its vendor `0x50`/`0x23`
+  battery report on `ffa0:0001`, including the charging state. Confirmed on
+  the reporter's hardware in [#232](https://github.com/HeyOkay/HaloBattery/issues/232):
+  the level matched G HUB and the ring followed the cable.
+- Add links to the HaloBattery website and the Discord community to Settings >
+  About.
 - Add Kazakh and Ukrainian throughout Settings, tray menus and notifications,
   with Windows language detection and native Cyrillic headings.
 - Percentage in the icon: devices that only report coarse battery steps now
@@ -47,6 +84,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
   approximate level, read at most once every 15 minutes and cached between reads
   because each read mutes USB audio for about 0.8 s.
+
+- Add Zaopin Z2 4K battery reporting over USB-C and the 2.4 GHz receiver.
 
 - **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
   (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
@@ -112,7 +151,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
   control channel, using the read-only status query from
-  marcinjakubowski/zoneout; confirmed on hardware by the reporter in #387.
+  marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test
+  build (#387); this bounded, exact-target implementation has offline tests,
+  with fresh hardware and charging-transition confirmation still pending.
+- AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -234,7 +276,27 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Wraith W1 / W1 Freestyle** on the shared PixArt ids: model check and pushed
   status report, level and charging. Unverified in the app.
 
+- **JBL Quantum 350 Wireless** on its 2.4 GHz receiver (`0ecb:206b`): read with the
+  receiver's HIDV1 feature reports (`0x68` link, `0x49` level in 5 % steps), the
+  same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
+  exposed by this protocol, so the level is shown with the charger unknown.
+  Test build pending on the reporter's unit.
+
 ### Fixed
+- Extend the Settings Close button hit target to the top-right corner while
+  preserving its visible size, position and hover/pressed feedback.
+
+- Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
+  and charging reply without relaxing receiver or other model validation.
+
+- Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
+  preserving one icon across cable/receiver transitions and limiting feature
+  requests to documented device identities and battery collections.
+
+- Glorious Model O: when another app (SignalRGB) is writing to the same vendor
+  feature report, the diagnostics now say the channel is busy instead of
+  reporting the mouse as asleep, and a refused write marks that reading stale
+  without stopping any other mouse (#281).
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
@@ -262,8 +324,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Read Arctis Pro Wireless through the sourced report-ID-zero fallback when the
   original exchange receives no answer; mark its coarse levels and unknown charging.
 - Refuse Glorious query echoes and provisional replies without suppressing real 0%.
-- Honor MonsGeek's keyboard-online flag instead of displaying a mouse-only
-  or disconnected-keyboard status as a current keyboard reading.
+- Honor MonsGeek's keyboard-online flag (zero while the keyboard is linked, as
+  MonsGeek's own driver reads it) instead of displaying a mouse-only or
+  disconnected-keyboard status as a current keyboard reading.
 - Refuse malformed percentages in AM Infinity and
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
@@ -344,6 +407,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.
 
+- Keychron Ultra-Link 8K: fall back to an output report when the receiver
+  rejects SET_FEATURE, read the charging flag in bit 7 of byte 20, and query
+  every matching receiver collection so two 8K dongles get separate icons,
+  each keyed on its own receiver so unplugging one never renames the other
+  (#373). Only documented battery collections are opened, and the output
+  retry is made only on `ffc1:0001`. The level was confirmed on a G4 with the
+  test build; the charging indication has not been reported yet.
+- Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
+  over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
+  on that collection when SET_FEATURE is refused or unanswered, and report the
+  charging bit. A Keychron receiver without a battery collection is skipped:
+  its keyboard, VIA and other collections are never opened or written.
+  Confirmed on hardware by @cocowalla in #270: the Keychron M6 icon and
+  100 % level match Keychron Launcher.
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 
 - Use single-language Language card headings in English, French and Spanish.
@@ -364,6 +441,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   transitions, and position backward navigation before the page settles.
 - Keep the colored Xbox logo centered inside the battery ring on both taskbar
   themes, and refresh the icon and charging previews with the current renderer.
+
+- **Razer Barracuda X (2022) on its USB cable** (`1532:0536`) is no longer sent any
+  command. 1.17.0 routed it to the BlackShark headset protocol on the strength of a
+  matching `ff00:0001` collection, but it is the cable identity, not a receiver, and
+  Windows refused every write ([#256](https://github.com/HeyOkay/HaloBattery/issues/256)).
+  The 2.4 GHz dongle (`1532:0552`) is read as before.
 
 ## [1.17.0] - 2026-11-12
 
@@ -520,6 +603,10 @@ source; their settings and battery history remain compatible.
 - **Razer Barracuda X (2022)** (`1532:0536`) - its receiver publishes `ff00:0001`, the
   collection the PA headset path reads, and the id was simply not routed there. Unverified
   on hardware; a test build is out for [#256](https://github.com/HeyOkay/HaloBattery/issues/256).
+  **Retracted after this release:** `0536` is the headset on its USB cable, not a
+  receiver; that collection has no output endpoint and Windows refused every write in the
+  #256 test. It never showed a battery level and is no longer sent anything (see
+  Unreleased). The 2.4 GHz dongle (`1532:0552`) is the supported path.
 
 ### Not enabled in this release
 

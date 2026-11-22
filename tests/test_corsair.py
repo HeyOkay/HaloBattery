@@ -220,6 +220,32 @@ class BragiParseTest(unittest.TestCase):
         self.assertIsNone(C.parse_bragi(bragi_se_reply(960)[:5]))   # short
 
 
+class XtCableParseTest(unittest.TestCase):
+    def test_only_complete_successful_self_get_replies_are_accepted(self):
+        good = bragi_se_reply(784, source=0)
+        self.assertEqual(C.parse_bragi_xt_cable(good), 78)
+        self.assertEqual(C.parse_bragi_xt_cable([0] + good), 78)
+        bad = [good[:n] for n in (0, 3, 5, 6, 63)]
+        bad += [good + [0], bragi_se_reply(784, source=1),
+                bragi_se_reply(784, source=2), bragi_se_reply(784, source=0, cmd=0x12),
+                bragi_se_reply(784, source=0, err=1), bragi_se_reply(1001, source=0),
+                bragi_reply(784, route=0)]
+        for offset, value in ((0, 0x0E), (4, -1), (5, 256), (5, True), (6, 1), (7, 1)):
+            altered = good.copy()
+            altered[offset] = value
+            bad.append(altered)
+        for reply in bad:
+            with self.subTest(reply=reply[:6], length=len(reply)):
+                self.assertIsNone(C.parse_bragi_xt_cable(reply))
+
+    def test_charge_requires_a_known_state_from_the_same_self_reply(self):
+        for value, expected in ((1, True), (2, False), (0, None), (3, None), (256, None)):
+            with self.subTest(value=value):
+                self.assertIs(C.parse_bragi_xt_cable(bragi_se_reply(value, source=0),
+                                                    charging=True), expected)
+        self.assertIsNone(C.parse_bragi_xt_cable(bragi_se_reply(1, source=1), charging=True))
+
+
 class Hs80UsbTest(unittest.TestCase):
     def test_usb_battery_request_frame(self):
         request = C.hs80_usb_request()
@@ -788,6 +814,57 @@ class VirtuosoFamilyTests(unittest.TestCase):
         self.assertEqual([(s.key, s.level, s.charging) for s in out],
                          [("corsair:virtuoso-xt", 87, False)])
         self.assertEqual([w[1] for w in d.writes], [0x09, 0x08, 0x08, 0x08])
+
+    def test_wired_xt_reads_its_self_reply_on_target_08(self):
+        # HeadsetControl 163c6ed corsair_virtuoso_xt.hpp: 0A62 answers itself,
+        # source 00 for target 08. The bytes are independent of provider constants.
+        class XtCable(FakeDongle):
+            def __init__(self, level):
+                super().__init__(replies=[])
+                self.script = {1: [bragi_se_reply(level, source=0)],
+                               2: [bragi_se_reply(level, source=0)],
+                               3: [bragi_se_reply(1, source=0)]}
+
+            def read(self, size, timeout_ms):
+                queue = self.script.get(len(self.writes)) or []
+                return list(queue.pop(0)) if queue else []
+
+        for raw, expected in ((0, 0), (784, 78), (1000, 100)):
+            with self.subTest(raw=raw):
+                cable = XtCable(raw)
+                out = self.poll([entry(0x0A62, b"xt-cable", 3, 0xFF42, 0x0001)],
+                                {b"xt-cable": cable})
+                self.assertEqual([(s.key, s.level, s.charging) for s in out],
+                                 [("corsair:virtuoso-xt", expected, True)])
+                self.assertEqual([write[:4] for write in cable.writes],
+                                 [bytes((2, 8, 2, 15)), bytes((2, 8, 2, 15)),
+                                  bytes((2, 8, 2, 16))])
+
+    def test_xt_self_reply_is_not_a_receiver_or_other_cable_reading(self):
+        for pid in (0x0A64, 0x0A3E, 0x0A3D, 0x0A40, 0x1B7F):
+            with self.subTest(pid=pid):
+                dongle = FakeDongle(bragi_se_reply(784, source=0))
+                with mock.patch.object(C, "BRAGI_WINDOW_S", 0.001):
+                    out = self.poll([entry(pid, b"other", 3, 0xFF42, 0x0001)],
+                                    {b"other": dongle})
+                self.assertEqual(out, [])
+
+    def test_xt_fallback_target_09_still_requires_a_headset_source(self):
+        # Target 08 stays silent; target 09 may use only the existing source-01 path.
+        for source, expected in ((0, None), (1, 78)):
+            with self.subTest(source=source):
+                class XtFallback(FakeDongle):
+                    def read(self, size, timeout_ms):
+                        if not self.writes or self.writes[-1][1] != 9:
+                            return []
+                        value = 2 if self.writes[-1][3] == 16 else 784
+                        return bragi_se_reply(value, source=source)
+
+                cable = XtFallback()
+                with mock.patch.object(C, "BRAGI_WINDOW_S", 0.001):
+                    out = self.poll([entry(0x0A62, b"xt", 3, 0xFF42, 0x0001)],
+                                    {b"xt": cable})
+                self.assertEqual([s.level for s in out], [] if expected is None else [expected])
 
     def test_the_se_receiver_and_cable_share_one_icon(self):
         class One(FakeDongle):

@@ -1,71 +1,77 @@
-"""Sony INZONE H9 II over its 2.4 GHz receiver's HID control channel.
+"""Sony INZONE H9 II receiver: read-only HID audio status, not H9 serial.
 
-The H9 II is a different transport from the H9/H7 serial port: its dongle
-exposes a 64-byte in/out vendor collection at usage page ``FF04`` (``054C:0FA8``),
-and INZONE Hub talks to it with 64-byte report-id-2 frames.
+Protocol source (MIT), marcinjakubowski/zoneout at
+49ebedb178f10c84c7e42e0e946c0ac971d08376:
+  src/zoneout/protocol.py L8-10,L33-43: exact 054c:0fa8 and status offsets.
+  src/zoneout/device.py L139-167: 64-byte output query 06, checksum A2,
+    then input reads. SPECS.md defines charging 0/1 and the status offsets.
+https://github.com/marcinjakubowski/zoneout/blob/49ebedb178f10c84c7e42e0e946c0ac971d08376/src/zoneout/device.py#L139-L167
+The Windows collection (interface 5 FF04:0001) and test-build level confirmation
+are in HaloBattery #387. Charging decoding is sourced, but the reporter did not
+confirm a cable transition; no hardware was tested for this implementation.
 
-Protocol sequence and the audio-status layout are from marcinjakubowski/zoneout
-(MIT), which supports the H9 II and INZONE Buds:
-
-    https://github.com/marcinjakubowski/zoneout
-    src/zoneout/protocol.py, src/zoneout/device.py
-
-Request for audio status (command 0x06), 64 bytes:
-
-    02 0C 01 00 FC 08 96 C3 41 06 01 01 00 9C ...
-
-The reply echoes command 0x06 at byte 9; byte 14 is the charging flag and byte
-15 the battery percentage on a headset.
-
-Read-only: only the status command is sent. No volume, noise-control, Bluetooth
-or firmware setting is written. Confirmed on the reporter's H9 II hardware
-(#387) with the read-only test build.
+Only the audio-status query below is sent. No H9 serial initialization, settings
+commands, feature-report fallback or alternate report sizes are attempted.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import List, Optional, Tuple
 
-try:
-    import hid
-except ImportError:              # pragma: no cover
-    hid = None
+import hid
 
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
-VID = 0x054C
-PID = 0x0FA8
-PAGE, USAGE = 0xFF04, 0x0001
+VID, PID = 0x054C, 0x0FA8
+INTERFACE, PAGE, USAGE = 5, 0xFF04, 0x0001
 REPORT_LEN = 64
-REPORT_ID = 0x02
-CMD_AUDIO_STATUS = 0x06
-MAGIC_1, MAGIC_2 = 0x96, 0xC3
-CHARGE_AT = 14
-LEVEL_AT = 15
-READ_MS = 25
-RETRIES = 40
+QUERY = bytes.fromhex("02 0C 01 00 FC 08 96 C3 41 06 01 01 00 A2") + bytes(50)
+DRAIN_LIMIT = 32
+READ_LIMIT = 40
+RECEIVER_BUDGET = 1.0
+POLL_BUDGET = 3.0
 
 
-def request(cmd: int = CMD_AUDIO_STATUS) -> List[int]:
-    req = [0x00] * REPORT_LEN
-    header = [REPORT_ID, 0x0C, 0x01, 0x00, 0xFC, 0x08,
-              MAGIC_1, MAGIC_2, 0x41, cmd, 0x01, 0x01, 0x00,
-              (cmd + 0x9C) & 0xFF]
-    req[:len(header)] = header
-    return req
+def parse_status(data) -> Optional[Tuple[int, bool, bool]]:
+    """Return level, charging, charging-known for a complete audio reply.
 
-
-def parse_reply(r) -> Optional[Tuple[int, bool]]:
-    """(level, charging) from an audio-status reply, or None."""
-    if not r or len(r) <= LEVEL_AT:
+    The source has no response sequence/checksum validation or verified status
+    response category. Do not require it to echo the request's magic/category.
+    """
+    if not isinstance(data, (bytes, bytearray, list, tuple)) or len(data) != REPORT_LEN:
         return None
-    if r[0] != REPORT_ID or r[9] != CMD_AUDIO_STATUS:
+    if any(type(value) is not int or not 0 <= value <= 255 for value in data):
         return None
-    level = r[LEVEL_AT]
-    if not 0 <= level <= 100:
+    if data[0] != 0x02 or data[9] != 0x06:
         return None
-    return level, bool(r[CHARGE_AT])
+    # Our exact outgoing query is not a battery measurement. Reject its echo
+    # without inventing any fixed header for the actual status response.
+    if bytes(data) == QUERY:
+        return None
+    level, charge = data[15], data[14]
+    if level > 100:
+        return None
+    # SPECS.md defines 0/1. Other flag values do not invalidate a valid level,
+    # but cannot be presented as a known charging state.
+    return level, charge == 1, charge in (0, 1)
+
+
+def path_key(path) -> Optional[str]:
+    """A collection path identifies a receiver; enumeration order/serial do not."""
+    if isinstance(path, bytes):
+        try:
+            path = path.decode("utf-8")
+        except UnicodeError:
+            return None
+    if not isinstance(path, str) or not path or "\0" in path:
+        return None
+    try:
+        normalized = path.casefold().encode("utf-8")
+    except UnicodeError:
+        return None
+    return "sony_h9ii:" + hashlib.sha256(normalized).hexdigest()
 
 
 class SonyH9IIProvider(Provider):
@@ -73,69 +79,106 @@ class SonyH9IIProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._cursor = 0
 
-    def _read(self, path) -> Optional[Tuple[int, bool]]:
-        dev = hid.device()
+    def _read(self, path, deadline) -> Optional[Tuple[int, bool, bool]]:
+        dev = None
         try:
+            dev = hid.device()
             dev.open_path(path)
-        except (OSError, IOError) as e:
-            self._diag.append(f"    open: {e}")
-            return None
-        try:
-            # Drain notifications left by the previous poll before asking.
-            while dev.read(REPORT_LEN, 1):
-                pass
-            sent = dev.write(request())
-            if sent is None or sent < 0:
-                self._diag.append(f"    write refused ({sent})")
+            metadata = getattr(dev, "get_report_lengths", None)
+            expected_write = None
+            if metadata is not None and not callable(metadata):
+                self._diag.append("  invalid report metadata helper; not querying")
                 return None
-            for _ in range(RETRIES):
-                r = dev.read(REPORT_LEN, READ_MS)
-                if not r:
-                    continue
-                if len(r) > LEVEL_AT and r[9] == CMD_AUDIO_STATUS:
-                    parsed = parse_reply(r)
-                    if parsed is not None:
-                        self._diag.append(f"    answer: {hexdump(r, 12)} -> "
-                                          f"{parsed[0]}% charging={parsed[1]}")
-                        return parsed
-            self._diag.append("    no audio-status reply")
-            return None
-        except (OSError, IOError, ValueError) as e:
-            self._diag.append(f"    read/write: {e}")
-            return None
+            if callable(metadata):
+                caps = metadata()
+                # HIDP_CAPS contains the largest report per collection, including
+                # its ID, not the size of report 2 alone. Native write pads to
+                # output caps; native read uses input caps then returns 64 bytes.
+                if (not isinstance(caps, dict)
+                        or any(type(caps.get(kind)) is not int or caps[kind] < REPORT_LEN
+                               for kind in ("input", "output"))):
+                    self._diag.append("  incompatible input/output report contract; not querying")
+                    return None
+                expected_write = caps["output"]
+            # Legacy hidapi has no cached-caps helper: use exactly the primary
+            # source's 64-byte write/read, with no guessed fallback variants.
+            for _ in range(DRAIN_LIMIT):
+                if time.monotonic() >= deadline:
+                    return None
+                if not dev.read(REPORT_LEN, 1):
+                    break
+            else:
+                self._diag.append("  input queue did not drain; not querying")
+                return None
+            if time.monotonic() >= deadline:
+                return None
+            sent = dev.write(QUERY)
+            if (type(sent) is not int or sent < REPORT_LEN
+                    or (expected_write is not None and sent != expected_write)):
+                self._diag.append(f"  status write refused or short ({sent})")
+                return None
+            for _ in range(READ_LIMIT):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                data = dev.read(REPORT_LEN, max(1, min(25, int(remaining * 1000))))
+                result = parse_status(data)
+                if result is not None:
+                    self._diag.append(f"  audio status: {hexdump(data, 16)}")
+                    return result
+            self._diag.append("  no matching audio-status reply")
+        except (OSError, ValueError, TypeError) as exc:
+            self._diag.append(f"  HID: {exc}")
         finally:
-            try:
-                dev.close()
-            except Exception:
-                pass
+            if dev is not None:
+                try:
+                    dev.close()
+                except (OSError, ValueError):
+                    pass
+        return None
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
-        if hid is None:
-            return []
+        deadline = time.monotonic() + POLL_BUDGET
         try:
             infos = hidlist.enumerate(VID)
-        except Exception as e:  # pragma: no cover
-            log.warning("hid.enumerate(sony_h9ii): %s", e)
+        except Exception as exc:  # pragma: no cover
+            log.warning("hid.enumerate(sony_h9ii): %s", exc)
             return []
-
-        out: List[DeviceStatus] = []
-        for d in infos:
-            if d.get("product_id") != PID:
+        candidates = {}
+        fields = ("vendor_id", "product_id", "interface_number", "usage_page", "usage")
+        for info in infos:
+            if (not isinstance(info, dict)
+                    or any(type(info.get(field)) is not int for field in fields)
+                    or tuple(info[field] for field in fields) != (VID, PID, INTERFACE, PAGE, USAGE)):
                 continue
-            if (d.get("usage_page"), d.get("usage")) != (PAGE, USAGE):
-                continue
-            name = (d.get("product_string") or "").strip() or "Sony INZONE H9 II"
-            self._diag.append(f"[Sony H9 II] {name} pid={PID:04x} "
-                              f"iface={d.get('interface_number')}")
-            got = self._read(d["path"])
-            if got is None:
-                continue
-            level, charging = got
-            out.append(DeviceStatus("sony_h9ii", "Sony INZONE H9 II", level, charging,
-                                    True, self.name, kind="headset"))
-            break
+            key = path_key(info.get("path"))
+            if key is not None:
+                candidates.setdefault(key, info["path"])
+        keys = sorted(candidates)
+        if not keys:
+            self._cursor = 0
+            return []
+        start = self._cursor % len(keys)
+        keys = keys[start:] + keys[:start]
+        out = []
+        for offset, key in enumerate(keys):
+            now = time.monotonic()
+            if now >= deadline:
+                self._diag.append("  poll budget reached; remaining receivers deferred")
+                break
+            # Protocol reads get one second per receiver; native ownership and
+            # cleanup have separate transport bounds. Resume after the last
+            # attempted receiver on the next poll if the shared budget expires.
+            self._cursor = (start + offset + 1) % len(keys)
+            self._diag.append(f"[Sony H9 II] pid=0fa8 iface=5 ff04:0001 {key}")
+            result = self._read(candidates[key], min(deadline, now + RECEIVER_BUDGET))
+            if result is not None:
+                level, charging, known = result
+                out.append(DeviceStatus(key, "Sony INZONE H9 II", level, charging, True,
+                                        self.name, kind="headset", charging_known=known))
         return out
 
     def diagnostics(self) -> List[str]:

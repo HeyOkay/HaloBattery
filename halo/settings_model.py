@@ -15,6 +15,10 @@ from providers.base import DeviceStatus
 
 log = logging.getLogger("halo_battery")
 
+# Settings > About links. The Discord invite is the server's permanent one.
+WEBSITE_URL = "https://halobattery.app"
+DISCORD_URL = "https://discord.gg/K796KR9xtk"
+
 
 class SettingsController:
     def __init__(self, app):
@@ -466,6 +470,8 @@ class SettingsController:
         actions = dict(refresh=getattr(app, "request_refresh", app.wake.set), diagnostics=app.request_diag, check_update=app.check_update_now,
                        start_update=app.start_update, quit=app.quit, show_whats_new=app.show_whats_new,
                        open_data=lambda: os.startfile(self.context["data_dir"]),
+                       open_website=lambda: app.open_url(WEBSITE_URL),
+                       open_discord=lambda: app.open_url(DISCORD_URL),
                        open_project=lambda: app.open_url("https://github.com/" + self.context["repo"]),
                        open_issue=lambda: app.open_url("https://github.com/" + self.context["repo"] + "/issues/new/choose"))
         if name not in actions:
