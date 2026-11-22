@@ -49,6 +49,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   while the headset was off.
 - Add an outline Discord shortcut at the bottom of the navigation rail, with
   a tooltip and a native fade to Discord's brand color on hover.
+- The 8BitDo Ultimate 2 Wireless is named as such in the controller list when it
+  is the only controller connected (next to another pad it keeps the generic name),
+  and its documentation says plainly that the 2.4 GHz dongle carries no battery
+  level while Bluetooth does (#461).
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in

@@ -859,6 +859,27 @@ The same exchange as the DeathStalker V2 Pro TKL above, with the ids and interfa
 
 Listened to, never written: byte 14 of the controller's enhanced input report (report 0x01 over Bluetooth, 0x04 over USB; bits 0-6 the level in %, bit 7 charging), as SDL reads it. The controller sends that report only after Steam or a game has switched it on, see the note below the table. The Pro 3 (2DC8:6009) is the exception: its descriptor declares one input report, 0x04, on both transports, and it carries the level in byte 14 at all times, so the Pro 3 shows its level without Steam - **confirmed on a real Pro 3 over Bluetooth**, with Steam closed and the controller freshly turned on. In XInput mode these controllers are read as Xbox controllers. The other models are **unverified**, so a level of 0 or above 100 is refused rather than shown
 
+### 8BitDo Ultimate 2 Wireless (XInput)
+
+**Connection:** Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`) or USB (gamepad only).
+
+An XInput pad, so Windows.Gaming.Input owns the battery report: over the dongle it
+returns its placeholder (`remain=1000`, `full=1000`), and Windows Settings shows no
+battery for the device either (checked by the reporter). The receiver's vendor
+collection (`ff7a:0001`) is silent - the diagnostics recorded `nothing received` - and
+its XInput-facing collection `0001:0005` must never be opened: reading it makes XInput
+fail with `read error` and the pad disappears on 2.4 GHz and USB (test build 3, #461).
+There is therefore no level to read over the dongle, and none is invented.
+
+Over Bluetooth the controller reports one, and the Bluetooth provider shows it - 60 % on
+the reporter's unit. The XInput provider names the pad **8BitDo Ultimate 2** from the
+product id in its Windows.Gaming.Input report, because Windows calls it "Xbox 360
+Controller for Windows" - but only while it is the only controller connected (one XInput
+slot, one report). Windows' report order is not the XInput slot order, so next to another
+controller the pad keeps the generic name rather than risk renaming the other one. Its
+Windows.Gaming.Input reports are deliberately left out of the trusted set: the
+`remain=full=1000` placeholder would otherwise become a false 100 % (#110, #191).
+
 ### ASUS ROG Raikiri II
 
 **Connection:** 2.4 GHz receiver (`0B05:1C92`), vendor collection `ff03:0001` on interface 4
