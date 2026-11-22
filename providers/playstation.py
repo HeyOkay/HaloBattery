@@ -117,7 +117,9 @@ def usb_identity_request(info: dict) -> Optional[Tuple[int, int, int]]:
         return None
     path = info.get("path")
     text = path.decode("ascii", "ignore") if isinstance(path, bytes) else str(path)
-    if not re.search(r"(?:^|#)vid_054c&pid_" + f"{pid:04x}" + r"(?:[&#]|$)", text.lower()):
+    text = text.lower()
+    if ("vid&" in text or _BT_HID_GUID in text
+            or not re.search(r"(?:^|#)vid_054c&pid_" + f"{pid:04x}" + r"(?:[&#]|$)", text)):
         return None
     # If hidapi exposes a bus type, it must also agree with the USB path.
     if type(info.get("bus_type", 1)) is not int or info.get("bus_type", 1) != 1:

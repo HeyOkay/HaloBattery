@@ -99,10 +99,22 @@ class UsbIdentityTests(unittest.TestCase):
                 self.assertIsNone(P.usb_identity_request(dict(valid, **changes)))
 
     def test_bluetooth_even_with_usb_bus_metadata_gets_no_identity_feature(self):
-        pad = FakePad("full")
-        values = self.poll([descriptor(BT_PATH, serial_number=MAC)], {BT_PATH: pad})
-        self.assertEqual(values[0].key, "ps:0ce6:" + MAC)
-        self.assertEqual(self.requests, [])
+        for path in (BT_PATH, b"\\\\?\\hid#vid&0002054c_pid&0ce6#controller",
+                     b"\\\\?\\hid#{00001124-0000-1000-8000-00805f9b34fb}#controller",
+                     USB_PATH + b"#{00001124-0000-1000-8000-00805f9b34fb}"):
+            with self.subTest(path=path):
+                info = descriptor(path, serial_number=MAC)
+                self.assertIsNone(P.usb_identity_request(info))
+                values = self.poll([info], {path: FakePad("full")})
+                self.assertEqual(values[0].key, "ps:0ce6:" + MAC)
+                self.assertEqual(self.requests, [])
+
+    def test_missing_bus_type_requires_positive_unambiguous_usb_path(self):
+        info = descriptor()
+        del info["bus_type"]
+        self.assertEqual(P.usb_identity_request(info), (9, 128, 20))
+        for path in (BT_PATH, b"opaque-device", USB_PATH + b"#vid&0002054c"):
+            self.assertIsNone(P.usb_identity_request(dict(info, path=path)))
 
     def test_complete_payload_echo_and_mac_are_required(self):
         for request in ((0x12, 64, 16), (9, 128, 20)):
