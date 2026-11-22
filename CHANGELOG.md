@@ -8,9 +8,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Refresh documented device-test evidence and distinguish pending support fixes
-  from released behavior.
-
 - Publish each successful pre-release build separately, with matching source
   tags and immutable assets, instead of replacing one rolling release.
 
@@ -34,6 +31,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   spacing and a brighter accent. Soften inactive navigation labels and glyphs,
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
+
+- Refresh documented device-test evidence and distinguish pending support fixes
+  from released behavior.
 
 ### Added
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
