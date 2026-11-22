@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from halo.locales import en, es, fr, ja, kk, ru, uk, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, kk, pl, ru, uk, zh_CN, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -41,6 +41,18 @@ def _east_slavic_plural(count: int) -> str:
     return "many"
 
 
+def _polish_plural(count: int) -> str:
+    """CLDR Polish integer forms; fractional and non-integer counts use other."""
+    if isinstance(count, bool) or not isinstance(count, int):
+        return "other"
+    count = abs(count)
+    if count == 1:
+        return "one"
+    if count % 100 not in range(12, 15) and count % 10 in range(2, 5):
+        return "few"
+    return "many"
+
+
 @dataclass(frozen=True)
 class Language:
     """All metadata needed to add a language; counts are nonnegative integers.
@@ -66,6 +78,8 @@ LANGUAGES = {
     "fr": Language("Français", fr.MESSAGES, plural_rule=_french_plural,
                    windows_primary_ids=(0x0C,)),
     "es": Language("Español", es.MESSAGES, windows_primary_ids=(0x0A,)),
+    "pl": Language("Polski", pl.MESSAGES, plural_rule=_polish_plural,
+                   windows_primary_ids=(0x15,), plural_forms=("one", "few", "many", "other")),
     "zh-TW": Language("繁體中文", zh_TW.MESSAGES, plural_rule=other_only,
                       plural_forms=("other",),
                       windows_language_ids=(0x0404, 0x0C04, 0x1404, 0x7C04)),

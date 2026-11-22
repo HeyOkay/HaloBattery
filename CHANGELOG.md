@@ -183,6 +183,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
+- Polish interface translation, including Windows language detection and Polish
+  plural forms for estimates and device counts.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
   name filters. Search all reviewed names with 50-candidate pages, round arrow
   and number buttons, predecoded neighboring previews and bounded parallel
@@ -212,7 +214,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
   Double-clicking a device's tray icon opens settings for that exact device.
   The compact right-click menu keeps device settings, refresh, app settings,
-  diagnostics, updates when available and exit within reach. All seven
+  diagnostics, updates when available and exit within reach. All ten
   interface languages remain available.
 - Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
   navigation and control glyphs for the settings window.
