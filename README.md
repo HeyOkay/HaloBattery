@@ -15,7 +15,7 @@ One icon per device. No vendor software.
 ### [⬇ Download the latest version](../../releases/latest)
 
 Maintained together with the community. To help, read [Contributing](.github/CONTRIBUTING.md).<br>
-The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) has fixes that are not released yet. It is rebuilt on every merge and may have bugs.
+The [pre-release builds](https://github.com/HeyOkay/HaloBattery/releases) have fixes that are not released yet and may have bugs. Choose the newest entry marked **Pre-release**; each successful build has its own release and matching source tag.
 
 <img src="docs/icons.png" alt="Every icon state: headset, mouse, keyboard, controllers and Bluetooth at 100 % down to 15 %, charging and asleep" width="560">
 

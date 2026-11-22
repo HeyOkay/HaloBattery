@@ -1,10 +1,8 @@
 name: Pre-release build
 
-# Every push to pre-release (each merged pull request) builds Halo Battery and
-# updates the single rolling GitHub release "prerelease-build" with the new zip
-# and installer while leaving the source tag fixed, so testers use one download URL.
-# It is marked as a pre-release: the app's updater only reads /releases/latest,
-# which never returns pre-releases, so normal users are not offered it.
+# Each successful pre-release build gets its own release and exact source tag.
+# Published builds are never replaced, so repository release immutability can
+# protect them. Pre-releases are excluded from the stable app updater.
 
 on:
   push:
@@ -12,14 +10,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: prerelease-build
-  cancel-in-progress: true
+  group: prerelease-build-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-
-env:
-  TAG: prerelease-build
 
 jobs:
   build:
@@ -64,7 +59,7 @@ jobs:
       - name: Archive native settings symbols
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: HaloBattery-Settings-symbols-${{ github.sha }}
+          name: HaloBattery-Settings-symbols-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
           include-hidden-files: true
           if-no-files-found: error
@@ -89,7 +84,7 @@ jobs:
           $lines = foreach ($f in @($zip, "dist/HaloBattery-$ver-pre-$sha-setup.exe")) { "{0} *{1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
           $lines | Out-File -Encoding ascii SHA256SUMS.txt
           @"
-          **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. It is rebuilt on every merge.
+          **Test build of the ``pre-release`` branch** at commit ${{ github.sha }}. Each successful build has its own pre-release and matching source tag; earlier builds stay available.
 
           It has the changes merged since the last stable release that are not yet in ``main``; see [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/CHANGELOG.md). It may have bugs. For everyday use, take the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
 
@@ -107,14 +102,14 @@ jobs:
         id: publish_assets
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: HaloBattery-pre-release-assets-${{ github.sha }}
+          name: HaloBattery-pre-release-assets-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: release-assets/
           if-no-files-found: error
           retention-days: 7
 
   publish:
     # Keep building/testing on a read-only runner; never execute downloaded data.
-    # workflow_dispatch is a build-only check and cannot replace the public build.
+    # workflow_dispatch stays build-only; only pushes to pre-release publish.
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/pre-release'
     runs-on: ubuntu-latest
@@ -156,41 +151,81 @@ jobs:
           echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
           echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
           echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=$(sha256sum "$zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "setup-sha256=$(sha256sum "$setup" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sums-sha256=$(sha256sum SHA256SUMS.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
-      - name: Replace the rolling pre-release
+      - name: Publish a build-specific pre-release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
           ZIP: ${{ steps.assets.outputs.zip }}
           SETUP: ${{ steps.assets.outputs.setup }}
-          SHORT: ${{ steps.assets.outputs.short }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
         shell: bash
         run: |
-          # Keep the public URL and tag anchor; update only release metadata/assets.
-          notes="$(mktemp "$RUNNER_TEMP/halobattery-prerelease-notes.XXXXXX")"
-          trap 'rm -f "$notes"' EXIT
-          cat release-assets/release_notes.md > "$notes"
-          printf '\n\nThe `%s` tag is a fixed source-archive anchor. GitHub\047s automatic Source code archives stay at that tag and may differ from these build assets. Exact build source: [%s](https://github.com/%s/commit/%s).\n' \
-            "$TAG" "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_SHA" >> "$notes"
-          # JSON-quoted names keep embedded newlines/control characters on one line.
-          if old_assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --json assets --jq '.assets[].name | @json')"; then
-            gh release upload "$TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt \
-              --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
-              --title "Pre-release build ($SHORT)" --notes-file "$notes"
-            # Cleanup runs only after successful uploads and metadata update. Preserve
-            # unknown attachments and the current build, including on a rerun.
-            pattern='^"HaloBattery-[0-9]+\.[0-9]+\.[0-9]+-pre-[0-9a-f]{7}(-setup\.exe|\.zip)"$'
-            while IFS= read -r quoted; do
-              [[ "$quoted" =~ $pattern ]] || continue
-              asset="${quoted:1:${#quoted}-2}"
-              if [[ "$asset" != "${ZIP##*/}" && "$asset" != "${SETUP##*/}" ]]; then
-                gh release delete-asset "$TAG" "$asset" --yes --repo "$GITHUB_REPOSITORY"
-              fi
-            done <<< "$old_assets"
-          else
-            # gh creates a missing tag at this commit; an existing tag stays put.
-            gh release create "$TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt \
-              --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
-              --title "Pre-release build ($SHORT)" --notes-file "$notes"
-          fi
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          short="${GITHUB_SHA:0:7}"
+          # Non-v tags cannot trigger the stable v* release workflow. A fresh
+          # run attempt never needs to replace an earlier attempt's draft/assets.
+          TAG="pre-$RELEASE_VERSION-$short-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ "$ZIP" == "release-assets/HaloBattery-$RELEASE_VERSION-pre-$short.zip" ]]
+          [[ "$SETUP" == "release-assets/HaloBattery-$RELEASE_VERSION-pre-$short-setup.exe" ]]
+          for digest in "$ZIP_SHA256" "$SETUP_SHA256" "$SUMS_SHA256"; do
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          done
+          [[ "$(sha256sum "$ZIP" | cut -d ' ' -f 1)" == "$ZIP_SHA256" ]]
+          [[ "$(sha256sum "$SETUP" | cut -d ' ' -f 1)" == "$SETUP_SHA256" ]]
+          [[ "$(sha256sum release-assets/SHA256SUMS.txt | cut -d ' ' -f 1)" == "$SUMS_SHA256" ]]
+          # Inspect all pages, including drafts. API errors are failures, never
+          # permission to create or mutate a release at an uncertain identity.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .id")"
+          [[ -z "$existing" ]]
+          existing_tag="$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" \
+            --jq ".[] | select(.ref == \"refs/tags/$TAG\") | .ref")"
+          [[ -z "$existing_tag" ]]
+          [[ "$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA" --jq '.ref')" == "refs/tags/$TAG" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f "tag_name=$TAG" -f "target_commitish=$GITHUB_SHA" \
+            -f "name=Pre-release $RELEASE_VERSION ($short)" \
+            -F draft=true -F prerelease=true -f make_latest=false \
+            -F body=@release-assets/release_notes.md --jq '.id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            --jq '[.id,.draft,.prerelease,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\ttrue\t'"$TAG" ]]
+          initial_assets="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --jq '.[].id')"
+          [[ -z "$initial_assets" ]]
+          gh release upload "$TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          # Recheck both source and draft identity immediately before publishing.
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            --jq '[.id,.draft,.prerelease,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\ttrue\t'"$TAG" ]]
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          published="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false -F prerelease=true -f make_latest=false \
+            --jq '[.id,.draft,.prerelease,.tag_name] | @tsv')"
+          [[ "$published" == "$release_id"$'\tfalse\ttrue\t'"$TAG" ]]
+          gh release verify "$TAG" --repo "$GITHUB_REPOSITORY"
+          for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
+            gh release verify-asset "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          printf 'Pre-release: https://github.com/%s/releases/tag/%s\n' "$GITHUB_REPOSITORY" "$TAG" >> "$GITHUB_STEP_SUMMARY"

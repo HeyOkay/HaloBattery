@@ -2,7 +2,7 @@
 
 Test signing is an explicit mode of the existing `release.yml` manual workflow.
 Its build, packaging, signing and verification jobs live in the same workflow.
-Normal manual builds, stable tag builds and the rolling pre-release retain their
+Normal manual builds, stable tag builds and per-build pre-releases retain their
 existing behavior.
 
 The job chain is:
@@ -115,7 +115,7 @@ This test signs the application PEs and outer setup only. The generated Inno
 uninstaller and temporary setup copies still need the separately reviewed
 signed-uninstaller pipeline. Redistributed DLLs, including libusb, are a separate
 publisher issue. The production certificate is still pending and no TEST artifact
-may feed the stable or rolling release publisher.
+may feed a stable or pre-release publisher.
 
 References: [SignPath GitHub integration](https://docs.signpath.io/trusted-build-systems/github),
 [GitHub reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows),
