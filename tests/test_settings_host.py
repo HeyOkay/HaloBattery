@@ -779,6 +779,17 @@ class SettingsHostTests(unittest.TestCase):
                 self.assertTrue(all(type(value) in (bool, int, str) for value in state["settings"].values()))
                 host.encode_message(state)
 
+    def test_polish_settings_uses_complete_localized_catalog(self):
+        self.controller.snapshot.return_value["cfg"]["language"] = "pl"
+        _, state = self.hello()
+        self.assertEqual(state["language"], "pl")
+        self.assertIn(dict(value="pl", label="Polski"), state["options"]["languages"])
+        self.assertEqual(state["labels"]["settings.title"], "Ustawienia")
+        self.assertEqual(state["labels"]["settings.website"], "Strona internetowa")
+        self.assertEqual(state["labels"]["icon.phone"], "Telefon")
+        self.assertEqual(state["labels"]["settings.open_failed"].count("{preferences}"), 1)
+        self.assertIn("Społeczność", state["labels"]["settings.discord"])
+
     def test_ready_callback_waits_for_first_visible_ack_and_runs_once(self):
         ready = Mock()
         manager = host.SettingsHost(self.controller, on_ready=ready)
