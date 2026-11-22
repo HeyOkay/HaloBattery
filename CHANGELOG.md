@@ -8,10 +8,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Give start-up's freed memory back to Windows two minutes after start: the idle app
-  drops from about 35 MB to about 15 MB in Task Manager.
-- Give memory back to Windows when the Settings window closes. Browsing icons used to
-  leave about 30 MB of freed memory counted against the app until Windows needed it.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
   1 MB (single colour) or 4-8 MB (colour) of raw pixels.
 - Custom Iconify tray icons no longer load the whole icon-library registry at start-up

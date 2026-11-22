@@ -11,7 +11,6 @@ import threading
 from dataclasses import dataclass, field
 
 from . import icons
-from .working_set import release_unused_memory
 
 PAGE_SIZE = 50
 MAX_SEARCH_START = 500000
@@ -204,12 +203,7 @@ class IconCatalogJobs:
             with self._pages_lock:
                 self._flights.clear()
             with self._catalog_lock:
-                owned = self._owns_catalog and self._catalog_instance is not None
                 self._catalog_instance = None
-            if owned:
-                # The window's search index, previews and HTTP buffers are garbage now. Hand
-                # their pages back to Windows instead of keeping ~30 MB in the tray's working set.
-                release_unused_memory()
         except (OSError, ValueError):
             log.warning("settings: temporary icon cache cleanup failed", exc_info=True)
         finally:
