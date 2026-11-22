@@ -119,7 +119,7 @@ class B0ParserTests(unittest.TestCase):
         (S.parse_nova5, [0xB0, 0x02, 0, 60, 0x00], (None, False, False)),
         (S.parse_arctis7_plus, [0xB0, 0x03, 2, 0x01], (50, True, True)),
         (S.parse_arctis7_plus, [0xB0, 0x01, 2, 0x00], (None, False, False)),   # off
-        (S.parse_arctis7_plus, [0xB0, 0x03, 9, 0x00], (100, False, True)),     # capped
+        (S.parse_arctis7_plus, [0xB0, 0x03, 9, 0x00], (None, False, False)),  # outside 0..4
         (S.parse_gamebuds, [0xB0, 0, 0, 0x03, 0x03, 80, 60], (60, False, True)),
         (S.parse_gamebuds, [0xB0, 0, 0, 0x03, 0x02, 80, 0], (80, False, True)),   # right in case
         (S.parse_gamebuds, [0xB0, 0, 0, 0x02, 0x02, 0, 0], (None, False, False)),
@@ -330,6 +330,105 @@ class SafetyTests(SteelSeriesTestCase):
 
     def test_gamedac_is_not_polled(self):
         self.assertNotIn(0x1280, S.CLASSIC_MODELS)
+
+
+class ProWirelessReportIDTests(SteelSeriesTestCase):
+    """#389: unnumbered HID output on the confirmed 1038:1290 base station."""
+
+    @staticmethod
+    def prefixed(step=3, state=0x04):
+        def respond(req):
+            if req[:3] == [0, 0x41, 0xAA]:
+                return [[state, 2] + [0] * 30]
+            if req[:3] == [0, 0x40, 0xAA]:
+                return [[step] + [0] * 31]
+            return []
+        return respond
+
+    def read_pro(self, responder):
+        return self.poll([entry(0x1290, 0, 0xFF00, b"pro")], {b"pro": responder})
+
+    def test_five_steps_are_approximate_and_charging_unknown(self):
+        for step in range(5):
+            with self.subTest(step=step):
+                [st], _ = self.read_pro(self.prefixed(step))
+                self.assertEqual(st.level, step * 25)
+                self.assertEqual(st.approx, f"about {step * 25}%")
+                self.assertEqual(st.ui_message, "state.approx")
+                self.assertFalse(st.charging_known)
+                self.assertFalse(st.charging)
+                requests = [req for _, req in self.bus.writes]
+                self.assertEqual([r[:3] for r in requests],
+                                 [[0x41, 0xAA, 0], [0, 0x41, 0xAA], [0, 0x40, 0xAA]])
+                self.assertEqual([len(r) for r in requests], [31, 32, 32])
+
+    def test_existing_framing_still_wins(self):
+        def respond(req):
+            return [[4]] if req[:2] == [0x41, 0xAA] else [[3]]
+        [st], _ = self.read_pro(respond)
+        self.assertEqual(st.level, 75)
+        self.assertEqual([req[:2] for _, req in self.bus.writes],
+                         [[0x41, 0xAA], [0x40, 0xAA]])
+
+    def test_off_in_prefixed_mode_does_not_ask_battery(self):
+        out, _ = self.read_pro(self.prefixed(state=2))
+        self.assertEqual(out, [])
+        self.assertEqual([req[:3] for _, req in self.bus.writes],
+                         [[0x41, 0xAA, 0], [0, 0x41, 0xAA]])
+
+    def test_refused_original_write_can_use_report_id_zero(self):
+        prefixed = self.prefixed()
+        def respond(req):
+            if req[0] != 0:
+                raise OSError("report ID refused")
+            return prefixed(req)
+        [st], _ = self.read_pro(respond)
+        self.assertEqual(st.level, 75)
+        self.assertEqual(len(self.bus.writes), 3)
+
+    def test_silent_or_garbage_status_has_no_battery_request(self):
+        for reply in ([], [0], [1], [0xFF]):
+            with self.subTest(reply=reply):
+                out, _ = self.read_pro(lambda req: [reply])
+                self.assertEqual(out, [])
+                self.assertEqual(len(self.bus.writes), 2)
+                self.assertTrue(all(0x41 in req[:3] for _, req in self.bus.writes))
+
+    def test_accepted_original_status_with_bad_battery_never_retries(self):
+        # Reviewer note: a partial accepted exchange proves its framing; changing
+        # formats here could consume unrelated packets as the one-byte battery.
+        for battery in ([], [5], [255]):
+            with self.subTest(battery=battery):
+                def respond(req):
+                    return [[4]] if req[:2] == [0x41, 0xAA] else [battery]
+                out, _ = self.read_pro(respond)
+                self.assertEqual(out, [])
+                self.assertEqual([req[:2] for _, req in self.bus.writes],
+                                 [[0x41, 0xAA], [0x40, 0xAA]])
+
+    def test_prefixed_invalid_battery_is_not_a_level(self):
+        for battery in ([], [5], [255]):
+            with self.subTest(battery=battery):
+                base = self.prefixed()
+                def respond(req):
+                    return [battery] if req[:3] == [0, 0x40, 0xAA] else base(req)
+                self.assertEqual(self.read_pro(respond)[0], [])
+
+    def test_disappearance_after_status_is_safe(self):
+        base = self.prefixed()
+        def respond(req):
+            if req[:3] == [0, 0x40, 0xAA]:
+                raise OSError("device disappeared")
+            return base(req)
+        out, provider = self.read_pro(respond)
+        self.assertEqual(out, [])
+        self.assertTrue(any("device disappeared" in x for x in provider.diagnostics()))
+
+    def test_other_classic_model_has_no_zero_fallback(self):
+        out, _ = self.poll([entry(0x1260, 5, 0xFF00, b"a7")],
+                           {b"a7": lambda req: []})
+        self.assertEqual(out, [])
+        self.assertEqual([req[:2] for _, req in self.bus.writes], [[0x06, 0x18]])
 
 
 if __name__ == "__main__":

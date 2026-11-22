@@ -24,6 +24,7 @@ internal sealed partial class SettingToggle : ToggleButton
         ui = window;
         Width = MinWidth = 40;
         Height = MinHeight = 22;
+        CornerRadius = new CornerRadius(11);
         Padding = new Thickness(0);
         BorderThickness = new Thickness(0);
         UseSystemFocusVisuals = true;
@@ -33,6 +34,7 @@ internal sealed partial class SettingToggle : ToggleButton
         IsEnabledChanged += (_, _) => Opacity = IsEnabled ? 1 : .45;
         Loaded += (_, _) => AttachThumbShadow();
         Unloaded += (_, _) => DetachThumbShadow();
+        ui.EnableControlSpotlight(this);
     }
 
     protected override void OnApplyTemplate()

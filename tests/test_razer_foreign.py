@@ -10,9 +10,6 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
-
-# Independent wire fixtures: OpenRazer driver/razercommon.h status table.
-# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -37,7 +34,7 @@ class Clock:
 def foreign_packet(n):
     """A reply to someone else's lighting frame: status 02, class 0f id 03."""
     out = bytearray(90)
-    out[0], out[1], out[5], out[6], out[7] = 0x02, (n * 7) % 0x20, 0x08, 0x0F, 0x03
+    out[0], out[1], out[5], out[6], out[7] = R.STATUS_OK, (n * 7) % 0x20, 0x08, 0x0F, 0x03
     return out
 
 
@@ -63,7 +60,7 @@ class BusyMouse:
         if self.pending is not None:
             req, self.pending = self.pending, None
             out = bytearray(90)
-            out[0] = 0x02
+            out[0] = R.STATUS_OK
             out[1:8] = req[1:8]
             out[9] = self.values[req[7]]
         else:

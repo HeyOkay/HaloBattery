@@ -347,7 +347,7 @@ class SpeedNovaPollTest(ProviderTest):
                 self.assertEqual(bus[entries[3]["path"]].writes, [])
                 self.assertEqual(bus[entries[0]["path"]].opened, 0)
 
-    def test_unknown_pairings_never_authorize_a_mouse_or_keyboard_query(self):
+    def test_unknown_pairings_do_not_authorize_the_keyboard_query(self):
         # Neither a plausible cable PID nor an explicit product name identifies
         # the paired Harpe model on this shared receiver.
         for paired, product in ((0x1234, "ROG SPEEDNOVA 8K RECEIVER"),
@@ -356,29 +356,29 @@ class SpeedNovaPollTest(ProviderTest):
             with self.subTest(paired=paired, product=product):
                 entries = [dict(d, product_string=product) for d in speednova_entries()]
                 pairs = [0x01, 0xA0, 0, 1, 0, paired & 0xFF, paired >> 8, 3, 5] + [0] * 55
-                bus = omni_bus(entries, pairs=pairs)
+                bus = omni_bus(entries, pairs=pairs, mouse=[])
                 self.assertEqual(self.poll(entries, bus), [])
                 self.assertEqual(bus[entries[2]["path"]].opened, 0)
-                self.assertEqual(bus[entries[3]["path"]].opened, 0)
-                self.assertEqual(bus[entries[3]["path"]].writes, [])
+                self.assertEqual(bus[entries[3]["path"]].writes,
+                                 [[3, 0x12, 7] + [0] * 61] * 3)
 
     def test_the_pair_list_requires_the_recorded_identity_and_collection(self):
         for changes in ({"interface_number": 3}, {"usage_page": 0xFF03},
                         {"usage": 2}, {"usage": None}, {"product_id": 0x1ACF}):
             with self.subTest(changes=changes):
                 entries = speednova_entries()
-                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY)
+                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY, mouse=[])
                 entries[1] = dict(entries[1], **changes)
                 self.assertEqual(self.poll(entries, bus), [])
-                self.assertEqual(sum(c.opened for c in bus.values()), 0)
-                self.assertEqual(sum(len(c.writes) for c in bus.values()), 0)
+                self.assertEqual(bus[entries[1]["path"]].writes, [])
+                self.assertEqual(bus[entries[2]["path"]].writes, [])
 
     def test_the_keyboard_requires_the_recorded_collection(self):
         for changes in ({"interface_number": 3}, {"usage_page": 0xFF03},
                         {"usage": 2}, {"usage": None}, {"product_id": 0x1ACF}):
             with self.subTest(changes=changes):
                 entries = speednova_entries()
-                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY)
+                bus = omni_bus(entries, pairs=SPEEDNOVA_PAIRS_REPLY, mouse=[])
                 entries[2] = dict(entries[2], **changes)
                 self.assertEqual(self.poll(entries, bus), [])
                 self.assertEqual(bus[entries[2]["path"]].opened, 0)
@@ -390,15 +390,14 @@ class SpeedNovaPollTest(ProviderTest):
                       [0x01, 0xFF, 0xAA] + [0] * 61):
             with self.subTest(pairs=pairs):
                 entries = speednova_entries()
-                bus = omni_bus(entries, pairs=pairs)
+                bus = omni_bus(entries, pairs=pairs, mouse=[])
                 self.assertEqual(self.poll(entries, bus), [])
                 self.assertEqual(bus[entries[2]["path"]].opened, 0)
-                self.assertEqual(bus[entries[3]["path"]].opened, 0)
 
     def test_each_speednova_receiver_uses_its_own_keyboard_channel(self):
         first, second = speednova_entries(), speednova_entries("7&2222222&0")
         bus = omni_bus(first, pairs=SPEEDNOVA_PAIRS_REPLY, keyboard=SPEEDNOVA_KEYBOARD_REPLY)
-        bus.update(omni_bus(second, pairs=[0x01, 0xA0, 0, 1, 0, 0x34, 0x12, 2, 4] + [0] * 55))
+        bus.update(omni_bus(second, pairs=[0x01, 0xA0, 0, 1, 0, 0x34, 0x12, 2, 4] + [0] * 55, mouse=[]))
         self.assertEqual([(r.name, r.level) for r in self.poll(first + second, bus)],
                          [("ROG Azoth 96 HE", 36)])
         self.assertEqual(bus[second[2]["path"]].opened, 0)

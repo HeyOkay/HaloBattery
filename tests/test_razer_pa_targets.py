@@ -1,8 +1,8 @@
 """PA target authorization: fake HID collections only, no device access.
 
 0550's collection metadata is from the original diagnostics attached to #332.
-Its later whole-build confirmation does not identify a successful PA packet or
-charging transition, so PA is held while the generic route remains unchanged.
+Its later whole-build confirmation does not identify a successful packet or
+charging transition. Automatic writes are held until an exact exchange is sourced.
 """
 import unittest
 from unittest.mock import Mock, patch
@@ -58,19 +58,6 @@ class PaTargetAuthorizationTest(unittest.TestCase):
                 read.assert_not_called()
                 opened.assert_not_called()
 
-    def test_0550_never_queries_pa_even_on_reported_vendor_collection(self):
-        # Both entries were on interface3 in the owner's original diagnostic.
-        consumer = collection(0x0550, b"consumer", usage_page=0x000C)
-        vendor = collection(0x0550)
-        provider = razer.RazerProvider()
-        with patch.object(blackshark, "is_candidate") as candidate, \
-                patch.object(blackshark, "read_battery") as read, \
-                patch.object(blackshark.hid, "device") as opened:
-            self.assertIsNone(provider._poll_pa((0x0550, "serial"), [consumer, vendor]))
-        candidate.assert_not_called()
-        read.assert_not_called()
-        opened.assert_not_called()
-        self.assertTrue(any("PA release hold" in line for line in provider.diagnostics()))
 
     def test_no_matching_vendor_collection_never_falls_back_to_standard_collections(self):
         for pid in (0x0550, 0x0555, 0x0556, 0x0557, 0x0583):
@@ -84,25 +71,6 @@ class PaTargetAuthorizationTest(unittest.TestCase):
                 read.assert_not_called()
                 opened.assert_not_called()
 
-    def test_direct_0550_hold_clears_only_its_tagged_pa_cache_before_candidates(self):
-        provider = razer.RazerProvider()
-        key = (0x0550, "serial")
-        provider._cache = {key: razer._Cand(b"generic", 0x1F),
-                           ("pa", *key): razer._Cand(b"old-pa", 0),
-                           ("pa", 0x0557, "serial"): razer._Cand(b"known-pa", 0)}
-        expected = {k: v for k, v in provider._cache.items() if k != ("pa", *key)}
-        provider._good[key] = (b"generic", 0x1F)
-        provider._last["razer:0550:serial"] = (60, True, 1)
-        with patch.object(blackshark, "is_candidate") as candidate, \
-                patch.object(blackshark, "read_battery") as read, \
-                patch.object(blackshark.hid, "device") as opened:
-            self.assertIsNone(provider._poll_pa(key, [collection(0x0550)]))
-        candidate.assert_not_called()
-        read.assert_not_called()
-        opened.assert_not_called()
-        self.assertEqual(provider._cache, expected)
-        self.assertEqual(provider._good, {key: (b"generic", 0x1F)})
-        self.assertEqual(provider._last, {"razer:0550:serial": (60, True, 1)})
 
     def test_primary_pa_models_keep_pa_first_and_generic_fallback_only_for_none(self):
         for pid in (0x0555, 0x0556, 0x0583):
@@ -140,35 +108,6 @@ class PaTargetAuthorizationTest(unittest.TestCase):
                         self.assertEqual(provider.poll()[0].level, level)
                     self.assertEqual([call[0] for call in calls.mock_calls], order)
 
-    def test_0550_keeps_generic_route_and_clears_only_pa_cache_without_replaying_level(self):
-        for generic_result in ((razer.STATUS_OK, 55, False), None,
-                               (razer.STATUS_TIMEOUT, None, None)):
-            with self.subTest(generic_result=generic_result):
-                provider = razer.RazerProvider()
-                key = (0x0550, "serial")
-                provider._cache = {key: razer._Cand(b"generic", 0x1F),
-                                   ("pa", *key): razer._Cand(b"old-pa", 0),
-                                   ("pa", 0x0557, "serial"): razer._Cand(b"known-pa", 0)}
-                expected = {k: v for k, v in provider._cache.items() if k != ("pa", *key)}
-                provider._good[key] = (b"generic", 0x1F)
-                provider._last["razer:0550:serial"] = (60, True, 1)
-                def generic(*args):
-                    self.assertNotIn(("pa", *key), provider._cache)
-                    return generic_result
-                with patch.object(razer.hidlist, "enumerate", return_value=[collection(0x0550)]), \
-                        patch.object(provider, "_poll_group", side_effect=generic) as read, \
-                        patch.object(provider, "_poll_pa") as pa:
-                    statuses = provider.poll()
-                read.assert_called_once_with(key, [collection(0x0550)], None)
-                pa.assert_not_called()
-                self.assertEqual(provider._cache, expected)
-                self.assertEqual(provider._good, {key: (b"generic", 0x1F)})
-                if generic_result is None or generic_result[0] != razer.STATUS_OK:
-                    self.assertEqual(statuses, [])
-                    self.assertEqual(provider._last, {"razer:0550:serial": (60, True, 1)})
-                else:
-                    self.assertEqual([(s.level, s.charging) for s in statuses], [(55, False)])
-                self.assertTrue(any("PA release hold" in line for line in provider.diagnostics()))
 
     def test_0552_stays_with_macronix_provider_without_generic_or_pa_queries(self):
         provider = razer.RazerProvider()
@@ -190,6 +129,22 @@ class PaTargetAuthorizationTest(unittest.TestCase):
                             (pid, "serial"), [collection(pid, usage_page=page)]),
                             (razer.STATUS_OK, 60, False))
                     read.assert_called_once()
+
+    def test_0550_never_opens_hid_or_replays_cache_even_on_reported_collection(self):
+        provider = razer.RazerProvider()
+        key = (0x0550, "serial")
+        provider._cache[("pa", *key)] = razer._Cand(b"old-pa", 0)
+        provider._last["razer:0550:serial"] = (60, True, 1)
+        with patch.object(razer.hidlist, "enumerate", return_value=[collection(0x0550)]), \
+                patch.object(provider, "_poll_group") as generic, \
+                patch.object(provider, "_poll_pa") as pa, \
+                patch.object(razer.hid, "device") as opened:
+            self.assertEqual(provider.poll(), [])
+        generic.assert_not_called()
+        pa.assert_not_called()
+        opened.assert_not_called()
+        self.assertNotIn(("pa", *key), provider._cache)
+
 
 
 if __name__ == "__main__":

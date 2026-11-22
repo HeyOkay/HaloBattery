@@ -11,9 +11,6 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
-
-# Independent wire fixtures: Synapse 1532:057a capture in HaloBattery #292; XOR bytes 0-61 stored at 62.
-# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -50,10 +47,7 @@ def frame(cmd_class, kind, value):
     b = [0] * 64
     b[0], b[1], b[2], b[6], b[9] = 2, 2, 0x60, 5, 0x80
     b[10], b[11], b[12], b[13] = cmd_class, kind, 1, value
-    checksum = 0
-    for value in b[:62]:
-        checksum ^= value
-    b[62] = checksum
+    b[62] = V.checksum(b)
     return b
 
 
@@ -145,6 +139,14 @@ class FrameTest(unittest.TestCase):
 
 
 class PollTest(Base):
+    def test_the_v3_pro_uses_the_same_exchange(self):
+        # #519: 1532:0577 "BlackShark V3 Pro HID" exposes the same ff14:0001
+        # collection on interface 5 and is read with the V3 frames.
+        self.entries = [dict(e, product_id=V.V3_PRO_PID,
+                             product_string="BlackShark V3 Pro HID") for e in ENTRIES]
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in self.p.poll()],
+                         [("razer:0577:", "Razer BlackShark V3 Pro", 97, False, True)])
+
     def test_the_diagnostics_case_reads_the_level(self):
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in self.p.poll()],
                          [("razer:057a:", "Razer BlackShark V3", 97, False, True)])

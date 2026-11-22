@@ -14,6 +14,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HyperHeadset cloud_iii_s_wireless.rs at57dfa2b; NGENUITY USBPcap HyperHeadset #36/#42.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -63,7 +66,7 @@ class Dongle:
         if self.silent:
             return len(data)
         cmd = data[5]
-        value = {H.CMD_BATTERY: self.level, H.CMD_CHARGING: self.charge}.get(cmd)
+        value = {0x06: self.level, 0x48: self.charge}.get(cmd)
         r = [0x0C, 0x02, 0x03, 0x01, 0x00, cmd, 0xFF if value is None else value] + [0] * 57
         self.inbox.setdefault(self.answers_on, []).append(r)
         return len(data)
@@ -139,7 +142,7 @@ class Cloud3STest(unittest.TestCase):
         self.assertEqual(dongle.features, [])
         for _, pkt in dongle.writes:
             self.assertEqual(pkt[3], 0x01)          # 01 = get; 00 would set a value
-            self.assertIn(pkt[5], (H.CMD_BATTERY, H.CMD_CHARGING))
+            self.assertIn(pkt[5], (0x06, 0x48))
 
     def test_the_answer_is_read_on_another_collection(self):
         dongle = Dongle(takes=b"ffc0:0202", answers_on=b"ff13:0001", level=55)

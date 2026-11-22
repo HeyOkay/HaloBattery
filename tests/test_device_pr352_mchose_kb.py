@@ -90,6 +90,12 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(K.parse_reply(reply(0x64, 0x01)), (100, 0x01))
         self.assertEqual(K.parse_reply(reply(0x2A, 0x00)), (42, 0x00))
 
+    def test_the_charge_nibble_is_the_high_nibble(self):
+        self.assertIs(K.parse_charging(0x00), False)
+        self.assertIs(K.parse_charging(0x10), True)
+        self.assertIs(K.parse_charging(0x01), False)  # K87 full, not on the cable
+        self.assertIsNone(K.parse_charging(0x20))
+
     def test_a_reply_that_does_not_echo_the_command_is_refused(self):
         wrong = reply()
         wrong[1] = 0x48
@@ -162,6 +168,25 @@ class PollTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertIsNone(out[0].level)
         self.assertFalse(out[0].online)
+
+    def test_the_g98_pro_uses_the_same_command_collection(self):
+        fake = FakeKeyboard([reply(0x64, 0x01)])
+        out, _ = self.poll(fake, entries(pid=0x2004))
+        self.assertEqual([(s.key, s.name, s.level) for s in out],
+                         [("mchose_kb:2004", "MCHOSE G98 Pro", 100)])
+        self.assertEqual({p for p, _ in fake.sent}, {CMD_PATH.replace(b"2001", b"2004")})
+
+    def test_the_g98_pro_charge_flag_is_read(self):
+        fake = FakeKeyboard([reply(0x32, 0x10)])
+        out, _ = self.poll(fake, entries(pid=0x2004))
+        self.assertEqual((out[0].level, out[0].charging, out[0].charging_known),
+                         (50, True, True))
+
+    def test_a_full_off_cable_keyboard_is_not_charging(self):
+        fake = FakeKeyboard([reply(0x64, 0x01)])
+        out, _ = self.poll(fake, entries(pid=0x2004))
+        self.assertEqual((out[0].level, out[0].charging, out[0].charging_known),
+                         (100, False, True))
 
     def test_another_mchose_vendor_id_is_left_alone(self):
         fake = FakeKeyboard([reply()])

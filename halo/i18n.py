@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from halo.locales import en, es, fr, ja, ru, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, kk, pl, ru, uk, zh_CN, zh_TW
 
 DEFAULT_LANGUAGE = "en"
 
@@ -28,8 +28,8 @@ def _french_plural(count: int) -> str:
     return "one" if count in (0, 1) else "other"
 
 
-def _russian_plural(count: int) -> str:
-    """CLDR Russian integer forms: 1 час, 2 часа, 5 часов, 21 час."""
+def _east_slavic_plural(count: int) -> str:
+    """CLDR Russian/Ukrainian integer forms: one, few and many; fractions use other."""
     if isinstance(count, bool) or not isinstance(count, int):
         return "other"
     count = abs(count)
@@ -37,6 +37,18 @@ def _russian_plural(count: int) -> str:
     if last == 1 and pair != 11:
         return "one"
     if 2 <= last <= 4 and not 12 <= pair <= 14:
+        return "few"
+    return "many"
+
+
+def _polish_plural(count: int) -> str:
+    """CLDR Polish integer forms; fractional and non-integer counts use other."""
+    if isinstance(count, bool) or not isinstance(count, int):
+        return "other"
+    count = abs(count)
+    if count == 1:
+        return "one"
+    if count % 100 not in range(12, 15) and count % 10 in range(2, 5):
         return "few"
     return "many"
 
@@ -66,6 +78,8 @@ LANGUAGES = {
     "fr": Language("Français", fr.MESSAGES, plural_rule=_french_plural,
                    windows_primary_ids=(0x0C,)),
     "es": Language("Español", es.MESSAGES, windows_primary_ids=(0x0A,)),
+    "pl": Language("Polski", pl.MESSAGES, plural_rule=_polish_plural,
+                   windows_primary_ids=(0x15,), plural_forms=("one", "few", "many", "other")),
     "zh-TW": Language("繁體中文", zh_TW.MESSAGES, plural_rule=other_only,
                       plural_forms=("other",),
                       windows_language_ids=(0x0404, 0x0C04, 0x1404, 0x7C04)),
@@ -74,7 +88,10 @@ LANGUAGES = {
                       windows_language_ids=(0x0804, 0x1004, 0x0004, 0x7804)),
     "ja": Language("日本語", ja.MESSAGES, plural_rule=other_only,
                    windows_primary_ids=(0x11,), plural_forms=("other",)),
-    "ru": Language("Русский", ru.MESSAGES, plural_rule=_russian_plural,
+    "kk": Language("Қазақша", kk.MESSAGES, windows_primary_ids=(0x3F,)),
+    "uk": Language("Українська", uk.MESSAGES, plural_rule=_east_slavic_plural,
+                   windows_primary_ids=(0x22,), plural_forms=("one", "few", "many", "other")),
+    "ru": Language("Русский", ru.MESSAGES, plural_rule=_east_slavic_plural,
                    windows_primary_ids=(0x19,), plural_forms=("one", "few", "many", "other")),
 }
 

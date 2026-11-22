@@ -114,6 +114,13 @@ class VoidEliteTest(unittest.TestCase):
         self.assertEqual(consumer.writes, [])
         self.assertTrue(vendor.writes)
 
+    def test_parse_void(self):
+        self.assertEqual(C.parse_void(reply(0x4B, 0x01)), (75, False))
+        self.assertEqual(C.parse_void(reply(0x4B, 0x05)), (75, True))
+        self.assertIsNone(C.parse_void(reply(0x4B, 0x00)))
+        self.assertIsNone(C.parse_void([0x64, 0x00, 0x4B, 0xB1]))
+        self.assertIsNone(C.parse_void([0x11, 0x00, 0x4B, 0xB1, 0x01]))
+
     def test_missing_vendor_pair_never_writes_to_other_collections(self):
         for page, usage in ((0x000C, 1), (0xFF00, 1), (0xFFC5, 2)):
             with self.subTest(page=page, usage=usage):
@@ -132,13 +139,6 @@ class VoidEliteTest(unittest.TestCase):
         self.assertEqual(out, [])
         self.assertTrue(control.writes)
         self.assertEqual(sibling.writes, [])
-
-    def test_parse_void(self):
-        self.assertEqual(C.parse_void(reply(0x4B, 0x01)), (75, False))
-        self.assertEqual(C.parse_void(reply(0x4B, 0x05)), (75, True))
-        self.assertIsNone(C.parse_void(reply(0x4B, 0x00)))
-        self.assertIsNone(C.parse_void([0x64, 0x00, 0x4B, 0xB1]))
-        self.assertIsNone(C.parse_void([0x11, 0x00, 0x4B, 0xB1, 0x01]))
 
 
 if __name__ == "__main__":

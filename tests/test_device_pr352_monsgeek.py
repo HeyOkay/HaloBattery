@@ -15,15 +15,21 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from providers import monsgeek as G  # noqa: E402
 
 
-def answer(level=54, mouse=100, kind=1):
-    """A status reply, report id first, as hidapi returns it."""
-    return [0x00, 0x00, level, mouse, 0x01, 0x01, 0x01, kind] + [0x00] * 57
+def answer(level=54, mouse=100, kind=1, keyboard_online=True, mouse_online=True):
+    """A status reply, report id first, as hidapi returns it.
+
+    The link bytes are zero while that device is online, as MonsGeek's driver
+    reads them (`isOnline: n[3] === 0` and `n[4] === 0`).
+    """
+    return [0x00, 0x00, level, mouse, 0 if keyboard_online else 1,
+            0 if mouse_online else 1, 0x01, kind] + [0x00] * 57
 
 
 class FakeDongle:
@@ -72,6 +78,12 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(G.make_request(), [0x00, 0xF7] + [0x00] * 63)
         self.assertEqual(len(G.make_request()), 65)
 
+    def test_the_gen2_receiver_gets_the_bit7_checksum(self):
+        req = G.make_request(0x5006)
+        self.assertEqual(req[8], 0x08)
+        self.assertEqual(req[:2], [0x00, 0xF7])
+        self.assertEqual(G.make_request(0x5026)[8], 0x00)
+
     def test_the_answer_reads_the_keyboard_level(self):
         self.assertEqual(G.parse_status(answer(54, 100, 1)), (54, 100, 1))
         self.assertEqual(G.parse_status(answer(7, 100, 3)), (7, 100, 3))
@@ -89,6 +101,30 @@ class ParseTest(unittest.TestCase):
     def test_a_short_answer_is_refused(self):
         self.assertIsNone(G.parse_status([0x00, 0x00, 0x33]))
         self.assertIsNone(G.parse_status(None))
+
+
+    def test_keyboard_online_is_independent_of_mouse_presence_or_stored_level(self):
+        for kind in (1, 3):
+            for link in (1, 2, 255):
+                with self.subTest(kind=kind, link=link):
+                    raw = [0, 0, 54, 100, link, 0, 1, kind] + [0] * 57
+                    self.assertIsNone(G.parse_status(raw))
+            linked = [0, 0, 54, 100, 0, 1, 1, kind] + [0] * 57
+            self.assertEqual(G.parse_status(linked), (54, 100, kind))
+        self.assertIsNone(G.parse_status(answer(54, kind=2, keyboard_online=1)))
+        for level in (0, 100):
+            self.assertEqual(G.parse_status(answer(level, mouse_online=0)), (level, 100, 1))
+
+    def test_a_real_reply_from_a_linked_keyboard_is_read(self):
+        # #372: a ROYUAN receiver of the same driver family (3151:5006) answered
+        # this while its keyboard was in use; the link byte r[4] is zero.
+        raw = bytes.fromhex("000064000001010100000000") + bytes(53)
+        self.assertEqual(G.parse_status(raw), (100, 0, 1))
+
+    def test_garbage_reply_does_not_raise_or_turn_into_zero(self):
+        for bad in (None, 42, "zero", {}, [None] * 65, [-1] * 65, [256] * 65):
+            with self.subTest(bad=bad):
+                self.assertIsNone(G.parse_status(bad))
 
 
 class PollTest(unittest.TestCase):
@@ -135,6 +171,49 @@ class PollTest(unittest.TestCase):
         out, _ = self.poll(fake, ents)
         self.assertEqual(out, [])
         self.assertEqual(fake.sent, [])
+
+    def test_x820_receiver_is_read_with_the_gen2_frame(self):
+        ents = entries(pid=0x5006)
+        fake = FakeDongle(answer(88, 100, 1), answer_path=CONFIG)
+        out, diag = self.poll(fake, ents)
+        self.assertEqual([(s.key, s.level, s.kind) for s in out],
+                         [("monsgeek:5006", 88, "keyboard")])
+        self.assertEqual(fake.sent[0][1][8], 0x08)
+        self.assertTrue(any("pid=5006" in line for line in diag))
+
+    def test_the_x820_receivers_real_reply_is_read(self):
+        # #372, test build 3 on the reporter's PC with the X820 Ultra in use:
+        # 100 %. The keyboard link byte (r[4]) is zero while it is online.
+        real = bytes.fromhex("000064000001010100000000") + bytes(53)
+        fake = FakeDongle(real, answer_path=CONFIG)
+        out, _diag = self.poll(fake, entries(pid=0x5006))
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("monsgeek:5006", 100, True)])
+        self.assertFalse(out[0].charging_known)
+
+
+    def test_offline_keyboard_never_publishes_its_cached_level_as_live(self):
+        for kind in (1, 2, 3):
+            fake = FakeDongle(answer(54, kind=kind, keyboard_online=0), answer_path=CONFIG)
+            out, _diag = self.poll(fake, entries())
+            self.assertEqual(out, [])
+
+    def test_disconnect_retains_last_confirmed_level_grey_then_expires(self):
+        fake = FakeDongle(answer(54), answer_path=CONFIG)
+        provider = G.MonsGeekProvider()
+        clock = [1000.0]
+        G.hid = types.SimpleNamespace(device=lambda: fake)
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid: entries())
+        with mock.patch.object(G.time, "time", lambda: clock[0]):
+            first = provider.poll()
+            self.assertEqual([(s.level, s.online) for s in first], [(54, True)])
+            fake.reply = answer(77, keyboard_online=0)
+            clock[0] += 5
+            stale = provider.poll()
+            self.assertEqual([(s.level, s.online) for s in stale], [(54, False)])
+            self.assertEqual(provider._last["monsgeek:5026"][0], 54)
+            clock[0] += G.ASLEEP_KEEP + 1
+            self.assertEqual(provider.poll(), [])
 
 
 if __name__ == "__main__":

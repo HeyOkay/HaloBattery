@@ -121,11 +121,11 @@ class BarracudaXReceiverTest(unittest.TestCase):
         self.assertEqual(out, [])
         pa.assert_not_called()
 
-    def test_a_working_mouse_style_reply_is_kept(self):
+    def test_an_answer_shaped_generic_fake_cannot_authorize_unsourced_writes(self):
         p = razer.RazerProvider()
         with patch("providers.razer.hidlist.enumerate", return_value=[self.info()]),                 patch.object(p, "_poll_group", return_value=(razer.STATUS_OK, 55, False)),                 patch.object(p, "_poll_pa", return_value=None):
             out = p.poll()
-        self.assertEqual(out[0].level, 55)
+        self.assertEqual(out, [])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ The protocol is PMarinov1994/ngenuity-linux-cli's: `50 02` asks for the battery 
 builder below writes those two frames in the layout that project confirmed on a real
 Haste 2 Wireless.
 """
+
+# Independent wire fixtures: PMarinov1994/ngenuity-linux-cli, NGENUITY universal protocol; HaloBattery #304.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -28,7 +31,7 @@ SHAPE = [
     (4, 0x0059, 0x0001),
 ]
 
-LINK = bytes([0x53, 0x01, 0x01]) + bytes(H.REPORT_LEN - 3)
+LINK = bytes([0x53, 0x01, 0x01]) + bytes(64 - 3)
 
 
 def battery(level=62, status=0, mv=3900, temp=27):
@@ -36,7 +39,7 @@ def battery(level=62, status=0, mv=3900, temp=27):
             + int(temp).to_bytes(2, "little", signed=True)
             + int(mv).to_bytes(2, "little")
             + bytes([0x02, 0x01])
-            + bytes(H.REPORT_LEN - 10))
+            + bytes(64 - 10))
 
 
 class FakeCollection:
@@ -119,7 +122,7 @@ class HyperXNgenuityTest(unittest.TestCase):
         self.assertEqual([(0xFF00, 0x0001)], [(p, u) for p, u, _ in writes])
         self.assertEqual([0x52, 0x01], writes[0][2][0][:2])
         self.assertEqual([0x50, 0x02], writes[0][2][1][:2])
-        self.assertEqual(H.REPORT_LEN, len(writes[0][2][1]))
+        self.assertEqual(64, len(writes[0][2][1]))
 
     def test_the_millivolts_are_reported_in_the_diagnostic(self):
         self.one_dongle(replies=[LINK, battery(62, 0, 3900, 27)])
@@ -150,7 +153,7 @@ class HyperXNgenuityTest(unittest.TestCase):
         self.assertEqual([], H.HyperXNgenuityProvider().poll())
 
     def test_an_unrelated_input_frame_is_skipped(self):
-        stale = bytes([0x45, 0x02, 0x00]) + bytes(H.REPORT_LEN - 3)
+        stale = bytes([0x45, 0x02, 0x00]) + bytes(64 - 3)
         self.one_dongle(replies=[LINK, stale, battery(42)])
         d = H.HyperXNgenuityProvider().poll()[0]
         self.assertEqual(42, d.level)

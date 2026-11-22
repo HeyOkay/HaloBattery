@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: plugato/JBL_Baterry_Monitor Quantum910 input report: 08 1e means 30 percent.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import queue
 import sys
@@ -107,15 +110,15 @@ class PollTest(unittest.TestCase):
 
     def test_level_heard_between_polls(self):
         self.provider.poll()
-        self.rx.send([J.REPORT_ID_BATTERY, 95])
+        self.rx.send([0x08, 95])
         self.rx.settle()
         self.assertEqual(self.seen(self.provider.poll()),
                          [("jbl:2088", "JBL Quantum 910 Wireless", 95, False, True, "headset")])
-        self.assertIn(f"  report 1: {J.hexdump([J.REPORT_ID_BATTERY, 95])}", self.provider.diagnostics())
+        self.assertIn(f"  report 1: {J.hexdump([0x08, 95])}", self.provider.diagnostics())
 
     def test_quiet_headset_keeps_the_last_level_greyed(self):
         self.provider.poll()
-        self.rx.send([J.REPORT_ID_BATTERY, 30])
+        self.rx.send([0x08, 30])
         self.rx.settle()
         self.provider.poll()
         self.rx.settle()
@@ -126,21 +129,21 @@ class PollTest(unittest.TestCase):
     def test_the_collection_stays_open_between_polls(self):
         for level in (40, 41, 42):
             self.provider.poll()
-            self.rx.send([J.REPORT_ID_BATTERY, level])
+            self.rx.send([0x08, level])
             self.rx.settle()
         self.assertEqual([r.level for r in self.provider.poll()], [42])
         self.assertEqual((self.rx.opened, self.rx.closed), (1, 0))
 
     def test_newest_level_wins(self):
         self.provider.poll()
-        self.rx.send([J.REPORT_ID_MUTE, 1], [J.REPORT_ID_BATTERY, 60], [J.REPORT_ID_BATTERY, 59])
+        self.rx.send([0x2F, 1], [0x08, 60], [0x08, 59])
         self.rx.settle()
         self.assertEqual([(r.level, r.online) for r in self.provider.poll()], [(59, True)])
         self.assertIn("  (mute report, not a level)", self.provider.diagnostics())
 
     def test_power_report_explains_silence(self):
         self.provider.poll()
-        self.rx.send([J.REPORT_ID_POWER, 0])
+        self.rx.send([0x09, 0])
         self.rx.settle()
         self.assertEqual(self.provider.poll(), [])
         diag = self.provider.diagnostics()
@@ -151,14 +154,14 @@ class PollTest(unittest.TestCase):
     def test_receiver_unplugged_and_back(self):
         self.provider.poll()
         self.rx.fail = OSError("read error")
-        self.rx.send([J.REPORT_ID_BATTERY, 1])    # wakes the reader
+        self.rx.send([0x08, 1])    # wakes the reader
         self.provider._readers[PATH].thread.join(WAIT)
         self.assertEqual(self.rx.closed, 1)
         self.rx.fail = None                        # plugged back in
         self.rx.reports = queue.Queue()
         self.provider.poll()                       # reports the error, opens it again
         self.assertIn("  read error: read error", self.provider.diagnostics())
-        self.rx.send([J.REPORT_ID_BATTERY, 70])
+        self.rx.send([0x08, 70])
         self.rx.settle()
         self.assertEqual([(r.level, r.online) for r in self.provider.poll()], [(70, True)])
         self.assertEqual(self.rx.opened, 2)
@@ -192,7 +195,7 @@ class PollTest(unittest.TestCase):
     def test_probe_listens_on_its_first_poll(self):
         # console mode (scripts/probe.bat) polls once, so it still waits for a level to arrive
         provider = J.JblProvider(listen_first=WAIT)
-        later = threading.Timer(0.2, self.rx.send, ([J.REPORT_ID_BATTERY, 88],))
+        later = threading.Timer(0.2, self.rx.send, ([0x08, 88],))
         later.start()                   # the headset talks only after poll() has begun
         try:
             started = time.monotonic()

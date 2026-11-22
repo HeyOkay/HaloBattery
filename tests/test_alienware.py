@@ -47,6 +47,7 @@ class FakeDevice:
         self.accept = accept
         self.sent = []
         self.opened = []
+        self.closed = 0
 
     def open_path(self, path):
         self.opened.append(path)
@@ -54,6 +55,9 @@ class FakeDevice:
     def send_feature_report(self, data):
         self.sent.append(bytes(data))
         return len(data) if self.accept else -1
+
+    def close(self):
+        self.closed += 1
 
     def read(self, size, timeout):
         if self.replies:
@@ -185,6 +189,15 @@ class PollTest(unittest.TestCase):
         self.assertFalse(out[0].online)
         diag = "\n".join(self.provider.diagnostics())
         self.assertIn("feature write refused", diag)
+
+    def test_every_opened_device_is_closed(self):
+        # the native transport keeps a device it opened until close() is called
+        self.provider.poll()
+        self.device.accept = False
+        self.provider.poll()
+        self.device.accept, self.device.replies = True, []
+        self.provider.poll()
+        self.assertEqual(len(self.device.opened), self.device.closed)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -120,6 +120,33 @@ class CatalogTests(unittest.TestCase):
         for hours in (0.5, 1, 1.5, 5.4, 47.9, 48, 72, 200):
             self.assertEqual(i18n.format_left(hours * 3600), hb.history.format_left(hours * 3600))
 
+    def test_polish_plural_rules_and_genitive_months(self):
+        expected = {0: "many", 1: "one", 2: "few", 4: "few", 5: "many",
+                    12: "many", 14: "many", 22: "few", 25: "many"}
+        for count, form in expected.items():
+            with self.subTest(count=count):
+                self.assertEqual(i18n.LANGUAGES["pl"].plural_rule(count), form)
+                self.assertIn(str(count), i18n.translate("duration.hours", language="pl", count=count))
+        self.assertEqual(i18n.translate("date.month.11", language="pl"), "listopada")
+        self.assertEqual(hb.whatsnew.nice_date("2026-11-16", language="pl"), "16 listopada 2026")
+
+    def test_polish_plural_rule_handles_signed_and_non_integer_counts(self):
+        rule = i18n.LANGUAGES["pl"].plural_rule
+        for count, expected in ((-1, "one"), (-2, "few"), (-12, "many"), (21, "many"),
+                                (101, "many"), (102, "few"), (112, "many")):
+            with self.subTest(count=count):
+                self.assertEqual(rule(count), expected)
+        for count in (True, False, None, "2", 1.0, 1.5):
+            with self.subTest(count=count):
+                self.assertEqual(rule(count), "other")
+
+    def test_polish_user_visible_text_uses_ascii_hyphens(self):
+        for key, value in i18n.LANGUAGES["pl"].catalog.items():
+            for text in value.values() if isinstance(value, Mapping) else (value,):
+                with self.subTest(key=key):
+                    self.assertNotIn("\u2013", text)
+                    self.assertNotIn("\u2014", text)
+
     def test_nonpositive_estimates_and_positive_boundary(self):
         expected = {"en": "no use left", "fr": "aucune autonomie restante",
                     "zh-TW": "無剩餘使用時間", "zh-CN": "无剩余使用时间",
@@ -368,7 +395,7 @@ class PresentationTests(unittest.TestCase):
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Enceinte", "Webcam",
                                   "Appareil de santé", "Maison connectée", "Montre connectée",
-                                  "Écran / TV", "Balise / Localisateur", "Casque",
+                                  "Écran / TV", "Balise / Localisateur", "Téléphone", "Casque",
                                   "Manette", "Bluetooth"])
 
     def test_immediate_switch_all_icons_placeholder_and_both_directions(self):
