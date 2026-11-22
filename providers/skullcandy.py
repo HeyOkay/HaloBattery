@@ -27,6 +27,11 @@ present):
              acknowledgement, so a reader that looks only at the first frame
              sees the ack and reads it as a refusal.
 
+Headroom's read_battery drains the interrupt stream before its on-demand query
+and accepts a newly arrived indication, including an unchanged battery value.
+Windows GET_REPORT is also retained when a known pre-query snapshot changes;
+an unchanged snapshot alone is not evidence of a fresh reading.
+
 The battery ask needs its role byte (0x00 = agent); an empty payload is rejected.
 The reply carries no charging state. When nothing answers (the headset off or
 asleep), the dongle keeps its icon, without a level, like the app's other
@@ -64,6 +69,9 @@ ASK = bytes([RPT_OUT, len(BATTERY_FRAME), RECIPIENT_HEADSET]) + BATTERY_FRAME
 
 READ_ATTEMPTS = 12               # the answer arrived within ~40 ms in the capture
 READ_DELAY = 0.06
+DRAIN_LIMIT = 16
+DRAIN_SECONDS = 0.3
+INTERRUPT_TIMEOUT_MS = 1
 
 # pid -> name. Wired and cable pids of the same model would share a name, so they
 # share one icon.
@@ -81,10 +89,24 @@ def battery_percent(report) -> Optional[int]:
     and any 0x5D indication of opcode 0x0CD6 with status 0 yields its percent; a
     direct scan for the indication pattern backs the slicer up for reports whose
     slicing runs off the end."""
-    if not report or len(report) < 9:
+    if not isinstance(report, (bytes, bytearray, list, tuple)):
         return None
-    start = 3 if report[0] == RPT_IN else 0
-    i = start
+    try:
+        report = bytes(report)
+    except (TypeError, ValueError):
+        return None
+    if len(report) < 9:
+        return None
+    if report[0] == RPT_IN:
+        if len(report) < 3 or report[2] != RECIPIENT_HEADSET:
+            return None
+        end = 3 + report[1]
+        if end > len(report):
+            return None
+        report = report[3:end]
+    elif report[0] != HEAD:
+        return None
+    i = 0
     while i + 6 <= len(report):
         if report[i] != HEAD:
             i += 1
@@ -95,14 +117,18 @@ def battery_percent(report) -> Optional[int]:
             break
         opcode = report[i + 4] | (report[i + 5] << 8)
         payload = report[i + 6:i + 4 + length]
-        if type_ == T_IND and opcode == OP_BATTERY and len(payload) >= 3 \
-                and payload[0] == 0 and 0 <= payload[2] <= 100:
+        if (type_ == T_IND and opcode == OP_BATTERY and len(payload) >= 3
+                and payload[0] == 0 and payload[1] == ROLE_AGENT and payload[2] <= 100):
             return payload[2]
         i += 4 + length
 
+    # Some captured streams need resynchronization after an unrelated bad frame.
+    # Search only inside the declared headset report, never its padding or a
+    # different recipient's data, and still verify status and requested role.
     pattern = bytes([HEAD, T_IND, 0x05, 0x00]) + OP_BATTERY.to_bytes(2, "little")
     k = report.find(pattern)
-    if k >= 0 and len(report) >= k + 9 and report[k + 6] == 0 and report[k + 8] <= 100:
+    if (k >= 0 and len(report) >= k + 9 and report[k + 6] == 0
+            and report[k + 7] == ROLE_AGENT and report[k + 8] <= 100):
         return report[k + 8]
     return None
 
@@ -114,30 +140,42 @@ class SkullcandyProvider(Provider):
         self._diag: List[str] = []
 
     def _read(self, path) -> Optional[int]:
-        """One battery query: the ask as an output report, then poll report 7 -
-        each read returns the dongle's most recent report, and the fresh one
-        arrives a few reads after the ask.
-
-        Report 7 still holds the previous poll's snapshot when the ask goes out
-        (Headroom's read_battery drains before it sends; review by
-        @ahmedkhursheed23), so it is read once first and reads identical to it are
-        skipped - taking one would show the old value for one more poll. The last
-        read is parsed even if it never changed, so a steady level cannot leave the
-        icon empty."""
+        """Drain old IRQ data, ask once, and require evidence of a fresh report."""
         dev = hid.device()
         try:
             dev.open_path(path)
-        except (OSError, IOError) as e:
+        except (OSError, ValueError) as e:
             self._diag.append(f"    open: {e}")
             return None
         try:
             before = None
             try:
                 pre = dev.get_input_report(RPT_IN, RPT_SIZE)
-                if pre:
+                if isinstance(pre, (bytes, bytearray, list, tuple)):
                     before = bytes(pre)
-            except (OSError, ValueError):
+            except (OSError, ValueError, TypeError, AttributeError):
                 pass
+
+            interrupt = callable(getattr(dev, "read", None))
+            if interrupt:
+                # The reference uses a bounded pre-query drain. No USB flush or
+                # extra command is issued; these are ordinary short input reads.
+                deadline = time.monotonic() + DRAIN_SECONDS
+                quiet = False
+                for _ in range(DRAIN_LIMIT):
+                    try:
+                        old = dev.read(RPT_SIZE, INTERRUPT_TIMEOUT_MS)
+                    except (OSError, ValueError):
+                        interrupt = False
+                        break
+                    if not old:
+                        quiet = True
+                        break
+                    if time.monotonic() >= deadline:
+                        break
+                if interrupt and not quiet:
+                    self._diag.append("    input backlog did not drain; battery query deferred")
+                    return None
             try:
                 sent = dev.write(ASK + bytes(RPT_SIZE - len(ASK)))
             except (OSError, ValueError) as e:
@@ -147,25 +185,35 @@ class SkullcandyProvider(Provider):
                 self._diag.append(f"    write returned {sent} of {RPT_SIZE} bytes")
                 return None
             skipped = 0
-            for attempt in range(READ_ATTEMPTS):
+            for _attempt in range(READ_ATTEMPTS):
                 time.sleep(READ_DELAY)
-                try:
-                    report = dev.get_input_report(RPT_IN, RPT_SIZE)
-                except (OSError, ValueError) as e:
-                    self._diag.append(f"    read: {e}")
-                    return None
-                if not report:
+                if interrupt:
+                    try:
+                        incoming = dev.read(RPT_SIZE, INTERRUPT_TIMEOUT_MS)
+                        level = battery_percent(incoming)
+                        if level is not None:
+                            self._diag.append(f"    -> {level}% (fresh interrupt report)")
+                            return level
+                    except (OSError, ValueError):
+                        # Some Windows drivers only expose GET_REPORT. Its
+                        # changed-snapshot fallback still needs a known baseline.
+                        interrupt = False
+                if before is None:
                     continue
-                data = bytes(report)
-                if before is not None and data == before and attempt + 1 < READ_ATTEMPTS:
+                try:
+                    report = bytes(dev.get_input_report(RPT_IN, RPT_SIZE))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    before = None
+                    continue
+                if report == before:
                     skipped += 1
                     continue
-                level = battery_percent(data)
+                level = battery_percent(report)
                 if level is not None:
-                    if skipped:
-                        self._diag.append(f"    ({skipped} unchanged report(s) skipped)")
-                    self._diag.append(f"    -> {level}%")
+                    self._diag.append(f"    -> {level}% (changed input snapshot)")
                     return level
+            if skipped:
+                self._diag.append(f"    ({skipped} unchanged snapshot(s) refused as stale)")
             self._diag.append("    no battery indication (headset off or asleep?)")
             return None
         finally:

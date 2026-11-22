@@ -186,6 +186,10 @@
     "eye-closed": {
       "source": "https://unpkg.com/lucide-static@1.17.0/icons/eye-closed.svg",
       "sha256": "fdcbfe31b24dddf4fd17bb51bcb88e39beafb2eb4372117ab86a208d04c08870"
+    },
+    "smartphone": {
+      "source": "https://unpkg.com/lucide-static@1.17.0/icons/smartphone.svg",
+      "sha256": "04e49a72309fe04fc063b6ddb5a0c4f7bb4843d8ae640df2af603162688c8776"
     }
   }
 }

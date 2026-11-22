@@ -39,7 +39,9 @@ ATTEMPTS = 3
 WAKE_ATTEMPTS = 4
 REPLY_TIMEOUT_MS = 150
 
-PA_PIDS = {0x0555, 0x0556, 0x0583, 0x0536}   # 0x0536: Barracuda X (2022), #256
+# Not here: 1532:0536. It is the Barracuda X (2022) on its USB cable, not a receiver, and
+# its ff00:0001 interface has no output endpoint: Windows refused every write (#256).
+PA_PIDS = {0x0555, 0x0556, 0x0583}
 
 
 def frame_query(cmd_id: int, cmd_type: int = TYPE_QUERY) -> bytes:

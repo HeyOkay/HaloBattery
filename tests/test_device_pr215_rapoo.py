@@ -14,6 +14,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Rapoo HUB report7 parser and literal BD keyboard capture, HaloBattery #193/PR #215.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -121,23 +124,23 @@ class PollTest(unittest.TestCase):
 
     def test_a_charging_frame_reads_charging(self):
         frame = REFERENCE.copy()
-        frame[R.STATUS_INDEX] = 0x02
-        frame[R.LEVEL_INDEX] = 0x50
+        frame[7] = 0x02
+        frame[8] = 0x50
         self.assertEqual(R.parse_report(frame), (80, True))
 
     def test_the_invalid_state_is_not_a_reading(self):
         frame = REFERENCE.copy()
-        frame[R.STATUS_INDEX] = 0x00
+        frame[7] = 0x00
         self.assertIsNone(R.parse_report(frame))
 
     def test_an_unknown_state_is_refused(self):
         frame = REFERENCE.copy()
-        frame[R.STATUS_INDEX] = 0x03
+        frame[7] = 0x03
         self.assertIsNone(R.parse_report(frame))
 
     def test_a_level_above_100_is_refused(self):
         frame = REFERENCE.copy()
-        frame[R.LEVEL_INDEX] = 0x65
+        frame[8] = 0x65
         self.assertIsNone(R.parse_report(frame))
 
     def test_another_report_id_is_refused(self):
@@ -146,7 +149,7 @@ class PollTest(unittest.TestCase):
         self.assertIsNone(R.parse_report(frame))
 
     def test_a_short_frame_is_refused(self):
-        self.assertIsNone(R.parse_report(REFERENCE[:R.LEVEL_INDEX]))
+        self.assertIsNone(R.parse_report(REFERENCE[:8]))
         self.assertIsNone(R.parse_report([]))
 
     # ------------------------------------------------- the keyboard's 0xBD frame
@@ -156,17 +159,17 @@ class PollTest(unittest.TestCase):
 
     def test_the_keyboards_charging_frame_reads_charging(self):
         frame = BD_REFERENCE.copy()
-        frame[R.BD_STATE_INDEX] = 0x02
+        frame[7] = 0x02
         self.assertEqual(R.parse_report(frame), (84, True))
 
     def test_a_bd_frame_with_an_invalid_state_is_refused(self):
         frame = BD_REFERENCE.copy()
-        frame[R.BD_STATE_INDEX] = 0x00
+        frame[7] = 0x00
         self.assertIsNone(R.parse_report(frame))
 
     def test_a_bd_frame_with_a_level_above_100_is_refused(self):
         frame = BD_REFERENCE.copy()
-        frame[R.BD_LEVEL_INDEX] = 0xAD
+        frame[8] = 0xAD
         self.assertIsNone(R.parse_report(frame))
 
     def test_a_bd_frame_of_another_variant_is_refused(self):
@@ -175,7 +178,7 @@ class PollTest(unittest.TestCase):
         self.assertIsNone(R.parse_report(frame))
 
     def test_a_short_bd_frame_is_refused(self):
-        self.assertIsNone(R.parse_report(BD_REFERENCE[:R.BD_LEVEL_INDEX]))
+        self.assertIsNone(R.parse_report(BD_REFERENCE[:8]))
 
     # ---------------------------------------------------------------- polling
 
@@ -249,8 +252,8 @@ class PollTest(unittest.TestCase):
 
     def test_a_cable_reading_carries_the_charging_state(self):
         frame = REFERENCE.copy()
-        frame[R.STATUS_INDEX] = 0x02
-        frame[R.LEVEL_INDEX] = 0x50
+        frame[7] = 0x02
+        frame[8] = 0x50
         entries = receiver_entries(pid=R.VT7_CABLE, prefix=b"cable")
         out = self.poll(entries, first_vendor(entries, frame=frame))
         self.assertEqual([(s.level, s.charging) for s in out], [(80, True)])
@@ -259,8 +262,8 @@ class PollTest(unittest.TestCase):
         recv = receiver_entries()
         cable = receiver_entries(pid=R.VT7_CABLE, prefix=b"cable")
         charge = REFERENCE.copy()
-        charge[R.STATUS_INDEX] = 0x02
-        charge[R.LEVEL_INDEX] = 0x50
+        charge[7] = 0x02
+        charge[8] = 0x50
         cols = dict(first_vendor(recv))
         cols.update(first_vendor(cable, frame=charge))
         out = self.poll(recv + cable, cols)
@@ -274,7 +277,7 @@ class PollTest(unittest.TestCase):
     def test_junk_before_the_frame_is_skipped(self):
         junk = [0x06, 0x02, 0x01, 0xD0, 0x07, 0xD0, 0x07, 0x01, 0x64]
         invalid = REFERENCE.copy()
-        invalid[R.STATUS_INDEX] = 0x00
+        invalid[7] = 0x00
         entries = receiver_entries()
         cols = first_vendor(entries)
         first = next(e for e in entries if (e["usage_page"], e["usage"]) == (0xFF00, 0x0002))

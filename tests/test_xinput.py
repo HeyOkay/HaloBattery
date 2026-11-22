@@ -87,6 +87,64 @@ class ProviderTest(unittest.TestCase):
         return p, p.poll()
 
 
+class NamingTest(ProviderTest):
+    """#523 review: a name may only come from the slot's own report."""
+
+    U2 = (0x2DC8, 0x310B)
+    XBOX_HID = {"vendor_id": 0x045E, "product_id": 0x02FD,
+                "product_string": "Controller (Xbox One For Windows)"}
+
+    def test_the_pad_is_named_from_its_own_wgi_report(self):
+        _p, res = self.poll({0: (X.TYPE_WIRED, 0)}, [wgi_report(*self.U2, 1000, 1000)])
+        self.assertEqual([s.name for s in res], ["8BitDo Ultimate 2"])
+
+    def test_an_idle_receiver_does_not_rename_the_pad_in_the_slot(self):
+        # the Ultimate 2 receiver is enumerated, but the slot holds an Xbox pad with
+        # no WGI data: the generic vendor name must stay, never 8BitDo's.
+        receiver = {"vendor_id": 0x2DC8, "product_id": 0x310B,
+                    "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}
+        _p, res = self.poll({0: (X.TYPE_NIMH, 2)}, [],
+                            hid_devices=[self.XBOX_HID, receiver])
+        self.assertEqual([s.name for s in res], ["Xbox controller"])
+
+    # slot 0: an Xbox pad on its adapter; slot 1: the Ultimate 2 on its dongle ("wired")
+    TWO_SLOTS = {0: (X.TYPE_NIMH, 3), 1: (X.TYPE_WIRED, 0)}
+    XBOX_REPORT = (0x045E, 0x0B12, 800, 1000)
+
+    def test_reversed_wgi_order_does_not_name_the_xbox_pad(self):
+        # #523 review: Windows.Gaming.Input lists the Ultimate 2 first although it is in
+        # slot 1. Equal counts do not say which report is whose, so no slot is renamed.
+        _p, res = self.poll(self.TWO_SLOTS,
+                            [wgi_report(*self.U2, 1000, 1000), wgi_report(*self.XBOX_REPORT)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.key for s in res], ["xinput:0", "xinput:1"])
+        self.assertEqual([s.name for s in res if "8BitDo" in s.name], [])
+
+    def test_two_active_slots_keep_the_generic_name_in_slot_order_too(self):
+        _p, res = self.poll(self.TWO_SLOTS,
+                            [wgi_report(*self.XBOX_REPORT), wgi_report(*self.U2, 1000, 1000)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.key for s in res], ["xinput:0", "xinput:1"])
+        self.assertEqual([s.name for s in res if "8BitDo" in s.name], [])
+
+    def test_one_slot_with_a_second_report_keeps_the_generic_name(self):
+        # one XInput slot, but Windows.Gaming.Input also lists an Ultimate 2 (an idle
+        # receiver, or a pad XInput does not see): the report is not known to be the slot's
+        _p, res = self.poll({0: (X.TYPE_NIMH, 3)},
+                            [wgi_report(*self.U2, 1000, 1000), wgi_report(*self.XBOX_REPORT)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.name for s in res], ["Xbox controller"])
+
+    def test_no_wgi_data_keeps_the_generic_name(self):
+        receiver = {"vendor_id": 0x2DC8, "product_id": 0x310B,
+                    "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}
+        _p, res = self.poll({0: (X.TYPE_NIMH, 2)}, [], hid_devices=[receiver])
+        self.assertEqual([s.name for s in res], ["Gamepad"])
+
+    def test_the_vendor_id_stays_out_of_the_trusted_wgi_set(self):
+        self.assertNotIn(0x2DC8, X.NAMED_VIDS)
+
+
 class XboxBluetoothTest(ProviderTest):
     def test_issue_108_no_ten_percent(self):
         p, res = self.poll({0: (X.TYPE_DISCONNECTED, 0)}, [wgi_report(0x045E, 0x02FD, 100, 1000)],

@@ -48,6 +48,7 @@ class PollWithoutDevicesTests(unittest.TestCase):
                 mock.patch("hid.device", device_class), \
                 mock.patch("serial.tools.list_ports.comports", lambda *a, **k: []), \
                 mock.patch("providers.dji.receiver_present", return_value=False), \
+                mock.patch("providers.phone_link._read_snapshot", return_value=None), \
                 mock.patch("providers.dji._Receiver.start",
                            side_effect=AssertionError("edge polling must not start a USB reader")) as start:
             # Construction is guarded too; a background retry must never escape this scope.

@@ -100,7 +100,7 @@ class PictogramTests(HideRenameTestCase):
         self.assertEqual([i.text for i in sub.items],
                          ["Automatic", "Mouse", "Keyboard", "Microphone", "Speaker", "Webcam",
                           "Health device", "Smart home", "Smartwatch", "Display / TV",
-                          "Tag / Tracker", "Headset",
+                          "Tag / Tracker", "Phone", "Headset",
                           "Controller", "Bluetooth"])
         self.assertEqual([i.text for i in sub.items if i.checked], ["Automatic"])
 

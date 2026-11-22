@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from providers import wlmouse as W  # noqa: E402
 
 RECEIVER_PID = 0xA880                    # Beast X Max, the confirmed one
-CABLE_PID = 0xA881                       # stands in for "a second device appeared"
+CABLE_PID = 0xA881                       # Beast X Max cable, owner's diagnostic
+UNKNOWN_PID = 0xA882                     # must never receive the feature query
 
 
 def path_for(pid, iface):
@@ -58,6 +59,8 @@ class FakePuck:
         self.feature = feature          # what get_feature_report returns
         self.beats = list(beats or [])  # frames handed out by read()
         self.sends = 0
+        self.sent_frames = []
+        self.feature_reads = 0
         self.opens = 0
 
 
@@ -81,9 +84,11 @@ class FakeBus:
 
             def send_feature_report(self, data):
                 self.puck.sends += 1
+                self.puck.sent_frames.append(list(data))
                 return len(data)
 
             def get_feature_report(self, rid, length):
+                self.puck.feature_reads += 1
                 return self.puck.feature if self.puck.feature else []
 
             def read(self, n):
@@ -118,6 +123,12 @@ class ProviderTest(unittest.TestCase):
 
 # ------------------------------------------------------------------ parse
 class ParseTest(unittest.TestCase):
+    def test_captured_beast_x_max_cable_reply(self):
+        # Literal diagnostic bytes from the owner's 2026-11-22 A881 capture,
+        # interface 2 FFFF:0000, independent of feature_reply() and W.QUERY.
+        reply = bytes.fromhex("00 a1 00 02 02 00 83 01 60 00 00 00")
+        self.assertEqual(W.parse_feature(reply), (96, True))
+
     def test_feature_reply(self):
         self.assertEqual(W.parse_feature(feature_reply(90, 1)), (90, True))
         self.assertEqual(W.parse_feature(feature_reply(0, 0)), (0, False))
@@ -134,6 +145,77 @@ class ParseTest(unittest.TestCase):
 
 # ------------------------------------------------------------------ polling
 class PollTest(ProviderTest):
+    def test_each_listed_pid_receives_only_the_documented_query(self):
+        # Literal identities/bytes from devices.py and the owner's cable
+        # diagnostic, not W.KNOWN/QUERY.
+        for pid in (0xA887, 0xA868, 0xA880, 0xA881):
+            with self.subTest(pid=pid):
+                puck = FakePuck(feature=feature_reply(85, 0))
+                res = self.poll([entry(pid, 2)], {path_for(pid, 2): puck})
+                self.assertEqual([(r.level, r.online) for r in res], [(85, True)])
+                self.assertEqual(puck.sent_frames,
+                                 [[0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x83] + [0] * 58])
+
+    def test_an_unknown_pid_with_a_convincing_name_receives_no_feature_request(self):
+        puck = FakePuck(feature=feature_reply(85, 0))
+        res = self.poll([entry(UNKNOWN_PID, 2, product="WLMOUSE BEAST MAX 8K RECEIVER")],
+                        {path_for(UNKNOWN_PID, 2): puck})
+        self.assertEqual(res, [])
+        self.assertEqual(puck.sends, 0)
+        self.assertEqual(puck.feature_reads, 0)
+
+    def test_a_known_pid_on_another_collection_receives_no_feature_request(self):
+        for pid in (RECEIVER_PID, CABLE_PID):
+            for page, usage in ((0xFFFF, 0x0001), (0xFFA0, 0x0001), (0xFF00, 0x0000),
+                                (0xFFFF, None), (0x0001, 0x0002), (0x0001, 0x0006)):
+                with self.subTest(pid=pid, page=page, usage=usage):
+                    puck = FakePuck(feature=feature_reply(85, 0))
+                    res = self.poll([entry(pid, 1, usage_page=page, usage=usage)],
+                                    {path_for(pid, 1): puck})
+                    self.assertEqual(res, [])
+                    self.assertEqual(puck.sends, 0)
+                    self.assertEqual(puck.feature_reads, 0)
+
+    def test_cable_feature_reply_shows_charging_without_a_heartbeat(self):
+        cable = FakePuck(feature=feature_reply(95, 1))
+        [res] = self.poll([entry(CABLE_PID, 2, product="WLMOUSE BEAST MAX")],
+                          {path_for(CABLE_PID, 2): cable})
+        self.assertEqual((res.key, res.name, res.level, res.charging, res.online),
+                         ("wlmouse", "WLmouse Beast X Max", 95, True, True))
+        self.assertEqual(cable.sends, 1)
+
+    def test_charging_cable_wins_and_unplug_returns_to_the_receiver_with_one_icon(self):
+        receiver = FakePuck(feature=feature_reply(93, 0))
+        cable = FakePuck(feature=feature_reply(95, 1))
+        receiver_info = entry(RECEIVER_PID, 2, product="WLMOUSE BEAST MAX 8K RECEIVER")
+        cable_info = entry(CABLE_PID, 2, product="WLMOUSE BEAST MAX")
+        pucks = {receiver_info["path"]: receiver, cable_info["path"]: cable}
+        [wireless] = self.poll([receiver_info], pucks)
+        self.assertEqual((wireless.level, wireless.charging, wireless.online), (93, False, True))
+        [charging] = self.poll([receiver_info, cable_info], pucks)
+        self.assertEqual((charging.level, charging.charging, charging.online), (95, True, True))
+        self.assertEqual(receiver.sends, 1)  # charging cable skips the receiver query
+        self.assertEqual(cable.sends, 1)
+        [unplugged] = self.poll([receiver_info], {receiver_info["path"]: receiver})
+        self.assertEqual((unplugged.level, unplugged.charging, unplugged.online), (93, False, True))
+        self.assertEqual(receiver.sends, 2)
+        self.assertEqual([(r.key, r.name) for r in (wireless, charging, unplugged)],
+                         [("wlmouse", "WLmouse Beast X Max")] * 3)
+
+    def test_an_excluded_feature_collection_can_still_supply_a_passive_heartbeat(self):
+        puck = FakePuck(beats=[heartbeat(47, 0)])
+        res = self.poll([entry(0xA880, 1, usage=0x0001)], {path_for(0xA880, 1): puck})
+        self.assertEqual([(r.level, r.online) for r in res], [(47, True)])
+        self.assertEqual(puck.sends, 0)
+        self.assertEqual(puck.feature_reads, 0)
+
+    def test_an_unknown_pid_can_still_supply_a_passive_heartbeat_without_queries(self):
+        puck = FakePuck(beats=[heartbeat(47, 1)])
+        res = self.poll([entry(UNKNOWN_PID, 2)], {path_for(UNKNOWN_PID, 2): puck})
+        self.assertEqual([(r.level, r.charging, r.online) for r in res], [(47, True, True)])
+        self.assertEqual(puck.sends, 0)
+        self.assertEqual(puck.feature_reads, 0)
+
     def test_no_receiver_costs_nothing(self):
         t0 = self.clock.now
         self.assertEqual(self.poll([], {}), [])
@@ -210,12 +292,16 @@ class PollTest(ProviderTest):
         t0 = self.clock.now
         self.assertEqual(self.poll(entries, pucks), [])
         self.assertLess(self.clock.now - t0, 0.01)
-        # the charging cable appears: the very next poll walks again
+        # The confirmed cable appears during silent backoff and only answers
+        # feature reports: discover its charging reading on the very next poll.
         cable = FakePuck(feature=feature_reply(91, 1))
         pucks[path_for(CABLE_PID, 0)] = cable
+        previous_sends = puck.sends
         res = self.poll(entries + [entry(CABLE_PID, 0)], pucks)
         self.assertEqual([(r.level, r.charging, r.online) for r in res], [(91, True, True)])
         self.assertEqual(cable.sends, 1)
+        self.assertEqual(cable.feature_reads, 1)
+        self.assertEqual(puck.sends, previous_sends)  # the charging cable wins; no receiver query
 
 
 if __name__ == "__main__":

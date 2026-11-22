@@ -17,7 +17,11 @@ class DeviceStatus:
     online: bool = True          # False = receiver present, but the device is asleep/off
     source: str = ""             # razer / wlmouse / logitech / steelseries / bluetooth / xinput
     approx: str = ""             # set when the device only reports coarse levels,
-                                 # e.g. "about 55% (medium)"; shown instead of "NN%"
+                                 # e.g. "about 55% (medium)"; shown instead of "NN%".
+                                 # Also used for placeholder/derived levels ("on cable,
+                                 # charging", "charging (about N% before ...)"); only
+                                 # an "about ..." text is a real coarse reading, see
+                                 # is_coarse_reading().
     kind: str = ""               # headset / mouse / keyboard / gamepad when known
                                  # (picks the pictogram); "" = guess from the source
     via: str = ""                # "bluetooth": a controller connected over Bluetooth
@@ -34,6 +38,23 @@ class DeviceStatus:
     # Presentation metadata; English approx remains available to diagnostics.
     ui_message: str = ""
     ui_params: dict = field(default_factory=dict)
+
+
+COARSE_PREFIX = "about "
+
+
+def is_coarse_reading(st: "DeviceStatus") -> bool:
+    """True when ``approx`` marks a live coarse grade the device reported.
+
+    The coarse readers (XInput, Logitech HID++ grades, SteelSeries coarse
+    models, DJI gauge) describe their level as "about NN% (...)". Every other
+    ``approx`` text goes with a level the device did not report as a number:
+    a wired XInput pad's placeholder 100 or last wireless level ("on cable,
+    charging"), a Logitech level from before the cable was plugged in
+    ("charging (about NN% before it was plugged in)"), a remembered level
+    ("NN% (last known; ...)"), or a level whose state is incomplete.
+    """
+    return st.level is not None and st.approx.startswith(COARSE_PREFIX)
 
 
 class Provider:

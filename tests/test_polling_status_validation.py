@@ -29,12 +29,13 @@ class NativeStatusValidationTests(unittest.TestCase):
         context.start()
         self.addCleanup(context.stop)
 
-    def pipeline(self, values):
+    def pipeline(self, values, bluetooth=False):
         provider = FakeProvider(values)
         runtime = PollingRuntime([provider], lambda full: None)
         self.addCleanup(lambda: self.assertTrue(runtime.close(.5)))
         runtime.configure(set())
-        app = make_app({"bluetooth": False})
+        app = make_app({"bluetooth": bluetooth})
+        app._bt_dup_logged = set()          # set by App.__init__, which make_app skips
         app._polling_runtime = runtime
         app.hid_results, app.bt_cache = [], []
         app._bt_revision = app._polling_bt_revision = 0
@@ -137,6 +138,19 @@ class NativeStatusValidationTests(unittest.TestCase):
                 self.assertIs(type(original.level), float)
         app.apply_polling(results)
         self.assertTrue(all(type(icon.status.level) is int for icon in app.icons.values()))
+    def test_turning_bluetooth_off_removes_its_icons(self):
+        app, _ = self.pipeline([], bluetooth=True)
+        app.wake, app.bt_fresh = Mock(), threading.Event()
+        headset = DeviceStatus("bt:aa", "Bluetooth headset", 60, source="bluetooth", kind="headset")
+        app._bt_update([headset])
+        app.apply_polling(app.consume_polling())
+        self.assertIn("bt:aa", app.icons)
+        # Bluetooth unticked in the menu: the cache is emptied and the next poll
+        # must count Bluetooth as completed, or its icon stays forever.
+        app.cfg["bluetooth"] = False
+        app._bt_clear()
+        app.apply_polling(app.consume_polling())
+        self.assertNotIn("bt:aa", app.icons)
 
 
 if __name__ == "__main__":

@@ -231,6 +231,34 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.device.write([0, 7]), 64)
         self.assertEqual(self.device.error(), 'Success')
 
+    def test_write_refused_with_incorrect_function_is_recognisable(self):
+        """hyperx_cloud3 retries a refused write as a feature report only when
+        error() names Windows error 1 the way hidapi does."""
+        from providers import hyperx_cloud3
+        original = self.api.create_write
+        def refused(owner, data):
+            request = original(owner, data)
+            request.completion = Completion(False, 1, 0, b'', False)
+            return request
+        self.api.create_write = refused
+        with self.runtime.provider_scope('refused-write') as scope:
+            self.assertEqual(self.device.write([0, 7]), -1)
+        self.assertTrue(scope.failed)
+        self.assertFalse(scope.unsafe)
+        text = self.device.error().lower()
+        self.assertIn('0x00000001', text)
+        self.assertTrue(any(marker in text for marker in hyperx_cloud3._FEATURE_ONLY), text)
+        self.api.create_write = original
+        self.assertEqual(self.device.write([0, 7]), 64)
+        self.assertEqual(self.device.error(), 'Success')
+
+    def test_read_timeout_longer_than_transport_limit_ends_empty(self):
+        """hyperx_cloud_flight reads with 2000 ms. A read whose own timeout is longer
+        than the transport limit (0.5 s here) ends empty, like hidapi, not as a failure."""
+        with self.runtime.provider_scope('slow-read') as scope:
+            self.assertEqual(self.device.read(64, 700), [])
+        self.assertFalse(scope.failed)
+
     def test_feature_exception_keeps_identity_and_diagnostic(self):
         original = self.metadata.send_feature
         fault = OSError(5, 'feature collection access denied')

@@ -271,6 +271,19 @@ class ShutdownTests(HideRenameTestCase):
         self.assertTrue(app.placeholder_ready.is_set())
         self.assertFalse(app.placeholder.visible)
 
+    def test_hidden_owner_retains_rollback_notice_until_registered_visible(self):
+        app = self.app()
+        app.cfg.update(last_version=hb.VERSION, update_target='99.0.0')
+        app.notify_update = mock.Mock()
+        app.show_placeholder(False, ensure_owner=True)
+        with mock.patch.object(hb, 'save_config'):
+            app.after_update()
+        app.notify_update.assert_not_called()
+        self.assertIsNotNone(app._pending_update_failure)
+        app.apply([])
+        self.assertTrue(app.placeholder.visible)
+        app.notify_update.assert_called_once_with('notification.update_not_completed',
+                                                 target='99.0.0', version=hb.VERSION)
 
     def test_run_waits_for_cleanup_owned_by_a_settings_worker(self):
         app = self.app()

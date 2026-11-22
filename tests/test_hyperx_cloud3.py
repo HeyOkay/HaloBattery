@@ -272,5 +272,51 @@ class Cloud2Core(Base):
         self.assertEqual([s.key for s in out], ["hyperx:05b7"])
 
 
+class AlternateCloud3Receiver(Base):
+    def entries(self):
+        path = PATH.replace(b"05b7", b"0fcc")
+        return [{"product_id": 0x0FCC, "path": path + suffix,
+                 "interface_number": 3, "usage_page": page, "usage": usage}
+                for suffix, page, usage in
+                [(b"consumer", 0x000C, 1), (b"telephony", 0x000B, 5),
+                 (b"vendor", 0xFF13, 1)]]
+
+    def test_selects_vendor_and_keeps_receiver_identity(self):
+        d = FakeDongle(level=48, charging=0)
+        out, diag = self.poll_entries(d, self.entries())
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].key, out[0].level), ("hyperx:0fcc", 48))
+        self.assertEqual(d.opened, [self.entries()[2]["path"]] * 2)
+        self.assertEqual(d.writes, [H.make_request(0x89), H.make_request(0x8A)])
+        self.assertEqual(d.features, [])
+
+    def test_other_collections_are_never_opened(self):
+        d = FakeDongle()
+        out, _ = self.poll_entries(d, self.entries()[:2])
+        self.assertEqual(out, [])
+        self.assertEqual(d.opened, [])
+        self.assertEqual(d.writes, [])
+
+    def test_battery_boundaries(self):
+        for level in (0, 100, 101):
+            with self.subTest(level=level):
+                out, _ = self.poll_entries(FakeDongle(level=level), self.entries())
+                self.assertEqual(len(out), int(level <= 100))
+
+    def test_charging_reply_is_read(self):
+        for state in (1, 2):
+            with self.subTest(state=state):
+                out, _ = self.poll_entries(FakeDongle(level=48, charging=state), self.entries())
+                self.assertEqual((out[0].level, out[0].charging), (48, True))
+
+    def test_disconnected_receiver(self):
+        class Gone(FakeDongle):
+            def open_path(self, path):
+                raise OSError("device disconnected")
+        out, diag = self.poll_entries(Gone(), self.entries())
+        self.assertEqual(out, [])
+        self.assertTrue(any("open:" in line for line in diag))
+
+
 if __name__ == "__main__":
     unittest.main()

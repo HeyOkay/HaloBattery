@@ -217,6 +217,52 @@ class SwapTests(TempDirTestCase):
             updates.swap_files(self.new, self.app, sleep=lambda s: None)
         self.assertEqual(self.read("app/HaloBattery.exe"), b"new exe")
 
+    def test_failed_new_app_launch_restores_and_restarts_the_old_app(self):
+        self.write("new/new-file.dll", b"new only")
+        launches = []
+
+        def start(cmd):
+            launches.append(self.read("app/HaloBattery.exe"))
+            if len(launches) == 1:
+                raise OSError("new executable is blocked")
+
+        ok = updates.finish_update(self.app, 0, self.new, start=start,
+                                   sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(launches, [b"new exe", b"old exe"])
+        self.assertEqual(self.read("app/_internal/gone.pyd"), b"old only")
+        self.assertFalse(os.path.exists(os.path.join(self.app, "new-file.dll")))
+        self.assertFalse(any(n.endswith(".old") for n in os.listdir(self.app)))
+        self.assertEqual(self.read("app/config.json"), b"{\"low\": 15}")
+
+    def test_failed_restart_is_not_reported_as_a_successful_install(self):
+        with mock.patch.object(updates, "log") as log:
+            ok = updates.finish_update(self.app, 0, self.new,
+                                       start=mock.Mock(side_effect=OSError("blocked")),
+                                       sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(self.read("app/HaloBattery.exe"), b"old exe")
+        self.assertTrue(any("could not start" in call.args[0] for call in log.error.call_args_list))
+
+    def test_temporarily_held_backup_is_retried_during_rollback(self):
+        real_replace = os.replace
+        restored = []
+
+        def replace(src, dst):
+            if src.endswith(".old"):
+                restored.append(src)
+                if len(restored) == 1:
+                    raise PermissionError("scanner is holding the backup")
+            return real_replace(src, dst)
+
+        with mock.patch.object(updates.os, "replace", side_effect=replace), \
+                mock.patch.object(updates.shutil, "copytree", side_effect=ValueError("copy failed")):
+            ok = updates.finish_update(self.app, 0, self.new, start=lambda cmd: None,
+                                       sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(self.read("app/_internal/gone.pyd"), b"old only")
+        self.assertGreaterEqual(len(restored), 3)
+
 
 class CommandLineTests(TempDirTestCase):
     def test_finish_args(self):
@@ -717,12 +763,15 @@ class AppUpdateTests(unittest.TestCase):
                 mock.patch.object(hb.updates, "download",
                                   lambda r, d, cur, progress: (progress(50), "C:/t/new")[1]), \
                 mock.patch.object(hb.updates, "prepare_runner", lambda app_dir, st: "C:/t/runner"), \
+                mock.patch.object(hb.updates, "current_process_creation_time", return_value=0x123456789ABCDEF0) as capture, \
                 mock.patch.object(hb.updates, "start_detached", lambda cmd, cwd=None: started.append(cmd)):
             app.install_update()
         self.assertEqual(started[0][0], os.path.join("C:/t/runner", "HaloBattery.exe"))
         self.assertEqual(started[0][1:3], ["--finish-update", "--app-dir"])
         self.assertIn("C:/t/new", started[0])
         self.assertEqual(started[0][-1], str(os.getpid()))
+        self.assertEqual(updates.parse_finish_creation_time(started[0]), 0x123456789ABCDEF0)
+        capture.assert_called_once_with()
         self.assertEqual(app.cfg["update_from"], hb.VERSION)
         self.assertEqual(app.cfg["whats_new_notes"]["version"], "99.0.0")
         self.assertEqual(quit_, [True])
