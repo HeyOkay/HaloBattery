@@ -359,6 +359,7 @@ BRAGI_SESSION_PIDS = {0x0A40}
 # resolveTarget tries 0x08 first on a wired id and 0x09 on a receiver, with the
 # other as the fallback (#570).
 BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62}
+BRAGI_XT_CABLE_PID = 0x0A62
 # The M65 RGB Ultra Wireless on its cable (1b1c:1bb5) uses the same Bragi
 # battery/charge properties as OpenLinkHub's m65rgbultraWU package, on target
 # 0x08 only: that package sends nothing to 0x09, and in #411 the 0x09 fallback
@@ -431,6 +432,31 @@ def parse_bragi(reply) -> Optional[int]:
     if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
         return None
     return value // 10
+
+
+def parse_bragi_xt_cable(reply, *, charging: bool = False):
+    """The wired XT's own GET reply; only used for its target-08 requests.
+
+    HeadsetControl identifies 0A62 as the self-addressed XT, and maps target 08
+    to reply source 00 while checking report ID, command and status:
+    https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L370-L405
+    https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L440-L554
+    Receiver parsing deliberately keeps rejecting source 00.
+    """
+    if not reply:
+        return None
+    data = list(reply)
+    if len(data) == BRAGI_MSG_SIZE + 1 and data[0] == 0:
+        data = data[1:]
+    if len(data) != BRAGI_MSG_SIZE or data[:4] != [0x01, 0x00, 0x02, 0x00]:
+        return None
+    if any(type(byte) is not int or not 0 <= byte <= 255 for byte in data):
+        return None
+    value = int.from_bytes(bytes(data[4:8]), "little")
+    if charging:
+        return {1: True, 2: False}.get(value)
+    return value // 10 if value <= BRAGI_LEVEL_MAX else None
+
 
 
 def _parse_bragi_cable_raw(reply) -> Optional[int]:
@@ -718,6 +744,8 @@ class CorsairProvider(Provider):
                               .get(state, "not charging"))
             return state == 1
         charge_parse = parse_bragi_charge
+        if pid == BRAGI_XT_CABLE_PID and route == BRAGI_ROUTE_DONGLE:
+            charge_parse = lambda reply: parse_bragi_xt_cable(reply, charging=True)
         value = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                          deadline - time.monotonic()),
                                 parse=charge_parse)
@@ -753,13 +781,15 @@ class CorsairProvider(Provider):
             self._drain(dev)
             if pid in BRAGI_SESSION_PIDS:
                 self._bragi_session(dev, deadline, pid)
-            parse = parse_bragi_cable if pid == 0x1BB5 else parse_bragi
             routes = self._routes(pid)
             first = None
             route = routes[0]
             for i, route in enumerate(routes):
                 if not self._write_bragi(dev, route=route, pid=pid):
                     return None
+                parse = (parse_bragi_xt_cable
+                         if pid == BRAGI_XT_CABLE_PID and route == BRAGI_ROUTE_DONGLE
+                         else parse_bragi_cable if pid == M65_CABLE_PID else parse_bragi)
                 first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
                                                  deadline - time.monotonic()), parse=parse)
                 if first is not None:

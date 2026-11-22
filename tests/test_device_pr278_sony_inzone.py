@@ -93,6 +93,10 @@ class PollTest(unittest.TestCase):
             types.SimpleNamespace(vid=0x1234, pid=S.PID, device="COM8"),
         ])
         S.time = types.SimpleNamespace(monotonic=self.clock.monotonic, sleep=self.clock.sleep)
+        # the provider also polls HID (INZONE H5); keep these serial tests off real devices
+        patcher = mock.patch.object(S.hidlist, "enumerate", return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         S.serial, S.list_ports, S.time = self.saved

@@ -138,6 +138,30 @@ class PollTest(unittest.TestCase):
         self.assertEqual(out[0].level, 99)
         self.assertEqual(dev.written, [bytes(K.make_request())])
 
+    def test_an_accepted_silent_feature_request_keeps_the_link_km_output_retry(self):
+        out, dev = self.poll([[], reply(66, True)], self.NAPE)
+        self.assertEqual([(66, True)], [(s.level, s.charging) for s in out])
+        self.assertEqual([b"nape-vendor"], dev.opened)
+        self.assertEqual([bytes(K.make_request())], dev.sent)
+        self.assertEqual([bytes(K.make_request())], dev.written)
+
+    def test_ffc1_wins_over_via_when_the_battery_page_is_last(self):
+        out, dev = self.poll([reply(100)], [self.NAPE[2], self.NAPE[1]])
+        self.assertEqual([100], [s.level for s in out])
+        self.assertEqual([b"nape-vendor"], dev.opened)
+
+    def test_a_silent_feature_fallback_keeps_both_receivers_independent(self):
+        a = {"path": b"receiver-a", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028}
+        b = dict(a, path=b"receiver-b")
+        out, dev = self.poll([[], reply(80, True), reply(70)], [a, b])
+        self.assertEqual([(80, True), (70, False)], [(s.level, s.charging) for s in out])
+        self.assertEqual(["keychron:d028:" + K._identity(d) for d in (a, b)],
+                         [s.key for s in out])
+        self.assertEqual([b"receiver-a", b"receiver-b"], dev.opened)
+        self.assertEqual([bytes(K.make_request())] * 2, dev.sent)
+        self.assertEqual([bytes(K.make_request())], dev.written)
+
     def test_a_keyboard_only_receiver_is_never_opened(self):
         # #421 review: interface 4 0001:0006 was the last fallback, and a refused
         # feature report then wrote b3 06 to that keyboard collection
@@ -167,11 +191,11 @@ class PollTest(unittest.TestCase):
         self.assertEqual(([], [], []), (dev.opened, dev.sent, dev.written))
 
     def test_the_output_retry_is_only_made_on_ffc1(self):
-        # the M5's interface-4 vendor page is queried the way the Linux module does it,
-        # with a feature report; refused, it is not retried with write()
+        # Outside the captured FFC1 output endpoint, keep the existing feature-only
+        # path: neither a refusal nor silence licenses a new output write.
         m5 = [{"path": b"m5-vendor", "interface_number": 4,
                "usage_page": 0xFF00, "usage": 0x0001, "product_id": 0xD048}]
-        for kwargs in ({"feature_result": -1}, {"feature_error": OSError("refused")}):
+        for kwargs in ({"feature_result": -1}, {"feature_error": OSError("refused")}, {}):
             out, dev = self.poll([], m5, **kwargs)
             self.assertEqual([], out)
             self.assertEqual([b"m5-vendor"], dev.opened)
@@ -277,8 +301,9 @@ class PollTest(unittest.TestCase):
             {"path": b"r2", "interface_number": 4, "usage_page": 0xFFC1,
              "usage": 0x0001, "product_id": 0xD028},
         ]
-        out, _dev = self.poll([reply(64)], infos, fail_read={b"r1"})
+        out, dev = self.poll([reply(64)], infos, fail_read={b"r1"})
         self.assertEqual([64], [s.level for s in out])
+        self.assertEqual([], dev.written)
 
     def test_no_reply_reports_nothing(self):
         out, _dev = self.poll([], self.NAPE)

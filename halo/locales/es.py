@@ -169,7 +169,7 @@ MESSAGES = {
     "provider.rapoo": "Ratones y teclados Rapoo",
     "provider.shield": "Mandos NVIDIA SHIELD",
     "provider.skullcandy": "Auriculares Skullcandy",
-    "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_inzone": "Sony INZONE H9 / H5",
     "provider.turtlebeach": "Auriculares Turtle Beach",
     "state.not_reported": "aún sin datos",
     "state.charging_unknown": "{state}, estado de carga desconocido",

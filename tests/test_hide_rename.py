@@ -100,6 +100,9 @@ def make_app(cfg=None):
     app.notes = []
     app.key_provider = {}
     app.held = {}
+    app.bt_native_failed = False            # #513: no in-process watcher yet
+    app._bt_generation = 0                  # #513: watcher snapshot ownership
+    app._bt_orphans = []
     app.history = hb.history.History()      # in memory: no path, never written
     return app
 

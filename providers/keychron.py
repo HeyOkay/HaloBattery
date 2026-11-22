@@ -13,8 +13,9 @@ vendor protocol:
     that module uses to find it, and a probe logs what is actually present.
   * request: `b3 06 00 ...` (report id 0xB3, command 0x06 status), normally as a
     64-byte *feature* report. Some 8K receivers reject the feature form with
-    `-1`; the same frame is then written as an output report (#373). That retry is
-    made only on the documented battery collection `ffc1:0001`.
+    `-1`; the same frame is then written as an output report (#373). The Link-KM
+    capture in #270 also documents that output form when the feature request is
+    accepted but unanswered. Both retries are limited to `ffc1:0001`.
   * nothing else is opened: a receiver whose collections are only keyboard,
     mouse, consumer, VIA or unrelated vendor pages is skipped (#421 review).
   * reply: a 64-byte input report on the interrupt endpoint: `b4 06 ... <level> ...`.
@@ -116,7 +117,11 @@ def is_battery_collection(d: dict) -> bool:
 def output_fallback_allowed(d: dict) -> bool:
     """The write() retry is documented only for the ffc1:0001 battery collection
     (#373 on the Ultra-Link 8K, the Keychron Launcher capture in #270); elsewhere
-    the frame stays a feature report, as the Linux module sends it (#421 review)."""
+    this provider retains its existing feature-only requests (#421 review).
+
+    The Linux source supplies the frame and interface, but its current
+    keychron_battery.c uses HID_OUTPUT_REPORT, not a feature report.
+    """
     return ((d.get("usage_page") or 0), (d.get("usage") or 0)) == BATTERY_COLLECTION
 
 
@@ -181,12 +186,24 @@ class KeychronProvider(Provider):
                     sent = dev.send_feature_report(make_request())
                 except (OSError, IOError, ValueError) as e:
                     self._diag.append(f"  attempt {attempt + 1} feature send: {e}")
-                if sent is None or sent < 0:
-                    # Some Ultra-Link 8K receivers reject SET_FEATURE with -1;
-                    # the same request as an output report is accepted (#373).
-                    if sent is not None:
-                        self._diag.append(f"  attempt {attempt + 1} feature refused ({sent})"
-                                          + ("; trying output" if output_ok else ""))
+                feature_ok = sent is not None and sent >= 0
+                if not feature_ok:
+                    self._diag.append(f"  attempt {attempt + 1} feature refused ({sent})"
+                                      + ("; trying output" if output_ok else ""))
+                r = None
+                if feature_ok:
+                    try:
+                        r = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
+                    except (OSError, IOError, ValueError) as e:
+                        self._diag.append(f"  attempt {attempt + 1} feature read: {e}")
+                        return None
+                if feature_ok and not r and output_ok:
+                    # #270: the Link-KM accepts SET_FEATURE but can answer only
+                    # the identical captured B3/06 frame on its output endpoint.
+                    self._diag.append(f"  attempt {attempt + 1}: feature accepted, "
+                                      "no reply; trying output")
+                    feature_ok = False
+                if not feature_ok:
                     if not output_ok:
                         continue        # no documented output endpoint here (#421 review)
                     try:
@@ -197,13 +214,11 @@ class KeychronProvider(Provider):
                     if sent is None or sent < 0:
                         self._diag.append(f"  attempt {attempt + 1} output refused ({sent})")
                         continue
-                try:
-                    r = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
-                except (OSError, IOError, ValueError) as e:
-                    # the receiver was unplugged or went away mid-read: this is
-                    # this receiver's failure, not the whole poll's (#373 review)
-                    self._diag.append(f"  attempt {attempt + 1} read: {e}")
-                    return None
+                    try:
+                        r = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
+                    except (OSError, IOError, ValueError) as e:
+                        self._diag.append(f"  attempt {attempt + 1} output read: {e}")
+                        return None
                 if not r:
                     self._diag.append(f"  attempt {attempt + 1}: no reply")
                     continue
