@@ -8,6 +8,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Wait briefly for GitHub release-attestation availability before completing
+  pre-release verification.
+
+- Publish each successful pre-release build separately, with matching source
+  tags and immutable assets, instead of replacing one rolling release.
+
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
@@ -30,7 +36,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
-- Add Zaopin Z2 4K battery reporting over USB-C and the 2.4 GHz receiver.
+- Add an outline Discord shortcut at the bottom of the navigation rail, with
+  a tooltip and a native fade to Discord's brand color on hover.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
@@ -62,6 +69,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
   approximate level, read at most once every 15 minutes and cached between reads
   because each read mutes USB audio for about 0.8 s.
+
+- Add Zaopin Z2 4K battery reporting over USB-C and the 2.4 GHz receiver.
 
 - **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
   (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
@@ -253,6 +262,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Test build pending on the reporter's unit.
 
 ### Fixed
+
+- Extend the Settings Close button hit target to the top-right corner while
+  preserving its visible size, position and hover/pressed feedback.
+
+- Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
+  and charging reply without relaxing receiver or other model validation.
+
+- Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
+  preserving one icon across cable/receiver transitions and limiting feature
+  requests to documented device identities and battery collections.
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.

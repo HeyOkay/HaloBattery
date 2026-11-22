@@ -1,0 +1,12 @@
+{
+  "package": "qlementine-icons",
+  "author": "Olivier Cléro",
+  "license": "../../docs/licenses/qlementine-icons-LICENSE.txt",
+  "license_source": "https://raw.githubusercontent.com/oclero/qlementine-icons/e7cf96d0c60836b285f117cede9ed8c4113ebfa8/LICENSE",
+  "icons": {
+    "discord-16": {
+      "source": "https://api.iconify.design/qlementine-icons/discord-16.svg",
+      "sha256": "7e743b4d8b96afcd8fb61816cbf20a62e437d2e8c85b7cbe13bfb310828f0483"
+    }
+  }
+}
