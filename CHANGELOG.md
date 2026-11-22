@@ -154,6 +154,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
 - **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
+- AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
@@ -406,6 +407,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.
 
+- Keychron Ultra-Link 8K: fall back to an output report when the receiver
+  rejects SET_FEATURE, read the charging flag in bit 7 of byte 20, and query
+  every matching receiver collection so two 8K dongles get separate icons,
+  each keyed on its own receiver so unplugging one never renames the other
+  (#373). Only documented battery collections are opened, and the output
+  retry is made only on `ffc1:0001`. The level was confirmed on a G4 with the
+  test build; the charging indication has not been reported yet.
 - Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
   over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
   on that collection when SET_FEATURE is refused or unanswered, and report the

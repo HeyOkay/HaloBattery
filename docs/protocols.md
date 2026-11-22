@@ -787,7 +787,7 @@ an idle test on the keyboard; absence of battery requests alone is not a power m
 
 **Connection:** 2.4 GHz receiver (3434:D028) and USB cable (3434:D048)
 
-Keychron's vendor protocol on interface 4: a 64-byte request `b3 06` (status), answered by a 64-byte input report `b4 06` whose byte 20 holds the level in its low seven bits and the charging flag in bit 7 (csutcliff/keychron-battery-dkms), retried up to three times. On the Ultra-Link 8K the host writes it as a feature report; the **Nape Pro** (`3434:d026`, the "Keychron Link-KM" receiver, #270) publishes the same `ffc1:0001` collection on **interface 1** and exposes it as an interrupt-OUT endpoint, so the same frame is retried with `write()` when SET_FEATURE is refused or unanswered. Only a documented battery collection is ever opened: `ffc1:0001` (interface 1 on the Link-KM, interface 4 on the Ultra-Link 8K per the #373 diagnostics) or a vendor page on interface 4 other than VIA (`ff60`), the interface csutcliff/keychron-battery-dkms binds to; the `write()` retry is made only on `ffc1:0001`. A receiver that shows only keyboard, mouse, consumer, VIA or other vendor collections is skipped without opening any of them. The USB capture of Keychron Launcher in #270 shows `b3 06` going out on that endpoint and `b4 06 ... 64 ...` coming back. Confirmed on hardware by @cocowalla in #270: the Keychron M6 icon appeared at 100 %, matching Keychron Launcher; the Nape Pro shares this receiver path. From csutcliff/keychron-battery-dkms for the original ids. A level above 100 is refused rather than shown.
+Keychron's vendor protocol on interface 4: `b3 06` (status), normally a 64-byte feature report, answered by a 64-byte input report `b4 06`. Byte 20 holds the level in its low seven bits and the charging flag in bit 7. On the captured `ffc1:0001` collections, a refused feature request (Ultra-Link 8K, #373) or an accepted but unanswered request (Link-KM, #270) falls back to the identical output report. From csutcliff/keychron-battery-dkms, which implements it for these two ids. The **Nape Pro** (`3434:d026`, the "Keychron Link-KM" receiver, #270) speaks the same exchange but publishes its vendor collection on **interface 1** (`ffc1:0001`), not 4, so the provider picks interface 4 first and then the `ffc1` vendor page. Only a documented battery collection is ever opened: `ffc1:0001` (interface 1 on the Link-KM, interface 4 on the Ultra-Link 8K per the #373 diagnostics) or a vendor page on interface 4 other than VIA (`ff60`), the interface the Linux module binds to; the output-report retry is made only on `ffc1:0001`. A receiver that shows only keyboard, mouse, consumer, VIA or other vendor collections is skipped without opening any of them. A single receiver id can appear twice (two Ultra-Link 8K dongles); every candidate collection is queried and each answering receiver gets its own icon, keyed on its own HID path (`keychron:<pid>:<hash>`), so a receiver keeps its key, names and history when another one sleeps, is unplugged or is plugged back in. The earlier shared key `keychron:<pid>` moves to the receiver once, through the app's key migration, when exactly one receiver of that id is plugged in and answers; with two plugged in nothing moves, because which of them owned it cannot be known. The level was confirmed on hardware: the reporter's raw capture read 99 % on an M6 8K (`63`, charging bit clear) and 99 % with bit 7 set while on a charger (`e3`), and a G4 with the same `D028` receiver read correctly on the test build in #373. The Ultra-Link 8K charging indication has not been confirmed in the app yet. On the Link-KM receiver, @cocowalla confirmed the M6 level against Keychron Launcher and the charging ring following the cable in #270. A level above 100 after masking bit 7 is refused rather than shown.
 
 ### Lofree Hyzen
 
@@ -1220,14 +1220,18 @@ While charging, link returned 0 but the valid charging flag kept the device onli
 Verification used the provider probe; the complete tray application has not yet
 been tested with this provider.
 
+### AJAZZ AJ159 PRO
+
+**Connection:** 8K receiver (`3151:402d`, product `AJAZZ 2.4G 8K`)
+
+The receiver publishes `ffff:0002` on interface 2 and has no interrupt-OUT report on any collection. The AJ-series exchange is used instead: a zero-payload `0xF7` feature poll wakes the 2.4G telemetry, then `GET_FEATURE 0x05` returns the charge (`05 00 00 64 ...`, level at byte 3 on Windows). Only that layout is accepted: the report id `05` first, zero padding at bytes 1-2 and a level of 1-100 at byte 3. Any other first byte, the reference's unnumbered Linux frame and `F7`-prefixed replies are refused, and only report `0x05` is requested. The provider tries the 33-, 65- and 67-byte poll lengths reported by the reference project, reads the answer as a feature report, and never calls `read()` on this collection. The reply carries the level only, so the app deliberately shows no charging ring (`charging_known=False`). Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289): the reporter's icon shows a percentage after test build 4. The Kysona Uranus (`3151:5031`) shares the transport but remains held until its own confirmation.
+
 ## 1.17.0 release exclusions and confirmations
 
-The AJAZZ alternate targets `3151:402d` (AJ159 PRO) and `3151:5031` (Kysona Uranus)
-are disabled by the provider's release allowlist before opening a HID device. The
-AJ179-derived command `0x10` is retained only for protocol tests and further review:
-[#289](https://github.com/HeyOkay/HaloBattery/issues/289) still reports no link,
-and [#251](https://github.com/HeyOkay/HaloBattery/issues/251) has no confirmation.
-The captured, confirmed AJ179 V2 MAX exchange is unchanged.
+The Kysona Uranus target `3151:5031` is disabled by the provider's release allowlist
+before opening a HID device; [#251](https://github.com/HeyOkay/HaloBattery/issues/251)
+has no confirmation. The AJ159 PRO above is enabled after [#289](https://github.com/HeyOkay/HaloBattery/issues/289)
+confirmed its level. The captured, confirmed AJ179 V2 MAX exchange is unchanged.
 
 Turtle Beach Stealth 600X Gen 3 (`10f5:2232`, [#239](https://github.com/HeyOkay/HaloBattery/issues/239))
 is excluded from the enabled PID allowlist until its exchange is confirmed. The
