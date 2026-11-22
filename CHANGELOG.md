@@ -255,6 +255,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Extend the Settings Close button hit target to the top-right corner while
+  preserving its visible size, position and hover/pressed feedback.
+
 - Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
   and charging reply without relaxing receiver or other model validation.
 
