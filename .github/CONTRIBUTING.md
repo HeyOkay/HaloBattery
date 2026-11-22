@@ -120,14 +120,22 @@ Look at the open issues and pull requests first, so that two people do not do th
   See [Building](../docs/building.md#stable-release-publication).
 - Hotfix: branch `hotfix/<name>` from `main`, pull request into `main` (code-owner approval).
 - After **every** release or hotfix, merge `main` back into `pre-release` (fast-forward when possible), so the two never drift apart.
-- **Test builds**: every successful push build of `pre-release` publishes a
-  separate [pre-release](https://github.com/HeyOkay/HaloBattery/releases)
-  (`.github/workflows/prerelease.yml`). Choose the newest entry marked
-  **Pre-release**. Each `pre-<version>-<short SHA>-<run ID>-<attempt>` tag points
+- **Test builds**: every push to `pre-release` runs tests and builds Actions
+  artifacts (`.github/workflows/prerelease.yml`), without publishing a release.
+  To publish a selected candidate, use **Actions > Pre-release build > Run
+  workflow**, select `pre-release` and enable **Publish this candidate**
+  (`publish_prerelease`), or run
+  `gh workflow run prerelease.yml --ref pre-release -f publish_prerelease=true`.
+  If Actions still shows the older default-branch form without this input, use
+  the CLI command above to pass it to the selected `pre-release` ref.
+  The boolean input defaults to false; ordinary manual runs only build artifacts.
+  Publication is allowed only from `pre-release` and creates a separate
+  [pre-release](https://github.com/HeyOkay/HaloBattery/releases). Each
+  `pre-<version>-<short SHA>-<run ID>-<attempt>` tag points
   to the exact build commit; previous builds and source archives stay unchanged.
-  These releases never become the stable updater's Latest release. Manual
-  dispatch builds artifacts only. A failed publication can leave a draft for
-  inspection; a rerun uses a new tag and never overwrites the old attempt.
+  These releases never become the stable updater's Latest release. A failed
+  publication can leave a draft for inspection; a rerun uses a new tag and never
+  overwrites the old attempt.
 
 
 ```
@@ -146,8 +154,8 @@ Before opening the release PR:
 
 1. Read new issue replies, PR review comments and hardware-test results, including
    follow-ups on the community fork. Record unresolved work in the original tracker.
-2. Check the latest `Tests` run and per-build pre-release. Test the packaged app
-   and installer, and verify the updater points to `HeyOkay/HaloBattery`.
+2. Check the latest `Tests` run and selected pre-release candidate. Test the
+   packaged app and installer, and verify the updater points to `HeyOkay/HaloBattery`.
 3. Review known regressions and experimental device paths. A passing simulated test
    is not hardware confirmation. Do not promote guessed protocol changes without a
    named source and the required tester confirmation.
