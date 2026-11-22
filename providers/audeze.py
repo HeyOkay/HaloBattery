@@ -29,7 +29,7 @@ Either that byte is not a plain read/write marker, or that one packet is not a
 plain read. Since it is part of the vendor's own initialisation and HeadsetControl
 sends it on every read, it stays - but the claim that the sequence writes nothing
 at all is withdrawn. What is enforced instead: the sequence is only sent to the
-product ids in KNOWN, and only ever to a vendor collection.
+product ids in KNOWN, and only ever to FF13:0001.
 
 Protocol and the packet tables come from the HeadsetControl project
 (Sapd/HeadsetControl, lib/devices/audeze_maxwell.hpp). The battery is their
@@ -103,23 +103,20 @@ from .base import DeviceStatus, Provider, hexdump, log
 AUDEZE_VID = 0x3329
 
 # PID -> name. 0x4B19 (the Maxwell dongle) and 0x4B1A (the USB-C cable) are
-# confirmed on hardware; the others use the same protocol and are listed so
-# their icon gets the right name, but nobody has confirmed them.
+# confirmed on hardware. HeadsetControl audeze_maxwell.hpp lists 4B19/4B18;
+# audeze_maxwell2.hpp lists 4B29/4B28, both on FF13:0001:
+# https://github.com/Sapd/HeadsetControl/tree/master/lib/devices
 KNOWN = {
     0x4B19: "Audeze Maxwell",
     0x4B18: "Audeze Maxwell (Xbox)",
     0x4B1A: "Audeze Maxwell (USB cable)",
-    # 0x4B1E is derived, not measured: it is 0x4B18 (the Xbox dongle) with the same
-    # +1 offset that separates the PC dongle 0x4B19 from its cable 0x4B1A. If the
-    # offset does not hold for the Xbox model, an Xbox cable is read as 0x4B18 and
-    # reported as "not charging" rather than as a cable.
-    0x4B1E: "Audeze Maxwell (Xbox, USB cable)",
+    # Inferred Xbox cable 4B1E is held until its exchange has a named source.
     0x4B29: "Audeze Maxwell 2",
     0x4B28: "Audeze Maxwell 2 (Xbox)",
 }
 
 # the cable endpoints: read before the dongle, see poll()
-CABLE_PIDS = {0x4B1A, 0x4B1E}
+CABLE_PIDS = {0x4B1A}
 
 # one icon per headset, so whichever endpoint answered is called this
 HEADSET_NAME = "Audeze Maxwell"
@@ -439,12 +436,12 @@ class AudezeProvider(Provider):
             off = pid not in CABLE_PIDS and no_headset_linked(ifaces)
             # The vendor collection (usage page 0xFF13) is the only one that speaks this
             # protocol, and only vendor collections are ever written to: a device whose
-            # vendor collection is missing gets nothing rather than the sequence going to
+            # FF13:0001 collection is missing gets nothing rather than the sequence going to
             # its consumer-control and telephony collections, which answer nothing, cost
             # about 2.6 s per poll and are not meant to receive it.
-            cands = ([d for d in ifaces if is_vendor_interface(d)]
-                     or [d for d in ifaces if d.get("usage_page") == VENDOR_USAGE_PAGE]
-                     or [d for d in ifaces if (d.get("usage_page") or 0) >= 0xFF00])
+            # HeadsetControl audeze_maxwell.hpp / audeze_maxwell2.hpp:
+            # FF13:0001 only (Maxwell 2 uses interface 5, so do not pin interface 0).
+            cands = [d for d in ifaces if is_vendor_interface(d)]
             if not cands:
                 self._diag.append("    no vendor collection on this device "
                                   "(not writing to the standard collections)")

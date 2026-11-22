@@ -9,7 +9,10 @@ the A50 X:
     usage page rather than by its interface number: HeadsetControl names
     interface 8, and a station here reports exactly that, but the usage page is
     what identifies the collection and the interface number is not part of the
-    protocol.
+    protocol. No other collection receives the battery request.
+    Source: Sapd/HeadsetControl lib/devices/logitech_astro_a50.hpp,
+    getCapabilityDetail(), lines 130-135:
+    https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/logitech_astro_a50.hpp#L130-L135
   * frames are 64 bytes, report id 0x02:
         [0] 0x02   report id
         [1] 0x0c   constant marker
@@ -89,14 +92,12 @@ class AstroProvider(Provider):
         self._diag: List[str] = []
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
-        """The control collection by usage page/usage, falling back to the first
-        entry so that a probe still shows what the station offers."""
+        """Only the control collection identified by the sourced usage pair."""
         for d in infos:
             if (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE):
                 return d
-        self._diag.append(f"  no usage {USAGE_PAGE:04x}:{USAGE:04x} collection; "
-                          f"falling back to the first of {len(infos)}")
-        return infos[0] if infos else None
+        self._diag.append(f"  no usage {USAGE_PAGE:04x}:{USAGE:04x} collection; not opening HID")
+        return None
 
     def _query(self, path: bytes, cmd: int, handle: int) -> Optional[List[int]]:
         dev = hid.device()

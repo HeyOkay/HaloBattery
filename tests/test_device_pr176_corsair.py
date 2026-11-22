@@ -220,9 +220,11 @@ class VoidPollTest(unittest.TestCase):
             os.environ["HALO_PROBE"] = "1"
             C.caps_for = lambda path: (64, 65, 65) if caps is None else caps.get(path)
         C.time = FakeClock()
+        opened = self.opened = []
 
         class Device:
             def open_path(self, path):
+                opened.append(path)
                 if path not in fakes:
                     raise OSError("cannot open")
                 self.impl = fakes[path]
@@ -304,28 +306,25 @@ class VoidPollTest(unittest.TestCase):
         self.assertTrue(any("caps: iface=3 ff13:0001 in/out/feat=64/0/32" in line
                             for line in diag))
 
-    def test_the_probe_matrix_finds_the_collection_that_takes_the_write(self):
-        # the #28 shape: every write on the protocol collection refused with -1,
-        # while another collection of the same receiver accepts the same frame
+    def test_probe_never_writes_to_notice_channel_or_caps_sized_frame(self):
+        # PR #176's hardware report identifies ff42:0001 as the output
+        # collection; ff42:0002 has no output report. A synthetic 63-byte caps
+        # value cannot authorize a truncated battery request on either path.
         main = FakeRefusingReceiver(heartbeat=None, replies=[])
-        sib = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME)
-        caps = {b"void-iface4-0001": (64, 63, 65),   # declares a 63-byte output report
+        sibling = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME)
+        caps = {b"void-iface4-0001": (64, 63, 65),
                 b"void-iface4-0002": (64, 65, 65)}
         out, diag = self.poll({b"void-iface4-0001": main,
-                               b"void-iface4-0002": sib}, probe=True, caps=caps)
+                               b"void-iface4-0002": sibling}, probe=True, caps=caps)
         self.assertEqual(out, [])
-        self.assertTrue(any("probe: write shapes, collection by collection" in line
-                            for line in diag))
+        self.assertTrue(any("write shapes on documented control collections" in line for line in diag))
         self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0001 -> -1")
                             for line in diag))
-        self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0002 -> 65")
+        self.assertTrue(any(line.startswith("  probe: write64-norid iface=4 ff42:0001 -> -1")
                             for line in diag))
-        self.assertTrue(any(line.startswith("  probe: write63-rid0 iface=4 ff42:0001 -> -1")
-                            for line in diag))
-        self.assertTrue(any("probe: first answer (" in line for line in diag))
-        self.assertTrue(any("takes the write" in line for line in diag))
-        self.assertEqual(len(sib.writes), 2)          # the accepted shape, then the re-ask
-        self.assertEqual(sib.writes[0], sib.writes[1])   # the re-ask reuses the accepted shape
+        self.assertEqual(sibling.writes, [])
+        self.assertTrue(main.writes)
+        self.assertTrue(all(len(w) in (64, 65) for w in main.writes))
 
     def test_the_normal_poll_never_asks_for_caps(self):
         called = []
@@ -361,6 +360,26 @@ class VoidPollTest(unittest.TestCase):
         # the exact frame the reporter's probe caught after the accepted write
         frame = [0x01, 0x01, 0x02, 0x00, 0x2A, 0x03] + [0x00] * 58
         self.assertEqual(C.parse_level(frame), 81)
+
+    def test_missing_control_collection_never_opens_unrelated_hid_in_probe_or_poll(self):
+        for probe in (False, True):
+            for iface, page, usage in ((3, 0xFF42, 1), (4, 0xFF42, 2),
+                                       (4, 0x0001, 2), (4, 0xFF13, 1)):
+                with self.subTest(probe=probe, iface=iface, page=page, usage=usage):
+                    self.entries = [entry(0x2A08, b"unrelated", iface, page, usage)]
+                    fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
+                    out, diag = self.poll({b"unrelated": fake}, probe=probe)
+                    self.assertEqual(out, [])
+                    self.assertEqual(fake.writes, [])
+                    self.assertEqual(self.opened, [])
+                    self.assertTrue(any("not opening HID" in line for line in diag))
+
+    def test_control_usage_is_selected_even_when_notice_channel_comes_first(self):
+        self.entries = list(reversed(void_entries()))
+        fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
+        out, _ = self.poll({b"void-iface4-0001": fake})
+        self.assertEqual([s.level for s in out], [55])
+        self.assertTrue(fake.writes)
 
 
 if __name__ == "__main__":

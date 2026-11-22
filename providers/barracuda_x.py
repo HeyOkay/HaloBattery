@@ -194,12 +194,16 @@ class BarracudaXProvider(Provider):
             if not self._enter_app_mode(dev):
                 self._diag.append("  app mode handshake failed")
                 return None
-            payload = self._race(dev, *REMOTE_MODE)
-            if payload is None or len(payload) < 3 or payload[2] != 0x00:
-                self._diag.append("  remote mode refused")
-                return None
             samples = []
             try:
+                # The sourced switch may already have reached the bridge even
+                # when its acknowledgment is missing, truncated or unreadable.
+                # Install restoration before attempting REMOTE_MODE, not after
+                # accepting its ACK (Protocol.cs Query, remote/local E1 01/00).
+                payload = self._race(dev, *REMOTE_MODE)
+                if payload is None or len(payload) < 3 or payload[2] != 0x00:
+                    self._diag.append("  remote mode refused")
+                    return None
                 for i in range(SAMPLES):
                     if i:
                         time.sleep(SAMPLE_GAP_S)
@@ -208,7 +212,7 @@ class BarracudaXProvider(Provider):
                     if mv is not None:
                         samples.append(mv)
             finally:
-                self._race(dev, *LOCAL_MODE)
+                self._restore_local_mode(dev)
             if not samples:
                 self._diag.append("  no voltage in any sample")
                 return None
@@ -225,6 +229,15 @@ class BarracudaXProvider(Provider):
                 dev.close()
             except Exception:
                 pass
+
+    def _restore_local_mode(self, dev) -> None:
+        """Best effort with the existing sourced command; never mask the read error."""
+        try:
+            reply = self._race(dev, *LOCAL_MODE)
+            if reply is None or len(reply) < 3 or reply[2] != 0x00:
+                self._diag.append("  local mode restoration unconfirmed")
+        except Exception as e:
+            self._diag.append(f"  local mode restoration failed: {e}")
 
     def _enter_app_mode(self, dev) -> bool:
         try:

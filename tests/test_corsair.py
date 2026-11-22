@@ -136,7 +136,7 @@ class FakeBus:
 class BragiParseTest(unittest.TestCase):
     def test_the_request_is_the_routed_get_behind_report_id_0(self):
         req = C.bragi_request()
-        self.assertEqual(len(req), C.BRAGI_MSG_SIZE + 1)
+        self.assertEqual(len(req), 64 + 1)
         self.assertEqual((req[0], req[1], req[2], req[3]), (0x00, 0x09, 0x02, 0x0F))
 
     def test_the_reporter_s_answer_parses_to_55_percent(self):
@@ -383,7 +383,7 @@ class BragiPollTest(unittest.TestCase):
         _, bus = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)], {b"d": FakeDongle()})
         w = bus.dongles[b"d"].writes[0]
         self.assertEqual((w[0], w[1], w[2], w[3], len(w)),
-                         (0x00, 0x09, 0x02, 0x0F, C.BRAGI_MSG_SIZE + 1))
+                         (0x00, 0x09, 0x02, 0x0F, 64 + 1))
 
     def test_the_usage_1_collection_is_asked_first(self):
         # the 0x0002 collection is the dongle's notice channel and stays untouched
@@ -394,22 +394,24 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(bus.opened, [b"answers"])
         self.assertEqual(out[0].level, 55)
 
-    def test_the_iface_1_collection_is_tried_first(self):
-        # with no usage 0x0001 collection, the interface-1 one goes first
+    def test_unrecognized_vendor_usages_are_never_opened(self):
+        # A matching interface number cannot authorize a different usage.
         e = [entry(0x1B7F, b"c0002", 2, 0xFF42, 0x0002),
              entry(0x1B7F, b"c0001", 1, 0xFF42, 0x0003)]
         out, bus = self.poll(e, {b"c0001": FakeDongle(bragi_reply(765)),
                                  b"c0002": FakeDongle(bragi_reply(0))})
-        self.assertEqual(bus.opened, [b"c0001"])
-        self.assertEqual(out[0].level, 76)
+        self.assertEqual(bus.opened, [])
+        self.assertEqual(out, [])
+        self.assertFalse(any(d.writes for d in bus.dongles.values()))
 
-    def test_both_vendor_collections_are_tried_and_the_first_that_answers_wins(self):
+    def test_a_silent_control_collection_never_writes_to_notice_channel(self):
         e = [entry(0x1B7F, b"c0001", 1, 0xFF42, 0x0001),
              entry(0x1B7F, b"c0002", 2, 0xFF42, 0x0002)]
         silent = FakeDongle(silent=True)
         out, bus = self.poll(e, {b"c0001": silent, b"c0002": FakeDongle(bragi_reply(765))})
-        self.assertEqual(out[0].level, 76)
-        self.assertEqual(bus.opened, [b"c0001", b"c0002"])
+        self.assertEqual(out, [])
+        self.assertEqual(bus.opened, [b"c0001"])
+        self.assertEqual(bus.dongles[b"c0002"].writes, [])
 
     def test_a_sleeping_or_unanswering_dongle_gives_no_icon(self):
         out, _ = self.poll([entry(0x1B7F, b"d", 1, 0xFF42, 0x0001)],
@@ -474,10 +476,10 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(len(bus.dongles[b"d"].writes), 1)
 
     def test_a_spent_budget_skips_the_remaining_collections(self):
-        # the per-dongle budget bounds the try-every-collection fallback
-        # (review by @ahmedkhursheed23); the clock jumps so it is spent at once
-        e = [entry(0x1B7F, b"c1", 1, 0x0001, 0x0002),
-             entry(0x1B7F, b"c2", 2, 0x0001, 0x0003)]
+        # The budget still covers multiple correctly identified control paths;
+        # the clock jumps so it is spent before any handle can be opened.
+        e = [entry(0x1B7F, b"c1", 1, 0xFF42, 0x0001),
+             entry(0x1B7F, b"c2", 2, 0xFF42, 0x0001)]
         st = {"t": 0.0}
 
         def clock():
@@ -508,7 +510,7 @@ class BragiPollTest(unittest.TestCase):
                 }
 
             def write(self, data):
-                if len(data) == C.BRAGI_MSG_SIZE + 1:   # the framed form is refused
+                if len(data) == 64 + 1:   # the framed form is refused
                     return -1
                 self.writes.append(bytes(data))
                 return len(data)
@@ -540,7 +542,7 @@ class BragiPollTest(unittest.TestCase):
                                5: [bragi_se_reply(960)], 6: [bragi_se_reply(2)]}
 
             def write(self, data):
-                if len(data) == C.BRAGI_MSG_SIZE + 1:
+                if len(data) == 64 + 1:
                     return -1
                 self.writes.append(bytes(data))
                 return len(data)
@@ -563,13 +565,13 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(out, [])
         self.assertEqual(bus.opened, [b"vendor"])
 
-    def test_an_empty_dump_entry_set_is_tried_when_ff42_is_missing(self):
-        # the doc's collection comes from the reporter's dump; if a firmware ever
-        # reports another page, trying the remaining collections is one read window
+    def test_unrelated_collection_is_not_opened_when_ff42_is_missing(self):
+        # An answer-shaped fake reply cannot authorize a write to a mouse page.
         out, bus = self.poll([entry(0x1B7F, b"d", 0, 0x0001, 0x0002)],
                              {b"d": FakeDongle(bragi_reply(765))})
-        self.assertEqual(out[0].level, 76)
-        self.assertEqual(bus.opened, [b"d"])
+        self.assertEqual(out, [])
+        self.assertEqual(bus.opened, [])
+        self.assertEqual(bus.dongles[b"d"].writes, [])
 
     def test_the_m65_slipstream_receiver_is_read(self):
         # #411: 1b1c:1ba6 'CORSAIR SLIPSTREAM WIRELESS USB Receiver'; the dump

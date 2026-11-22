@@ -8,6 +8,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Restrict battery requests to sourced HID control collections, keep confirmed
+  cable routes, hold unsourced receiver paths, and restore Barracuda receiver
+  mode after failed reads. Correct
+  URX and MCHOSE K87 request framing; identify Azoth 96 HE on its shared receiver.
+  Barracuda `1532:0550` automatic writes are held pending a sourced capture;
+  the owner-confirmed whole-build level does not identify its battery exchange.
+
 - Identify supported Sony USB controllers by their own pairing address so one
   controller keeps its identity across USB ports and Bluetooth. Keep ambiguous
   or anonymous controllers separate instead of transferring another pad's settings.
