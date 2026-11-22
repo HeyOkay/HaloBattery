@@ -178,14 +178,14 @@ class MonsGeekProvider(Provider):
             self._diag.append(f"  -> {key}: {level}% (device type {kind})")
             self._last[key] = (level, name, time.time())
             out.append(DeviceStatus(key, name, level, False, True,
-                                    "monsgeek", kind="keyboard"))
+                                    "monsgeek", kind="keyboard", charging_known=False))
 
         now = time.time()
         for key, (level, name, when) in self._last.items():
             if key in seen or now - when >= ASLEEP_KEEP:
                 continue
             out.append(DeviceStatus(key, name, level, False, False,
-                                    "monsgeek", kind="keyboard"))
+                                    "monsgeek", kind="keyboard", charging_known=False))
         return out
 
     def diagnostics(self) -> List[str]:

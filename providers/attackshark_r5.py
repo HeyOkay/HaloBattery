@@ -2,7 +2,8 @@
 
 The R5 Ultra uses the same 64-byte feature-report protocol as the R6/R8/M5
 Ultra, recovered from the vendor's WebHID driver by
-``mohammed-just/attack-shark-r6-cli`` (MIT).  Its ``get_battery`` sends
+``mohammed-just/attack-shark-r6-cli`` at b3438542106999adb743858f267ddc33a167e7d7
+(MIT), ``r6ctl.py:281-292,354-373``. Its ``get_battery`` sends
 ``cmd 2,2,0,0x83`` and parses a reply with the 0xA1 marker; the battery is
 read-only.
 
@@ -52,21 +53,26 @@ def make_request() -> List[int]:
 
 
 def _normalize(a: int, b: int) -> Tuple[Optional[int], bool]:
-    """The reference parser: some firmware returns (pct, charge), others reversed."""
+    """Accept either sourced order only when both level and charge flag are valid.
+
+    A flag cannot stand in for an invalid percentage: (0, 255) is not a 0% reading.
+    Keep the reference's charge-first preference for ambiguous 0/1 pairs.
+    """
     if a in (0, 1) and 0 <= b <= 100:
         return b, a == 1
     if b in (0, 1) and 0 <= a <= 100:
         return a, b == 1
-    if 0 <= a <= 100:
-        return a, b == 1
-    if 0 <= b <= 100:
-        return b, a == 1
     return None, False
 
 
 def parse_reply(r) -> Optional[Tuple[int, bool]]:
     """(level, charging) from a battery reply, or None when it is not one."""
-    d = list(r or [])
+    if not isinstance(r, (bytes, bytearray, list, tuple)):
+        return None
+    try:
+        d = bytes(r)
+    except (TypeError, ValueError, OverflowError):
+        return None
     if len(d) < 9:
         return None
     # The reference accepts both positions of the report-id-like 0xA1 marker.

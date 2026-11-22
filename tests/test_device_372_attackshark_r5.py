@@ -75,6 +75,39 @@ class R5Test(unittest.TestCase):
         self.assertIsNone(A.parse_reply([0, 1, 2, 3]))
         self.assertIsNone(A.parse_reply([0xA1, 0, 0, 2, 0, 0x83, 101, 0]))
 
+    def test_full_frames_refuse_out_of_range_levels_and_invalid_charge_pairs(self):
+        for first, second in ((0, 101), (0, 255), (1, 255), (101, 0), (255, 0), (255, 1),
+                              (2, 73), (73, 2), (255, 255)):
+            for prefix in ([0xA1, 0, 0, 2, 0, 0x83], [0, 0xA1, 0, 2, 2, 0, 0x83]):
+                for length in (9, 65):
+                    frame = prefix + [first, second]
+                    frame += [0] * (length - len(frame))
+                    with self.subTest(pair=(first, second), prefix=prefix, length=length):
+                        self.assertEqual(len(frame), length)
+                        self.assertIsNone(A.parse_reply(frame))
+
+    def test_valid_boundary_levels_in_both_documented_orders_and_layouts(self):
+        pairs = ((0, 0, (0, False)), (1, 0, (0, True)), (1, 1, (1, True)),
+                 (0, 100, (100, False)), (1, 100, (100, True)),
+                 (100, 0, (100, False)), (100, 1, (100, True)))
+        for first, second, expected in pairs:
+            for prefix in ([0xA1, 0, 0, 2, 0, 0x83], [0, 0xA1, 0, 2, 2, 0, 0x83]):
+                with self.subTest(pair=(first, second), prefix=prefix):
+                    frame = prefix + [first, second]
+                    self.assertEqual(A.parse_reply(frame + [0] * (65 - len(frame))), expected)
+
+    def test_invalid_full_report_cannot_publish_a_live_zero(self):
+        raw = bytes.fromhex("00a1000202008300ff") + bytes(56)
+        dev = FakeDev([raw, raw])
+        self.assertEqual(self.poll(dev).poll(), [])
+        self.assertTrue(dev.closed)
+
+    def test_garbage_full_frames_and_non_byte_values_are_refused(self):
+        for raw in (None, True, "not a HID report", {}, reply(-1, 0), reply(256, 0),
+                    reply(None, 0), [0x99] + [0] * 64, bytes(65)):
+            with self.subTest(raw=raw):
+                self.assertIsNone(A.parse_reply(raw))
+
     def test_the_reporters_reply_reads_91_not_charging(self):
         # #372, test build 3 on the reporter's receiver (interface 2, ffff:0000):
         # 00 a1 00 02 02 00 83 00 5b -> 91 %, not charging. This firmware sends

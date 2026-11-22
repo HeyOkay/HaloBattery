@@ -189,6 +189,7 @@ class PollTest(unittest.TestCase):
         out, _diag = self.poll(fake, entries(pid=0x5006))
         self.assertEqual([(s.key, s.level, s.online) for s in out],
                          [("monsgeek:5006", 100, True)])
+        self.assertFalse(out[0].charging_known)
 
 
     def test_offline_keyboard_never_publishes_its_cached_level_as_live(self):

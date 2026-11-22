@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
+  percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
+
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
 

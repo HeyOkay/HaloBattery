@@ -593,17 +593,19 @@ the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange
 **Connection:** 2.4 GHz receiver (373E:0047)
 
 The R5 Ultra uses the R6/R8/M5 Ultra feature-report protocol, recovered from the
-vendor WebHID driver by [mohammed-just/attack-shark-r6-cli](https://github.com/mohammed-just/attack-shark-r6-cli)
+vendor WebHID driver by [mohammed-just/attack-shark-r6-cli at b343854](https://github.com/mohammed-just/attack-shark-r6-cli/blob/b3438542106999adb743858f267ddc33a167e7d7/r6ctl.py#L354-L373)
 (MIT). A 64-byte feature report with report id 0 carries `02 02 00 83` at bytes
 2-5; the reply starts with the `0xA1` marker and carries the battery percentage
-and charging flag. The provider sends only that read-only battery command, tries
-each vendor-page collection in turn, and sends no configuration, DPI, lighting or
+and charging flag. Either sourced byte order is accepted only when the flag is
+0/1 and the percentage is 0-100; malformed pairs cannot become a live 0% reading.
+The provider sends only that read-only battery command, tries each receiver
+collection in the reference's order, and sends no configuration, DPI, lighting or
 firmware command. **Confirmed on hardware** by the reporter of
 [#372](https://github.com/HeyOkay/HaloBattery/issues/372): the R5 read 91 % on its
 2.4 GHz receiver. The X820 Ultra on its own receiver (`3151:5006`, product
 `2.4G Wireless Keyboard`) reads through the ROYUAN/MonsGeek `0xF7` status query
 and showed 100 %; its wired id (`3151:5002`) does not carry a battery command and
-is not used.
+is not used. This keyboard status has no charging flag, so charging stays unknown.
 
 ### iRocks M31R
 
