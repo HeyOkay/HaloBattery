@@ -54,7 +54,7 @@ class GenericProbeLeaseTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / "halo_battery.pyw"
         tree = ast.parse(path.read_text(encoding="utf-8"))
         main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
-        env = dict(VERSION="test", PRETEND_VERSION="", sys=SimpleNamespace(argv=["app", "--probe"]),
+        env = dict(VERSION="test", PRETEND_VERSION="", sys=SimpleNamespace(argv=["app", "--probe"], stderr=io.StringIO()),
                    flyout=SimpleNamespace(enable_dpi_awareness=Mock()), probe=Mock(), log=Mock())
         exec(compile(ast.Module(body=[main], type_ignores=[]), str(path), "exec"), env)
         return env
@@ -63,7 +63,10 @@ class GenericProbeLeaseTests(unittest.TestCase):
         env, guard = self.main_globals(), Mock()
         guard.acquire.return_value = False
         with patch.object(G, "InstanceGuard", return_value=guard):
-            env["main"]()
+            with self.assertRaises(SystemExit) as failure:
+                env["main"]()
+        self.assertNotEqual(failure.exception.code, 0)
+        self.assertIn("another diagnostic is running", env["sys"].stderr.getvalue())
         env["probe"].assert_not_called()
         guard.close.assert_called_once()
 
@@ -84,6 +87,19 @@ class GenericProbeLeaseTests(unittest.TestCase):
 
     def test_guard_creation_failure_never_polls(self):
         env = self.main_globals()
-        with patch.object(G, "InstanceGuard", side_effect=OSError("unavailable")):
-            env["main"]()
+        with patch.object(G, "InstanceGuard", side_effect=PermissionError("access denied")):
+            with self.assertRaises(SystemExit) as failure:
+                env["main"]()
+        self.assertNotEqual(failure.exception.code, 0)
+        self.assertIn("exclusive device access unavailable", env["sys"].stderr.getvalue())
         env["probe"].assert_not_called()
+
+    def test_missing_or_unusable_console_still_fails_closed(self):
+        for console in (None, Mock(write=Mock(side_effect=OSError("closed console")))):
+            env, guard = self.main_globals(), Mock()
+            env["sys"].stderr = console
+            guard.acquire.return_value = False
+            with patch.object(G, "InstanceGuard", return_value=guard), self.assertRaises(SystemExit) as failure:
+                env["main"]()
+            self.assertNotEqual(failure.exception.code, 0)
+            env["probe"].assert_not_called()

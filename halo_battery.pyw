@@ -3688,15 +3688,22 @@ def main():
         # a synchronous native call does not return.
         from halo.diagnostic_guard import InstanceGuard
         global _probe_instance_guard
+        error = None
         try:
             _probe_instance_guard = InstanceGuard()
             if not _probe_instance_guard.acquire():
                 _probe_instance_guard.close()
-                log.error("probe: HaloBattery or another diagnostic is running")
-                return
+                error = "probe: HaloBattery or another diagnostic is running"
         except OSError:
-            log.error("probe: exclusive device access unavailable")
-            return
+            error = "probe: exclusive device access unavailable"
+        if error is not None:
+            log.error("%s", error)
+            if sys.stderr is not None:
+                try:
+                    print(error, file=sys.stderr)
+                except (OSError, ValueError):
+                    pass  # A missing/unusable console must not permit polling.
+            raise SystemExit(1)
         probe()
         return
     try:
