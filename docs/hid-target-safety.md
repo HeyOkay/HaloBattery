@@ -74,7 +74,8 @@ Manufacturer [main-DQZs6ZzX.js](https://www.mchose.com.cn/assets/main-DQZs6ZzX.j
 SHA-256 `61588300659c7802018831d78a98af1dfd7967d70a8d286bfbd3e4d424173227`,
 defines 19-byte getBattery template `13 4a 01` plus 16 zeros. Its wireless wrapper
 appends additive checksum `5e`, producing the complete 20-byte HIDAPI output.
-Only `41E4:2001`, interface 1, `FF02:0002` receives it. Truncated or refused writes
+Only the documented `41E4:2001` K87 and `41E4:2004` G98 Pro identities,
+interface 1, `FF02:0002`, receive this shared query. Truncated or refused writes
 abort; replies require the full header, length, checksum and 0-100% range.
 The literal captured K87 reply ends `c5` and reports 100%; its low flag does not
 mean charging. Existing G98 Pro `41E4:2004` support and high-nibble charging
