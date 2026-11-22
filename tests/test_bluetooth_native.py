@@ -187,6 +187,9 @@ class NativeWatcherFailureTests(unittest.TestCase):
                 clock.t = T0 + bluetooth.STALL_TIMEOUT + 1
                 self.assertTrue(w.failed)
                 self.assertEqual(w.stalls, 1)
+                # abandoned while the call is still blocked: running() must be False
+                # now, not only once the call returns years later
+                self.assertFalse(w.running())
             finally:
                 release.set()
                 w._thread.join(15)
@@ -234,10 +237,12 @@ class AppFallbackChainTests(unittest.TestCase):
         app = make_app({"bluetooth": True})
         app.stop_evt, app.bt_wake = threading.Event(), threading.Event()
         app.bt_watch, app.bt_watch_failed = None, False
-        app.bt = object()
+        app.bt = mock.Mock(native=True)       # takes the "no native reads" handover
         made = []
 
         class Native:
+            alive = False
+
             def __init__(self, provider, on_update):
                 self.failed = True
                 made.append("native")
@@ -249,6 +254,8 @@ class AppFallbackChainTests(unittest.TestCase):
                 pass
 
         class PowerShell:
+            alive = False
+
             def __init__(self, provider, on_update):
                 self.failed = False
                 made.append("powershell")
@@ -271,6 +278,118 @@ class AppFallbackChainTests(unittest.TestCase):
         self.assertEqual(made, ["native", "powershell"])
         self.assertTrue(app.bt_native_failed)
         self.assertFalse(app.bt_watch_failed)
+
+
+class SnapshotOwnershipTests(unittest.TestCase):
+    """#513 review: an abandoned watcher must not publish, and a failed in-process
+    backend must never be retried by the one-shot fallback loop."""
+
+    def app(self):
+        app = make_app({"bluetooth": True})
+        app.stop_evt, app.bt_wake, app.bt_fresh = (threading.Event(), threading.Event(),
+                                                   threading.Event())
+        app.bt_watch, app.bt_watch_failed, app.bt_native_failed = None, False, False
+        app._bt_generation, app._bt_orphans = 0, []
+        app.bt_cache, app._bt_revision = [], 0
+
+        class Wake:
+            def __init__(self):
+                self.calls = 0
+
+            def bluetooth(self):
+                self.calls += 1
+
+        app.wake = Wake()
+        app.bt = mock.Mock(native=True)
+        app.bt.poll.return_value = []
+        return app
+
+    def test_a_late_snapshot_from_an_abandoned_watcher_is_ignored(self):
+        app = self.app()
+        app._bt_generation = 4                 # the loop gave up on 1..3
+        app._bt_update([], generation=3)
+        self.assertEqual((app.bt_cache, app._bt_revision), ([], 0))
+        self.assertFalse(app.bt_fresh.is_set())
+        self.assertEqual(app.wake.calls, 0)
+
+    def test_the_current_watcher_still_publishes(self):
+        app = self.app()
+        app._bt_generation = 4
+        app._bt_update([], generation=4)
+        self.assertEqual(app._bt_revision, 1)
+        self.assertTrue(app.bt_fresh.is_set())
+        self.assertEqual(app.wake.calls, 1)
+
+    def test_the_fallback_loop_stops_admitting_native_work(self):
+        app = self.app()
+        app.bt_native_failed = True
+        app.bt_watch_failed = True             # both watchers are out: one-shot path
+
+        class OneWait:
+            def wait(self, seconds):
+                app.stop_evt.set()
+                return True
+
+            def clear(self):
+                pass
+
+        app.bt_wake = OneWait()
+        with mock.patch.object(hb, "log"):
+            app.bt_loop()
+        self.assertFalse(app.bt.native)
+        app.bt.poll.assert_called_once()
+
+    def test_repeated_stalls_keep_one_watcher_per_backend(self):
+        app = self.app()
+        made = {"native": 0, "powershell": 0}
+        stopped = []
+
+        class Base:
+            failed = True
+
+            def __init__(self, provider, on_update, label):
+                made[label] += 1
+
+            def start(self):
+                return self
+
+            def stop(self):
+                stopped.append(type(self).__name__)
+
+            @property
+            def alive(self):
+                return False
+
+        class Native(Base):
+            def __init__(self, provider, on_update):
+                super().__init__(provider, on_update, "native")
+
+        class PowerShell(Base):
+            def __init__(self, provider, on_update):
+                super().__init__(provider, on_update, "powershell")
+
+        rounds = {"n": 0}
+
+        class Wake:
+            def wait(self, seconds):
+                rounds["n"] += 1
+                if rounds["n"] >= 6:
+                    app.stop_evt.set()
+                return True
+
+            def clear(self):
+                pass
+
+        app.bt_wake = Wake()
+        with mock.patch.object(hb, "NativeBluetoothWatcher", Native), \
+                mock.patch.object(hb, "BluetoothWatcher", PowerShell), \
+                mock.patch.object(hb.sys, "platform", "win32"), mock.patch.object(hb, "log"):
+            app.bt_loop()
+        self.assertEqual(made, {"native": 1, "powershell": 1})
+        self.assertEqual(stopped, ["Native", "PowerShell"])
+        self.assertFalse(app.bt.native)
+        self.assertTrue(app.bt_watch_failed)
+        self.assertLessEqual(len(app._bt_orphans), 2)
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows DLLs")

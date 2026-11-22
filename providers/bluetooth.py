@@ -497,6 +497,12 @@ class BluetoothWatcher:
     def running(self) -> bool:
         return self._thread.is_alive() and not self.failed
 
+    @property
+    def alive(self) -> bool:
+        """True while the worker thread runs, even after `failed` - the app keeps at
+        most one abandoned watcher and never starts another of the same kind."""
+        return self._thread.is_alive()
+
     def stop(self) -> None:
         self._stop.set()
         proc = self._proc
@@ -639,6 +645,12 @@ class NativeBluetoothWatcher:
 
     def running(self) -> bool:
         return self._thread.is_alive() and not self.failed
+
+    @property
+    def alive(self) -> bool:
+        """True while the worker thread runs, even after `failed` - a stalled call
+        can return minutes later."""
+        return self._thread.is_alive()
 
     def stop(self) -> None:
         self._stop.set()
