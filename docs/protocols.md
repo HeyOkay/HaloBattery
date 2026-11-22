@@ -999,8 +999,9 @@ once per connection, then the charging and battery queries; the collection stays
 so the headset's pushes arrive, and a query only goes out at connect, after a link-up
 push, or after minutes of silence, because this dongle resets its radio link when it is
 polled continuously. The V3 Pro identity was added from the identical collection shape
-in [#519](https://github.com/HeyOkay/HaloBattery/issues/519) and is **unverified on
-hardware**.
+in [#519](https://github.com/HeyOkay/HaloBattery/issues/519); its level and charging are
+**confirmed on the reporter's headset** in that issue - the icon appeared, the percentage
+agreed with Synapse, and the charging ring followed the cable.
 
 ### Razer BlackShark V3 X HyperSpeed
 

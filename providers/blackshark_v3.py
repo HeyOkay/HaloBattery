@@ -2,7 +2,9 @@
 
 The V3 Pro (1532:0577, product "BlackShark V3 Pro HID") publishes the same four
 collections on interface 5, including ff14:0001, so it is read with the same frames.
-Its level and charging are unverified on hardware: the first run decides.
+Level and charging are confirmed on @robertagorecki-bit's headset (#519): the tray
+icon appeared, the percentage agreed with Synapse, and the charging ring followed
+the cable.
 
 Not the 2023 model's "PA" protocol: the dongle takes those frames on ff14:0001 and never
 answers them, and it refuses the 90-byte feature reports of the other Razer devices.
