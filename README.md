@@ -11,6 +11,8 @@ One icon per device. No vendor software.
 [![Downloads](https://img.shields.io/github/downloads/HeyOkay/HaloBattery/total?color=2ea043)](../../releases)
 [![Windows 10 / 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
 [![License: MIT](https://img.shields.io/github/license/HeyOkay/HaloBattery?color=lightgrey)](LICENSE)
+[![Website](https://img.shields.io/badge/website-halobattery.app-2ea043)](https://halobattery.app)
+[![Discord](https://img.shields.io/badge/discord-join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/K796KR9xtk)
 
 ### [⬇ Download the latest version](../../releases/latest)
 
@@ -31,7 +33,7 @@ The [pre-release builds](https://github.com/HeyOkay/HaloBattery/releases) have f
 - **Stays out of the way.** Alerts wait until your full-screen game closes, and devices are polled less often while you play.
 - **Native look.** A Windows 11 style menu, sharp at any display scale, light or dark.
 - **Autoupdates.** A new release installs from the tray menu in one click.
-- **Nine languages.** English, Spanish, French, Japanese, Kazakh, Ukrainian, Russian and Simplified / Traditional Chinese, chosen from Windows at first start and changeable in Preferences.
+- **Ten languages.** English, Spanish, French, Polish, Japanese, Kazakh, Ukrainian, Russian and Simplified / Traditional Chinese, chosen from Windows at first start and changeable in Preferences.
 
 <p align="center"><img src="docs/charging.gif" alt="The charging animation: the green arc slowly breathes" width="300"></p>
 

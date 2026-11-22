@@ -194,6 +194,7 @@ class IconCatalogJobs:
                         catalog.close_transport()
                     except (OSError, ValueError):
                         log.warning("settings: icon HTTP cancellation failed", exc_info=True)
+                catalog = None                  # this frame must not keep it alive below
             for worker in (self._thread, self._warm_thread, self._index_thread):
                 if worker is not None and worker is not threading.current_thread():
                     worker.join()

@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: LennardKittner/HyperHeadset src/devices/cloud_iii_wireless.rs report66 battery89/charge8a.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -66,10 +69,10 @@ class FakeDongle:
 
     def _answer(self, packet):
         cmd = packet[1]
-        r = [H.REPORT_ID, cmd] + [0] * 60
-        if cmd == H.CMD_BATTERY:
+        r = [0x66, cmd] + [0] * 60
+        if cmd == 0x89:
             r[2], r[4] = 1, self.level
-        elif cmd == H.CMD_CHARGING:
+        elif cmd == 0x8A:
             r[2] = self.charging
         self.pending.append(r)
 
@@ -164,7 +167,7 @@ class WritePath(Base):
         self.assertTrue(out[0].charging)
         # The same packet goes out as a feature report, for both commands.
         self.assertEqual(d.features, d.writes)
-        self.assertEqual([f[1] for f in d.features], [H.CMD_BATTERY, H.CMD_CHARGING])
+        self.assertEqual([f[1] for f in d.features], [0x89, 0x8A])
         self.assertTrue(any("retrying as a feature report" in line for line in diag), diag)
         self.assertTrue(any("feature report accepted" in line for line in diag), diag)
 
@@ -227,7 +230,7 @@ class Cloud2Core(Base):
                          [("hyperx:0995", "HyperX Cloud II Core Wireless", 48, False,
                            "hyperx", "headset")])
         self.assertEqual(set(d.opened), {CORE_PATH_VENDOR})   # the consumer collection is left alone
-        self.assertEqual([w[1] for w in d.writes], [H.CMD_BATTERY, H.CMD_CHARGING])
+        self.assertEqual([w[1] for w in d.writes], [0x89, 0x8A])
 
     def test_the_second_mode_alone_keeps_the_shared_icon(self):
         # one headset, one icon: the cable mode alone still reports under the shared key

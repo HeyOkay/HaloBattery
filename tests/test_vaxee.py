@@ -12,6 +12,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: ryanlewis/mousebatt src/protocol.rs VAXEE; report0e headera5, battery0b/charging10.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -23,9 +26,9 @@ from providers import vaxee as V  # noqa: E402
 
 
 def reply(cmd, value):
-    r = [0x00] * V.REPORT_LEN
-    r[0] = V.REPORT_ID
-    r[1] = V.HEADER
+    r = [0x00] * 64
+    r[0] = 0x0E
+    r[1] = 0xA5
     r[2] = cmd
     r[3] = 0x01
     r[4] = 0x01
@@ -50,9 +53,9 @@ class FakeCollection:
         return len(data)
 
     def get(self, length):
-        if not self.answer or self.cmd not in (V.CMD_BATTERY, V.CMD_CHARGING):
+        if not self.answer or self.cmd not in (0x0B, 0x10):
             return []
-        value = self.battery if self.cmd == V.CMD_BATTERY else self.charging
+        value = self.battery if self.cmd == 0x0B else self.charging
         return reply(self.cmd, value)[:length]
 
 
@@ -145,8 +148,8 @@ class PollTest(unittest.TestCase):
         cols = self.cols(entries_)
         self.poll(entries_, cols)
         sent = cols[entries_[0]["path"]].sent
-        self.assertEqual(sent[0], [0x0E, 0xA5, V.CMD_BATTERY, 0x01, 0x01] + [0x00] * 59)
-        self.assertEqual(sent[1], [0x0E, 0xA5, V.CMD_CHARGING, 0x01, 0x01] + [0x00] * 59)
+        self.assertEqual(sent[0], [0x0E, 0xA5, 0x0B, 0x01, 0x01] + [0x00] * 59)
+        self.assertEqual(sent[1], [0x0E, 0xA5, 0x10, 0x01, 0x01] + [0x00] * 59)
 
     def test_cable_is_asked_first_and_wins(self):
         dongle = entries()
@@ -202,8 +205,8 @@ class PollTest(unittest.TestCase):
         self.assertEqual(cols[entries_[0]["path"]].opened, 0)
 
     def test_wrong_command_echo_is_refused(self):
-        self.assertIsNone(V.parse_reply(reply(V.CMD_CHARGING, 1), V.CMD_BATTERY))
-        self.assertEqual(V.parse_reply(reply(V.CMD_BATTERY, 9), V.CMD_BATTERY), 9)
+        self.assertIsNone(V.parse_reply(reply(0x10, 1), 0x0B))
+        self.assertEqual(V.parse_reply(reply(0x0B, 9), 0x0B), 9)
 
     def test_name_is_not_prefixed_twice(self):
         self.assertEqual(V.display_name("VAXEE XE-S"), "VAXEE XE-S")

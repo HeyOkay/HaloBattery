@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: G-Wolves mouse.xyz feature-report protocol (64-byte payload plus report ID).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import time
@@ -91,7 +94,7 @@ def receiver(entries, target_index, answer=(0, 77)):
     """Collections for `entries`: only entries[target_index] has the 65-byte feature report."""
     cols = {}
     for n, e in enumerate(entries):
-        cols[e["path"]] = FakeCollection(G.FEATURE_LENGTH if n == target_index else
+        cols[e["path"]] = FakeCollection(65 if n == target_index else
                                          (0 if n % 2 else 9), answer)
     return cols
 
@@ -161,7 +164,7 @@ class PollTest(ProviderTest):
 
     def test_other_vendors_ids_are_ignored(self):
         e = [dict(issue_82_entries()[5], product_id=0x3899)]    # a G-Wolves pid in no list
-        cols = {e[0]["path"]: FakeCollection(G.FEATURE_LENGTH)}
+        cols = {e[0]["path"]: FakeCollection(65)}
         self.assertEqual(self.poll(e, cols), [])
         self.assertEqual(cols[e[0]["path"]].opened, 0)
 

@@ -15,6 +15,7 @@ import math
 import re
 import threading
 import xml.etree.ElementTree as ET
+import zlib
 
 from PIL import Image, ImageColor
 
@@ -490,27 +491,33 @@ class _RenderCache:
             return self.bytes
 
 
+def _pack(raw):
+    """1024 px masters are kept zlib-compressed: 1 MB (mono) or 4 MB (colour, per theme) of
+    pixels shrink to tens of KB, and a render-cache miss decompresses one in about a millisecond."""
+    return None if raw is None else zlib.compress(raw,1)
+
+
 @dataclass(frozen=True)
 class CustomGlyph:
     """Immutable validated centre-only master; safe for tray and preview caches."""
     png_bytes: bytes
     digest: str
-    _alpha_bytes: bytes = field(repr=False,compare=False)
-    _rgba_bytes: bytes | None = field(default=None,repr=False,compare=False)
-    _light_rgba_bytes: bytes | None = field(default=None,repr=False,compare=False)
+    _alpha_z: bytes = field(repr=False,compare=False)
+    _rgba_z: bytes | None = field(default=None,repr=False,compare=False)
+    _light_rgba_z: bytes | None = field(default=None,repr=False,compare=False)
     _cache: _RenderCache = field(default_factory=_RenderCache,init=False,repr=False,compare=False)
 
     @property
     def is_colored(self):
-        return self._rgba_bytes is not None
+        return self._rgba_z is not None
 
     @property
     def color_mode(self):
-        return 'mixed' if self._light_rgba_bytes is not None else ('color' if self.is_colored else 'monochrome')
+        return 'mixed' if self._light_rgba_z is not None else ('color' if self.is_colored else 'monochrome')
 
     @property
     def memory_bytes(self):
-        return len(self.png_bytes)+len(self._alpha_bytes)+(len(self._rgba_bytes) if self._rgba_bytes is not None else 0)+(len(self._light_rgba_bytes) if self._light_rgba_bytes is not None else 0)+self._cache.memory_bytes()
+        return len(self.png_bytes)+len(self._alpha_z)+(len(self._rgba_z) if self._rgba_z is not None else 0)+(len(self._light_rgba_z) if self._light_rgba_z is not None else 0)+self._cache.memory_bytes()
 
     @classmethod
     def from_png(cls,data: bytes,*,renderer_version=None):
@@ -576,7 +583,7 @@ class CustomGlyph:
         buffer=io.BytesIO();saved.save(buffer,format='PNG')
         mode=b'mixed' if light_raw is not None else (b'color' if colored else b'monochrome')
         digest=hashlib.sha256(RENDERER_VERSION.encode('ascii')+b'\0'+PLACEMENT_VERSION.encode('ascii')+b'\0'+mode+b'\0'+(rgba if colored else raw)+(light_raw or b'')).hexdigest()
-        return cls(buffer.getvalue(),digest,raw,rgba,light_raw)
+        return cls(buffer.getvalue(),digest,_pack(raw),_pack(rgba),_pack(light_raw))
 
     def render(self,size:int,fg:tuple,alpha:int=255,foreground_opacity:float=230/255):
         if isinstance(size,bool) or not isinstance(size,int) or not 1<=size<=1024:
@@ -588,9 +595,9 @@ class CustomGlyph:
         if isinstance(foreground_opacity,bool) or not isinstance(foreground_opacity,(int,float)) or not math.isfinite(foreground_opacity) or not 0<=foreground_opacity<=1:
             raise SvgGlyphError('Glyph foreground opacity must be within 0..1')
         if self.is_colored:
-            image=self._cache.image((size,'black'),lambda:_sized_color(self._rgba_bytes,size)).copy()
-            if self._light_rgba_bytes is not None and fg!=(0,0,0):
-                light=self._cache.image((size,'white'),lambda:_sized_color(self._light_rgba_bytes,size))
+            image=self._cache.image((size,'black'),lambda:_sized_color(zlib.decompress(self._rgba_z),size)).copy()
+            if self._light_rgba_z is not None and fg!=(0,0,0):
+                light=self._cache.image((size,'white'),lambda:_sized_color(zlib.decompress(self._light_rgba_z),size))
                 if fg==(255,255,255):
                     image=light.copy()
                 else:
@@ -599,7 +606,7 @@ class CustomGlyph:
                     image=Image.merge('RGBA',(*channels,image.getchannel('A')))
             image.putalpha(image.getchannel('A').point(lambda v:round(v*alpha/255)))
             return image
-        mask=self._cache.image((size,'alpha'),lambda:_sized_mask(self._alpha_bytes,size))
+        mask=self._cache.image((size,'alpha'),lambda:_sized_mask(zlib.decompress(self._alpha_z),size))
         coverage=mask.point(lambda v:round(v*alpha*foreground_opacity/255))
         image=Image.new('RGBA',(size,size),fg+(0,)); image.putalpha(coverage)
         return image

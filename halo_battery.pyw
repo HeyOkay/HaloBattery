@@ -161,7 +161,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        RedSquareProvider,
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
-                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
+                       AttackSharkR5Provider, SonyH9IIProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
@@ -279,6 +280,7 @@ PROVIDER_LABELS = {
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
+    "attackshark_r5": "Attack Shark R5 Ultra",
     "irocks": "iRocks M31R",
     "kraken_v4": "Razer Kraken V4",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
@@ -317,6 +319,7 @@ PROVIDER_LABELS = {
     "shield": "NVIDIA SHIELD controllers",
     "skullcandy": "Skullcandy headsets",
     "sony_inzone": "Sony INZONE H9 / H5",
+    "sony_h9ii": "Sony INZONE H9 II",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
@@ -341,10 +344,10 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), LogitechG435RtkProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
-            InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            InphicProvider(), AttackSharkR5Provider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             BlackSharkMtkProvider(),
             IRocksProvider(),
-            SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
+            SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
             EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), LogitechG325Provider(), JblQuantum350Provider()]
 
@@ -3561,7 +3564,9 @@ class App:
             threading.Thread(target=self.anim_loop, daemon=True).start()
             threading.Thread(target=self.bt_loop, daemon=True).start()
             threading.Thread(target=self.update_loop, daemon=True).start()
-            self.ui_host.start()                    # tkinter is ready by the first activation
+            # The flyout's tkinter thread starts on the first menu or window (show()/call()
+            # start it, ~70 ms): starting it here kept about 4 MB of Tcl/Tk in memory for
+            # sessions that never open the menu.
             self.report_hid_backend_failure()
             self.report_custom_icon_failure()
             stop_file = verification_stop_file()

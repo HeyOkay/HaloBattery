@@ -10,6 +10,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Identify the next pre-release as 1.18.0 and allow its updater to install the
   stable 1.18.0 when available. Preview What's new uses the bundled changelog.
+- Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
+  percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
+- Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
+  1 MB (single colour) or 4-8 MB (colour) of raw pixels.
+- Custom Iconify tray icons no longer load the whole icon-library registry at start-up
+  (about 4 MB, with a 12 MB peak while reading it); it is read when Settings browses
+  icons or an older selection has to be checked.
+- Start the tray menu's window system when the menu (or another window) first opens,
+  not at start-up: about 4 MB less for sessions that never open the menu, at the
+  cost of about 70 ms on the first open.
+- Use less memory while running: the app no longer keeps its full-size (1024 px)
+  icon artwork in memory after drawing the small icons it needs (about 4 MB), and
+  saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
 
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
@@ -43,7 +56,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
+- Refresh documented device-test evidence and distinguish pending support fixes
+  from released behavior.
+
+- Use independent protocol fixtures and cover the six originally surviving
+  battery/history mutations without changing device requests or controller identities.
+
 ### Added
+- Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
+  the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
+  ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
+  confirmed that the tray icon and charging animation appear on their headset.
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,
@@ -152,8 +175,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
+- **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
+- **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
+- Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
+  control channel, using the read-only status query from
+  marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test
+  build (#387); this bounded, exact-target implementation has offline tests,
+  with fresh hardware and charging-transition confirmation still pending.
+- AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
+- Polish interface translation, including Windows language detection and Polish
+  plural forms for estimates and device counts.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
   name filters. Search all reviewed names with 50-candidate pages, round arrow
   and number buttons, predecoded neighboring previews and bounded parallel
@@ -183,7 +216,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
   Double-clicking a device's tray icon opens settings for that exact device.
   The compact right-click menu keeps device settings, refresh, app settings,
-  diagnostics, updates when available and exit within reach. All seven
+  diagnostics, updates when available and exit within reach. All ten
   interface languages remain available.
 - Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
   navigation and control glyphs for the settings window.
@@ -404,6 +437,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.
 
+- Keychron Ultra-Link 8K: fall back to an output report when the receiver
+  rejects SET_FEATURE, read the charging flag in bit 7 of byte 20, and query
+  every matching receiver collection so two 8K dongles get separate icons,
+  each keyed on its own receiver so unplugging one never renames the other
+  (#373). Only documented battery collections are opened, and the output
+  retry is made only on `ffc1:0001`. The level was confirmed on a G4 with the
+  test build; the charging indication has not been reported yet.
+- Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
+  over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
+  on that collection when SET_FEATURE is refused or unanswered, and report the
+  charging bit. A Keychron receiver without a battery collection is skipped:
+  its keyboard, VIA and other collections are never opened or written.
+  Confirmed on hardware by @cocowalla in #270: the Keychron M6 icon and
+  100 % level match Keychron Launcher.
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 
 - Use single-language Language card headings in English, French and Spanish.
