@@ -23,11 +23,22 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from providers import attackshark_r11 as A  # noqa: E402
+from providers import compx as C  # noqa: E402
 
 REQUEST = bytes.fromhex("08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49")
 REPLY_85_CHARGING = bytes.fromhex("08 04 00 00 00 00 55 01 00 00 00 00 00 00 00 00 f3")
 REPLY_42_BATTERY = bytes.fromhex("08 04 00 00 00 00 2a 00 00 00 00 00 00 00 00 00 1f")
 NOT_A_REPLY = bytes.fromhex("08 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00")
+
+
+def frame(level, charging):
+    """A valid CompX power reply with the checksum the parser expects."""
+    f = [0] * C.PAYLOAD_LEN
+    f[0], f[1] = C.PAYLOAD_HEADER, C.CMD_POWER
+    f[6] = level
+    f[7] = 1 if charging else 0
+    f[-1] = C.checksum(f[:-1])
+    return bytes(f)
 
 
 class FakeDevice:
@@ -105,6 +116,21 @@ class PollTest(unittest.TestCase):
     def test_on_battery_is_not_charging(self):
         out = self.poll(entries(), [REPLY_42_BATTERY])
         self.assertEqual((out[0].level, out[0].charging), (42, False))
+
+    def test_charging_holds_the_level_from_before_the_cable(self):
+        self.poll(entries(), [frame(100, False)])
+        out = self.poll(entries(), [frame(95, True)])
+        self.assertEqual((out[0].level, out[0].charging), (100, True))
+
+    def test_the_held_level_clears_when_the_cable_is_unplugged(self):
+        self.poll(entries(), [frame(100, False)])
+        self.poll(entries(), [frame(95, True)])
+        out = self.poll(entries(), [frame(97, False)])
+        self.assertEqual((out[0].level, out[0].charging), (97, False))
+
+    def test_a_first_reading_while_charging_uses_the_reported_level(self):
+        out = self.poll(entries(), [frame(95, True)])
+        self.assertEqual((out[0].level, out[0].charging), (95, True))
 
     def test_the_question_is_the_compX_power_frame_and_only_that(self):
         self.poll(entries(), [REPLY_85_CHARGING])
