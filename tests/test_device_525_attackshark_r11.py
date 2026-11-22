@@ -122,6 +122,11 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries(), [frame(95, True)])
         self.assertEqual((out[0].level, out[0].charging), (100, True))
 
+    def test_a_lower_pre_cable_poll_does_not_hide_the_charging_level(self):
+        self.poll(entries(), [frame(85, False)])
+        out = self.poll(entries(), [frame(90, True)])
+        self.assertEqual((out[0].level, out[0].charging), (90, True))
+
     def test_the_held_level_clears_when_the_cable_is_unplugged(self):
         self.poll(entries(), [frame(100, False)])
         self.poll(entries(), [frame(95, True)])

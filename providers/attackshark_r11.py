@@ -14,14 +14,16 @@ Source: the CompX notes behind #69 (blak0p's protocol documents, validated on
 the R1/X6 dongles) and the LAMZU Atlantis support, whose frame builder and
 parser this module reuses unchanged (``providers/compx.py``).
 
-While charging, this mouse reports a level a few points below the one the
-vendor app keeps showing (95 % at a full 100 %), so the provider holds the level
-from before the cable for the charging session and accepts the fresh level again
-once the cable is out.
+While charging, this mouse can report a level a few points below the one the
+vendor app keeps showing (95 % at a full 100 %), and a poll at the plug-in can
+catch a 5-point drop first. The provider publishes the higher of the pre-cable
+level and the charging reply, then accepts fresh replies again once the cable
+is out.
 
-**Unverified on hardware**: the first run is the test build in #525. If the
-dongle does not answer the CompX query, the diagnostics name every collection
-tried and the raw reply, and the next step is a capture of the vendor app.
+**Confirmed on hardware** in #525: the level matched the vendor software at
+90 % and 100 %, and the charging state held at both levels and cleared within a
+poll or two after unplugging. If the dongle stops answering, the diagnostics
+name every collection tried and the raw reply.
 """
 from __future__ import annotations
 
@@ -57,9 +59,10 @@ class AttackSharkR11Provider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Optional[Tuple[int, bool, float]] = None
-        # The mouse reports a lower level while charging (95 % at a full 100 %),
-        # the same way the vendor app keeps showing the level from before the
-        # cable. Hold that level for the charging session.
+        # The mouse can report a lower level while charging (95 % at a full 100 %),
+        # and a poll around the plug-in can catch 85 % on the way from 90 %. Keep
+        # the higher of that pre-cable level and the charging reply, which matches
+        # the vendor app in both cases.
         self._precharge: Optional[int] = None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
@@ -124,7 +127,7 @@ class AttackSharkR11Provider(Provider):
                     if self._precharge is None and self._last is not None and not self._last[1]:
                         self._precharge = self._last[0]
                     if self._precharge is not None:
-                        level = self._precharge
+                        level = max(level, self._precharge)
                 else:
                     self._precharge = None
                 self._last = (level, charging, time.time())
