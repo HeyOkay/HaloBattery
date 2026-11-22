@@ -33,6 +33,7 @@ NAME = "URX Core75"
 KEY = f"urx:{PID:04x}"
 
 USAGE_PAGE, USAGE = 0xFF60, 0x0061          # the VIA raw HID channel, interface 1
+PRODUCT_WORDS = ("urx", "core75")           # the EVO75 shares 36b0:3002 but is not this board
 REPORT_SIZE = 32
 REPORT_ID = 0x00
 VIA_CUSTOM_GET = 0x08
@@ -97,8 +98,15 @@ class UrxProvider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(urx): %s", e)
             return []
-        mine = [d for d in infos if d.get("product_id") == PID]
+        mine = [d for d in infos
+                if d.get("product_id") == PID
+                and any(w in (d.get("product_string") or "").lower() for w in PRODUCT_WORDS)]
         if not mine:
+            same_id = [d for d in infos if d.get("product_id") == PID]
+            if same_id:
+                self._diag.append(
+                    "[URX] pid=3002 is present but its product string is not a URX Core75; "
+                    "not claiming it (EVO75 and other QMK boards share this id)")
             return []
         d = pick(mine)
         if d is None:

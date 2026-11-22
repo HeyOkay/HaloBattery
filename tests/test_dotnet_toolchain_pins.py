@@ -34,7 +34,25 @@ class DotnetToolchainPinTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 workflow = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
                 versions = re.findall(r'^\s*dotnet-version:\s*[\"\']([^\"\']+)[\"\']\s*$', workflow, re.MULTILINE)
-                self.assertEqual(versions, [SDK, SDK] if name == "tests.yml" else [SDK])
+                expected_jobs = {
+                    "tests.yml": {"tests", "compatibility"},
+                    "prerelease.yml": {"build"},
+                    "release.yml": {"build", "test_build"},
+                }[name]
+                self.assertEqual(versions, [SDK] * len(expected_jobs))
+                # Pin every actual SDK-consuming job, including the isolated
+                # manual TEST build; another SDK in a different job must fail.
+                body = workflow.split("\njobs:\n", 1)[1]
+                sections = re.split(r"(?m)^  ([A-Za-z_][A-Za-z0-9_-]*):\n", body)
+                sdk_jobs = {sections[index]: sections[index + 1]
+                            for index in range(1, len(sections), 2)
+                            if "dotnet-version:" in sections[index + 1]}
+                self.assertEqual(set(sdk_jobs), expected_jobs)
+                for job_name, job in sdk_jobs.items():
+                    with self.subTest(job=job_name):
+                        self.assertEqual(re.findall(
+                            r'^\s*dotnet-version:\s*[\"\']([^\"\']+)[\"\']\s*$',
+                            job, re.MULTILINE), [SDK])
 
     def test_required_ci_installs_exact_sdk_before_native_unit_guards(self):
         workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
@@ -42,7 +60,7 @@ class DotnetToolchainPinTests(unittest.TestCase):
         compatibility = workflow.split("  compatibility:\n", 1)[1].split("  lint:\n", 1)[0]
         for job in (required, compatibility):
             self.assertLess(job.index("- name: Set up .NET"), job.index("- name: Unit tests"))
-        self.assertIn("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1", workflow)
+        self.assertIn("actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73", workflow)
 
     def test_runtime_targeting_pin_stays_scoped_and_shipping_qa_aot_policy_is_preserved(self):
         project = ET.parse(PROJECT / "HaloBattery.Settings.csproj").getroot()

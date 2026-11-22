@@ -93,3 +93,73 @@ The installer script also rejects other compiler versions.
 checks. Portable extraction uses `/PORTABLE=1 /CURRENTUSER /NOICONS` and does not
 register an installed Inno Setup application. Building the HaloBattery installer
 does not install or uninstall HaloBattery.
+
+
+## Stable release publication
+
+The owner enabled repository release immutability on 2026-11-17 and set the
+Actions variable `STABLE_RELEASE_IMMUTABILITY_ENABLED=true`. This policy protects
+future published releases; it does not retroactively lock earlier releases.
+The historical `prerelease-build` release is now immutable too. Preserve it;
+do not replace its files, move its tag, or delete and recreate it.
+
+The stable publisher receives validated build files on a fresh runner, creates
+a new draft, uploads without replacement and checks the remote asset digests.
+It refuses any existing release or draft for that tag. GitHub provenance
+attestations bind the ZIP and installer to the exact tag commit and release
+workflow. Publication follows verification of those attestations; afterward,
+`gh release verify <tag>` and `gh release verify-asset <tag> <file>` check the
+immutable release and its assets. These attestations do not code-sign the EXE
+or replace the pending SignPath integration.
+
+Only the publisher receives `contents: write`, `id-token: write` and
+`attestations: write`. Build/test jobs keep read-only repository permissions,
+and manual dispatch cannot publish. No persistent signing/admin token is
+stored in the workflow. The owner acknowledgement variable is a prerequisite,
+not a substitute for the actual GitHub repository setting.
+
+A failed upload or attestation can leave an unpublished draft. A rerun stops
+rather than modifying it. Inspect the failed run and draft, retain evidence,
+and recover deliberately; there is no automated asset deletion or overwrite.
+
+## Pre-release publication
+
+Every push to `pre-release` runs tests and builds Actions artifacts without
+publishing a release. Manual runs also build artifacts by default. To publish
+a selected candidate, open **Actions > Pre-release build > Run workflow**,
+select the `pre-release` branch and enable **Publish this candidate** (`publish_prerelease`)
+(a boolean input that defaults to false), or run:
+
+```sh
+gh workflow run prerelease.yml --ref pre-release -f publish_prerelease=true
+```
+
+If Actions still shows the older default-branch form without this input, use
+the CLI command above to pass it to the selected `pre-release` ref.
+
+Only this explicit manual selection on `pre-release` can publish a pre-release.
+It creates a tag such as `pre-1.17.0-0123456-12345-1`. The final fields are the
+GitHub run ID and attempt, so reruns never require rewriting a published release or a
+failed draft. Tags do not start with `v`, so they cannot trigger stable release
+publication.
+
+The fresh read-only build hands data to a separate `contents: write` publisher.
+It refuses existing tags/releases, creates an exact-commit tag and draft,
+uploads without replacement, verifies remote asset names/digests/states and
+the tag target, then publishes with `prerelease=true` and `make_latest=false`.
+Repository release immutability locks the completed release; GitHub CLI verifies
+that protection and the three assets afterward. No stable signing or OIDC
+permission is added by this workflow.
+
+Each run has independent concurrency and attempt-specific Actions artifact
+names. A newer merge cannot cancel an older publication halfway through.
+Interrupted drafts and tags are retained for inspection. The old rolling
+release remains historical; use the [release list](https://github.com/HeyOkay/HaloBattery/releases)
+to select a new entry marked **Pre-release**. The normal app updater continues
+to use only the latest stable release.
+
+
+## Test code signing
+
+See [Test signing with SignPath](signing.md) for the explicit manual TEST mode,
+protected environment setup and remaining production-signing requirements.

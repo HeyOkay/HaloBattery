@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -49,68 +48,11 @@ public sealed partial class MainWindow
         Refresh();
     }
 
-    private const double RestingBrandOpacity = .84;
-    private const int BrandFadeMilliseconds = 180;
-    private TextBlock? brandLabel;
-    private bool brandHovered;
-
+    // Also used by popup reveal initialization under a stationary pointer.
     [StructLayout(LayoutKind.Sequential)]
     private struct BrandPointerPoint { public int X, Y; }
     [DllImport("user32.dll", EntryPoint = "GetCursorPos", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetBrandCursorPosition(out BrandPointerPoint point);
-    [DllImport("user32.dll", EntryPoint = "ScreenToClient", ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool BrandScreenToClient(nint window, ref BrandPointerPoint point);
-
-    private void InitializeBrandHover()
-    {
-        // Caption input bypasses XAML. Observe it without removing the logo from
-        // the native drag region or keeping a rendering/timer loop alive.
-        header.PointerMoved += (_, _) => UpdateBrandHover();
-        header.PointerExited += (_, _) => SetBrandHovered(false);
-        try
-        {
-            var source = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
-            source.PointerEntered += OnBrandPointerMoved;
-            source.PointerMoved += OnBrandPointerMoved;
-            source.PointerExited += OnBrandPointerExited;
-            Closed += (_, _) =>
-            {
-                source.PointerEntered -= OnBrandPointerMoved;
-                source.PointerMoved -= OnBrandPointerMoved;
-                source.PointerExited -= OnBrandPointerExited;
-            };
-        }
-        catch (Exception error) { System.Diagnostics.Debug.WriteLine(error); }
-    }
-
-    private void OnBrandPointerMoved(InputNonClientPointerSource sender, NonClientPointerEventArgs args)
-        => UpdateBrandHover();
-
-    private void OnBrandPointerExited(InputNonClientPointerSource sender, NonClientPointerEventArgs args)
-        => SetBrandHovered(false);
-
-    private void UpdateBrandHover()
-    {
-        if (brandLabel is not { IsLoaded: true } label || closing) return;
-        if (!GetBrandCursorPosition(out var point) || !BrandScreenToClient(hwnd, ref point)) return;
-        var bounds = label.TransformToVisual(root).TransformBounds(
-            new Windows.Foundation.Rect(0, 0, label.ActualWidth, label.ActualHeight));
-        SetBrandHovered(bounds.Contains(new Windows.Foundation.Point(point.X / Scale, point.Y / Scale)));
-    }
-
-    private void SetBrandHovered(bool hovered)
-    {
-        if (brandHovered == hovered) return;
-        brandHovered = hovered;
-        if (brandLabel is not { } label) return;
-        if (settings.AnimationsEnabled)
-            label.OpacityTransition ??= new ScalarTransition
-                { Duration = TimeSpan.FromMilliseconds(BrandFadeMilliseconds) };
-        else
-            label.OpacityTransition = null;
-        label.Opacity = hovered ? 1 : RestingBrandOpacity;
-    }
 
 }

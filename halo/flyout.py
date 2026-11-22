@@ -697,7 +697,9 @@ class FlyoutHost:
     def __init__(self, win32: Optional[_Win32] = None):
         self._w = win32
         self._thread: Optional[threading.Thread] = None
+        self._start_lock = threading.Lock()
         self._ready = threading.Event()
+        self._stop_requested = threading.Event()
         self._failed = False
         self._root = None
         self._tk = None
@@ -715,11 +717,25 @@ class FlyoutHost:
 
     # ---------------- thread
     def start(self) -> None:
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._main, name="flyout", daemon=True)
-            self._thread.start()
+        # Tray callbacks and What's new can race on the first activation. Publish
+        # and start exactly one Tk owner; stop() remains nonblocking and Tk-free.
+        with self._start_lock:
+            if self._stop_requested.is_set() or self._thread is not None:
+                return
+            owner = threading.Thread(target=self._main, name="flyout", daemon=True)
+            self._thread = owner
+            try:
+                owner.start()
+            except Exception:
+                self._thread = None
+                raise
 
     def _main(self) -> None:
+        if self._stop_requested.is_set():
+            self._failed = True
+            self._ready.set()
+            return
+        root = None
         try:
             import tkinter as tk
             from tkinter import font as tk_font
@@ -738,27 +754,53 @@ class FlyoutHost:
             log.warning("menu: tkinter is not available (%s), using the classic menu", e)
             self._failed = True
             self._ready.set()
+            if root is not None:
+                try:
+                    root.destroy()
+                except Exception:
+                    pass
+            self._root = None
             return
-        self._ready.set()
         try:
+            # Only this owner thread calls Tk. A cross-thread after()/quit()
+            # can wait indefinitely once Windows has stopped its event loop.
+            root.after(50, self._poll_stop)
+            self._ready.set()
             root.mainloop()
         except Exception as e:
             log.warning("menu: %s", e)
         finally:
             self._failed = True
-
-    def stop(self) -> None:
-        root = self._root
-        if root is not None and not self._failed:
+            self._stop_requested.set()
+            self._ready.set()
             try:
-                root.after(0, root.quit)
+                self.close()
+            except Exception:
+                log.warning("menu: could not close all flyout panels", exc_info=True)
+            self._styles.clear()
+            try:
+                root.destroy()
             except Exception:
                 pass
+            self._root = None
+
+    def _poll_stop(self) -> None:
+        """Runs only on the existing Tk owner thread, including during shutdown."""
+        if self._stop_requested.is_set():
+            self._root.quit()
+        else:
+            self._root.after(50, self._poll_stop)
+
+    def stop(self) -> None:
+        # No Tk call, native call, new thread or wait on a session/tray caller.
+        # If the owner loop is already stopped, process shutdown can still finish.
+        self._stop_requested.set()
+        self._ready.set()
 
     def call(self, fn: Callable[[], None]) -> bool:
         """Run fn in the tkinter thread (another window of the app, e.g. "What's new").
         -> False when tkinter is not available."""
-        if self._failed:
+        if self._failed or self._stop_requested.is_set():
             return False
         self.start()
         if not self._ready.wait(5) or self._failed:
@@ -773,7 +815,7 @@ class FlyoutHost:
     def show(self, menu, icon, point: Optional[Tuple[int, int]] = None) -> bool:
         """Open the flyout for a tray icon (called from the icon's thread).
         -> False when it cannot be shown; the caller then shows the classic menu."""
-        if self._failed:
+        if self._failed or self._stop_requested.is_set():
             return False
         self.start()
         if not self._ready.wait(5) or self._failed:

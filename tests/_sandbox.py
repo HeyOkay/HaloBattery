@@ -48,6 +48,7 @@ def install_guards():
     socket.create_connection = no_network
     socket.getaddrinfo = no_network
     install_port_guards()
+    install_phone_cache_guard()
     try:
         import hid
     except ImportError:
@@ -62,6 +63,81 @@ def install_guards():
 
     hid.enumerate = no_enumerate
     hid.device = NoDevice
+
+
+def install_phone_cache_guard():
+    """No all-provider test may inspect the developer's linked-phone cache.
+
+    Dedicated reader tests may explicitly supply a directory below our shared
+    temporary root. The ordinary default boundary fails loudly until a test
+    injects its missing/synthetic snapshot.
+    """
+    import sys
+
+    # Startup tests deliberately have not selected the app's import path yet.
+    # Importing providers here can execute an unrelated package in their cwd.
+    module = sys.modules.get("providers.phone_link")
+    if module is not None:
+        _guard_phone_cache_reader(module)
+    if not any(getattr(finder, "_phone_cache_sandbox", False) for finder in sys.meta_path):
+        sys.meta_path.insert(0, _PhoneCacheFinder())
+
+
+def _guard_phone_cache_reader(phone_link):
+    from pathlib import Path
+
+    reader = phone_link._read_snapshot
+    if getattr(reader, "_phone_cache_guard", False):
+        return
+
+    def sandboxed_reader(package_root=None):
+        if (package_root is None
+                or not Path(package_root).resolve().is_relative_to(Path(root()).resolve())):
+            raise AssertionError("a test tried to read real Phone Link local state")
+        return reader(package_root)
+
+    sandboxed_reader._phone_cache_guard = True
+    phone_link._read_snapshot = sandboxed_reader
+
+
+class _PhoneCacheFinder:
+    """Wrap only the cache module after normal import resolution chooses it."""
+    _phone_cache_sandbox = True
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname != "providers.phone_link":
+            return None
+        import sys
+
+        # Preserve the normal finder order, including any bundled-module finder.
+        # Never resolve/import the parent package ourselves.
+        for finder in sys.meta_path:
+            if finder is self:
+                continue
+            find_spec = getattr(finder, "find_spec", None)
+            spec = find_spec(fullname, path, target) if find_spec else None
+            if spec is not None:
+                if not callable(getattr(spec.loader, "exec_module", None)):
+                    raise ImportError("cannot install the Phone Link test cache guard")
+                spec.loader = _PhoneCacheLoader(spec.loader)
+                return spec
+        return None
+
+
+class _PhoneCacheLoader:
+    def __init__(self, loader):
+        self._loader = loader
+
+    def create_module(self, spec):
+        create = getattr(self._loader, "create_module", None)
+        return create(spec) if create else None
+
+    def exec_module(self, module):
+        self._loader.exec_module(module)
+        _guard_phone_cache_reader(module)
+
+    def __getattr__(self, name):
+        return getattr(self._loader, name)
 
 
 def install_port_guards():

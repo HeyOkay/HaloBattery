@@ -87,6 +87,19 @@ def usb_pad(status):
     return pad
 
 
+def identified_usb_pad(status, mac="a0ab51123456"):
+    """A serial-less DualSense whose sourced USB pairing report supplies its MAC."""
+    pad = usb_pad(status)
+    original = pad.on_feature
+    def on_feature(report_id):
+        if report_id == 0x09:
+            pad.features.append(report_id)
+            return [0x09, *bytes.fromhex(mac)[::-1], *([0] * 13)]
+        return original(report_id)
+    pad.on_feature = on_feature
+    return pad
+
+
 class FakeBus:
     def __init__(self, pads):
         self.pads = pads
@@ -190,14 +203,13 @@ class ProviderTest(unittest.TestCase):
 
     def test_cable_reading_wins_over_basic_bluetooth(self):
         bt = FakePad("basic")
-        usb = FakePad("full")
-        usb_report = [0x01] + [0] * 77
-        usb_report[53] = 0x16                       # 60 %, charging
-        usb.on_read = lambda: usb_report
-        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac="a0:ab:51:12:34:56")], {BT_PATH: bt, USB_PATH: usb})
+        usb = identified_usb_pad(0x16)               # 60 %, charging
+        wired = dict(entry(USB_PATH, mac=""), vendor_id=0x054c)
+        out = self.poll([entry(BT_PATH), wired], {BT_PATH: bt, USB_PATH: usb})
         self.assertEqual(len(out), 1)
         self.assertEqual((out[0].level, out[0].charging), (60, True))
         self.assertEqual(bt.features, [])
+        self.assertEqual(usb.features, [0x09, 0x05])
 
     # ---- two controllers of the same model on USB
     # Over USB hidapi reports no serial number for these controllers, so the serial
@@ -217,11 +229,11 @@ class ProviderTest(unittest.TestCase):
         second = {s.level: s.key for s in self.poll(list(reversed(entries)), pads)}
         self.assertEqual(first, second)
 
-    def test_one_usb_controller_has_stable_endpoint_key_and_legacy_alias(self):
-        # The old count-dependent key is migrated only for this sole USB pad.
+    def test_anonymous_usb_controller_keeps_endpoint_without_guessing_legacy_owner(self):
+        # A sole current pad does not prove who owned a historical plain key.
         out = self.poll([entry(USB_PATH, mac="")], {USB_PATH: usb_pad(0x08)})
         self.assertEqual([s.key for s in out], ["ps:0ce6:usb-8&1234abcd&0"])
-        self.assertEqual(self.provider.legacy_key_aliases(), {"ps:0ce6:": out[0].key})
+        self.assertEqual(self.provider.legacy_key_aliases(), {})
 
     def test_collections_of_one_usb_controller_stay_one_icon(self):
         # one controller with two collections: same instance, the last part is the
@@ -235,8 +247,9 @@ class ProviderTest(unittest.TestCase):
 
     def test_bluetooth_and_two_usb_controllers_keep_every_controller(self):
         # one controller on Bluetooth and its cable, plus a second one on USB only
-        out = self.poll([entry(BT_PATH), entry(USB_PATH, mac="a0ab51123456"), entry(USB_PATH_2, mac="")],
-                        {BT_PATH: FakePad("basic"), USB_PATH: usb_pad(0x16),
+        wired = dict(entry(USB_PATH, mac=""), vendor_id=0x054c)
+        out = self.poll([entry(BT_PATH), wired, entry(USB_PATH_2, mac="")],
+                        {BT_PATH: FakePad("basic"), USB_PATH: identified_usb_pad(0x16),
                          USB_PATH_2: usb_pad(0x04)})
         self.assertEqual(len(out), 2)
         self.assertIn("ps:0ce6:a0ab51123456", {s.key for s in out})

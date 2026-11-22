@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, hidlist, wgi
+from . import beitong, flydigi, gamesir, hidlist, raikiri, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -55,6 +55,14 @@ NAMED = [
     (0x3537, "", "GameSir controller"),
     (0x045E, "controller", "Xbox controller"),
 ]
+# Named from the identity in the pad's Windows.Gaming.Input report, and only while one
+# controller is involved (one XInput slot, one report): that order is not the XInput slot
+# order, so with several controllers the generic name stays (#523 review). It is
+# deliberately not in NAMED: NAMED_VIDS also decides whose Windows.Gaming.Input reports
+# are trusted, and trusting this pad's placeholder (remain=full=1000) would publish a
+# false 100% (#110, #191, #461). Presence of the receiver alone never names a slot -
+# an idle Ultimate 2 next to another pad must not rename that pad (#523 review).
+NAMED_PAD_IDS = {(0x2DC8, 0x310B): "8BitDo Ultimate 2"}
 
 
 # the vendors whose controllers this provider reads; Windows.Gaming.Input also reports
@@ -318,10 +326,32 @@ class XInputProvider(Provider):
             len(slots) == 1 and len(all_reports) == 1
             and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
         )
+        # The GameSir G7 Pro 8K, likewise: its Windows level is the 1000/1000 placeholder
+        # and its XInput type "wired" on the dongle; the pad's own report has the level.
+        single_gamesir = (
+            len(slots) == 1 and len(all_reports) == 1
+            and all_reports[0].vid == gamesir.VENDOR_VID
+            and (gamesir.is_supported(all_reports[0].pid)
+                 or (all_reports[0].pid == gamesir.XINPUT_WIRED_PID
+                     and gamesir.has_supported_collection()))
+        )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
+        # The Raikiri II's own query is paired to its one XInput slot; its WGI
+        # report is not in NAMED_VIDS, so the generic Xbox entry is not shown.
+        single_raikiri = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == (raikiri.VID, raikiri.PID)
+        )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
+        # Naming only: the Ultimate 2's Windows report is a placeholder, so it never
+        # reaches `reports` (its level must not be trusted); its identity still names the
+        # pad. Equal counts do not pair reports with slots - with the Ultimate 2 listed
+        # first and an Xbox pad in slot 0 the Xbox pad was renamed (#523 review) - so,
+        # like Beitong above, only one slot with one report is an unambiguous pair.
+        single_pad_name = (NAMED_PAD_IDS.get((all_reports[0].vid, all_reports[0].pid))
+                           if len(slots) == 1 and len(all_reports) == 1 else None)
         if len(slots) != 1 or len(reports) != 1:
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
@@ -343,11 +373,16 @@ class XInputProvider(Provider):
         # would then get the Vader's name and level (#216 review, @ahmedkhursheed23).
         # The slot's vendor comes from its Windows.Gaming.Input report, which a FlyDigi
         # pad sends under its own vendor id (the placeholder), so the paired report
-        # identifies it. base_vid can only be 0x3537/0x045E, so it never allows the call.
+        # identifies it. base_vid is 0x3537/0x045E/0x2DC8, so it never allows the call.
         vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
-            if only_vid == FLYDIGI_VID:
+            if single_raikiri:
+                try:
+                    vendor_reading = raikiri.read_connected(self._diag)
+                except Exception as e:     # a broken vendor path must not blind XInput
+                    self._diag.append(f"[Raikiri] {e}")
+            elif only_vid == FLYDIGI_VID:
                 try:
                     vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput
@@ -357,6 +392,11 @@ class XInputProvider(Provider):
                     vendor_reading = beitong.read_connected(self._diag)
                 except Exception as e:
                     self._diag.append(f"[Beitong] {e}")
+            elif single_gamesir:
+                try:
+                    vendor_reading = gamesir.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[GameSir] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -391,7 +431,7 @@ class XInputProvider(Provider):
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
-            if single_beitong:
+            if single_beitong or single_gamesir:
                 if rep is not None and rep.placeholder:
                     rep = None
                 if res is not None and res[1]:
@@ -413,7 +453,7 @@ class XInputProvider(Provider):
                 vias[slot] = "bluetooth"
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
-            name = (rep.name if rep and rep.name else None) or base_name
+            name = single_pad_name or (rep.name if rep and rep.name else None) or base_name
             if len(slots) > 1 and res is not None and res[1]:
                 # A receiver may report XInput's wired/no-battery type for a
                 # wireless pad. Without a proven WGI-to-slot identity, neither

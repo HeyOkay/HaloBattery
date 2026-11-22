@@ -121,6 +121,13 @@ class BatteryReportTests(unittest.TestCase):
                                     self.report(dualsense, bluetooth, 0x1f)]
                     self.assertIsNone(self.read(dualsense, bluetooth))
 
+    def test_continuous_fault_stream_returns_without_waiting_out_the_read_window(self):
+        self.packets = [self.report(True, False, 0xaf)] * 100
+        start = self.clock.now
+        self.assertIsNone(self.read(True, False))
+        self.assertLess(self.clock.now - start, .1)
+        self.assertEqual(len(self.packets), 92)
+
     def test_truncated_reports_with_a_status_byte_are_refused(self):
         for dualsense in (False, True):
             for bluetooth in (False, True):
@@ -145,6 +152,11 @@ class BatteryReportTests(unittest.TestCase):
                 self.assertEqual(len(values), 1)
                 self.assertIsNone(values[0].level)
                 self.assertFalse(values[0].charging)
+                self.assertFalse(values[0].charging_known)
+                self.assertFalse(self.provider.pending)
+                self.assertEqual(self.provider._pending_since, {})
+                self.assertEqual(values[0].ui_message, "state.poll_unavailable")
+                self.assertNotIn("another app", values[0].approx)
 
     def test_bluetooth_validation_never_adds_feature_requests(self):
         for dualsense in (False, True):

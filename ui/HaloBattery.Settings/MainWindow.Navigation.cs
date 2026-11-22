@@ -42,8 +42,16 @@ public sealed partial class MainWindow
         navigationHost.Margin = nav.Margin;
         nav.Margin = new Thickness(0);
         navigationHighlight.RenderTransform = navigationTranslation;
-        navigationHost.Children.Add(navigationHighlight);
-        navigationHost.Children.Add(nav);
+        navigationHost.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        navigationHost.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+        navigationHost.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var items = new Grid();
+        items.Children.Add(navigationHighlight);
+        items.Children.Add(nav);
+        navigationHost.Children.Add(items);
+        var discord = BuildDiscordButton();
+        Grid.SetRow(discord, 2);
+        navigationHost.Children.Add(discord);
         navigationHost.Unloaded += (_, _) => StopNavigationAnimation(navigationTargetY);
         Closed += (_, _) => StopNavigationAnimation(navigationTargetY);
         return navigationHost;
@@ -112,6 +120,7 @@ public sealed partial class MainWindow
         // FinishRail still calls BuildNavigation; update existing labels instead
         // of replacing buttons and interrupting the moving highlight.
         foreach (var label in navLabels) label.Opacity = expanded ? 1 : 0;
+        RefreshDiscordButtonTheme();
         SetNavigationSelection(current, motion);
     }
 

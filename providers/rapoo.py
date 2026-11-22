@@ -1,5 +1,16 @@
 """Rapoo gaming devices that push their battery by themselves.
 
+The older VT9 Pro receiver 24AE:185A uses a separate passive seven-byte BB
+format, restored from #109's reporter USBPcap and the test-build source:
+https://github.com/user-attachments/files/32778389/wireshark.capture.pcapng.gz
+https://github.com/casparas123/HaloBattery/blob/d5a5a5dfc6e93b2b26719f590e7dc65f1e3e4bdb/providers/rapoo.py
+The capture's ten interrupt-IN packets on endpoint 82 are all
+"bb b0 42 20 03 01 64": state at index 5, percentage at index 6. State 1
+means discharging, 2 charging; transition/unknown states are refused. The
+test-build source records the state meanings; the capture confirms only
+100% discharging. Windows collection-sized reads may add zero padding after
+the seven-byte payload. This family never uses the Gen-2 07/BD parsers below.
+
 Rapoo's own web driver at hub.rapoo.com ("RAPOO HUB - VT Generation 2 Series
 Web Driver") reads the battery of every device it supports without ever asking
 for it: the device pushes a status report on input report 7 and the driver's
@@ -43,8 +54,8 @@ Rapoo's own A HUB device layer (RapooDevice.dll, the KBForV700DIY status path,
 which clamps index 8 to at most 100 and publishes it as the device's
 Electricity property), and the reporter's two captures carry it verbatim:
 `bd 01 00 07 00 46 00 01 54 ..` - state 1, level 84 - twenty minutes apart.
-Both shapes are accepted on every claimed id, as the vendor layer's own
-receiver dispatch does.
+Both Gen-2 shapes are accepted on the Gen-2 ids, as the vendor layer's own
+receiver dispatch does. The older VT9 Pro 185A is isolated to its BB parser.
 
 Verified on the reporter's hardware: the mouse - level and charging. The
 keyboard has not answered this provider yet; the next test build is the check.
@@ -64,6 +75,7 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 RAPOO_VID = 0x24AE
 VT7_RECEIVER = 0x1413      # the mouse's 2.4 GHz receiver
+VT9_PRO_RECEIVER = 0x185A  # older VT9 Pro, passive BB family from issue #109
 VT7_CABLE = 0x4613         # ... and the same mouse on its charging cable
 V700DIY_KEYBOARD = 0x4824  # the keyboard on its cable / plugged in
 V700DIY_RECEIVER = 0x1924  # ... and its own 2.4 GHz receiver
@@ -75,6 +87,7 @@ PIDS = {
     V700DIY_RECEIVER: ("Rapoo V700DIY-98", "keyboard", V700DIY_KEYBOARD),
     V700DIY_KEYBOARD: ("Rapoo V700DIY-98", "keyboard", V700DIY_KEYBOARD),
     0x14A9: ("Rapoo VT9 Pro V2", "mouse", 0x14A9),
+    VT9_PRO_RECEIVER: ("Rapoo VT9 Pro", "mouse", VT9_PRO_RECEIVER),
 }
 
 VENDOR_PAGE = 0xFF00
@@ -104,8 +117,31 @@ READ_TIMEOUT_MS = 250
 MAX_CANDIDATES = 3                    # the dumps show this many vendor collections and up
 QUIET_RESCAN_EVERY = 5                # a silent device is fully re-scanned occasionally
 ASLEEP_KEEP = 300                     # s, as in the other receiver providers
+VT9_PRO_ATTEMPTS = 16                # 4 s covers the observed ~3 s BB push cadence
+VT9_PRO_BUFFER_LIMIT = 64            # existing read(64) caller bound, NOT a descriptor/report size
 
 Reading = Tuple[int, bool]
+
+
+def parse_vt9pro(r) -> Optional[Reading]:
+    """The old receiver's seven-byte BB/B0 push, allowing zero-only HID padding.
+
+    The pinned test build accepts >=7 bytes. Windows HIDAPI/native reads use
+    HIDP_CAPS.InputReportByteLength (the collection maximum), not the length
+    of this report ID. Keep the existing read(64) caller bound and reject any
+    meaningful trailing bytes; neither 32 nor 64 is a known descriptor size.
+    """
+    if (not isinstance(r, (bytes, bytearray, list, tuple)) or not 7 <= len(r) <= VT9_PRO_BUFFER_LIMIT
+            or any(type(byte) is not int or not 0 <= byte <= 255 for byte in r)):
+        return None
+    if any(r[7:]):
+        return None
+    if r[0] != 0xBB or r[1] != 0xB0 or r[4] != 0x03:
+        return None
+    state, level = r[5], r[6]
+    if state not in (1, 2) or not 0 <= level <= 100:
+        return None
+    return level, state == 2
 
 
 def parse_bd(r) -> Optional[Reading]:
@@ -192,7 +228,7 @@ class RapooProvider(Provider):
         self._quiet: Dict[int, int] = {}
         self._meta: Dict[str, Tuple[str, str]] = {}            # key -> (name, kind)
 
-    def _listen(self, path: bytes, attempts: int = READ_ATTEMPTS) -> Optional[Reading]:
+    def _listen(self, path: bytes, attempts: int = READ_ATTEMPTS, *, parser=parse_report) -> Optional[Reading]:
         """Read what the device pushes; nothing is ever sent."""
         dev = hid.device()
         try:
@@ -205,7 +241,7 @@ class RapooProvider(Provider):
                 r = dev.read(64, READ_TIMEOUT_MS)
                 if not r:
                     continue              # quiet until the next push
-                reading = parse_report(r)
+                reading = parser(r)
                 self._diag.append(f"    report: {hexdump(r, 12)}"
                                   + ("" if reading else "  (not a battery shape)"))
                 if reading is not None:
@@ -235,7 +271,19 @@ class RapooProvider(Provider):
         found: Dict[str, List[Tuple[int, bool, str, str]]] = {}   # key -> readings
         for pid, (name, kind, logical) in PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid]
+            if pid == VT9_PRO_RECEIVER:
+                # #109 identifies two vendor top-level collections on iface 1.
+                # The capture cannot say which Windows collection receives BB;
+                # listen on these two, never on the pointer/key/consumer faces.
+                mine = [d for d in mine if d.get("vendor_id", RAPOO_VID) == RAPOO_VID
+                        and d.get("interface_number") == 1
+                        and d.get("usage_page") == VENDOR_PAGE
+                        and d.get("usage") in PREFERRED_USAGES]
             if not mine:
+                if pid == VT9_PRO_RECEIVER:
+                    self._last.pop(f"rapoo:{logical:04x}", None)
+                    self._chosen.pop(pid, None)
+                    self._quiet.pop(pid, None)
                 continue
             key = f"rapoo:{logical:04x}"
             self._meta[key] = (name, kind)
@@ -249,7 +297,8 @@ class RapooProvider(Provider):
             quiet = self._quiet.get(pid, 0)
             deep = self._chosen.get(pid) is None and (
                 quiet == 0 or quiet % QUIET_RESCAN_EVERY == 0)
-            budget = order[:MAX_CANDIDATES] if deep else order[:1]
+            max_candidates = 2 if pid == VT9_PRO_RECEIVER else MAX_CANDIDATES
+            budget = order[:max_candidates] if deep else order[:1]
             got = None
             for n, d in enumerate(budget):
                 self._diag.append(f"  listening on iface={d.get('interface_number')} "
@@ -257,8 +306,11 @@ class RapooProvider(Provider):
                 # The first candidate is the one that carries the pushes, and it gets the
                 # full window (one push period); the extra candidates of a full scan only
                 # a short one - they are a fallback for a device that moved.
-                got = self._listen(d["path"],
-                                   READ_ATTEMPTS if n == 0 else SWEEP_ATTEMPTS)
+                if pid == VT9_PRO_RECEIVER:
+                    got = self._listen(d["path"], VT9_PRO_ATTEMPTS, parser=parse_vt9pro)
+                else:
+                    got = self._listen(d["path"],
+                                       READ_ATTEMPTS if n == 0 else SWEEP_ATTEMPTS)
                 if got is not None:
                     self._chosen[pid] = d["path"]
                     break

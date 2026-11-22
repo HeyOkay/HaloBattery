@@ -139,6 +139,14 @@ class FrameTest(unittest.TestCase):
 
 
 class PollTest(Base):
+    def test_the_v3_pro_uses_the_same_exchange(self):
+        # #519: 1532:0577 "BlackShark V3 Pro HID" exposes the same ff14:0001
+        # collection on interface 5 and is read with the V3 frames.
+        self.entries = [dict(e, product_id=V.V3_PRO_PID,
+                             product_string="BlackShark V3 Pro HID") for e in ENTRIES]
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in self.p.poll()],
+                         [("razer:0577:", "Razer BlackShark V3 Pro", 97, False, True)])
+
     def test_the_diagnostics_case_reads_the_level(self):
         self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in self.p.poll()],
                          [("razer:057a:", "Razer BlackShark V3", 97, False, True)])

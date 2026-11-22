@@ -5,10 +5,20 @@ Windows' XInput / Windows.Gaming.Input battery APIs never report them. The
 battery level is read directly from the controller's HID input report, the same
 source the Linux hid-sony / hid-playstation drivers and DS4Windows use.
 
+USB identity reads: SDL at c8da179691f909734cd1b124c930e49311428996,
+SDL_hidapi_ps4.c:266-277,317-344 (GET_FEATURE 0x12, 64-byte buffer) and
+SDL_hidapi_ps5.c:375-433 (GET_FEATURE 0x09, 128-byte buffer). The six bytes
+at indices 1..6 are the controller's Bluetooth address in reverse byte order.
+Linux hid-playstation.c at the commit below defines the complete 16-/20-byte
+payloads and validates the echoed report id (799-818, 1183-1199, 2148-2166).
+Only Sony 054c:05c4/09cc/0ce6/0df2 USB gamepad collections (01:05) are asked.
+Not Bluetooth: SDL explicitly warns that 0x09 enables enhanced reports there.
+The Strikepad and USB wireless adapter are not in this new-read allowlist.
+
 Battery-state reference: Sony's drivers/hid/hid-playstation.c in Linux commit
 666539eecdf4db623f5e3c3e55cf9f2dfad24aa4, dualsense_parse_report (1610-1638)
 and dualshock4_parse_report (2550-2588). Error/undefined status codes are not
-battery percentages. Existing level granularity is retained; no new requests.
+battery percentages. Existing level granularity is retained.
 https://github.com/torvalds/linux/blob/666539eecdf4db623f5e3c3e55cf9f2dfad24aa4/drivers/hid/hid-playstation.c
 
   * USB: the controller streams its full input report immediately.
@@ -94,6 +104,42 @@ _BT_HID_GUID = "{00001124-0000-1000-8000-00805f9b34fb}"
 WINDOW = 1.5
 BUDGET = 2.5
 
+# report id, caller buffer size used by SDL, complete payload size from Linux.
+USB_IDENTITY_REPORTS = {0x05C4: (0x12, 64, 16), 0x09CC: (0x12, 64, 16),
+                        0x0CE6: (0x09, 128, 20), 0x0DF2: (0x09, 128, 20)}
+
+
+def usb_identity_request(info: dict) -> Optional[Tuple[int, int, int]]:
+    """The new read requires an explicit Sony USB gamepad, never a guessed collection."""
+    pid = info.get("product_id")
+    if (info.get("vendor_id") != SONY_VID or pid not in USB_IDENTITY_REPORTS
+            or (info.get("usage_page"), info.get("usage")) != (1, 5)):
+        return None
+    path = info.get("path")
+    text = path.decode("ascii", "ignore") if isinstance(path, bytes) else str(path)
+    if not re.search(r"(?:^|#)vid_054c&pid_" + f"{pid:04x}" + r"(?:[&#]|$)", text.lower()):
+        return None
+    # If hidapi exposes a bus type, it must also agree with the USB path.
+    if type(info.get("bus_type", 1)) is not int or info.get("bus_type", 1) != 1:
+        return None
+    return USB_IDENTITY_REPORTS[pid]
+
+
+def parse_usb_identity(report, request: Tuple[int, int, int]) -> str:
+    """Strict complete USB pairing-info payload; no host address or padding is an identity."""
+    if not isinstance(report, (bytes, bytearray, list, tuple)):
+        return ""
+    if isinstance(report, (list, tuple)) and any(type(value) is not int for value in report):
+        return ""
+    try:
+        data = bytes(report)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    report_id, maximum, minimum = request
+    if not minimum <= len(data) <= maximum or data[0] != report_id:
+        return ""
+    return _mac(data[1:7][::-1].hex())
+
 
 def parse_ds4(byte: int) -> Optional[Tuple[int, bool]]:
     """Valid DualShock 4 battery byte, or no reading for error/reserved codes."""
@@ -149,7 +195,7 @@ def _instance(path) -> str:
 
 
 def _mac(serial) -> str:
-    """MAC-shaped serial metadata for proof only; never rewrite saved BT keys."""
+    """Canonical physical address; only a proven MAC can migrate an old BT key."""
     if type(serial) is not str:
         return ""
     if not re.fullmatch(r"(?:[0-9a-fA-F]{12}|(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2})", serial):
@@ -182,6 +228,8 @@ class PlayStationProvider(Provider):
         # the module docstring. Set by the app from Preferences before each poll.
         self.switch_bluetooth = False
         self._basic: bool = False   # the last _read saw a Bluetooth controller in its basic mode
+        self._identity_mac = ""    # from this opened handle only, never cached by USB path
+        self._status_error = False
 
     # ---- low level -------------------------------------------------------
     @staticmethod
@@ -191,11 +239,13 @@ class PlayStationProvider(Provider):
         return "vid&" in s or _BT_HID_GUID in s
 
     def _read(self, path, is_dualsense: bool, window: float = WINDOW,
-              adapter: bool = False) -> Optional[Tuple[int, bool]]:
+              adapter: bool = False, identity_info: Optional[dict] = None) -> Optional[Tuple[int, bool]]:
         """-> (level, charging) or None if no battery report arrived.
 
         `adapter` is the DS4 USB wireless adapter, which also reports when no controller
         is paired with it."""
+        self._identity_mac = ""
+        self._status_error = False
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -208,6 +258,15 @@ class PlayStationProvider(Provider):
             except Exception:
                 pass
             bluetooth = self._is_bluetooth(path)
+            identity_request = usb_identity_request(identity_info) if identity_info is not None else None
+            if not bluetooth and identity_request is not None:
+                try:
+                    self._identity_mac = parse_usb_identity(
+                        dev.get_feature_report(identity_request[0], identity_request[1]), identity_request)
+                    self._diag.append("    USB physical identity read: "
+                                      + ("valid" if self._identity_mac else "unavailable"))
+                except (OSError, ValueError) as e:
+                    self._diag.append(f"    USB identity read unavailable: {e}")
             rid, off = (DUALSENSE_REPORT if is_dualsense else DS4_REPORT)[bluetooth]
             report_size = 78 if bluetooth else 64  # full input reports in the pinned driver
             self._diag.append(f"    {'Bluetooth' if bluetooth else 'USB'}: "
@@ -224,6 +283,7 @@ class PlayStationProvider(Provider):
                 except (OSError, ValueError) as e:
                     self._diag.append(f"    feature {trigger:#04x}: {e}")
             deadline = time.time() + window
+            invalid_reports = 0
             while time.time() < deadline:
                 try:
                     data = dev.read(78)
@@ -231,6 +291,8 @@ class PlayStationProvider(Provider):
                     self._diag.append(f"    read: {e}")
                     break
                 if not data:
+                    if self._status_error:
+                        break       # a recognized error is not a controller still starting
                     time.sleep(0.005)
                     continue
                 # skip the stripped-down Bluetooth report 0x01 (no battery) and any
@@ -257,8 +319,13 @@ class PlayStationProvider(Provider):
                 byte = data[off]
                 reading = parse_dualsense(byte) if is_dualsense else parse_ds4(byte)
                 if reading is not None:
+                    self._status_error = False
                     return reading
+                self._status_error = True
                 self._diag.append(f"    battery status {byte:#04x}: error or reserved; ignored")
+                invalid_reports += 1
+                if invalid_reports >= 8:
+                    break           # a continuous fault stream must not spin for the whole window
             self._diag.append(f"    no {rid:#04x} report received")
             return None
         finally:
@@ -307,7 +374,10 @@ class PlayStationProvider(Provider):
                               f"{'Bluetooth' if bluetooth else 'USB'} interfaces={len(ifaces)} '{product}'")
             res = None
             basic = False
-            ordered = sorted(ifaces, key=_battery_first)
+            fault = False
+            physical_mac = ""
+            identity_attempted = False
+            ordered = sorted(ifaces, key=lambda d: (usb_identity_request(d) is None, _battery_first(d)))
             budget_end = time.time() + BUDGET
             for d in ordered:
                 self._diag.append(
@@ -319,8 +389,13 @@ class PlayStationProvider(Provider):
                                       "the remaining interfaces are skipped")
                     break
                 self._basic = False
+                identity_info = d if not identity_attempted and usb_identity_request(d) is not None else None
+                identity_attempted |= identity_info is not None
                 res = self._read(d["path"], is_dualsense, min(WINDOW, left),
-                                 adapter=pid == ADAPTER_PID)
+                                 adapter=pid == ADAPTER_PID, identity_info=identity_info)
+                fault |= self._status_error
+                if self._identity_mac:
+                    physical_mac = self._identity_mac
                 if res is not None:
                     break
                 if self._basic:
@@ -328,15 +403,20 @@ class PlayStationProvider(Provider):
                     break
             if res is not None:
                 self._diag.append(f"  -> {res[0]}%{' charging' if res[1] else ''}")
+            metadata_mac = _mac(serial)
+            if physical_mac and metadata_mac and physical_mac != metadata_mac:
+                self._diag.append("    conflicting USB physical identity and serial metadata; keeping endpoint separate")
+                physical_mac = metadata_mac = ""
+            mac = physical_mac or metadata_mac
             conns.append({"pid": pid, "name": name, "bluetooth": bluetooth,
-                          "mac": serial if bluetooth and _mac(serial) else "", "reading": res,
-                          "basic": basic, "usb": "" if bluetooth else ident,
+                          "mac": mac, "reading": res,
+                          "basic": basic, "fault": fault, "usb": "" if bluetooth else ident,
                           "identity": ident, "serial": serial,
                           "legacy_serials": serials or ({""} if bluetooth else {"usb-" + _instance(ifaces[0]["path"])})})
 
         devs = self._merge(conns)
-        # USB keys always include their endpoint identity. Adding/removing
-        # another pad cannot rename a surviving pad or move its preferences.
+        # Valid unique physical addresses survive USB port moves. Anonymous or
+        # conflicting devices remain endpoint-local; counts never establish ownership.
         out: List[DeviceStatus] = []
         connection_results = {}
         for dev in devs:
@@ -346,6 +426,13 @@ class PlayStationProvider(Provider):
             if dev["usb"]:
                 connection_results[(dev["pid"], False, dev["usb"])] = key
             res = dev["reading"]
+            if res is None and dev.get("fault"):
+                self._pending_since.pop(key, None)
+                self._gave_up.discard(key)
+                out.append(DeviceStatus(key, dev["name"], None, False, True, "playstation",
+                                        "battery status unavailable (controller reported an error)",
+                                        charging_known=False, ui_message="state.poll_unavailable"))
+                continue
             if res is None and dev.get("basic"):
                 # Bluetooth, basic mode, not switched on purpose: this is the normal state,
                 # not a controller that is still starting, so no fast re-check either
@@ -392,20 +479,19 @@ class PlayStationProvider(Provider):
         for key in [k for k in self._pending_since if k not in present]:
             del self._pending_since[key]
         self._gave_up &= present
-        # Older keys could be plain for either transport without a usable MAC,
-        # or carry a USB serial/instance when multiple pads were present. Build
-        # proof across ALL endpoints, including unreadable ones. A merged pair
-        # counts as one target only because _merge proved its unique MAC match.
+        # Only an actually observed MAC-shaped old key proves its old owner.
+        # A plain/anonymous/port key could belong to another previously attached
+        # pad, even when exactly one pad is present now. Never move those settings.
         legacy_targets = {}
         conflicting = set()
         for connection in conns:
             prefix = f"ps:{connection['pid']:04x}:"
             target = connection_results[(connection["pid"], connection["bluetooth"], connection["identity"])]
-            if not connection["bluetooth"] or not _mac(connection["serial"]):
-                legacy_targets.setdefault(prefix, set()).add(target)
+            if not connection["mac"] or target != prefix + connection["mac"]:
+                continue             # duplicate/anonymous endpoints prove no historical owner
             serials = connection["legacy_serials"]
             for serial in serials:
-                if serial:
+                if _mac(serial) and _mac(serial) == connection["mac"]:
                     old = prefix + serial
                     legacy_targets.setdefault(old, set()).add(target)
                     if len(serials) > 1:
@@ -415,12 +501,12 @@ class PlayStationProvider(Provider):
         return out
 
     def _merge(self, conns: List[dict]) -> List[dict]:
-        """Combine only unique USB/BT pairs proven by existing MAC metadata.
+        """Combine only unique USB/BT pairs proven by physical addresses.
 
         A common PID, battery level or list order is not identity. When USB has
         no matching MAC serial, two connections may remain visible for the same
         physical pad; this is safer than hiding a different controller's battery.
-        No pairing feature reports are added to obtain missing identity data.
+        USB pairing-info reads provide missing identity on the sourced Sony models.
         """
         by_pid: Dict[int, List[dict]] = {}
         for connection in conns:
@@ -429,7 +515,7 @@ class PlayStationProvider(Provider):
         for pid, group in by_pid.items():
             wireless, wired = {}, {}
             for connection in group:
-                mac = _mac(connection.get("mac") if connection["bluetooth"] else connection.get("serial"))
+                mac = _mac(connection.get("mac"))
                 if mac:
                     (wireless if connection["bluetooth"] else wired).setdefault(mac, []).append(connection)
             pairs = {}
@@ -443,10 +529,12 @@ class PlayStationProvider(Provider):
                     device = dict(connection)
                     device["reading"] = self._prefer([cable["reading"], connection["reading"]])
                     device["usb"] = cable["usb"]
+                    device["fault"] = connection.get("fault", False) or cable.get("fault", False)
                     out.append(device)
-                    self._diag.append(f"[PlayStation] pid={pid:04x}: matching MAC metadata; showing one icon")
+                    self._diag.append(f"[PlayStation] pid={pid:04x}: matching physical address; showing one icon")
                 elif id(connection) not in merged_usb:
-                    if connection["bluetooth"] and len(wireless.get(_mac(connection.get("mac")), ())) > 1:
+                    mac = _mac(connection.get("mac"))
+                    if (len(wireless.get(mac, ())) > 1 or len(wired.get(mac, ())) > 1):
                         # A clone's repeated serial is not a unique Bluetooth
                         # identity either. Keep both endpoints instead of using
                         # the same key and hiding one of their readings.

@@ -81,3 +81,28 @@ class RegistryTests(unittest.TestCase):
         self.assertIsNotNone(service.load(asset_id))
         self.assertIs(service.cached("test:mouse"),asset)
         self.assertTrue(service.needs_upgrade(asset))
+
+    def test_registry_is_read_on_first_use_and_sealed_selections_skip_it(self):
+        """The tray loads applied icons without the registry; browsing reads it once."""
+        (self.root/'registry.json.gz').write_bytes(gzip.compress(c._json_bytes(self.registry),mtime=0))
+        def fresh():
+            return c.IconifyCatalog(self.root/'data',registry_dir=self.root,fetch=lambda url:self.fail('Unexpected network'))
+        service=fresh();version=svg_glyph.LEGACY_RENDERER_VERSION
+        self.assertNotIn('registry',vars(service))
+        image=Image.new('L',(1024,1024));ImageDraw.Draw(image).ellipse((112,112,911,911),fill=255)
+        output=io.BytesIO();image.save(output,'PNG');png=output.getvalue()
+        asset_id=c._hash([c.ASSET_REVISION,'test:mouse','a'*64,version])
+        metadata=dict(asset_id=asset_id,icon_id='test:mouse',source_hash='a'*64,renderer_revision=version,
+            collection='Test',author=self.entry['author'],license=self.entry['license'],license_text=self.entry['license_text'],
+            notices=[],provenance={},png_sha256=hashlib.sha256(png).hexdigest())
+        folder=service.root/'assets'/asset_id;folder.mkdir(parents=True)
+        (folder/'metadata.json').write_bytes(c._json_bytes(metadata));(folder/'glyph.png').write_bytes(png)
+        sealed=service.seal_selection(service.load(asset_id))       # older selection: checked against it
+        self.assertIn('registry',vars(service))
+        tray=fresh()
+        self.assertIsNotNone(tray.load(sealed.id))
+        self.assertNotIn('registry',vars(tray))                     # an applied icon needs no registry
+        self.assertEqual(tray.collections()[0]['id'],'test')        # browsing reads and checks it
+        self.assertIn('registry',vars(tray))
+        broken=c.IconifyCatalog(self.root/'other',registry_dir=self.root/'missing',fetch=lambda url:self.fail('Unexpected network'))
+        with self.assertRaises(OSError):broken.collections()       # a missing registry fails on use

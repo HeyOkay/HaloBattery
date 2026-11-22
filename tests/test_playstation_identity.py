@@ -28,15 +28,15 @@ class PlayStationIdentityTests(unittest.TestCase):
         self.assertEqual({value.key: (value.level, value.charging) for value in values},
                          {"ps:0ce6:a0ab51123456": (20, False), "ps:0ce6:usb-8&1234abcd&0": (90, True)})
 
-    def test_unique_equal_mac_metadata_merges_transports_and_preserves_bt_key(self):
+    def test_unique_equal_mac_metadata_merges_and_proves_raw_mac_alias(self):
         bt_serial = "A0AB51123456"
         values = self.poll([entry(BT_PATH, mac=bt_serial), entry(USB_PATH, mac="a0:ab:51:12:34:56")],
                            {BT_PATH: FakePad("full", status=0x02), USB_PATH: usb_pad(0x17)})
         self.assertEqual([(v.key, v.level, v.charging) for v in values],
-                         [("ps:0ce6:" + bt_serial, 70, True)])
+                         [("ps:0ce6:a0ab51123456", 70, True)])
         self.assertEqual(self.provider.legacy_key_aliases(),
-                         {"ps:0ce6:": "ps:0ce6:" + bt_serial,
-                          "ps:0ce6:a0:ab:51:12:34:56": "ps:0ce6:" + bt_serial})
+                         {"ps:0ce6:" + bt_serial: "ps:0ce6:a0ab51123456",
+                          "ps:0ce6:a0:ab:51:12:34:56": "ps:0ce6:a0ab51123456"})
 
     def test_equal_usb_and_bt_serials_still_read_both_transport_reports(self):
         bt = FakePad("full", status=0x02)
@@ -120,11 +120,11 @@ class PlayStationIdentityTests(unittest.TestCase):
         moved = self.poll([entry(USB_PATH_2, mac="")], {USB_PATH_2: usb_pad(0x08)})[0].key
         self.assertNotEqual(old, moved)
 
-    def test_legacy_alias_is_only_the_sole_candidate_and_is_cached(self):
+    def test_plain_legacy_owner_is_unproven_and_alias_access_is_cached(self):
         pad = usb_pad(0x08)
-        value = self.poll([entry(USB_PATH, mac="")], {USB_PATH: pad})[0]
+        self.poll([entry(USB_PATH, mac="")], {USB_PATH: pad})
         clock, features = self.clock.now, list(pad.features)
-        expected = {"ps:0ce6:": value.key}
+        expected = {}
         self.assertEqual(self.provider.legacy_key_aliases(), expected)
         self.provider.legacy_key_aliases().clear()
         self.assertEqual(self.provider.legacy_key_aliases(), expected)
@@ -157,13 +157,12 @@ class PlayStationIdentityTests(unittest.TestCase):
                            {BT_PATH: FakePad("full", status=0x05), USB_PATH: usb_pad(0x05)})
         self.assertEqual(len(values), 2)
 
-    def test_sole_bluetooth_without_mac_migrates_plain_key(self):
+    def test_sole_bluetooth_without_mac_cannot_prove_historical_owner(self):
         for serial in ("", "dummy", "000000000000"):
             with self.subTest(serial=serial):
-                value = self.poll([entry(BT_PATH, mac=serial)], {BT_PATH: FakePad("basic")})[0]
-                self.assertEqual(self.provider.legacy_key_aliases()["ps:0ce6:"], value.key)
-                if serial:
-                    self.assertEqual(self.provider.legacy_key_aliases()["ps:0ce6:" + serial], value.key)
+                values = self.poll([entry(BT_PATH, mac=serial)], {BT_PATH: FakePad("basic")})
+                self.assertEqual(len(values), 1)
+                self.assertEqual(self.provider.legacy_key_aliases(), {})
 
     def test_no_mac_bluetooth_and_usb_never_move_plain_key_to_usb(self):
         for serial in ("", "dummy"):
@@ -175,13 +174,12 @@ class PlayStationIdentityTests(unittest.TestCase):
                 self.assertEqual(len(values), 2)
                 self.assertNotIn("ps:0ce6:", self.provider.legacy_key_aliases())
 
-    def test_unique_legacy_usb_serials_migrate_to_their_own_endpoint(self):
+    def test_non_mac_serials_cannot_prove_historical_endpoint_owner(self):
         descriptors = [entry(USB_PATH, mac="pad-one"), entry(USB_PATH_2, mac="pad-two")]
         for ordering in (descriptors, list(reversed(descriptors))):
             values = self.poll(ordering, {USB_PATH: usb_pad(0x08), USB_PATH_2: usb_pad(0x03)})
-            keys = {value.level: value.key for value in values}
-            self.assertEqual(self.provider.legacy_key_aliases(),
-                             {"ps:0ce6:pad-one": keys[80], "ps:0ce6:pad-two": keys[30]})
+            self.assertEqual(len({value.key for value in values}), 2)
+            self.assertEqual(self.provider.legacy_key_aliases(), {})
 
     def test_conflicting_collection_serial_cannot_migrate_a_shared_legacy_key(self):
         other_collection = USB_PATH.replace(b"&0&0000#", b"&0&0001#")

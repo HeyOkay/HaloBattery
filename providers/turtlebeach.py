@@ -87,9 +87,12 @@ TURTLEBEACH_VID = 0x10F5
 # twice (the first pass, dev 14 in the capture, has no ff13 collection yet), and only the
 # full enumeration is read. 0x229E is the headset itself on its USB cable - the same
 # records over the same collection.
+# The Xbox transmitter 10f5:2285 uses this same exchange: reporter-confirmed
+# detection and battery level in #401, implemented by PR #423. No new wire frames.
 KNOWN = {
     0x229B: "Turtle Beach Stealth Pro II",
     0x229E: "Turtle Beach Stealth Pro II",
+    0x2285: "Turtle Beach Stealth Pro II Xbox",
     0x2250: "Turtle Beach Stealth 700 Gen 3",
     0x2251: "Turtle Beach Stealth 700 Gen 3",
     0x2253: "Turtle Beach Stealth 700 Gen 3 headset",
@@ -99,17 +102,19 @@ KNOWN = {
 
 # Atlas Air is confirmed in #310; Stealth 600X (#239) still lacks a verified
 # exchange. Retain its protocol fixtures without opening it in a stable build.
-ENABLED_PIDS = frozenset((0x229B, 0x229E, 0x2250, 0x2251, 0x2253, 0x225E))
+ENABLED_PIDS = frozenset((0x229B, 0x229E, 0x2285, 0x2250, 0x2251, 0x2253, 0x225E))
 
 # The Stealth 700 Gen 3 reads through the CoAP tunnel (#211): 2250/2251 are its
 # transmitters, 2253 the headset on its own USB cable (its author's hardware run). The
 # Stealth Pro II ids read through the Swarm II SInf/GSI asks. Same record, same parsers.
 COAP_PIDS = frozenset((0x2250, 0x2251, 0x2253))
-# The Atlas Air (#310) and the Stealth 600X Gen 3 (#239) are on the same ff13:0001
-# collection as both families, but which of the two exchanges each answers is not
-# known yet. They are read with the Swarm II asks first, because they send no enable
-# frame, and the CoAP tunnel after them.
+# These models keep their own names and icon keys rather than the Pro II family key.
 DUAL_PIDS = frozenset((0x225E, 0x2232))
+# #310's confirmed build (e5a43e0) reports charging only through SInf/GSI; its
+# CoAP path always returns charging unknown. Keep that confirmed Atlas Air read,
+# including while silent, without enabling the 700's CoAP client on this target.
+# The held 600X exchange remains available only for experimental protocol tests.
+COAP_FALLBACK_PIDS = frozenset((0x2232,))
 ATLAS_KEY = "turtlebeach:atlasair"
 DUAL_KEYS = {0x225E: ATLAS_KEY, 0x2232: "turtlebeach:stealth600x"}
 # The 700's dongle and cable are one headset (#211, as the Pro II's pair is): one icon,
@@ -332,15 +337,14 @@ class TurtleBeachProvider(Provider):
                      ) -> Tuple[Optional[int], Optional[str], Optional[bool]]:
         """Read a model's GSI record through whichever of the two exchanges it speaks.
 
-        The Stealth 700 Gen 3 ids use the CoAP tunnel, the Pro II ids the Swarm II
-        SInf/GSI asks. A model whose exchange is not known yet (the Atlas Air, #310)
-        gets the asks first - they send no enable frame - and the tunnel if nothing
-        answers. Either way only record reads leave this file for a new model.
+        The Stealth 700 Gen 3 ids use the CoAP tunnel; the Pro II and confirmed
+        Atlas Air (#310) use SInf/GSI. Only an explicitly allowed experimental
+        model gets the tunnel after silent asks.
         """
         if pid in COAP_PIDS:
             return self._read_coap(path)
         level, name, charging = self._read_sinf(path)
-        if level is None and pid in DUAL_PIDS:
+        if level is None and pid in COAP_FALLBACK_PIDS:
             self._diag.append("    (the Swarm II asks gave nothing; trying the CoAP tunnel)")
             coap = self._read_coap(path)
             if coap[0] is not None:

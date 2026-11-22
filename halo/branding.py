@@ -10,6 +10,11 @@ import math
 
 from PIL import Image, ImageDraw, ImageFont
 
+# Approved SVG geometry, also used by MainWindow.Branding.cs in Settings.
+WORDMARK_EM_PER_ICON = 658.6038224327436 / 832
+WORDMARK_GAP_PER_ICON = 155.76923076923077 / 832
+_BOLT_CENTRE_BELOW_RING = ((291.99294929707946 + 753.015625) / 2 - 512) / 658.6038224327436
+
 
 def accent_colour(rgb, light):
     h, luminance, saturation = colorsys.rgb_to_hls(*(value / 255 for value in rgb))
@@ -55,9 +60,9 @@ def _masks(size):
         painters[index].text((x - left + padding, padding - top), char,
                              font=font, fill=255, anchor="ls")
     output_size = (math.ceil(width / ss), math.ceil(height / ss))
-    # Settings centres the ring slightly above the visible capital-letter centre.
-    # The native 20 px reference places it 1 px above the H (0.05 em).
-    icon_center = (padding - top + (cap_box[1] + cap_box[3]) / 2) / ss - size * .05
+    # Match the H ink to the lightning, using the approved SVG's measured
+    # lightning/ring centres rather than the old optical offset.
+    icon_center = (padding - top + (cap_box[1] + cap_box[3]) / 2) / ss - size * _BOLT_CENTRE_BELOW_RING
     return (tuple(mask.resize(output_size, Image.Resampling.LANCZOS) for mask in masks),
             (padding - top) / ss, icon_center)
 

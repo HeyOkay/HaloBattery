@@ -108,7 +108,7 @@ class ProviderTest(unittest.TestCase):
     def setUp(self):
         self._saved = (S.hid, S.hidlist, S.time)
         self.clock = Clock()
-        S.time = types.SimpleNamespace(time=self.clock.time, sleep=self.clock.sleep)
+        S.time = types.SimpleNamespace(monotonic=self.clock.time, sleep=self.clock.sleep)
         self.provider = S.SteamProvider()
 
     def tearDown(self):

@@ -320,7 +320,8 @@ class SettingsHost:
                 pictogram=item.get("pictogram", ""), controller=bool(item.get("controller")),
                 brand=item.get("brand", "default"), brandColor=bool(item.get("brand_color")),
                 lowOverride=item.get("low_override"), hidden=bool(item.get("hidden")), level=level,
-                charging=status.charging if type(status.charging) is bool else None, online=bool(status.online),
+                charging=status.charging if type(status.charging) is bool and
+                    getattr(status, "charging_known", True) is not False else None, online=bool(status.online),
                 paused=bool(getattr(status, "polling_paused", False))))
         with self._lock:
             keys = [item["key"] for item in devices]
@@ -348,7 +349,7 @@ class SettingsHost:
             options=dict(languages=options((key, value.name) for key, value in i18n.LANGUAGES.items()),
                 intervals=options(intervals), thresholds=options(thresholds),
                 pictograms=options((value, tr("icon." + value) if value else tr("choice.auto")) for value in
-                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "headset", "gamepad", "bluetooth")),
+                    ("", "mouse", "keyboard", "microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker", "phone", "headset", "gamepad", "bluetooth")),
                 brands=options((value, tr("controller." + value)) for value in ("default", "xbox", "playstation", "nintendo")), iconThemes=options(themes)),
             update=dict(version=update.get("version", ""), progress=progress, installOk=bool(state.get("install_ok")),
                         status=state.get("update_status", ""), message=state.get("update_message", "")))
@@ -480,15 +481,24 @@ class SettingsHost:
             if type(request_id) is not int or not 0 <= request_id <= 2147483647:
                 raise ValueError("invalid settings request id")
             if kind == "preview":
-                if set(message) != {"type", "id", "deviceKey"} or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str):
+                if (set(message) not in ({"type", "id", "deviceKey"}, {"type", "id", "deviceKey", "transition"})
+                        or message["deviceKey"] is not None and not isinstance(message["deviceKey"], str)
+                        or "transition" in message and type(message["transition"]) is not bool):
                     raise ValueError("invalid preview request")
-                image = self.controller.preview(message["deviceKey"], size=80)
+                transition = None
+                if message.get("transition", False):
+                    image, transition = self.controller.preview_transition(message["deviceKey"], size=80)
+                else:
+                    image = self.controller.preview(message["deviceKey"], size=80)
                 if image.size != (80, 80):
                     raise ValueError("invalid settings preview size")
                 output = io.BytesIO()
                 image.save(output, format="PNG")
-                self._send(session, dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
-                    png=base64.b64encode(output.getvalue()).decode("ascii")))
+                response = dict(type="preview", id=request_id, deviceKey=message["deviceKey"], size=80,
+                                png=base64.b64encode(output.getvalue()).decode("ascii"))
+                if transition is not None:
+                    response["transition"] = transition
+                self._send(session, response)
                 return
             result = dict(type="result", id=request_id, ok=False)
             deferred = None
@@ -540,7 +550,8 @@ class SettingsHost:
         fields = dict(setGlobal={"key", "value"}, setDevice={"deviceKey", "field", "value"},
             setProvider={"name", "enabled"}, setIconContent={"mode"}, selectDevice={"deviceKey"})
         actions = dict(refresh="refresh", diagnostics="diagnostics", checkUpdate="check_update", startUpdate="start_update",
-            openData="open_data", openProject="open_project", openIssue="open_issue", quit="quit", showWhatsNew="show_whats_new")
+            openData="open_data", openProject="open_project", openIssue="open_issue", openWebsite="open_website",
+            openDiscord="open_discord", quit="quit", showWhatsNew="show_whats_new")
         if not isinstance(name, str) or not isinstance(args, dict) or name not in fields and name not in actions:
             raise ValueError("unknown settings command")
         if set(args) != fields.get(name, set()):

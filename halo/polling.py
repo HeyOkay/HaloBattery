@@ -24,11 +24,15 @@ _CONFLICTS = frozenset((frozenset(("razer", "barracuda")),
                        frozenset(("razer", "barracuda_x")),
                        frozenset(("pulsar", "gwolves")),
                        frozenset(("logitech", "astro")),
-                       frozenset(("logitech", "logitech_centurion"))))
+                       frozenset(("logitech", "logitech_centurion")),
+                       frozenset(("aula_f108", "lofree"))))
 _TIMEOUTS = {"logitech": 45.0, "xinput": 35.0, "razer": 25.0,
              "turtlebeach": 30.0, "jbl": 15.0, "dji": 15.0, "discovery": 10.0}
 _CIRCUIT_COOLDOWN = 60.0
 _MAX_PROVIDER_STATUSES = 256
+# Admission bound, not a reserved allocation: allow Phone Link alongside
+# additional composed providers while keeping the two existing workers.
+_MAX_PROVIDERS = 128
 
 
 @dataclass
@@ -75,8 +79,8 @@ class PollingRuntime:
                  diagnostics_reader=None, provider_scope=None, transport_idle=None,
                  cancel_owner=None, clock=time.monotonic):
         providers = tuple(providers)
-        if len(providers) > 64 or len({id(p) for p in providers}) != len(providers):
-            raise ValueError("at most 64 distinct existing provider instances are supported")
+        if len(providers) > _MAX_PROVIDERS or len({id(p) for p in providers}) != len(providers):
+            raise ValueError(f"at most {_MAX_PROVIDERS} distinct existing provider instances are supported")
         self._clock, self._notify = clock, notify
         self._scope = provider_scope or (lambda owner: nullcontext(None))
         self._idle = transport_idle or (lambda owner: True)

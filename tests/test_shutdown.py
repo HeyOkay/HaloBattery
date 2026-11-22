@@ -271,6 +271,19 @@ class ShutdownTests(HideRenameTestCase):
         self.assertTrue(app.placeholder_ready.is_set())
         self.assertFalse(app.placeholder.visible)
 
+    def test_hidden_owner_retains_rollback_notice_until_registered_visible(self):
+        app = self.app()
+        app.cfg.update(last_version=hb.VERSION, update_target='99.0.0')
+        app.notify_update = mock.Mock()
+        app.show_placeholder(False, ensure_owner=True)
+        with mock.patch.object(hb, 'save_config'):
+            app.after_update()
+        app.notify_update.assert_not_called()
+        self.assertIsNotNone(app._pending_update_failure)
+        app.apply([])
+        self.assertTrue(app.placeholder.visible)
+        app.notify_update.assert_called_once_with('notification.update_not_completed',
+                                                 target='99.0.0', version=hb.VERSION)
 
     def test_run_waits_for_cleanup_owned_by_a_settings_worker(self):
         app = self.app()
@@ -321,13 +334,14 @@ class ShutdownTests(HideRenameTestCase):
         app.start_tray_history_cleanup = mock.Mock()
         app.show_placeholder = mock.Mock()
         app.ui_host = mock.Mock()
-        app.ui_host.start.side_effect = RuntimeError('UI host unavailable')
+        app.report_hid_backend_failure = mock.Mock(side_effect=RuntimeError('start-up step failed'))
         with mock.patch.object(hb, 'write_json') as write, \
                 mock.patch.object(hb.threading, 'Thread', return_value=SimpleNamespace(start=lambda: None)):
-            with self.assertRaisesRegex(RuntimeError, 'UI host unavailable'):
+            with self.assertRaisesRegex(RuntimeError, 'start-up step failed'):
                 app.run()
         self.assertTrue(app.stop_evt.is_set())
         app.history.save.assert_called_once_with(force=True)
         write.assert_called_once()
         self.assertFalse(write.call_args.args[1]['running'])
         app.ui_host.stop.assert_called_once_with()
+        app.ui_host.start.assert_not_called()           # tkinter starts on first use, not at start-up
