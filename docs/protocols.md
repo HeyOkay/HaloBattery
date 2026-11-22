@@ -430,6 +430,30 @@ The receiver exposes the CompX control collection `ff02:0002` on interface 1. It
 
 The protocol is shared with the Lamzu Thorn/Atlantis family and is taken from the open-source `lavandiI/lamzu-battery` implementation.
 
+Pinned source: [CompX request and parser, lines 7-14 and 65-121](https://github.com/lavandiI/lamzu-battery/blob/ef51ad02a875bd386f7ba22e4e91bfc98d41fe87/src/protocol/compx.rs#L7),
+[request-before-read and feature fallback, lines 125-158](https://github.com/lavandiI/lamzu-battery/blob/ef51ad02a875bd386f7ba22e4e91bfc98d41fe87/src/hid.rs#L125),
+and [power states, lines 77-85](https://github.com/lavandiI/lamzu-battery/blob/ef51ad02a875bd386f7ba22e4e91bfc98d41fe87/src/protocol/mod.rs#L77).
+The owner's [charging inventory](https://github.com/user-attachments/files/35143662/diagnostics-charging.txt)
+at lines 84-99 proves interface 1, `ff02:0002` for both `fb08` and `fb09`, with
+product strings `IO Aurora Receiver` and `IO Aurora` respectively. Only these
+exact VID/PID/product/collection combinations are queried; other collections are
+never tried as a fallback. Multiple matching endpoints remain ambiguous.
+
+The cable is preferred while present. Old queued input is discarded until the
+queue is empty before a new request; a queue that will not drain is not queried.
+An incomplete/refused write cannot refresh the cached sample. Opened native
+handles provide immutable cached input/output/feature capacities: the 17-byte
+request is padded by the transport and must complete to the full output capacity.
+No additional caps probe is opened. Legacy HIDAPI must complete exactly 17 bytes.
+The source's feature read is tried only after an accepted request; native feature
+buffers use the cached capacity. Failed reads keep the previous sample greyed,
+without updating its timestamp. Power state 3 keeps the percentage with charging
+unknown; states above 3 and malformed frames are refused. Shared CompX/LAMZU
+protocol code and its existing normal behavior are unchanged.
+These collection/freshness/capacity safeguards have offline fake-device and
+mocked-native-transport coverage; they have not been retested on the owner's
+hardware after the review fixes.
+
 While the mouse charges from a PC USB port it leaves the receiver and comes back as `3554:fb09`; the same query there carries the charging flag, and that is what draws the charging ring. A wall adapter never shows a state, because the mouse has no USB link to read then.
 
 **Confirmed on hardware** ([#493](https://github.com/HeyOkay/HaloBattery/issues/493)): the reporter compared the level against IO Hub (the vendor app) and confirmed that the charging ring appears while the mouse is on the PC cable and clears when it is unplugged.
@@ -1016,6 +1040,46 @@ Read straight from the HID input report (USB byte 53, Bluetooth full report byte
 
 Read straight from the HID input report: exact percentage and charging state (USB byte 30, Bluetooth full report byte 32). Over Bluetooth, see the note below the table
 
+#### Sony battery validation and physical identity
+
+Battery codes follow Sony's [Linux hid-playstation driver at
+`666539e`](https://github.com/torvalds/linux/blob/666539eecdf4db623f5e3c3e55cf9f2dfad24aa4/drivers/hid/hid-playstation.c):
+DualSense parsing at lines 1610-1638, DualShock 4 at 2550-2588. Keep the existing
+10% display bins. DualSense state 2 means full independently of the level nibble;
+DS4 cable level 11 means full. Fault/reserved states are unavailable, not full or
+still connecting. For DS4 without a cable, refuse undefined bins 11-15 rather
+than applying Linux's saturation-to-full behavior. Reports must include the
+complete 64-byte USB or 78-byte Bluetooth input frame.
+
+On Sony USB `054c:05c4`/`09cc` (DS4) and `0ce6`/`0df2` (DualSense/Edge), only the
+explicit `0001:0005` gamepad collection receives one pairing-info GET_FEATURE on
+its already-open handle per poll. Sources: SDL at `c8da179`:
+[PS4 lines 266-277 and 317-344](https://github.com/libsdl-org/SDL/blob/c8da179691f909734cd1b124c930e49311428996/src/joystick/hidapi/SDL_hidapi_ps4.c#L266)
+uses report `0x12` with a 64-byte caller buffer;
+[PS5 lines 375-433](https://github.com/libsdl-org/SDL/blob/c8da179691f909734cd1b124c930e49311428996/src/joystick/hidapi/SDL_hidapi_ps5.c#L375)
+uses report `0x09` with a 128-byte caller buffer. Both read the controller address
+from bytes 6..1. Linux's `ps_get_report` (799-818), `dualsense_get_mac_address`
+(1183-1199) and `dualshock4_get_mac_address` (2148-2166) establish the echoed report
+ID and complete 20-/16-byte payloads required here. Zero/broadcast or malformed
+addresses are refused. Larger caller buffers account for HID report padding.
+
+No new pairing read is made on Bluetooth: SDL's PS5 lines 427-428 warn it can
+enable enhanced reports there. Unknown collections, other vendors, the `05c5`
+Strikepad and `0ba0` wireless adapter are excluded from these new reads. Existing
+battery-trigger behavior and the Bluetooth opt-in remain unchanged. There is no
+persistent path-to-address cache: a different pad may reuse the same USB path
+between polls. The existing bounded native transport handles these reads; no new
+worker/process or dependency is introduced. These new identity reads have only
+offline coverage in this change, not hardware confirmation.
+
+Canonical unique addresses combine only one USB and one Bluetooth connection of
+the same model. Duplicate addresses or conflicting metadata keep every endpoint
+visible. Only an actually observed MAC-formatted old key can prove a settings
+migration; plain, port-based or arbitrary old serial keys cannot prove their
+historical owner, even if one controller is present now. Ambiguous legacy settings
+must be selected again. Anonymous clones remain port-dependent; no level, list
+order or controller count is used as a physical identity.
+
 ### Steam Controller (2025) with its puck
 
 **Connection:** wired USB `28de:1302`, or puck `28de:1304` (Proteus) / `28de:1305` (Nereid).
@@ -1049,6 +1113,22 @@ above 100 is refused rather than shown.
 **Connection:** USB or the Xbox wireless adapter
 
 Any Xbox-compatible controller is read the same way as the GameSir G7 Pro: the battery level from `Windows.Gaming.Input.RawGameControllers`, with XInput's coarse level (low / medium / full) as the fallback. Controllers other than the GameSir have not been individually tested.
+
+WGI report order is not an XInput user index. Associate a level only with one
+eligible WGI report and one XInput slot; multiple pads keep their own coarse
+XInput levels. An ambiguous receiver's "wired" type has no trustworthy percentage
+or charging state, so it stays unknown. Observed disconnects invalidate per-slot
+levels and WGI associations. XInput exposes no persistent identity here; swapping
+controllers between observations without an observed disconnect cannot establish
+a new physical owner. WGI nullable Int32 capacities must satisfy
+`0 <= remaining <= full <= 2147483647`, with `full > 0`, rather than being clamped.
+
+GameSir Nova 2 Lite `3537:1098` has a captured false-full WGI report:
+`Discharging`, `remaining=full=1000`, `rate=None` ([owner comparison](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5879245780),
+[exact identity and report](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5885746260)).
+The same narrow rule appeared in [the prior provider fix](https://github.com/casparas123/HaloBattery/commit/f2e6a834dde1aa829f708a16f473b5f18718f752).
+Refuse that exact report on that identity only; other models and charging/idle
+reports may legitimately be full. No HID request is added for this fallback.
 
 ## Microphones
 
@@ -1535,3 +1615,49 @@ confirmed the level in an earlier test build. No successful raw reply was attach
 the bounded reader and its native-transport integration have offline coverage but
 have not been freshly tested on H9 II hardware. Charging is source-based and its
 cable transition remains unconfirmed.
+
+## Explicit diagnostic readers
+
+See [device diagnostics](device-diagnostics.md) for the acknowledgement, exact
+endpoint restrictions and known hardware limitations. These readers do not
+change normal provider allowlists.
+
+- AJ159 PRO: Aiacos/ajazz-control-center at
+  `03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3`,
+  `src/devices/mouse/src/aj_series.cpp` L225-264,290-312; same-target Windows
+  GET05/65 reply in [#289 test4](https://github.com/HeyOkay/HaloBattery/issues/289#issuecomment-6899703056).
+  Only 3151:402D interface2 FFFF:0002, a caps-sized `00 F7` feature poll,
+  30 ms wait, then GET05. Numbered `05 00 00 <level>` requires 1-100;
+  zero means unknown. Charging is unknown. The normal AJ159 reader is unchanged.
+- PRO X 3: Sapd/HeadsetControl at
+  `1d2ccd1412246d85b2f8733d739cc865ba466aab`,
+  `lib/devices/logitech_gpro_x3_lightspeed.hpp` L14-24,46-64,80-93,
+  `lib/devices/protocols/logitech_centurion_protocol.hpp`
+  L89-145,237-275,305-325,394-448,554-670 and captured fixtures in
+  `tests/test_protocols.cpp` L1589-1596,1643-1666. Only 046D:0B45 interface3
+  FFA0:0001 and three 50/23 Root/bridge/battery exchanges. No FeatureSet scan,
+  setup, settings, optional offline probe, recovery or X2 fallback.
+- Sony H9 II uses the existing reviewed `providers/sony_h9ii.py` reader without
+  changes. No response category or magic is inferred from the outgoing request.
+- Endgame 4K: johanneszab/vole
+  [PROTOCOL.md](https://github.com/johanneszab/vole/blob/4ba29dea54b4628df03cfe2f94f4576c124afd80/re/PROTOCOL.md)
+  sections1-3,12-14 and stuffz/mouse-battery-monitor `docs/ENDGAME.md` at
+  `25871cce3a8266d8d2bc05b0ca81fbb74b3a38b4`. Only 3367:1970 receiver
+  or cabled 1968/1982, FF01:0002; one A1/0E identity and one A1/B4 battery
+  command. Busy responses are re-read, not resent. No A0/config/settings or
+  recovery exchange is used. A successful reply has no command/target echo;
+  repeated agreement cannot establish freshness. The source documents that
+  a failed command can leave the link wedged until a successful 0F probe.
+  This tool deliberately does not add automatic recovery and remains held.
+- Tachi: manufacturer's Aurora `getBatPer`/`setReport`/`getReport` in
+  `https://www.xvalleyinno.top/LAMZU/static/js/index-4fe8914c.js`, SHA256
+  `5895a882e4e3570131044fa610a6e300ee835446c9909721f73b1e09951dd354`;
+  model table `Config/env-models.json` SHA256
+  `f931e5e7c11b041f74f938aeeeaf214046fc9a64af2ca822ad5afaa06cd9128b`
+  and #262 HID inventory. Dorsal at
+  `55f702fc70ce852228cf2c7d20173541e4f17420`, `src/dorsal/protocol.py`
+  L244-260 independently supports the mouse payload but bypasses a real USB
+  receiver. Only 37B0:000C interface2 FFFF:0000, report0 plus the 64-byte
+  Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
+  fallback, wired probes or alternate-size probing. Real receiver, charging
+  and recovery validation remain outstanding.

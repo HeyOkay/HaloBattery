@@ -17,6 +17,7 @@ def reply(level, power=0, *, valid=True):
 
 
 AURORA = {
+    "vendor_id": 0x3554,
     "path": b"aurora",
     "product_id": A.PID,
     "product_string": "IO Aurora Receiver",

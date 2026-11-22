@@ -380,17 +380,19 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("débranchez", hb.device_state(st, language="fr"))
 
     def test_every_provider_and_pictogram_is_translated(self):
+        # Held-only families keep all catalog keys but expose no ineffective switch.
+        visible = set(hb.PROVIDER_LABELS) - {"endgame_4k", "lamzu_sw"}
         for code in i18n.LANGUAGES:
             with self.subTest(language=code):
                 app = make_app({"language": code})
                 prefs = find(app.build_menu(None), app.tr("menu.preferences")).submenu
                 labels = [item.text for item in find(prefs, app.tr("preferences.providers")).submenu]
                 self.assertEqual(set(labels), {i18n.translate("provider." + key, language=code)
-                                               for key in hb.PROVIDER_LABELS})
+                                               for key in visible})
                 # New providers must also have reference keys, not just translations.
                 self.assertTrue(all("provider." + key in en.MESSAGES for key in hb.PROVIDER_LABELS))
                 if code == "en":
-                    self.assertEqual(set(labels), set(hb.PROVIDER_LABELS.values()))
+                    self.assertEqual(set(labels), {hb.PROVIDER_LABELS[key] for key in visible})
         owner = types.SimpleNamespace(status=dev())
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Enceinte", "Webcam",

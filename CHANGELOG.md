@@ -8,6 +8,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Identify supported Sony USB controllers by their own pairing address so one
+  controller keeps its identity across USB ports and Bluetooth. Keep ambiguous
+  or anonymous controllers separate instead of transferring another pad's settings.
+- Refuse invalid controller battery states and capacities; report Sony battery
+  faults without repeatedly treating the controller as newly connected. Avoid
+  assigning Windows battery reports to multiple XInput pads by list order.
 - Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
   percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
@@ -68,6 +74,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - IO Aurora (`3554:FB08` receiver): read the level with the CompX report-8
   query, and the charging state from the mouse's own cable identity
   (`3554:FB09`), which appears when it leaves the receiver on the cable.
+  Prefer the cable and accept fresh replies only after a complete query on the
+  captured control collection; keep old readings greyed when a query fails.
   Confirmed on a user's unit: 100 % matching IO Hub, the charging ring on the
   PC cable and clearing when unplugged ([#493](https://github.com/HeyOkay/HaloBattery/issues/493)).
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
@@ -314,6 +322,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
   exposed by this protocol, so the level is shown with the charger unknown.
   Test build pending on the reporter's unit.
+
+- Add explicitly acknowledged local device diagnostics with exclusive device access,
+  bounded native cleanup and sanitized JSON reports. Unverified device protocols
+  stay disabled during normal use.
 
 ### Fixed
 - Extend the Settings Close button hit target to the top-right corner while
