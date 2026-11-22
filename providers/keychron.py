@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import hid
 
@@ -79,11 +79,14 @@ def parse_level(r) -> Optional[Tuple[int, bool]]:
 
 
 def _identity(info: dict) -> str:
-    """Stable per-receiver suffix: the dongle's serial when Windows exposes one,
-    else a hash of its collection path - never how many receivers answered."""
-    serial = str(info.get("serial_number") or "").strip()
-    seed = serial.encode("utf-8") if serial else bytes(info.get("path") or b"")
-    return hashlib.sha1(seed).hexdigest()[:8]
+    """A receiver's own key suffix, from its HID path alone.
+
+    The path is unique per plugged-in receiver and stays the same across replugging into
+    the same port and across reboots (Windows builds it from the dongle's serial number when
+    it has one, otherwise from its USB port). It never depends on which other receivers are
+    plugged in or answering (#373 review); a serial string could repeat between two units.
+    """
+    return hashlib.sha256(b"path:" + bytes(info.get("path") or b"")).hexdigest()
 
 
 class KeychronProvider(Provider):
@@ -91,6 +94,15 @@ class KeychronProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._legacy_aliases: Dict[str, str] = {}
+
+    def legacy_key_aliases(self) -> Dict[str, str]:
+        """The old shared `keychron:<pid>` key -> the one receiver it can only have meant.
+
+        Cached from the last poll. Reported only when exactly one receiver of that id is
+        plugged in and it answered; with two, which of them had the old key is unknowable,
+        so nothing moves (the app's migrate_device_keys() does the move, once)."""
+        return dict(self._legacy_aliases)
 
     def _picks(self, infos: List[dict]) -> List[dict]:
         """Every battery collection, not just the first.
@@ -177,6 +189,7 @@ class KeychronProvider(Provider):
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
+        self._legacy_aliases = {}
         try:
             infos = hidlist.enumerate(KEYCHRON_VID)
         except Exception as e:  # pragma: no cover
@@ -189,12 +202,6 @@ class KeychronProvider(Provider):
                 continue
             name = PIDS[pid]
             candidates = self._picks(mine)
-            # Identity follows what is plugged in, not who answered this time:
-            # with two receivers present, the quieter one must not inherit the
-            # other's key (and its settings) when it finally answers (#373 review).
-            # One receiver keeps the original keychron:<pid> key, so a single
-            # dongle's history is not reset by this change.
-            multi = len(candidates) > 1
             found = []
             for d in candidates:
                 self._diag.append(f"[Keychron] pid={pid:04x} '{name}' "
@@ -209,11 +216,17 @@ class KeychronProvider(Provider):
                     continue
                 if got is not None:
                     found.append((d, got))
+            # Every receiver is keyed on its own identity, whether or not another one is
+            # plugged in or answering: a key that depended on the others would move a
+            # receiver's history and settings when a sibling is unplugged (#373 review).
             for d, (level, charging) in found:
-                key = f"keychron:{pid:04x}"
-                if multi:
-                    key += ":" + _identity(d)
+                key = f"keychron:{pid:04x}:{_identity(d)}"
                 out.append(DeviceStatus(key, name, level, charging, True, "keychron"))
+            # The key before this change was the shared keychron:<pid>. Count the receivers
+            # that are plugged in, not just the ones that answered: a silent sibling makes
+            # the old key just as ambiguous.
+            if len(candidates) == 1 and len(found) == 1:
+                self._legacy_aliases[f"keychron:{pid:04x}"] = out[-1].key
         return out
 
     def diagnostics(self) -> List[str]:

@@ -72,17 +72,17 @@ class PollTest(unittest.TestCase):
     def tearDown(self):
         K.hid, K.hidlist, K.time = self._saved
 
-    def poll(self, replies, infos, feature_result=None, fail_read=()):
+    def poll(self, replies, infos, feature_result=None, fail_read=(), provider=None):
         dev = FakeDevice(replies, feature_result=feature_result, fail_read=fail_read)
         K.hid = types.SimpleNamespace(device=lambda: dev)
         K.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(infos))
         K.time = types.SimpleNamespace(sleep=lambda s: None)
-        return K.KeychronProvider().poll(), dev
+        return (provider or K.KeychronProvider()).poll(), dev
 
     def test_the_nape_pro_uses_its_vendor_collection_on_interface_1(self):
         out, dev = self.poll([reply(75)], self.NAPE)
         self.assertEqual([(s.key, s.name, s.level) for s in out],
-                         [("keychron:d026", "Keychron Nape Pro", 75)])
+                         [("keychron:d026:" + K._identity(self.NAPE[1]), "Keychron Nape Pro", 75)])
         self.assertEqual([b"nape-vendor"], dev.opened)
         self.assertEqual([bytes(K.make_request())], dev.sent)
 
@@ -150,6 +150,47 @@ class PollTest(unittest.TestCase):
         self.assertEqual([keys[0]], [s.key for s in first_only])
         self.assertEqual(keys, [s.key for s in both_again])
         self.assertEqual(79, first_only[0].level)
+
+    def test_unplugging_one_receiver_does_not_rename_the_other(self):
+        # #373 review: two connected -> one physically connected -> two connected.
+        a = {"path": b"receiver-a", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028}
+        b = {"path": b"receiver-b", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028}
+        provider = K.KeychronProvider()
+        both, _ = self.poll([reply(80), reply(70)], [a, b], provider=provider)
+        alone, _ = self.poll([reply(79)], [a], provider=provider)         # B unplugged
+        again, _ = self.poll([reply(78), reply(69)], [a, b], provider=provider)
+        key_a, key_b = (s.key for s in both)
+        self.assertEqual([key_a], [s.key for s in alone])
+        self.assertEqual([key_a, key_b], [s.key for s in again])
+        self.assertNotIn("keychron:d028", (key_a, key_b))
+        # B alone keeps B's key as well, not the one A had while it was alone
+        only_b, _ = self.poll([reply(68)], [b], provider=provider)
+        self.assertEqual([key_b], [s.key for s in only_b])
+
+    def test_the_old_shared_key_moves_only_to_an_unambiguous_receiver(self):
+        a = {"path": b"receiver-a", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028}
+        b = {"path": b"receiver-b", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028}
+        provider = K.KeychronProvider()
+        out, _ = self.poll([reply(80)], [a], provider=provider)
+        self.assertEqual({"keychron:d028": out[0].key}, provider.legacy_key_aliases())
+        self.poll([reply(80), reply(70)], [a, b], provider=provider)     # two: unknowable
+        self.assertEqual({}, provider.legacy_key_aliases())
+        self.poll([reply(80)], [a, b], provider=provider)                # B silent, still plugged in
+        self.assertEqual({}, provider.legacy_key_aliases())
+        self.poll([], [a], provider=provider)                            # A silent
+        self.assertEqual({}, provider.legacy_key_aliases())
+
+    def test_the_alias_passes_the_polling_runtime_checks(self):
+        provider = K.KeychronProvider()
+        out, _ = self.poll([reply(75)], self.NAPE, provider=provider)
+        from halo.polling import PollingRuntime
+        aliases, error = PollingRuntime._alias_metadata(provider)
+        self.assertIsNone(error)
+        self.assertEqual({"keychron:d026": out[0].key}, aliases)
 
     def test_one_receiver_going_away_does_not_hide_the_other(self):
         infos = [

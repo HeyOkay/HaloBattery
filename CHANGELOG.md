@@ -364,7 +364,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Keychron Ultra-Link 8K: fall back to an output report when the receiver
   rejects SET_FEATURE, read the charging flag in bit 7 of byte 20, and query
-  every matching receiver collection so two 8K dongles get separate icons
+  every matching receiver collection so two 8K dongles get separate icons,
+  each keyed on its own receiver so unplugging one never renames the other
   (#373). The level was confirmed on a G4 with the test build; the charging
   indication has not been reported yet.
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
