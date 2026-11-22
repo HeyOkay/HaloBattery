@@ -310,6 +310,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   exposed by this protocol, so the level is shown with the charger unknown.
   Test build pending on the reporter's unit.
 
+- Add explicitly acknowledged local device diagnostics with exclusive device access,
+  bounded native cleanup and sanitized JSON reports. Unverified device protocols
+  stay disabled during normal use.
+
 ### Fixed
 - Extend the Settings Close button hit target to the top-right corner while
   preserving its visible size, position and hover/pressed feedback.

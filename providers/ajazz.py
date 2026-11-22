@@ -1,4 +1,11 @@
-"""AJAZZ AJ179 V2 MAX over its 2.4 GHz receiver (249a:5c2f), without AJAZZ's software.
+"""Diagnostic-only AJ159 reader: Aiacos/ajazz-control-center
+03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3,
+src/devices/mouse/src/aj_series.cpp L225-264,290-312; owner #289 test4
+95ac6df038f1ec3d27653c89be0d2fdfc43d5253 / issuecomment-6899703056:
+3151:402D interface2 FFFF:0002, SET_FEATURE 00 F7 then GET05, zero unknown.
+Diagnostic helper alone uses opened native feature caps; normal AJ159 untouched.
+
+AJAZZ AJ179 V2 MAX over its 2.4 GHz receiver (249a:5c2f), without AJAZZ's software.
 
 The receiver carries the level two ways, both recorded from the vendor's own
 app (AJAZZ Driver 1.0.7.3) in the reporter's USBPcap captures in #74:
@@ -246,6 +253,18 @@ def candidates(ifaces: List[dict]) -> List[dict]:
     return sorted(out, key=rank)
 
 
+def parse_aj159_diagnostic(frame) -> Optional[int]:
+    """The confirmed numbered Windows report: 05 00 00 <level> ... ."""
+    if not isinstance(frame, (bytes, bytearray, memoryview, list, tuple)) or len(frame) < 4:
+        return None
+    if any(type(value) is not int or not 0 <= value <= 255 for value in frame):
+        return None
+    if tuple(frame[:3]) != (0x05, 0x00, 0x00):
+        return None
+    level = frame[3]
+    return level if 1 <= level <= 100 else None
+
+
 class AjazzProvider(Provider):
     name = "ajazz"
 
@@ -257,6 +276,48 @@ class AjazzProvider(Provider):
         self._wired_chosen: Optional[bytes] = None
         # the AJ159 PRO target keeps its own state (#289)
         self._alt: Dict[int, dict] = {}   # pid -> chosen path / last / charging
+
+    def _diagnose_aj159(self, d: dict) -> Tuple[Optional[int], bool]:
+        """One sourced F7/05 exchange on AJ159's confirmed control collection."""
+        if (d.get("vendor_id", 0x3151) != 0x3151 or d.get("product_id") != 0x402D
+                or d.get("interface_number") != 2
+                or (d.get("usage_page"), d.get("usage")) != (0xFFFF, 0x0002)):
+            return None, False
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+            metadata = getattr(dev, "get_report_lengths", None)
+            length = None
+            if callable(metadata):
+                caps = metadata()
+                length = caps.get("feature") if isinstance(caps, dict) else None
+            if type(length) is not int or not 4 <= length <= 32768:
+                self._diag.append("    AJ159: no usable feature report size")
+                return None, False
+            poll = bytes((0x00, 0xF7)) + bytes(length - 2)
+            wrote = dev.send_feature_report(poll)
+            if type(wrote) is not int or wrote != length:
+                self._diag.append(f"    AJ159: incomplete feature poll ({wrote!r}/{length})")
+                return None, False
+            time.sleep(0.03)
+            reply = dev.get_feature_report(0x05, length)
+            level = parse_aj159_diagnostic(reply)
+            try:
+                preview = hexdump(reply, 12)
+            except (TypeError, ValueError):
+                preview = "invalid feature reply"
+            self._diag.append(f"    AJ159 report 05 len={length}: {preview}"
+                              + (f" -> {level}%" if level is not None else " (no current level)"))
+            return level, True
+        except (OSError, ValueError) as error:
+            self._diag.append(f"    AJ159 feature exchange: {error}")
+            return None, False
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
 
     def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.

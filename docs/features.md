@@ -234,3 +234,11 @@ use-time estimates. See [source and verification limits](protocols.md#phone-link
 Ongoing updates depend on Phone Link's background synchronization. HaloBattery
 does not keep it alive or refresh it by opening its window. If Phone Link omits
 charging status, HaloBattery cannot reconstruct it from the battery percentage.
+
+### Guarded device diagnostics
+
+Explicit [local diagnostic commands](device-diagnostics.md) are separate from
+normal polling and require acknowledgement before opening hardware. Reports
+contain sanitized status and phase information, not raw HID paths or serials.
+Families with no enabled normal target are hidden from provider switches;
+saved preferences are retained and mixed families remain available.
