@@ -89,6 +89,25 @@ records the 85% input reply and confirms chargeStatus 0/1. Only this captured
 USB target is enabled. Other newer PIDs receive neither this request nor a
 guessed legacy fallback.
 
+The X9 headset (3837:6045, C-Media strings) is listed in the same M HUB web bundle
+(www.mchose.com.cn, ``assets/main-DQZs6ZzX.js``, fetched 2026-11-17) as
+``createAudioHidProduct({modelKey:"MCHOSE X9", vendorId:14391, productId:24645,
+connectionType:WIRELESS, protocolProfile:AUDIO_PROTOCOL_PROFILE.BLK})``. The BLK profile's
+``audio.blk.readBattery`` is the ``65 01`` frame above: output report 0x55
+(``BLK_BATTERY_REPORT_ID=85``), 63 data bytes, ``[0]=101`` (``BLK_BATTERY_COMMAND_ID``) and
+``[1]=1``. Its ``parseBatteryResponse`` reads the level from data byte 1 and the state from
+byte 2 (3 charging, 4 full, 2 discharge, 26 asleep), the decode ``parse_status_55`` already
+does. The AA frame (cmd 0x0B) is M HUB's MC profile (``audio.mc.readBattery``), which the
+X9 is not on, so the X9 is only sent ``65 01``.
+Measured on an X9 on its dongle: report 0x55 lives on its ff90:0001 collection, the only one
+written to, and the read answers ``55 65 28 02`` (40 %, discharging) within 30 ms. On its
+cable the headset drops its radio link - the dongle stops answering - and shows up as a
+second USB device, 3837:6044 'MCHOSE X9 HEADSET', which M HUB does not list: nothing is
+written to it, so a charging X9 keeps its last level greyed out (ASLEEP_KEEP) and no
+charging state is invented. State 3 is decoded as charging the way M HUB decodes it, but it
+has never been seen: M HUB loses the cabled headset the same way. The level is confirmed on
+Windows too, by @Kolomhon with test builds carrying this code (#458).
+
 Not verified: the legacy 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
 in every reading so far). The V9 Turbo+ is confirmed on @IsonanDough's hardware (#193): the
@@ -153,8 +172,12 @@ A5_READ_GAP = 0.03
 # The V9 Turbo+ headset (issue #193): one product over two USB devices.
 HEADSET_DONGLE_PID = 0x6008
 HEADSET_BODY_PID = 0x600A
-HEADSET_PIDS = (HEADSET_DONGLE_PID, HEADSET_BODY_PID)
-HEADSET_PAIR = {0x6008: 0x6008, 0x600A: 0x6008}   # a dongle and a headset, one icon
+# The X9 headset: M HUB's BLK audio profile on one USB device (see the module docstring).
+X9_PID = 0x6045
+X9_CABLE_PID = 0x6044         # the X9 on its cable: not in M HUB, never written to
+HEADSET_PIDS = (HEADSET_DONGLE_PID, HEADSET_BODY_PID, X9_PID)
+HEADSET_PAIR = {0x6008: 0x6008, 0x600A: 0x6008,   # a dongle and a headset, one icon
+                X9_PID: X9_PID}
 AUDIO_REPORT = 0x55
 AUDIO_LEN = 63                # payload bytes; the report id rides in front of them
 AUDIO_CMD_BATTERY = 0x0B
@@ -413,9 +436,10 @@ def device_key(vid: int, pid: int) -> str:
     @ahmedkhursheed23). The first-generation A5 Pro Max (0x2023) and its three
     identities share their vendor id, so they stay on one key too.
 
-    The V9 Turbo+ is the one pair that needs a key of its own: the headset (0x600A) and
-    its dongle (0x6008) are one product, and both sides deliberately map to the same
-    per-product key so they share an icon.
+    The headsets need keys of their own: the V9 Turbo+ headset (0x600A) and its dongle
+    (0x6008) are one product, and both sides deliberately map to the same per-product key
+    so they share an icon; the X9 (0x6045) is one device and keeps its own key, apart
+    from the 0x3837 mice.
     """
     if vid == MEASURED_VID:
         return "mchose"
@@ -647,14 +671,15 @@ class MchoseProvider(Provider):
                 pass
         return None
 
-    def _read_headset(self, path: bytes) -> Optional[Tuple[Optional[int], bool]]:
+    def _read_headset(self, path: bytes, pid: int) -> Optional[Tuple[Optional[int], bool]]:
         """Ask the headset for its status the way M HUB does, on output report 0x55.
 
         The AA frame (cmd 0x0B) is the audio path in M HUB's own driver; the
         '65 01' frame is what the sister-model community driver uses and what the
         non-audio family answers to. Both are status reads - nothing else is ever
         sent - and a collection that cannot take report 0x55 refuses the write at
-        once, which just moves on to the next candidate.
+        once, which just moves on to the next candidate. The X9 gets the '65 01'
+        frame only: that is its BLK profile's battery read, and BLK has no AA frame.
         """
         dev = hid.device()
         try:
@@ -663,9 +688,11 @@ class MchoseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            for label, request, parser in (
-                    ("AA frame", AUDIO_REQUEST, parse_audio),
-                    ("65 01 frame", STATUS_REQUEST, parse_status_55)):
+            frames = (("AA frame", AUDIO_REQUEST, parse_audio),
+                      ("65 01 frame", STATUS_REQUEST, parse_status_55))
+            if pid == X9_PID:
+                frames = frames[1:]       # BLK has no AA frame: the X9 never gets it
+            for label, request, parser in frames:
                 for attempt in range(HEADSET_ATTEMPTS):
                     try:
                         wrote = dev.write(bytes([AUDIO_REPORT]) + request)
@@ -675,7 +702,12 @@ class MchoseProvider(Provider):
                     if wrote is None or wrote < 0:
                         self._diag.append(f"    {label} write refused ({wrote})")
                         break
-                    resp = dev.read(64, HEADSET_READ_MS)
+                    try:
+                        resp = dev.read(64, HEADSET_READ_MS)
+                    except (OSError, ValueError) as e:
+                        # unplugged mid-poll: the other MCHOSE devices must still be read
+                        self._diag.append(f"    {label} read: {e}")
+                        return None
                     if resp:
                         got = parser(resp)
                         if got is not None:
@@ -712,6 +744,11 @@ class MchoseProvider(Provider):
 
         found: Dict[str, List[Tuple[int, bool, int, int]]] = {}   # key -> readings
         for (vid, pid), ifaces in groups.items():
+            if (vid, pid) == (0x3837, X9_CABLE_PID):
+                # before the naming below: it must not lend its name to the 0x3837 mice
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x}: the X9 on its "
+                                  "cable, which M HUB does not read; leaving it alone")
+                continue
             key = device_key(vid, pid)
             self._kinds[key] = "headset" if pid in HEADSET_PIDS else "mouse"
             product = (ifaces[0].get("product_string") or "").strip()
@@ -748,6 +785,11 @@ class MchoseProvider(Provider):
                 # never where the answer comes from, so it is not written to at all
                 # (the G7's rule; review by @ahmedkhursheed23).
                 cols = [d for d in cols if (d.get("usage_page") or 0) == A5_USAGE_PAGE]
+            elif pid == X9_PID:
+                # the X9 declares report 0x55 on ff90:0001 only (measured), so nothing off
+                # that path is written to (the G7's rule)
+                cols = [d for d in cols
+                        if (d.get("usage_page"), d.get("usage")) == (0xFF90, 0x0001)]
             elif pid in HEADSET_PIDS:
                 # the dongle's 0xFF00 page first; on the headset none of its pages is
                 # known to carry the report yet, so the dump order is kept otherwise
@@ -782,7 +824,7 @@ class MchoseProvider(Provider):
                     if got_mc is not None:
                         found.setdefault(key, []).append((got_mc[0], got_mc[1], pid, 0))
                 elif pid in HEADSET_PIDS:
-                    got = self._read_headset(d["path"])
+                    got = self._read_headset(d["path"], pid)
                     if got is not None:
                         if got[0] is None:
                             self._diag.append("    heard: asleep")

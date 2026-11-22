@@ -57,12 +57,13 @@ else:
     # must not override its bundled packages (for example an older halo/ folder).
     sys.path.insert(0, BASE_DIR)
 
-if __name__ == "__main__":
-    # Held-device diagnostics must precede profile/log/backend/app startup.
-    from halo.device_diagnostics import dispatch as _dispatch_device_diagnostics
-    _diagnostic_exit = _dispatch_device_diagnostics(sys.argv[1:])
-    if _diagnostic_exit is not None:
-        raise SystemExit(_diagnostic_exit)
+# Explicit diagnostics dispatch before profiles, logging, UI or HID imports.
+from halo import device_diagnostics as _device_diagnostics
+_diagnostic_exit = _device_diagnostics.dispatch(sys.argv[1:])
+if _diagnostic_exit is not None:
+    raise SystemExit(_diagnostic_exit)
+
+from halo.provider_policy import available_provider_labels, provider_available
 
 APPDATA_DIR = os.environ.get("APPDATA", os.path.expanduser("~"))
 PORTABLE_MARKER = "portable.txt"   # next to the app: keep settings and the log in its folder
@@ -149,23 +150,29 @@ from pystray import Menu, MenuItem as Item  # noqa: E402
 from halo import app_icon, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 from providers import hidlist  # noqa: E402
+from providers.base import is_coarse_reading  # noqa: E402
 from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa: E402
-                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BluetoothProvider, CorsairProvider,
-                       DeviceStatus, DjiProvider, SonyH9IIProvider,
-                       EightBitDoProvider,
+                       AudezeProvider, BarracudaProvider, BarracudaXProvider, BlackSharkMtkProvider, BluetoothProvider, CorsairProvider,
+                       DeviceStatus, DjiProvider, DarmosharkProvider,
+                       EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXProvider, JblProvider,
+                       HyperXCloudCoreProvider, HyperXProvider, JblProvider, JblQuantum350Provider,
                        KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
-                       LogitechCenturionProvider,
+                       LogitechCenturionProvider, LogitechG325Provider, LogitechG435RtkProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
-                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AulaProvider, AulaF108Provider, DareuProvider,
+                       AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, LamzuSinowealthProvider, UrxProvider)
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider,
+                       RedSquareProvider,
+                       MchoseK99Provider,
+                       CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
+                       SonyH9IIProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
-from halo.provider_policy import available_provider_labels, provider_available  # noqa: E402
+from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
 
 # Development-only escape hatch for controlled comparisons; the Windows app
 # uses the bounded native transport by default, without a bundle marker.
@@ -228,6 +235,8 @@ PROVIDER_LABELS = {
     "ajazz": "AJAZZ mice",
     "alienware": "Alienware Pro Wireless keyboard",
     "am_infinity": "AM Infinity 8K (Angry Miao)",
+    "arbiter": "Arbiter Studio mice",
+    "areson": "Areson / Redragon mice",
     "astro": "Astro A50",
     "asus": "ASUS ROG / TUF mice, keyboards and headsets",
     "atk_keyboard": "ATK V75X keyboard",
@@ -237,47 +246,69 @@ PROVIDER_LABELS = {
     "aula_f108": "AULA F108 Pro keyboards",
     "barracuda": "Razer Barracuda Pro",
     "barracuda_x": "Razer Barracuda X",
+    "blackshark_mtk": "Razer BlackShark V2 HyperSpeed",
+    "blackshark_v3x": "Razer BlackShark V3 X HyperSpeed",
+    "cherry": "CHERRY MX 3.0S Wireless",
     "corsair": "Corsair headsets",
+    "coolermaster": "Cooler Master mice",
     "dji": "DJI Mic Mini 2",
+    "darmoshark": "Darmoshark N5",
     "dareu": "DAREU mice",
     "eweadn": "EWEADN / 前行者 mice",
     "eweadn_ydx": "EWEADN X23 Pro",
+    "fantech": "Fantech Helios Go XD5",
     "finalmouse": "Finalmouse UltralightX",
+    "fractal": "Fractal Scape",
     "glorious": "Glorious Model O Wireless",
+    "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
     "hyperx_cloud3": "HyperX Cloud III Wireless, Cloud II Core Wireless",
+    "hyperx_cloud_core": "HyperX Cloud Core Wireless",
     "hyperx_cloud3s": "HyperX Cloud III S Wireless",
     "hyperx_cloud_flight": "HyperX Cloud Flight Wireless",
     "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
     "irocks": "iRocks M31R",
+    "kraken_v4": "Razer Kraken V4",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
     "jbl": "JBL Quantum",
     "keychron": "Keychron",
     "lamzu": "LAMZU mice",
     "lamzu_sw": "Lamzu Tachi (8K receiver)",
+    "machenike": "Machenike L7",
+    "mchose_k99": "MCHOSE K99 V3",
+    "moondrop": "MOONDROP GM01 Pro",
+    "ninjutso_sprime": "Ninjutso / Sprime mice",
+    "royal_kludge": "Royal Kludge MG6 Pro",
     "urx": "URX Core75",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
-    "logitech_centurion": "Logitech PRO X 2 / PRO X 3 LIGHTSPEED",
+    "logitech_g325": "Logitech G325 LIGHTSPEED",
+    "logitech_centurion": "Logitech G PRO X 2 LIGHTSPEED",
+    "logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "mchose": "MCHOSE mice",
+    "attackshark_x66": "ATTACKSHARK X66",
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
+    "msi": "MSI mice",
     "nintendo": "Nintendo Switch controllers",
+    "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",
     "endgame_4k": "Endgame Gear 4K mice (XM2w / OP1w)",
     "plantronics": "Plantronics headsets (BT600 adapter)",
+    "phone_link": "Phone Link",
     "playstation": "PlayStation controllers",
     "pulsar": "Pulsar / ATK VXE / Redragon mice",
     "rapoo": "Rapoo mice and keyboards",
+    "redsquare": "Red Square Alumix TKL keyboard",
     "razer": "Razer mice and headsets",
     "shield": "NVIDIA SHIELD controllers",
     "skullcandy": "Skullcandy headsets",
-    "sony_inzone": "Sony INZONE H9",
+    "sony_inzone": "Sony INZONE H9 / H5",
     "sony_h9ii": "Sony INZONE H9 II",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
@@ -285,27 +316,30 @@ PROVIDER_LABELS = {
     "turtlebeach": "Turtle Beach headsets",
     "vaxee": "VAXEE mice",
     "wlmouse": "WLmouse",
+    "wraith": "Wraith W1",
     "xinput": "Xbox-compatible controllers",
+    "zowie": "ZOWIE mice",
 }
 
 
 def make_providers(jbl_listen_first: float = 0.0) -> list:
     # jbl_listen_first: only --probe passes it, so its single poll waits for a JBL level
-    return [RazerProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
-            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXProvider(),
-            KeychronProvider(), PulsarProvider(),
-            JblProvider(listen_first=jbl_listen_first), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
+    return [RazerProvider(), BlackSharkV3XProvider(), AudezeProvider(), WLmouseProvider(), MchoseProvider(),
+            HyperXAlpha2Provider(), HyperXCloud3Provider(), HyperXCloudCoreProvider(), HyperXProvider(),
+            KeychronProvider(), PulsarProvider(), AresonProvider(), ArbiterProvider(), FantechProvider(), MsiProvider(), WraithProvider(), MachenikeProvider(), MoondropProvider(), NinjutsoSprimeProvider(),
+            JblProvider(listen_first=jbl_listen_first), JblHidV3Provider(), CherryProvider(), CoolerMasterProvider(), RoyalKludgeProvider(), ZowieProvider(), FractalProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
             LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
-            SteelSeriesEliteProvider(), LogitechCenturionProvider(), HyperXCloud3SProvider(), NzxtProvider(),
-            SteamProvider(), EndgameWEProvider(),
+            SteelSeriesEliteProvider(), LogitechCenturionProvider(), LogitechG435RtkProvider(), HyperXCloud3SProvider(), NzxtProvider(),
+            SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
+            BlackSharkMtkProvider(),
             IRocksProvider(),
-            SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(),
+            SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), GloriousProvider(), LamzuSinowealthProvider(), UrxProvider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), LogitechG325Provider(), JblQuantum350Provider()]
 
 
 # ---------------------------------------------------------------- config
@@ -1010,7 +1044,7 @@ MIC_WORDS = ("microphone", " mic", "mic ")
 def badge_for(st: DeviceStatus) -> str:
     if st.kind in ("headset", "mouse", "gamepad", "keyboard", "microphone",
                    "speaker", "webcam", "health", "smart_home",
-                   "watch", "display", "tracker"):   # from the device
+                   "watch", "display", "tracker", "phone"):   # from the device
         return st.kind
     n = st.name.lower()
     if any(w in n for w in MIC_WORDS):
@@ -1031,7 +1065,7 @@ PICTOGRAM_CHOICES = (("", "Automatic"), ("mouse", "Mouse"), ("keyboard", "Keyboa
                      ("microphone", "Microphone"), ("speaker", "Speaker"), ("webcam", "Webcam"),
                      ("health", "Health device"), ("smart_home", "Smart home"),
                      ("watch", "Smartwatch"), ("display", "Display / TV"), ("tracker", "Tag / Tracker"),
-                     ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
+                     ("phone", "Phone / tablet"), ("headset", "Headset"), ("gamepad", "Controller"), ("bluetooth", "Bluetooth"))
 
 CONTROLLER_BRANDS = ("default", "xbox", "playstation", "nintendo")
 CONTROLLER_PICTOGRAMS = ("gamepad", "dualshock", "dualsense")
@@ -1212,8 +1246,16 @@ def describe(st: DeviceStatus, name: Optional[str] = None, left: str = "", *, la
                           name=name or st.name, state=device_state(st, left, language=language))
 
 
+def phone_link_last_reported(st: DeviceStatus) -> bool:
+    """A known cached percentage can be drawn without claiming a live connection."""
+    return (st.source == "phone_link" and st.ui_message == "state.phone_link_last_reported"
+            and type(st.level) is int and 0 <= st.level <= 100)
+
+
 def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
+    if phone_link_last_reported(st):
+        return i18n.translate("state.phone_link_last_reported", language=language, level=st.level)
     if st.polling_stale:
         return i18n.translate("state.poll_unavailable" if st.level is None else "state.poll_stale",
                               language=language, level=st.level)
@@ -1528,7 +1570,7 @@ class App:
         self.history.load()
         self.held: Dict[tuple, tuple] = {}      # (device key, kind) -> English text/title + parameters
         self.was_quiet = False
-        self.bt = BluetoothProvider()
+        self.bt = BluetoothProvider(native=True)
         self.icons: Dict[str, DeviceIcon] = {}
         self.started = time.monotonic()
         self.placeholder: Optional[pystray.Icon] = None
@@ -1550,6 +1592,13 @@ class App:
         self.bt_fresh = threading.Event()     # fresh result for diagnostics
         self.bt_watch: Optional[BluetoothWatcher] = None
         self.bt_watch_failed = False
+        self.bt_native_failed = False       # the in-process watcher gave up: use PowerShell's
+        # Ownership of a snapshot: bumped whenever a watcher is abandoned, so a
+        # Windows call that returns minutes later cannot publish into the cache.
+        self._bt_generation = 0
+        # Retired watchers whose thread still runs: a native call can stay blocked in
+        # Windows, and no second in-process watcher is started next to one.
+        self._bt_orphans: List[BluetoothWatcher] = []
         self.update: Optional[updates.Release] = None   # a newer release, when there is one
         self.update_wake = threading.Event()  # "check for updates now"
         self.update_manual = False            # the check was asked for from the menu
@@ -1627,7 +1676,7 @@ class App:
         """Dependencies for the UI controller, without importing this entry module."""
         return dict(defaults=DEFAULTS, valid_setting=_valid_setting, save_config=save_config,
                     autostart_enabled=autostart_enabled, set_autostart=set_autostart,
-                    remove_status_file=remove_status_file, provider_labels=available_provider_labels(PROVIDER_LABELS),
+                    remove_status_file=remove_status_file, provider_labels=PROVIDER_LABELS,
                     controller_brands=CONTROLLER_BRANDS, controller_pictograms=CONTROLLER_PICTOGRAMS,
                     device_state=device_state, device_kind=badge_for, version=VERSION, data_dir=DATA_DIR, status_path=STATUS_PATH,
                     repo=updates.REPO, has_translation=lambda key: key in i18n.LANGUAGES["en"].catalog)
@@ -1636,9 +1685,16 @@ class App:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
         animate = self.cfg["animation"] and st.charging and st.online
-        text = (str(st.level) if self.cfg.get("percent_in_icon") and st.level is not None and not st.approx else "")
+        # Exact and coarse ("about NN%") levels show the number; the tooltip and
+        # status file keep the "about" wording. Any other approx text marks a
+        # level the device did not report as a number (a wired pad's placeholder
+        # 100, a level from before the cable went in): no number for those.
+        text = ""
+        if (self.cfg.get("percent_in_icon") and st.level is not None
+                and (not st.approx or is_coarse_reading(st))):
+            text = str(st.level)
         brand, color = self.controller_style(st)
-        state = (st.level, st.charging, st.online or st.polling_paused, self.low_for(st),
+        state = (st.level, st.charging, st.online or st.polling_paused or phone_link_last_reported(st), self.low_for(st),
                 self.light_taskbar, badge, animate, text, st.polling_paused,
                 size if size is not None else getattr(self, "tray_size", icons.SIZE), brand, color,
                 self.cfg.get("filled_icons", False))
@@ -1784,7 +1840,7 @@ class App:
                     self.configure_polling()
                 save_config(self.cfg)
                 if key == "bluetooth":
-                    self.bt_cache = []
+                    self._bt_clear()
                     self.bt_wake.set()
                 if key == "update_check":
                     if self.cfg[key]:
@@ -2191,7 +2247,7 @@ class App:
         """Turn one device type on or off. Off, its devices are not opened at all, and
         their icons go away at once rather than after the next two polls."""
         if not provider_available(name, PROVIDER_LABELS):
-            raise ValueError("unavailable provider")
+            raise ValueError("provider is not available for normal polling")
         with self.lock:
             off = self.disabled_providers()
             if name in off:
@@ -2452,7 +2508,7 @@ class App:
             try:
                 if isinstance(p, PlayStationProvider):
                     p.switch_bluetooth = bool(self.cfg.get("playstation_full_mode", False))
-                if isinstance(p, AtkKeyboardProvider):
+                if isinstance(p, (AtkKeyboardProvider, MchoseK99Provider)):
                     p.activity.wake = self.wake.set
                 found = refuse_bad_levels(p.poll())
                 if self.stopping():
@@ -2561,10 +2617,16 @@ class App:
         except Exception:
             log.exception("status file")
 
-    def _bt_update(self, res: List[DeviceStatus]):
-        """A snapshot from the Bluetooth watcher: show it right away."""
+    def _bt_update(self, res: List[DeviceStatus], generation: Optional[int] = None):
+        """A snapshot from the Bluetooth watcher: show it right away.
+
+        `generation` ties the snapshot to the watcher that produced it. A watcher
+        the loop abandoned - failed, stalled, or Bluetooth switched off - may still
+        return from a blocked Windows call, and must not touch the cache."""
         with self.lock:
             if self.stopping():
+                return
+            if generation is not None and generation != self._bt_generation:
                 return
             if self.cfg["bluetooth"]:
                 self.bt_cache = refuse_bad_levels(res)
@@ -2572,10 +2634,33 @@ class App:
             self.bt_fresh.set()
             self.wake.bluetooth()
 
+    def _bt_retire(self, watcher) -> None:
+        """Take a watcher out of service before anything replaces it - it failed, stalled or
+        Bluetooth was switched off. A late result (a Windows call can return minutes later)
+        can no longer change the provider's cache (`release`) or reach the tray (the
+        generation), and a thread still blocked in a call is remembered, so no second
+        in-process watcher starts next to it (#513 review)."""
+        self.bt.release(watcher)
+        with self.lock:
+            self._bt_generation += 1
+        watcher.stop()
+        if watcher.alive:
+            self._bt_orphans.append(watcher)
+
+    def _bt_clear(self):
+        """Bluetooth switched off: drop its readings. The revision bump makes the next
+        poll treat Bluetooth as completed, so its icons are removed instead of kept."""
+        with self.lock:
+            if self.bt_cache:
+                self.bt_cache = []
+                self._bt_revision = getattr(self, "_bt_revision", 0) + 1
+                self.wake.bluetooth()
+
     def bt_loop(self):
-        """Separate thread: PowerShell can take a few seconds and must not delay
-        the mouse and headset icons. On Windows a long-lived watcher reports
-        connects and disconnects within a few seconds; if it cannot run, one-shot
+        """Separate thread: a Bluetooth read can take a few seconds and must not delay
+        the mouse and headset icons. On Windows a watcher reports connects and
+        disconnects within a few seconds: the in-process one first (no PowerShell
+        process), the PowerShell one if that fails; if neither can run, one-shot
         polls once a minute are the fallback."""
         while not self.stop_evt.is_set():
             if self.cfg["bluetooth"] and sys.platform == "win32" and not self.bt_watch_failed:
@@ -2583,18 +2668,49 @@ class App:
                     with self.lock:
                         if self.stopping():
                             return
-                        self.bt_watch = BluetoothWatcher(self.bt, self._bt_update).start()
+                        self._bt_orphans = [w for w in self._bt_orphans if w.alive]
+                        native = not self.bt_native_failed
+                        # Never two in-process watchers: a retired one still blocked in a
+                        # Windows call is waited for, and given up on once it has stalled.
+                        blocked = [w for w in self._bt_orphans
+                                   if native and isinstance(w, NativeBluetoothWatcher)]
+                        if any(w.failed for w in blocked):
+                            log.warning("bluetooth: a retired in-process read never came back, "
+                                        "starting the PowerShell watcher")
+                            self.bt_native_failed = True
+                            self.bt.native = False
+                            native, blocked = False, []
+                        if not blocked:
+                            watcher = NativeBluetoothWatcher if native else BluetoothWatcher
+                            self._bt_generation += 1
+                            generation = self._bt_generation
+                            self.bt_watch = watcher(
+                                self.bt,
+                                lambda res, g=generation: self._bt_update(res, g)).start()
+                    if self.bt_watch is None:          # waiting for the retired call
+                        self.bt_wake.wait(2)
+                        self.bt_wake.clear()
+                        continue
                 if self.bt_watch.failed:
-                    self.bt_watch_failed = True
+                    abandoned = self.bt_watch
+                    if isinstance(abandoned, NativeBluetoothWatcher):
+                        log.warning("bluetooth: in-process watcher failed, starting the PowerShell watcher")
+                        self.bt_native_failed = True
+                        self.bt.native = False      # no in-process reads from now on
+                    else:
+                        self.bt_watch_failed = True
+                    self._bt_retire(abandoned)
                     self.bt_watch = None
                     continue
                 self.bt_wake.wait(2)
                 self.bt_wake.clear()
                 continue
             if self.bt_watch is not None:            # Bluetooth turned off in the menu
-                self.bt_watch.stop()
+                self._bt_retire(self.bt_watch)
                 self.bt_watch = None
             if self.cfg["bluetooth"]:
+                if self.bt_native_failed and getattr(self.bt, "native", False):
+                    self.bt.native = False          # the fallback loop must not retry it
                 t0 = time.time()
                 try:
                     res = self.bt.poll()
@@ -2604,7 +2720,7 @@ class App:
                 log.info("bluetooth: %d device(s) in %.1f s", len(res), time.time() - t0)
                 self._bt_update(res)            # same checked path as the watcher
             else:
-                self.bt_cache = []
+                self._bt_clear()
                 self.bt_fresh.set()
             self.bt_wake.wait(60)
             self.bt_wake.clear()
@@ -2696,6 +2812,7 @@ class App:
 
         self.show_placeholder(not self.icons)
         self.history.save()
+        self.deliver_update_failure()
 
     def show_placeholder(self, show: bool, *, ensure_owner=False) -> None:
         """The "no devices" icon. It is made once and after that only shown or hidden.
@@ -3103,9 +3220,20 @@ class App:
         self.after_update()
         if self.stop_evt.wait(30):               # let the icons come up first
             return
-        staging = self.cfg.pop("update_staging", None)
-        if getattr(sys, "frozen", False):            # never in a source folder
-            updates.cleanup(BASE_DIR, staging)
+        # Serialize with a user-triggered installation: cleanup must not consume
+        # the staging path of a new attempt while its download/runner is starting.
+        if getattr(sys, "frozen", False) and self.update_lock.acquire(blocking=False):
+            try:                                    # never in a source folder
+                with self.lock:
+                    staging = self.cfg.get("update_staging")
+                if updates.cleanup(BASE_DIR, staging):
+                    install_ok, install_why = updates.can_install(True, BASE_DIR)
+                    with self.lock:
+                        self.cfg.pop("update_staging", None)
+                        self.install_ok, self.install_why = install_ok, install_why
+                        save_config(self.cfg)
+            finally:
+                self.update_lock.release()
         while not self.stop_evt.is_set():
             # cleared before the check: a click on "Check for updates now" during the
             # check wakes the next round instead of being lost
@@ -3182,16 +3310,26 @@ class App:
                 self.notify_update("notification.update_downloading", version=rel.version)
                 staging = updates.staging_dir()
                 new_app = updates.download(rel, staging, VERSION, progress=self._update_progress)
-                self.cfg.update(update_from=VERSION, update_staging=staging,
-                                whats_new_notes={"version": rel.version, "notes": rel.notes,
-                                                 "url": rel.url, "date": rel.published})
-                save_config(self.cfg)
+                with self.lock:
+                    self.cfg.update(update_from=VERSION, update_target=rel.version, update_staging=staging,
+                                    whats_new_notes={"version": rel.version, "notes": rel.notes,
+                                                     "url": rel.url, "date": rel.published})
+                    save_config(self.cfg)
                 log.info("update: v%s downloaded, restarting to install it", rel.version)
                 runner = updates.prepare_runner(BASE_DIR, staging)
+                creation_time = updates.current_process_creation_time()
                 updates.start_detached(
-                    updates.finish_command(runner, new_app, BASE_DIR, os.getpid()), cwd=runner)
+                    updates.finish_command(runner, new_app, BASE_DIR, os.getpid(),
+                                           expected_creation_time=creation_time), cwd=runner)
         except Exception as e:
             log.warning("update failed: %s", e)
+            # The runner did not start, so this is already reported here. Do not
+            # report a second failed attempt at the next application startup.
+            with self.lock:
+                if self.cfg.pop("update_target", None) is not None:
+                    self.cfg.pop("update_from", None)
+                    self.cfg.pop("whats_new_notes", None)
+                    save_config(self.cfg)
             self.update_progress = None
             self.refresh_menus()
             self.notify_update("notification.update_failed", error=str(e))
@@ -3208,11 +3346,26 @@ class App:
         show the "What's new" window once."""
         if PRETEND_VERSION:
             return
-        prev = self.cfg.get("last_version")
-        from_version = self.cfg.pop("update_from", None)
-        if prev != VERSION or from_version:
-            self.cfg["last_version"] = VERSION
-            save_config(self.cfg)
+        with self.lock:
+            prev = self.cfg.get("last_version")
+            had_attempt = "update_from" in self.cfg or "update_target" in self.cfg
+            from_version = self.cfg.pop("update_from", None)
+            target = self.cfg.pop("update_target", None)
+            # Older installers stored the target only alongside cached notes.
+            notes = self.cfg.get("whats_new_notes")
+            if target is None and from_version is not None and isinstance(notes, dict):
+                target = notes.get("version")
+            failed = isinstance(target, str) and len(target) <= 64 and updates.is_newer(target, VERSION)
+            if failed:
+                self.cfg.pop("whats_new_notes", None)
+                self._pending_update_failure = dict(target=target, version=VERSION)
+                log.warning("update: v%s was requested, but v%s is still running", target, VERSION)
+            if prev != VERSION or had_attempt:
+                self.cfg["last_version"] = VERSION
+                save_config(self.cfg)
+        if failed:
+            self.deliver_update_failure()
+            return
         if prev is None:
             # settings from a version before 1.15.0, which did not note its version
             upgraded = bool(getattr(self, "config_existed", False))
@@ -3220,6 +3373,18 @@ class App:
             upgraded = updates.is_newer(VERSION, prev)
         if upgraded and self.cfg.get("whats_new", True):
             self.show_whats_new(from_version or prev or "")
+
+    def deliver_update_failure(self) -> None:
+        # Startup may reach update handling before the first poll creates a tray
+        # icon. Keep the message until there is a notification target.
+        with self.lock:
+            pending = getattr(self, "_pending_update_failure", None)
+            ready = any(bool(getattr(owner.icon, "visible", False)) for owner in self.icons.values())
+            ready = ready or bool(self.placeholder is not None and self.placeholder.visible)
+            if self.stopping() or pending is None or not ready:
+                return
+            self._pending_update_failure = None
+        self.notify_update("notification.update_not_completed", **pending)
 
     def show_whats_new(self, from_version: str = "") -> None:
         with self.lock:
@@ -3302,6 +3467,8 @@ class App:
             for provider in self.providers:
                 if isinstance(provider, AtkKeyboardProvider):
                     cleanup.append(("ATK", provider.close))
+                elif isinstance(provider, MchoseK99Provider):
+                    cleanup.append(("MCHOSE K99", provider.close))
             for name in ("win_events", "bt_watch"):
                 target = getattr(self, name, None)
                 if target is not None:
@@ -3384,7 +3551,9 @@ class App:
             threading.Thread(target=self.anim_loop, daemon=True).start()
             threading.Thread(target=self.bt_loop, daemon=True).start()
             threading.Thread(target=self.update_loop, daemon=True).start()
-            self.ui_host.start()                    # tkinter is ready by the first activation
+            # The flyout's tkinter thread starts on the first menu or window (show()/call()
+            # start it, ~70 ms): starting it here kept about 4 MB of Tcl/Tk in memory for
+            # sessions that never open the menu.
             self.report_hid_backend_failure()
             self.report_custom_icon_failure()
             stop_file = verification_stop_file()
@@ -3469,7 +3638,7 @@ def probe():
     app = App.__new__(App)
     app.cfg = load_config()
     app.providers = make_providers(jbl_listen_first=JBL_PROBE_LISTEN_S)
-    app.bt = BluetoothProvider()
+    app.bt = BluetoothProvider(native=True)
     res = []
     sections = []
     for p in app.providers + [app.bt]:
@@ -3513,10 +3682,25 @@ def main():
     # stretches it on a scaled screen, which made the menu text small and blurry
     flyout.enable_dpi_awareness()
     if "--probe" in sys.argv:
+        # Do not let a generic probe interleave with the app or a targeted
+        # diagnostic. Keep its kernel lease until process exit, including when
+        # a synchronous native call does not return.
+        from halo.diagnostic_guard import InstanceGuard
+        global _probe_instance_guard
+        try:
+            _probe_instance_guard = InstanceGuard()
+            if not _probe_instance_guard.acquire():
+                _probe_instance_guard.close()
+                log.error("probe: HaloBattery or another diagnostic is running")
+                return
+        except OSError:
+            log.error("probe: exclusive device access unavailable")
+            return
         probe()
         return
     try:
         finish = updates.parse_finish_args(sys.argv)
+        creation_time = updates.parse_finish_creation_time(sys.argv)
     except ValueError as e:
         log.error("update: %s", e)
         return
@@ -3524,7 +3708,7 @@ def main():
         # a copy of this app in %TEMP%: put the downloaded version in place and start it
         app_dir, new_app, pid = finish
         log.info("update: installing %s into %s (old pid %d)", new_app, app_dir, pid)
-        updates.finish_update(app_dir, pid, new_app)
+        updates.finish_update(app_dir, pid, new_app, expected_creation_time=creation_time)
         return
     if "--pretend-version" in sys.argv:
         i = sys.argv.index("--pretend-version")

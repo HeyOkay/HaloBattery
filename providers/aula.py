@@ -4,9 +4,6 @@ Source: AULA's own Windows application, AULA HUB (an Electron app whose HID call
 hooked over CDP to recover the command), then replayed against the hardware and confirmed
 byte for byte. The same exchange is what the board answers to AULA's own web driver
 (hev.aulacn.com).
-Capture/replay evidence and receiver diagnostics: https://github.com/HeyOkay/HaloBattery/issues/325
-Original implementation: https://github.com/HeyOkay/HaloBattery/pull/327
-Only the captured FEFC receiver on FF80:0001 is a target for this query.
 
 The receiver exposes usage page 0xFF80 usage 0x0001, 33-byte input and output reports and
 no report id in the payload:
@@ -49,7 +46,6 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x0C45                   # the 2.4 GHz receiver; the cable id 0x38A6 has no battery
-PID = 0xFEFC                   # F87 Pro V2C; other Sonix products are not this protocol
 PAGE, USAGE = 0xFF80, 0x0001
 REPORT_LEN = 33
 QUERY = 0xAA                   # the `AA` in `AA 10`
@@ -138,8 +134,6 @@ class AulaProvider(Provider):
 
         out: List[DeviceStatus] = []
         for d in infos:
-            if d.get("product_id") != PID:
-                continue
             if (d.get("usage_page"), d.get("usage")) != (PAGE, USAGE):
                 continue
             name = (d.get("product_string") or "").strip() or "AULA keyboard"

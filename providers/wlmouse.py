@@ -5,13 +5,14 @@ Protocol (reverse-engineered by @len0c, see incconutwo/mouse-battery-tray, MIT):
   * reply:   a1|a2 00 02 02 00 83 <charging> <battery%>
   * fallback: the mouse periodically sends an input report 03 00 <battery%> <charging>
 
-Source: incconutwo/mouse-battery-tray, devices.py lines 80-85 (listed PIDs/query),
+Source: incconutwo/mouse-battery-tray, devices.py lines 80-85 (PIDs/query),
 102-125 (feature framing), and 165-175 (preferred FFFF:0000 collection):
 https://github.com/incconutwo/mouse-battery-tray/blob/main/devices.py#L80-L175
-The A880 receiver's successful exchange on interface 2, FFFF:0000 is recorded in
-https://github.com/HeyOkay/HaloBattery/issues/387
-Only the listed PIDs on FFFF:0000 receive feature requests. Unlisted cable
-identities can still supply passive heartbeats, but are never sent this query.
+Owner hardware capture, 2026-11-22: Beast X Max cable 36A7:A881, interface 2,
+FFFF:0000; reply 00 a1 00 02 02 00 83 01 60 00 00 00 = 96%, charging.
+The owner also confirmed cable-to-receiver recovery in the Desktop build.
+Only the listed PIDs on FFFF:0000 receive feature requests. Unlisted identities
+can still supply passive heartbeats, but are never sent this query.
 
 A receiver whose mouse is switched off is walked at most every fifth poll once
 nothing is shown (or it never answered after the first tries): each walk sends the
@@ -36,6 +37,7 @@ KNOWN = {
     0xA887: "WLmouse Beast X",
     0xA868: "WLmouse Beast X Mini Pro",
     0xA880: "WLmouse Beast X Max",          # 8K receiver, confirmed on hardware
+    0xA881: "WLmouse Beast X Max",          # USB cable, owner capture above
 }
 
 # receiver PIDs (a mouse on the cable shows up in Windows with its own PID)
@@ -95,14 +97,6 @@ class WLmouseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None, None
         try:
-            lengths = (65, 64)  # legacy hidapi compatibility when caps are unavailable
-            metadata = getattr(dev, "get_report_lengths", None)
-            if callable(metadata) and metadata().get("feature") == 65:
-                # Windows reports the receiver's complete feature size including
-                # ID 0. A 64-byte retry cannot contain this report and returns
-                # ERROR_INVALID_PARAMETER when the mouse is asleep (#413).
-                # https://learn.microsoft.com/windows-hardware/drivers/ddi/hidsdi/nf-hidsdi-hidd_getfeature
-                lengths = (65,)
             report = [0x00] + QUERY + [0x00] * (64 - len(QUERY))
             try:
                 dev.send_feature_report(report)
@@ -110,7 +104,7 @@ class WLmouseProvider(Provider):
                 self._diag.append(f"    send: {e}")
             for _ in range(15):
                 time.sleep(0.05)
-                for length in lengths:
+                for length in (65, 64):
                     try:
                         resp = dev.get_feature_report(0, length)
                     except (OSError, ValueError):
@@ -132,12 +126,11 @@ class WLmouseProvider(Provider):
         dev = hid.device()
         try:
             dev.open_path(path)
-            metadata = getattr(dev, "get_report_lengths", None)
-            if callable(metadata) and metadata().get("input") == 0:
-                self._diag.append("    passive read skipped: collection has no input reports")
-                return None, None
             dev.set_nonblocking(True)
-            deadline = time.time() + seconds
+        except (OSError, IOError):
+            return None, None
+        deadline = time.time() + seconds
+        try:
             while time.time() < deadline:
                 try:
                     data = dev.read(64)
@@ -149,8 +142,6 @@ class WLmouseProvider(Provider):
                         self._diag.append(f"    heartbeat: {hexdump(data, 8)}")
                         return batt, chg
                 time.sleep(0.02)
-        except (OSError, ValueError):
-            return None, None
         finally:
             try:
                 dev.close()
@@ -202,8 +193,8 @@ class WLmouseProvider(Provider):
         key = "wlmouse"
         readings = []           # (batt, charging, pid)
 
-        # #62 item 5: a walk of a silent receiver is expensive (an allowed feature
-        # request's refusal ~0.75 s, then the ~2 s listen), and a switched-off
+        # #62 item 5: a walk of a silent receiver is expensive (each vendor
+        # collection's refusal ~0.75 s, then the ~2 s listen), and a switched-off
         # mouse paid it on every poll forever. While something is shown, or while
         # the first tries run, every poll walks; once nothing is shown, only every
         # BACKOFF_EVERY-th does - and a change in the receiver's device set (the

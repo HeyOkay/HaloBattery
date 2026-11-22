@@ -203,6 +203,19 @@ class PulsarTest(unittest.TestCase):
         P.hid = types.SimpleNamespace(device=self.bus.device_class())
         return self.bus
 
+    def test_the_lamzu_atlantis_v2_receiver_is_read(self):
+        # #408: 3554:f50d 'LAMZU Pro 1K Receiver' publishes ff02:0002 and the
+        # same 17-byte Compx frame as the rest of the family
+        bus = self.one_receiver(vid=0x3554, pid=0xF50D, replies=[reply(73, 0, 3980)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f50d", d.key)
+        self.assertEqual("Lamzu Atlantis V2 (2.4 GHz)", d.name)
+        self.assertEqual(73, d.level)
+        self.assertEqual("mouse", d.kind)
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
     def test_the_r1_pro_max_receiver_is_read(self):
         bus = self.one_receiver(replies=[reply(78, 0, 3900)])
         provider = P.PulsarProvider()
@@ -244,8 +257,19 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual("pulsar:3554f523", d.key)
         self.assertEqual("Teevolution Terra Pro (2.4 GHz)", d.name)
         self.assertEqual(88, d.level)
-        self.assertEqual("keyboard", d.kind)
+        self.assertEqual("mouse", d.kind)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_teevolution_terra_1k_receiver_is_read_as_a_mouse(self):
+        # #448: the 1K receiver is 3554:f520, a sibling of the 8K F523
+        bus = self.one_receiver(vid=0x3554, pid=0xF520, replies=[reply(88, 0)])
+        found = P.PulsarProvider().poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:3554f520", d.key)
+        self.assertEqual("Teevolution Terra Pro (1K receiver)", d.name)
+        self.assertEqual(88, d.level)
+        self.assertEqual("mouse", d.kind)
 
     def test_the_corsair_sabre_v2_pro_is_read(self):
         # #290: 1b1c:2b2a 'Sabre v2 Pro Ultralight Wireless Receiver' publishes
@@ -308,6 +332,20 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(54, d.level)
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_zaopin_z2_4k_is_read_over_both_transports(self):
+        cases = (
+            (0xF526, "Zaopin Z2 4K (wired)", 45, True, 3817),
+            (0xF527, "Zaopin Z2 4K (2.4 GHz)", 30, False, 3704),
+        )
+        for pid, name, level, charging, mv in cases:
+            with self.subTest(pid=pid):
+                bus = self.one_receiver(pid=pid, replies=[reply(level, int(charging), mv)])
+                [device] = P.PulsarProvider().poll()
+                self.assertEqual((f"pulsar:3554{pid:04x}", name, level, charging, "mouse"),
+                                 (device.key, device.name, device.level, device.charging,
+                                  device.kind))
+                self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
     def test_the_vgn_dragonfly_4k_receiver_is_read(self):
         # #323: the receiver is 3554:f505 with six vendor pages on interface 1, the

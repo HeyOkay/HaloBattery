@@ -353,8 +353,7 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("débranchez", hb.device_state(st, language="fr"))
 
     def test_every_provider_and_pictogram_is_translated(self):
-        # Held-only families retain translation keys for diagnostics/future
-        # support, but must not present a nonfunctional settings switch.
+        # Held-only families keep all catalog keys but expose no ineffective switch.
         visible = set(hb.PROVIDER_LABELS) - {"endgame_4k", "lamzu_sw"}
         for code in i18n.LANGUAGES:
             with self.subTest(language=code):
@@ -371,7 +370,7 @@ class PresentationTests(unittest.TestCase):
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Enceinte", "Webcam",
                                   "Appareil de santé", "Maison connectée", "Montre connectée",
-                                  "Écran / TV", "Balise / Localisateur", "Casque",
+                                  "Écran / TV", "Balise / Localisateur", "Téléphone", "Casque",
                                   "Manette", "Bluetooth"])
 
     def test_immediate_switch_all_icons_placeholder_and_both_directions(self):

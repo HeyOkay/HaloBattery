@@ -89,5 +89,6 @@ public sealed partial class MainWindow
         style.Setters.Add(new Setter(ComboBoxItem.UseSystemFocusVisualsProperty, true));
         style.Setters.Add(new Setter(ComboBoxItem.TemplateProperty, template));
         box.ItemContainerStyle = style;
+        EnableComboPopupSpotlights(box);
     }
 }

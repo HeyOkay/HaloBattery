@@ -1,21 +1,28 @@
-"""MCHOSE K87 keyboards on the 2.4 GHz receiver (41E4:2001).
+"""MCHOSE K87 and G98 Pro keyboards on their 2.4 GHz receivers.
 
-Protocol taken from MCHOSE's own web driver (M HUB):
-https://www.mchose.com.cn/assets/main-DQZs6ZzX.js
-SHA-256: 61588300659c7802018831d78a98af1dfd7967d70a8d286bfbd3e4d424173227
-The getBattery command table specifies 19 bytes: ``13 4a 01`` + 16 zero bytes.
-The wireless readCommand appends crcHandler16(command), which is the sum of
-those bytes (0x5e), and genCommandHandler removes the report ID before
-sendReport(reportId, payload). HIDAPI includes that ID: the complete output
-report is 20 bytes, ending in 0x5e. No device/configuration write is added.
+K87 is 41E4:2001; the G98 Pro reports 41E4:2004 but exposes the same
+ff02:0002 command collection and the same 19-byte 13 4A 01 exchange, so it is
+read with the identical query. Confirmed on the reporter's hardware in #378:
+94 % on battery, 50 % with the charging ring on the cable.
 
-On the captured K87 receiver (41E4:2001, interface 1, FF02:0002, 20-byte
-input/output), the full battery reply is:
+Protocol taken from MCHOSE's own web driver (M HUB): the site www.mchose.com.cn ships the
+configurator as ``assets/purify.es-*.js``, whose command table has
+
+    ["getBattery", {default: {
+        wirelessCommand: "13 4a 01 00 00 ... 00",          # 19 bytes
+        wirelessParser: batteryLevel:u8, fullStatus:bit4, chargeStatus:bit4,
+        wiredCommand: "06 87 00 00 01 00 02 00 ..." }}]
+
+0x13 is the report id, so the wire frame is ``13 4a 01`` + zeros. On the hardware here
+(``41E4:2001``, vendor collection usage page 0xFF02, 20-byte in/out) the answer is
 
     13 4A 01 00 02 64 01 00 00 ... 00 C5
-                     ^^  ^^           ^^ sum(bytes 0..18) & 0xFF
+                     ^^  ^^           ^^ checksum = sum(bytes 0..18) & 0xFF
 
-The level is byte 5 (0x64 = 100%); flags in byte 6 remain diagnostic only.
+which decodes as: command echo, 0x02 (link/mode), **0x64 = 100 %**, 0x01 (full/charge
+nibble). The checksum matches the frame, so the layout is confirmed against the vendor
+parser: after the 5-byte header the payload is ``batteryLevel`` then the full/charge nibble.
+
 The 8-byte feature report on the same interface (usage page 0xFF04, report id 6) is a second
 status channel; it reports the same 100 in its own layout, but the output channel above is
 the one the vendor driver reads the level from.
@@ -33,17 +40,12 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 VENDOR = 0x41E4
-PRODUCTS = {0x2001: "MCHOSE K87"}
+PRODUCTS = {0x2001: "MCHOSE K87", 0x2004: "MCHOSE G98 Pro"}
 USAGE_PAGE = 0xFF02
-USAGE = 0x0002
-INTERFACE = 1
-REPORT_SIZE = 20
 
 REPORT_ID = 0x13
 CMD = 0x4A
-# Exact manufacturer getBattery frame, including its additive checksum.
-_REQUEST_BODY = bytes([REPORT_ID, CMD, 0x01] + [0] * 16)
-REQUEST = _REQUEST_BODY + bytes([sum(_REQUEST_BODY) & 0xFF])
+REQUEST = bytes([REPORT_ID, CMD, 0x01, 0x00, 0x00, 0x02] + [0] * 13)
 
 ATTEMPTS = 3
 ATTEMPT_GAP = 0.15
@@ -56,24 +58,28 @@ def parse_reply(resp) -> Optional[Tuple[int, int]]:
     """(level, flags) from the getBattery answer, or None.
 
     ``flags`` is the byte after the level: the vendor schema splits it into
-    ``fullStatus`` (high nibble) and ``chargeStatus`` (low nibble). Measured on the hardware
-    here, a full keyboard that is **not** on the cable answers ``0x01``, so the low nibble is
-    not "charging right now" - it reads 1 while the pack is full, and the tray must not show
-    the breathing-charging animation for it. The flag is kept for diagnostics only.
+    ``fullStatus`` (low nibble) and ``chargeStatus`` (high nibble). Measured on
+    the K87, a full keyboard that is **not** on the cable answers ``0x01``; the
+    G98 Pro on its cable answers ``0x10``. The high nibble is therefore the
+    charging state, not a "charging right now" reading of the low nibble.
     """
-    if not isinstance(resp, (bytes, bytearray, list, tuple)):
+    if not resp or len(resp) < 7:
         return None
-    try:
-        r = bytes(resp)
-    except (TypeError, ValueError):
-        return None
-    if (len(r) != REPORT_SIZE or r[:4] != bytes([REPORT_ID, CMD, 1, 0])
-            or r[-1] != (sum(r[:-1]) & 0xFF)):
+    r = bytes(resp)
+    if r[0] != REPORT_ID or r[1] != CMD:
         return None
     level = r[5]
     if level > 100:
         return None
     return level, r[6]
+
+
+def parse_charging(flags: int) -> Optional[bool]:
+    """True when the high nibble says charging, False on battery, None if unknown."""
+    state = (flags >> 4) & 0x0F
+    if state in (0, 1):
+        return bool(state)
+    return None
 
 
 class MchoseKbProvider(Provider):
@@ -98,10 +104,7 @@ class MchoseKbProvider(Provider):
                 pass
             for attempt in range(ATTEMPTS):
                 try:
-                    sent = dev.write(REQUEST)
-                    if type(sent) is not int or sent < REPORT_SIZE:
-                        self._diag.append(f"    write refused/short ({sent})")
-                        return None
+                    dev.write(REQUEST)
                 except (OSError, ValueError) as e:
                     self._diag.append(f"    write: {e}")
                     return None
@@ -138,8 +141,7 @@ class MchoseKbProvider(Provider):
             pid = d.get("product_id")
             if d.get("vendor_id") != VENDOR or pid not in PRODUCTS:
                 continue
-            if ((d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE)
-                    or d.get("interface_number") != INTERFACE):
+            if (d.get("usage_page") or 0) != USAGE_PAGE:
                 continue
             key = f"mchose_kb:{pid:04x}"
             if key in seen:
@@ -153,20 +155,31 @@ class MchoseKbProvider(Provider):
                 self._diag.append("    no answer (keyboard asleep?)")
                 continue
             level, flags = got
+            charging = parse_charging(flags)
             seen.add(key)
             self._last[key] = (level, name, time.time())
-            self._diag.append(f"  -> {key}: {level}% (flags 0x{flags:02x})")
-            out.append(DeviceStatus(key, name, level, False, True,
-                                    "mchose_kb", kind="keyboard", wake_on_input=True))
+            state = (" charging" if charging else " on battery"
+                     if charging is not None else " charging unknown")
+            self._diag.append(f"  -> {key}: {level}% (flags 0x{flags:02x}){state}")
+            out.append(DeviceStatus(key, name, level, bool(charging), True,
+                                    "mchose_kb", kind="keyboard", wake_on_input=True,
+                                    charging_known=charging is not None))
 
         if not seen:
-            last = self._last.get("mchose_kb:2001")
-            if last:
-                out.append(DeviceStatus("mchose_kb:2001", last[1], last[0], False, False,
-                                        "mchose_kb", kind="keyboard", wake_on_input=True))
-            elif any(d.get("vendor_id") == VENDOR and d.get("product_id") in PRODUCTS for d in infos):
-                out.append(DeviceStatus("mchose_kb:2001", self._name, None, False, False,
-                                        "mchose_kb", kind="keyboard", wake_on_input=True))
+            # only the models actually present; do not invent a K87 when a
+            # different MCHOSE keyboard is the one that went quiet
+            present = sorted({d.get("product_id") for d in infos
+                              if d.get("vendor_id") == VENDOR
+                              and d.get("product_id") in PRODUCTS})
+            for pid in present:
+                key = f"mchose_kb:{pid:04x}"
+                last = self._last.get(key)
+                if last:
+                    out.append(DeviceStatus(key, last[1], last[0], False, False,
+                                            "mchose_kb", kind="keyboard", wake_on_input=True))
+                else:
+                    out.append(DeviceStatus(key, PRODUCTS[pid], None, False, False,
+                                            "mchose_kb", kind="keyboard", wake_on_input=True))
         return out
 
     def diagnostics(self) -> List[str]:

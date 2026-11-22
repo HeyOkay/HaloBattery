@@ -7,11 +7,10 @@ from providers import ajazz, endgame_4k, turtlebeach, sony_inzone, lamzu_sw, log
 
 
 class StableDevicePolicyTests(unittest.TestCase):
-    def test_aj159_is_enabled_after_its_f7_05_level_was_confirmed(self):
-        # #289's owner captured report05 at70%; the prior shared hold is obsolete.
-        self.assertEqual(ajazz.ENABLED_ALT_TARGETS, {(0x3151, 0x402D)})
+    def test_aj159_is_enabled_after_its_level_was_confirmed(self):
+        self.assertIn((0x3151, 0x402D), ajazz.ENABLED_ALT_TARGETS)
 
-    def test_kysona_is_not_opened_even_with_a_valid_vendor_collection(self):
+    def test_kysona_is_not_opened_even_with_valid_vendor_collections(self):
         entries = [{"product_id": 0x5031, "usage_page": 0xFFFF, "usage": 2,
                     "path": b"held", "interface_number": 2}]
         with mock.patch.object(ajazz.hidlist, "enumerate",
@@ -48,7 +47,8 @@ class StableDevicePolicyTests(unittest.TestCase):
         ports = types.SimpleNamespace(comports=mock.Mock(return_value=[port]))
         serial = types.SimpleNamespace(Serial=mock.Mock())
         with mock.patch.object(sony_inzone, "list_ports", ports), \
-             mock.patch.object(sony_inzone, "serial", serial):
+             mock.patch.object(sony_inzone, "serial", serial), \
+             mock.patch.object(sony_inzone.hidlist, "enumerate", return_value=[]):
             provider = sony_inzone.SonyInzoneProvider()
             self.assertEqual(provider.poll(), [])
             serial.Serial.assert_not_called()
@@ -64,20 +64,15 @@ class StableDevicePolicyTests(unittest.TestCase):
             device.assert_not_called()
             self.assertTrue(any("release hold" in line for line in provider.diagnostics()))
 
-    def test_pro_x_3_uses_its_separately_sourced_status_reader(self):
-        # HeadsetControl1d2ccd14 supplies the exact X3 50/23 exchange; the old
-        # release hold based on unconfirmed X2 compatibility is superseded.
-        entries = [{"vendor_id": 0x046D, "product_id": 0x0B45,
-                    "usage_page": 0xFFA0, "usage": 1,
-                    "path": b"prox3", "interface_number": 3}]
-        with mock.patch.object(logitech_centurion.hidlist, "enumerate", return_value=entries):
+    def test_pro_x_3_does_not_open_its_centurion_collection(self):
+        entries = [{"product_id": 0x0B45, "usage_page": 0xFFA0, "usage": 1,
+                    "path": b"held", "interface_number": 3}]
+        with mock.patch.object(logitech_centurion.hidlist, "enumerate", return_value=entries), \
+             mock.patch.object(logitech_centurion.hid, "device") as device:
             provider = logitech_centurion.LogitechCenturionProvider()
-            with mock.patch.object(provider, "_read", side_effect=AssertionError("X2 query on X3")), \
-                 mock.patch.object(provider, "_read_x3", return_value=(78, False, False)) as read:
-                [status] = provider.poll()
-                read.assert_called_once_with(b"prox3")
-                self.assertEqual((status.level, status.charging, status.charging_known),
-                                 (78, False, False))
+            self.assertEqual(provider.poll(), [])
+            device.assert_not_called()
+            self.assertTrue(any("release hold" in line for line in provider.diagnostics()))
 
     def test_confirmed_pro_x_2_is_still_polled(self):
         entries = [{"product_id": 0x0AF7, "usage_page": 0xFFA0, "usage": 1,

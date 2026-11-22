@@ -103,7 +103,7 @@ class BatteryTests(unittest.TestCase):
 
     def test_stale_full_reply_is_not_displayed(self):
         data = bytearray(FULL)
-        data[:9] = OFFLINE[:9]  # Independent receiver-off capture above.
+        data[:9] = blackshark2020.NO_REPLY_PREFIX
         with patch.object(blackshark2020.time, "monotonic", side_effect=[0, 1]):
             self.assertEqual(self.read([data]), ("offline", None, False))
 

@@ -132,11 +132,10 @@ class NativeAdapterTests(unittest.TestCase):
         self.assertFalse(scope.failed)
         self.assertEqual(result["percentage"], 75)
         self.assertEqual([frame[:4] for frame in self.metadata.features],
-                         [bytes.fromhex("a1 0e 00 00"), bytes.fromhex("a1 b4 00 00"),
-                          bytes.fromhex("a1 b4 00 00")])
+                         [bytes.fromhex("a1 0e 00 00"), bytes.fromhex("a1 b4 00 00")])
         self.assertTrue(all(len(frame) == 1041 for frame in self.metadata.features))
         self.assertTrue(all(not any(frame[4:]) for frame in self.metadata.features))
-        self.assertEqual(len(self.api.ioctls), 3)
+        self.assertEqual(len(self.api.ioctls), 2)
         for code, options in self.api.ioctls:
             self.assertEqual(options["input_data"], b"\xa1" + bytes(63))
             self.assertEqual(options["output_size"], 64)

@@ -90,15 +90,18 @@ class ParseTests(unittest.TestCase):
             self.assertIsNone(S.parse_status(status(value)))
         for value in (-1, True, 0.0, "0", None):
             self.assertIsNone(S.parse_status(status(charge=value)))
-    def test_report_magic_category_and_command_are_correlated(self):
-        for offset, value in ((0, 3), (6, 0), (7, 0), (8, 0x14), (9, 4)):
+    def test_report_and_command_are_correlated_without_inventing_response_echo(self):
+        for offset, value in ((0, 3), (9, 4)):
             data = list(STATUS)
             data[offset] = value
             self.assertIsNone(S.parse_status(data))
-        # No invented response checksum/sequence or full request-header echo.
+        # The source does not establish a status-response magic/category,
+        # sequence or checksum. These are synthetic variants, not captures.
         data = list(STATUS)
+        data[6:9] = [0, 0, 0x14]
         data[11], data[13], data[22] = 77, 33, 55
         self.assertEqual(S.parse_status(data), (60, False, True))
+        self.assertIsNone(S.parse_status(REQUEST))
 
 
 class ProviderTests(unittest.TestCase):
@@ -181,7 +184,8 @@ class ProviderTests(unittest.TestCase):
         bad = status(101)
         other = list(STATUS)
         other[9] = 7
-        result, made, _, _ = self.run_poll(answers={b"receiver": [bad, other, status(0, 255)]})
+        result, made, _, _ = self.run_poll(
+            answers={b"receiver": [REQUEST, bad, other, status(0, 255)]})
         self.assertEqual((result[0].level, result[0].charging_known), (0, False))
         result, made, _, _ = self.run_poll(error=True)
         self.assertEqual(result, [])
@@ -211,14 +215,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(made[0].path, missing)
         self.assertEqual([r.level for r in result], [77])
 
-    def test_factory_has_exactly64_and_serial_h9ii_stays_held(self):
+    def test_factory_registers_separate_hid_and_serial_providers(self):
+        from halo.polling import _MAX_PROVIDERS
         from providers import sony_inzone
         self.assertNotIn(0x0FA8, sony_inzone.ENABLED_PIDS)
         tree = ast.parse((Path(__file__).resolve().parents[1] / "halo_battery.pyw").read_text(encoding="utf-8"))
         factory = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "make_providers")
         result = next(n for n in ast.walk(factory) if isinstance(n, ast.Return))
         names = [n.func.id for n in result.value.elts]
-        self.assertEqual(len(names), 64)
+        self.assertEqual(len(names), len(set(names)))
+        self.assertLessEqual(len(names), _MAX_PROVIDERS)
         self.assertEqual(names.count("SonyH9IIProvider"), 1)
         self.assertIn("SonyInzoneProvider", names)
 

@@ -37,10 +37,14 @@ CAPTURED56_CHARGING = ([0x10, 0x00, 0x01, 0x0B, 0x4E, 0x36, 0x32, 0x35, 0x00, 0x
                         0x11, 0x01, 0x00, 0x38, 0x00] + [0x00] * 16 + [0x35])
 ANNOUNCED75 = [0xC0, 0x01, 0x4B] + [0x00] * 29
 ANNOUNCED74 = [0xC0, 0x01, 0x4A] + [0x00] * 29
-# Protocol correction for #289/PR427: owner's test4 diagnostic L50, GET05 =70%.
-# https://github.com/user-attachments/files/34882030/diagnostics.txt
-# The old AJ179 command10 fixtures were not this receiver's protocol.
-AJ159_CAPTURE70 = bytes.fromhex("05 00 00 46 01 00 01 02 00 00 00 00") + bytes(53)
+# The 3151 8K receiver's AJ-series status reply: GET_FEATURE 0x05, 75 %.
+SERIES75 = [0x05, 0x00, 0x00, 0x4B, 0x01, 0x01, 0x01, 0x02]
+# The reporter's reply on test build 4 (#289 diagnostics): 70 %.
+SERIES_CAPTURED70 = [0x05, 0x00, 0x00, 0x46, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00]
+# Not documented for this path, so refused: the reference's unnumbered Linux hidraw
+# frame (Windows hidapi always returns the report id first) and an F7-prefixed frame.
+SERIES_UNNUMMED75 = [0x00, 0x00, 0x4B, 0x01, 0x01, 0x01, 0x02]
+SERIES_AM75 = [0xF7, 0x00, 0x4B]
 
 
 def info(level, flag=0x01):
@@ -53,15 +57,16 @@ def info(level, flag=0x01):
 
 
 class FakeCollection:
-    """replies: frames the collection answers with, in order; accept_write:
-    False means the collection has no output report (hidapi returns -1)."""
+    """replies: input frames for the AJ179's read; feature_reply: the 3151
+    receiver's GET_FEATURE status; accept_write: False means no output report."""
 
     def __init__(self, replies=(), accept_write=True, feature_reply=None):
         self.replies = list(replies)
         self.accept_write = accept_write
+        self.feature_reply = feature_reply
         self.sent = []
         self.feature_sent = []
-        self.feature_reply = feature_reply
+        self.feature_reads = []         # the report ids asked for with GET_FEATURE
         self.opened = 0
         self.reads = 0
 
@@ -85,11 +90,14 @@ def fake_device_class(cols, order_log):
             return len(data) if self.c.accept_write else -1
 
         def send_feature_report(self, data):
-            self.c.feature_sent.append(bytes(data))
+            self.c.feature_sent.append(list(data))
             return len(data)
 
-        def get_feature_report(self, report, length):
-            return self.c.feature_reply if report == 0x05 else []
+        def get_feature_report(self, report_id, n):
+            self.c.feature_reads.append(report_id)
+            if report_id == 0x05 and self.c.feature_reply is not None:
+                return list(self.c.feature_reply) + [0] * (n - len(self.c.feature_reply))
+            return []
 
         def read(self, n, timeout):
             return self.c.read()
@@ -179,6 +187,35 @@ class PollTest(unittest.TestCase):
     def test_a_windows_read_keeps_the_report_id(self):
         self.assertEqual(A.parse_reply([0x00] + CAPTURED75), (75, "info", False))
 
+    def test_series_status_frame_reads_75(self):
+        self.assertEqual(A.parse_series_reply(SERIES75, 0x05), 75)
+
+    def test_the_captured_289_reply_reads_70(self):
+        # #289, test build 4 on the reporter's AJ159 PRO: 05 00 00 46 01 00 01 02 ...
+        self.assertEqual(A.parse_series_reply(SERIES_CAPTURED70, 0x05), 70)
+
+    def test_series_unknown_header_bytes_are_refused(self):
+        # #427 review: an unknown first byte fell through to a fixed offset, so any
+        # in-range byte there became a battery reading
+        self.assertIsNone(A.parse_series_reply([0x99, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x99, 70], 0xF7))
+        self.assertIsNone(A.parse_series_reply([0x99, 0x00, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x04, 0x00, 0x00, 70], 0x05))
+
+    def test_series_forms_without_the_documented_header_are_refused(self):
+        # only `05 00 00 <level>` is documented for Windows hidapi, which returns the
+        # report id first: the leading-zero shapes, the unnumbered Linux frame, an
+        # F7-prefixed frame and a 0x05 frame for another request are all refused
+        self.assertIsNone(A.parse_series_reply([0x00, 0x05, 0x00, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x00, 0xF7, 0x00, 70], 0xF7))
+        self.assertIsNone(A.parse_series_reply(SERIES_UNNUMMED75, 0x05))
+        self.assertIsNone(A.parse_series_reply(SERIES_AM75, 0xF7))
+        self.assertIsNone(A.parse_series_reply(SERIES75, 0xF7))
+
+    def test_series_junk_padding_is_refused(self):
+        self.assertIsNone(A.parse_series_reply([0x05, 0xAD, 0x00, 0x63], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x05, 0x00, 0x00, 0x00], 0x05))
+
     def test_an_announcement_needs_the_live_flag(self):
         self.assertIsNone(A.parse_reply([0xC0, 0x00, 0x4B] + [0x00] * 29))
 
@@ -215,12 +252,13 @@ class PollTest(unittest.TestCase):
         self.assertEqual(list(A.make_request())[:2], [0x00, 0x10])   # report id + the app's read
         self.assertEqual(len(A.make_request()), A.REPORT_SIZE + 1)
 
-    def alt(self, index, product, reply_frame=AJ159_CAPTURE70):
+    def alt(self, index, product, reply_frame=SERIES75):
         vid, pid, name = A.ALT_TARGETS[index]
         entries = [{"path": b"alt-vendor", "interface_number": 2,
                     "usage_page": 0xFFFF, "usage": 0x0002,
                     "product_id": pid, "product_string": product}]
-        cols = {b"alt-vendor": FakeCollection(feature_reply=reply_frame)}
+        cols = {b"alt-vendor": FakeCollection((), accept_write=False,
+                                               feature_reply=reply_frame)}
         A.hid = types.SimpleNamespace(device=fake_device_class(cols, self.order))
         A.hidlist = types.SimpleNamespace(
             enumerate=lambda v=0: entries if v == vid else [])
@@ -228,30 +266,31 @@ class PollTest(unittest.TestCase):
         self.last_cols = cols
         return A.AjazzProvider().poll()
 
-    # Check the confirmed protocol independently of the release allowlist.
+    # Exercise the retained experimental protocol independently of release policy.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_aj159_pros_8k_receiver_is_read(self):
-        # #289 test4 confirms F7/GET05 on FFFF:0002; not AJ179 command10.
+        # #289: 3151:402d 'AJAZZ 2.4G 8K' - the vendor channel sits on usage page
+        # FFFF instead of the AJ179's unlabelled mi_02; the AJ179 notes say the
+        # AJ159 family speaks the same CompX protocol, so the same read is sent
         out = self.alt(0, "AJAZZ 2.4G 8K")
         self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
-                         [("ajazz:402d", "AJAZZ AJ159 PRO", 70, "mouse")])
-        collection = self.last_cols[b"alt-vendor"]
-        self.assertEqual(collection.feature_sent, [bytes.fromhex("00 f7") + bytes(63)])
-        self.assertEqual(collection.sent, [])
-        self.assertEqual(collection.reads, 0)
+                         [("ajazz:402d", "AJAZZ AJ159 PRO", 75, "mouse")])
+        vendor = self.last_cols[b"alt-vendor"]
+        self.assertEqual(0, vendor.reads)                 # feature-only: no input read
+        self.assertEqual([0x00, A.SERIES_POLL_OPCODE], vendor.feature_sent[0][:2])
 
-    # Widening an allowlist cannot create an unverified Kysona protocol.
+    # Exercise the retained experimental protocol independently of release policy.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
-    def test_kysona_shape_does_not_authorize_an_unsourced_protocol(self):
-        # #251 has no confirmed request/reply, even if a caller widens an allowlist.
+    def test_the_kysona_uranus_is_read_on_the_same_family(self):
+        # #251: 3151:5031 '2.4G Wireless Mouse' publishes the same ffff:0001/0002
+        # collections as the AJ159's receiver
         out = self.alt(1, "2.4G Wireless Mouse")
-        self.assertEqual(out, [])
-        self.assertEqual(self.order, [])
-        self.assertEqual(self.last_cols[b"alt-vendor"].feature_sent, [])
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("ajazz:5031", "Kysona Uranus", 75, "mouse")])
 
-    # Check the confirmed collection independently of the release allowlist.
+    # Exercise the retained experimental protocol independently of release policy.
     @mock.patch.object(A, "ENABLED_ALT_TARGETS",
                        frozenset((v, p) for v, p, _ in A.ALT_TARGETS))
     def test_the_fifth_collection_is_reached_on_the_8k_receiver(self):
@@ -265,14 +304,33 @@ class PollTest(unittest.TestCase):
                     "path": b"k8-%d-%04x-%02x" % (i, p, u),
                     "product_string": "AJAZZ 2.4G 8K"}
                    for i, p, u in shape]
-        cols = self.cols(entries, answer=entries[4]["path"])
-        cols[entries[4]["path"]].feature_reply = AJ159_CAPTURE70
+        cols = {e["path"]: FakeCollection((), accept_write=False,
+                                           feature_reply=SERIES75 if e["path"] == entries[4]["path"] else None)
+                for e in entries}
         out = self.poll(entries, cols, lengths={e["path"]: 64 for e in entries})
-        self.assertEqual([(s.key, s.level) for s in out], [("ajazz:402d", 70)])
-        self.assertEqual(self.order, [entries[4]["path"]])
-        self.assertTrue(all(not c.sent and not c.reads for c in cols.values()))
-        self.assertEqual(cols[entries[4]["path"]].feature_sent,
-                         [bytes.fromhex("00 f7") + bytes(63)])
+        self.assertEqual([(s.key, s.level) for s in out], [("ajazz:402d", 75)])
+        # only the documented ffff:0002 control collection is opened, not the
+        # four input-only collections on interface 1
+        self.assertEqual(1, len(self.order))
+        self.assertEqual(entries[4]["path"], self.order[0])
+        self.assertEqual([len(p) for p in cols[entries[4]["path"]].feature_sent], [33])
+
+    def test_the_captured_reply_shows_70_with_charging_unknown(self):
+        # release configuration: the AJ159 PRO is enabled and its reply has no
+        # charging flag, so the charging state stays explicitly unknown
+        out = self.alt(0, "AJAZZ 2.4G 8K", reply_frame=SERIES_CAPTURED70)
+        self.assertEqual([(s.key, s.level, s.online, s.charging_known) for s in out],
+                         [("ajazz:402d", 70, True, False)])
+
+    def test_only_status_report_05_is_requested(self):
+        # a link that is not up yet answers 05 00 00 00 ...: no level is shown, and
+        # no other report id is asked for while every poll length is tried
+        out = self.alt(0, "AJAZZ 2.4G 8K", reply_frame=[0x05] + [0x00] * 7)
+        self.assertEqual([(s.key, s.level, s.charging_known) for s in out],
+                         [("ajazz:402d", None, False)])
+        vendor = self.last_cols[b"alt-vendor"]
+        self.assertTrue(vendor.feature_reads)
+        self.assertEqual({0x05}, set(vendor.feature_reads))
 
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()

@@ -16,9 +16,6 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
-
-# Independent wire fixtures: HeadsetControl corsair_void_v2w.hpp; Virtuoso reply captures in HaloBattery #204.
-# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -37,8 +34,8 @@ def entry(pid, path, iface, page, usage, name=DONGLE):
             "path": path, "product_string": name, "serial_number": ""}
 
 
-def bragi_reply(value=550, route=0x01, cmd=0x02, err=0x00,
-                report_id=False, size=64):
+def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0x00,
+                report_id=False, size=C.BRAGI_MSG_SIZE):
     """A reply frame of the shape the dongle sends; value is in tenths of a percent."""
     payload = bytearray(size)
     payload[0] = route
@@ -49,12 +46,12 @@ def bragi_reply(value=550, route=0x01, cmd=0x02, err=0x00,
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
-def bragi_se_reply(value=960, source=0x01, cmd=0x02,
-                   err=0x00, report_id=False, size=64):
+def bragi_se_reply(value=960, source=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET,
+                   err=0x00, report_id=False, size=C.BRAGI_MSG_SIZE):
     """The Virtuoso receivers' answer shape (probe-measured, #204): the source
     byte sits between the route and the command - `01 01 02 00 <v LE>`."""
     payload = bytearray(size)
-    payload[0] = 0x01
+    payload[0] = C.BRAGI_ROUTE_CHILD
     payload[1] = source
     payload[2] = cmd
     payload[3] = err
@@ -151,7 +148,7 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(bus.opened, [b"k65-answers"])
         w = bus.dongles[b"k65-answers"].writes[0]
         self.assertEqual((w[0], w[1], w[2], w[3], len(w)),
-                         (0x00, 0x09, 0x02, 0x0F, 64 + 1))
+                         (0x00, 0x09, 0x02, 0x0F, C.BRAGI_MSG_SIZE + 1))
 
 
     def test_the_headset_family_is_untouched(self):
@@ -160,6 +157,8 @@ class BragiPollTest(unittest.TestCase):
                                   0x0A97: "Corsair HS80 Max Wireless"})
         self.assertEqual(C.BRAGI_PIDS, {
             0x1B7F: "Corsair Dark Core RGB Pro SE",
+            0x1BA6: "Corsair M65 RGB Ultra Wireless",   # #411 (Slipstream receiver)
+            0x1BB5: "Corsair M65 RGB Ultra Wireless",   # #411 (the same mouse on its cable)
             0x2B07: "Corsair K65 PLUS Wireless",
             0x1BDC: "Corsair M75 Wireless",
             0x0A40: "Corsair Virtuoso RGB Wireless SE",
@@ -173,9 +172,12 @@ class BragiPollTest(unittest.TestCase):
         self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3E])
         self.assertEqual(C.BRAGI_KEYS[0x0A40], C.BRAGI_KEYS[0x0A3D])
         self.assertEqual(C.BRAGI_KEYS[0x0A64], C.BRAGI_KEYS[0x0A62])
+        self.assertEqual(C.BRAGI_KEYS[0x1BA6], C.BRAGI_KEYS[0x1BB5])
         self.assertEqual(C.BRAGI_SESSION_PIDS, {0x0A40})
         self.assertEqual(C.BRAGI_KEYS[0x2B07], "corsair:2b07")
-        self.assertEqual(C.BRAGI_KINDS, {0x1B7F: "mouse", 0x2B07: "keyboard", 0x1BDC: "mouse"})
+        self.assertEqual(C.BRAGI_KINDS, {0x1B7F: "mouse", 0x1BA6: "mouse",
+                                         0x1BB5: "mouse", 0x2B07: "keyboard",
+                                         0x1BDC: "mouse"})
         self.assertNotIn(0x1B7F, C.PIDS)
         self.assertNotIn(0x0A40, C.PIDS)
 

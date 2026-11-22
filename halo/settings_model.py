@@ -1,17 +1,24 @@
 """Settings actions and read-only presentation snapshots; never poll hardware here."""
 from __future__ import annotations
 
+import base64
 import copy
+import io
 import os
 import logging
 import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+from .provider_policy import available_provider_labels, provider_available
 from . import icons
 from providers.base import DeviceStatus
 
 log = logging.getLogger("halo_battery")
+
+# Settings > About links. The Discord invite is the server's permanent one.
+WEBSITE_URL = "https://halobattery.app"
+DISCORD_URL = "https://discord.gg/K796KR9xtk"
 
 
 class SettingsController:
@@ -20,6 +27,7 @@ class SettingsController:
         self.context = app.settings_context()
         self._preview_state = None
         self._preview_art = None
+        self._preview_background = None
         self._catalog = None
         self._catalog_lock = threading.Lock()
         self._icon_selection_revisions = {}
@@ -67,7 +75,7 @@ class SettingsController:
         devices.sort(key=lambda row: row["name"].casefold())
         providers = [dict(name=name,
                          label=i18n.translate("provider." + name, language=cfg["language"]) if ctx["has_translation"]("provider." + name) else label,
-                         enabled=name not in disabled) for name, label in ctx["provider_labels"].items()]
+                         enabled=name not in disabled) for name, label in available_provider_labels(ctx["provider_labels"]).items()]
         providers.sort(key=lambda row: row["label"].casefold())
         result["providers"] = providers
         result["autostart"] = ctx["autostart_enabled"]()
@@ -141,7 +149,7 @@ class SettingsController:
         app.wake.set()
 
     def set_provider(self, name, enabled):
-        if name not in self.context["provider_labels"] or not isinstance(enabled, bool):
+        if not provider_available(name, self.context["provider_labels"]) or not isinstance(enabled, bool):
             raise ValueError("invalid provider")
         if (name not in self.app.disabled_providers()) != enabled:
             self.app.toggle_provider(name)
@@ -198,6 +206,12 @@ class SettingsController:
         self._redraw()
 
     def preview(self, key=None, size=80, frame=None):
+        return self._preview(key, size, frame, transition=False)
+
+    def preview_transition(self, key=None, size=80, frame=None):
+        return self._preview(key, size, frame, transition=True)
+
+    def _preview(self, key, size, frame, *, transition):
         if size != 80 or isinstance(size, bool):
             raise ValueError("Settings previews use exactly 80 physical pixels")
         app = self.app
@@ -205,30 +219,49 @@ class SettingsController:
             statuses = self._statuses()
             st = statuses.get(key) if key is not None else next(iter(statuses.values()), None)
             if st is None:
-                return icons.render(None, False, False, light_taskbar=app.light_taskbar, size=size,
-                                    ring_style=app.cfg.get("ring_style", "thin"))
-            state = app.icon_render_state(st, size=size)
+                state = (None, False, False, 20, app.light_taskbar, "", False, "", False,
+                         size, "default", False, False, None, app.cfg.get("ring_style", "thin"))
+            else:
+                state = app.icon_render_state(st, size=size)
             tick = getattr(app, "anim_tick", 0) if frame is None else frame
             asset = getattr(app, "_custom_assets", {}).get(state[13]) if len(state) > 13 else None
         if state != self._preview_state:
             self._preview_state,self._preview_art=state,{}
+            self._preview_background = None
         level,charging,online,low,light,badge,animate,text,paused,pixels,brand,color,filled=state[:13]
         custom = {"custom_glyph": asset.glyph} if asset is not None else {}
         if len(state) > 14:
             custom["ring_style"] = state[14]
         index=tick % icons.BREATH_FRAMES if animate else 0
+        phase=index/icons.BREATH_FRAMES if animate else 0.
+        pulse=icons.breath_level(phase) if animate else 1.
+        options = dict(pulse=pulse, text=text, force_active=paused if not animate else False,
+                       size=pixels, brand=brand, brand_color=color, filled=filled,
+                       animation_phase=phase if animate and level is None else 0., **custom)
         if index not in self._preview_art:
-            # Match charging_frames exactly, but generate only the visible frame.
-            # Eagerly rendering a whole 500% cycle stalls the settings UI when a
-            # device first connects or its state changes.
-            phase=index/icons.BREATH_FRAMES if animate else 0.
-            self._preview_art[index]=icons.render(
-                level,charging,online,low,light,badge,
-                pulse=icons.breath_level(phase) if animate else 1.,text=text,
-                force_active=paused if not animate else False,size=pixels,
-                brand=brand,brand_color=color,filled=filled,
-                animation_phase=phase if animate and level is None else 0., **custom)
-        return self._preview_art[index].copy()
+            # Match charging_frames exactly, generating only the visible frame.
+            self._preview_art[index]=icons.render(level,charging,online,low,light,badge, **options)
+        image = self._preview_art[index].copy()
+        if not transition:
+            return image
+        if self._preview_background is None:
+            background = icons.render(level,charging,online,low,light,badge, include_arc=False, **options)
+            output = io.BytesIO()
+            background.save(output, format="PNG")
+            self._preview_background = base64.b64encode(output.getvalue()).decode("ascii")
+        fg = (0, 0, 0) if light else (255, 255, 255)
+        arc = icons.arc_color(level, charging, low, fg)
+        opacity = icons.NEUTRAL_OPACITY if arc == fg else 255
+        width = icons._ring_width(custom.get("ring_style", "thin"))
+        # Match the rendered arc, not the transport connection. A retained
+        # Phone Link reading and a paused known-level device still draw a solid
+        # charge arc; selecting either must interpolate that visible percentage.
+        eligible = online and type(level) is int and 0 <= level <= 100
+        fraction = (1. if level >= 100 else max(level, 2) / 100 if level > 0 else 0.) if eligible else 0.
+        return image, dict(background=self._preview_background, level=fraction,
+                           color=[*arc, int(opacity * max(0., min(1., pulse)))],
+                           radius=(31.5 - width / 2) * pixels / 64,
+                           width=width * pixels / 64, eligible=bool(eligible))
 
     def icon_catalog(self):
         # Independent from app.lock: registry/file/network work is never on a poll.
@@ -438,6 +471,8 @@ class SettingsController:
         actions = dict(refresh=getattr(app, "request_refresh", app.wake.set), diagnostics=app.request_diag, check_update=app.check_update_now,
                        start_update=app.start_update, quit=app.quit, show_whats_new=app.show_whats_new,
                        open_data=lambda: os.startfile(self.context["data_dir"]),
+                       open_website=lambda: app.open_url(WEBSITE_URL),
+                       open_discord=lambda: app.open_url(DISCORD_URL),
                        open_project=lambda: app.open_url("https://github.com/" + self.context["repo"]),
                        open_issue=lambda: app.open_url("https://github.com/" + self.context["repo"] + "/issues/new/choose"))
         if name not in actions:

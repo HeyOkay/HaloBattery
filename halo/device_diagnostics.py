@@ -4,8 +4,6 @@ Only the acknowledged runner imports HID/transport/provider code. Protocols and
 endpoint restrictions remain in the providers; this module never polls the
 normal provider factory or publishes a tray/history observation.
 """
-import argparse
-import json
 import sys
 
 
@@ -54,7 +52,7 @@ def run(device, *, transport=None, acknowledged=False, load_backend=None,
         create_runtime=None, create_provider=None, create_guard=None):
     """One existing native runtime/scope, with no device access before consent."""
     global _retained_guard
-    result = {"experimental": True, "release_hold": device not in _TARGETED_DEVICES, "freshness": "unverified",
+    result = {"experimental": True, "release_hold": device in ("endgame-4k", "lamzu-tachi", "logitech-pro-x3"), "freshness": "unverified",
               "reading": None, "diagnostics": []}
     if (device not in _DEVICES or acknowledged is not True
             or (device == "endgame-4k" and transport not in ("receiver", "wired"))
@@ -126,6 +124,8 @@ def run(device, *, transport=None, acknowledged=False, load_backend=None,
 
 def main(argv=None, *, device=None, runner=None):
     """Parse either the executable command or a fixed-device source wrapper."""
+    import argparse
+    import json
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     if device is None:
         parser.add_argument("--diagnose-device", choices=_DEVICES, required=True)

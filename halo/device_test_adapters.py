@@ -65,12 +65,16 @@ class TargetedDeviceTester:
             raise ValueError("experimental acknowledgement required before device access")
         target = _TARGETS[self.device]
         phase = "enumeration"
+        offline_errors = ()
         try:
             module, provider = _load_provider(self.device)
+            offline = getattr(module, "Offline", None)
+            if self.device == "logitech-pro-x3" and isinstance(offline, type) and issubclass(offline, Exception):
+                offline_errors = (offline,)
             endpoint = _select_endpoint(module.hidlist.enumerate(target[0]), target)
             phase = "status"
             if self.device == "aj159":
-                level, accepted = provider._ask_aj159(endpoint)
+                level, accepted = provider._diagnose_aj159(endpoint)
                 result = (level, False, False) if accepted is True else None
             elif self.device == "inzone-h9ii":
                 result = provider._read(endpoint["path"], time.monotonic() + module.RECEIVER_BUDGET)
@@ -88,6 +92,9 @@ class TargetedDeviceTester:
                     "charging": charging if known else None, "charging_known": known,
                     "charging_basis": "sourced status flag" if known else "unknown",
                     "freshness": "unverified"}
+        except offline_errors:
+            self._diag.append("phase=status: headset offline; no reading accepted")
+            return None
         except (OSError, ValueError, TypeError, RuntimeError, ImportError, AttributeError, IndexError) as error:
             # Existing reader diagnostics may contain raw paths, reports or
             # exception text. Publish only a phase and exception class here.

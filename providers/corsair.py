@@ -4,11 +4,8 @@ without iCUE.
 Protocol from Sapd/HeadsetControl's corsair_void_v2w device:
 
   * the vendor collection on the receiver, which HeadsetControl identifies by
-    interface 4. The Windows dumps in #28 and the independent confirmation in
-    PR #176 identify its control collection as ff42:0001; ff42:0002 is a notice
-    channel with no output report. No other collection receives these requests.
-    Sources: HeadsetControl lib/devices/corsair_void_v2w.hpp, lines 52-57;
-    https://github.com/HeyOkay/HaloBattery/pull/176#issuecomment-6031065546
+    interface 4 (it gives no usage page/usage for it, so the interface number is
+    the only handle on that collection; a probe logs whatever it actually finds).
   * commands are 64 bytes with no leading report id: [0] 0x02, [1] endpoint,
     [2] 0x02, [3] command. Endpoint 0x08 is the receiver itself, 0x09 the
     headset behind it. Replies are 64 bytes. HeadsetControl writes the same
@@ -48,9 +45,7 @@ property, so a second app on the same dongle (iCUE, SignalRGB) can put an
 answer for another property on the channel that parses as a level; the ask is
 therefore repeated and only two equal answers are taken, the wait is a time
 window (traffic frames end a 500 ms read early), and a per-dongle budget
-bounds the read across matching control collections (review by @ahmedkhursheed23).
-Only ff42:0001 is used: #56's capture and #154's K65 dump identify it as the
-command/reply collection; the ff42:0002 notice channel is never written. The
+bounds the try-every-collection fallback (review by @ahmedkhursheed23). The
 Virtuoso RGB Wireless SE receiver (1b1c:0a40) runs the same exchange with two
 measured differences (#204, jeffpeng3's Linux proof-of-concept and the Windows
 probe): Windows refuses every report-id-prefixed write on it and takes the bare
@@ -75,10 +70,9 @@ return value, every frame with the time it took to arrive, a listen-only pass
 before writing anything (with the vendor app open it catches the vendor's own
 exchange), and - when the usual sequence yields nothing - the vendor app's
 fuller software-mode path. It also prints every collection's declared report
-lengths and tries the two sourced battery-frame shapes only on interface 4,
-ff42:0001. Report lengths are diagnostic metadata, not permission to construct
-another frame size or to write to another collection. A write Windows refuses
-locally looks exactly like a switched-off device. Normal polling keeps the short windows; a provider runs on the tray's
+lengths and tries the battery frame in each framing on every collection,
+because a write Windows refuses locally looks exactly like a switched-off
+device. Normal polling keeps the short windows; a provider runs on the tray's
 timer and must never block it.
 
 The Dark Core / Ironclaw mice and their dongles speak a second, unrelated
@@ -98,6 +92,20 @@ exchange as the Dark Core's dongle: route 0x09 asks the paired keyboard for prop
 as a little-endian uint16 from the reply's bytes 3-4, so this id mirrors that; no
 charge property is read, because that handler reports none. Confirmed on the
 reporter's own unit (#154): his test build run showed 100 % (`01 02 00 e8 03`).
+
+The M65 RGB Ultra Wireless's SLIPSTREAM receiver (1b1c:1ba6, #411) publishes the
+same ff42:0001/0002 pair and answers the same routed get-property exchange as
+the Dark Core's dongle. Its level is property 0x0F and its charge state is
+property 0x10, matching OpenLinkHub's m65rgbultraW package (state 1 charging,
+2 on battery, 3 full). When the mouse is plugged in, it moves to its cable
+identity 1b1c:1bb5, which publishes the same pair and answers level on target
+0x08 plus charge property 0x10 (the exchange OpenLinkHub's m65rgbultraWU
+package uses). The cable and receiver share one icon; the cable's charging
+reading wins while it is connected. Confirmed on the reporter's mouse in #411
+(test builds 4 and 5): receiver replies 01 02 00 d4 03 (98 %) and charge state 2; cable
+replies 00 02 00 3e 03 (83 %) with charge state 1, and 00 02 00 e8 03 (100 %)
+with state 3 (full). Both identities answered on ff42:0001 only, so the M65 ids
+are asked there and nowhere else, and the cable is asked on target 0x08 only.
 """
 from __future__ import annotations
 
@@ -114,11 +122,9 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 CORSAIR_VID = 0x1B1C
 
-# Windows collection from #28 and PR #176; HeadsetControl names interface 4.
-# https://github.com/HeyOkay/HaloBattery/issues/28#issuecomment-5857289829
-USAGE_PAGE = 0xFF42
-USAGE = 0x0001
-CONTROL_INTERFACE = 4
+USAGE_PAGE = 0
+USAGE = 0
+CONTROL_INTERFACE = 4           # the collection that carries the protocol
 
 RECEIVER_ENDPOINT = 0x08
 HEADSET_ENDPOINT = 0x09
@@ -277,6 +283,11 @@ def make_software_mode(endpoint: int) -> List[int]:
 # dongle is read.
 BRAGI_PIDS = {
     0x1B7F: "Corsair Dark Core RGB Pro SE",
+    # The M65's cable identity is listed before the receiver: while charging both
+    # can be present, and the receiver then has no battery answer. Asking the
+    # cable first avoids waiting out the receiver's read budget before the level.
+    0x1BB5: "Corsair M65 RGB Ultra Wireless",   # #411 the same mouse on its cable
+    0x1BA6: "Corsair M65 RGB Ultra Wireless",   # #411 SLIPSTREAM receiver
     0x2B07: "Corsair K65 PLUS Wireless",
     0x1BDC: "Corsair M75 Wireless",
     0x0A40: "Corsair Virtuoso RGB Wireless SE",
@@ -287,10 +298,13 @@ BRAGI_PIDS = {
 }
 # the pictogram each family member draws: the Dark Core is a mouse, the K65 PLUS a
 # keyboard; the Virtuoso ids are headsets
-BRAGI_KINDS = {0x1B7F: "mouse", 0x2B07: "keyboard", 0x1BDC: "mouse"}
+BRAGI_KINDS = {0x1B7F: "mouse", 0x1BA6: "mouse", 0x1BB5: "mouse",
+               0x2B07: "keyboard", 0x1BDC: "mouse"}
 # one icon per product: a headset's receiver and cable ids share the key
 BRAGI_KEYS = {
     0x1B7F: "corsair:1b7f",
+    0x1BA6: "corsair:m65",
+    0x1BB5: "corsair:m65",
     0x2B07: "corsair:2b07",
     0x1BDC: "corsair:1bdc",
     0x0A40: "corsair:virtuoso-se",
@@ -321,7 +335,7 @@ BRAGI_ROUTE_MOUSE = 0x09         # 0x08 | child 1: the paired mouse
 BRAGI_ROUTE_CHILD = 0x01         # the route the mouse's answers come back with
 BRAGI_CMD_GET = 0x02             # ckb-next: CMD_GET
 BRAGI_PROP_BATTERY = 0x0F        # ckb-next: BRAGI_BATTERY_LEVEL
-BRAGI_PROP_CHARGE = 0x10         # 1 = charging, 2 = on battery (#204, measured)
+BRAGI_PROP_CHARGE = 0x10         # 1 = charging, 2 = on battery, 3 = full (OpenLinkHub)
 BRAGI_PROP_HEARTBEAT = 0x12      # the session heartbeats (#204)
 BRAGI_PROP_FIRMWARE = 0x13       # the session's firmware query (#204)
 BRAGI_LEVEL_MAX = 1000           # tenths of a percent (765 -> 76 %)
@@ -343,8 +357,21 @@ BRAGI_BARE_PIDS = {0x0A40, 0x0A3E, 0x0A3D, 0x0A64, 0x0A62}
 BRAGI_SESSION_PIDS = {0x0A40}
 # the wired ids resolve their target the other way round: HeadsetControl's
 # resolveTarget tries 0x08 first on a wired id and 0x09 on a receiver, with the
-# other as the fallback (#570)
+# other as the fallback (#570).
 BRAGI_WIRED_PIDS = {0x0A3D, 0x0A62}
+BRAGI_XT_CABLE_PID = 0x0A62
+# The M65 RGB Ultra Wireless on its cable (1b1c:1bb5) uses the same Bragi
+# battery/charge properties as OpenLinkHub's m65rgbultraWU package, on target
+# 0x08 only: that package sends nothing to 0x09, and in #411 the 0x09 fallback
+# only ever got the error 01 02 06. So the cable has no fallback target.
+M65_CABLE_PID = 0x1BB5
+# The M65 ids answered only on ff42:0001 (#411, receiver and cable); they are
+# never asked on ff42:0002 or on any other collection.
+BRAGI_EXACT_PIDS = {0x1BA6, M65_CABLE_PID}
+# ids that answer the charge property 0x10. The Virtuoso family was measured in
+# #204; the wired M65 uses the same property in OpenLinkHub's m65rgbultraWU
+# package, and its Slipstream receiver uses m65rgbultraW's charge query (#411).
+BRAGI_CHARGE_PIDS = set(BRAGI_BARE_PIDS) | {0x1BB5, 0x1BA6}
 
 
 def bragi_request(prop: int = BRAGI_PROP_BATTERY,
@@ -387,7 +414,9 @@ def parse_bragi_raw(reply) -> Optional[int]:
     data = list(reply)
     if len(data) >= BRAGI_MSG_SIZE + 1:      # hidapi may hand the report id back
         data = data[1:]
-    if len(data) < 5 or data[0] != BRAGI_ROUTE_CHILD:
+    if len(data) < 5:
+        return None
+    if data[0] != BRAGI_ROUTE_CHILD:
         return None
     if data[1] == BRAGI_CMD_GET and data[2] == 0x00:            # the Dark Core
         return data[3] | (data[4] << 8)
@@ -403,6 +432,78 @@ def parse_bragi(reply) -> Optional[int]:
     if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
         return None
     return value // 10
+
+
+def parse_bragi_xt_cable(reply, *, charging: bool = False):
+    """The wired XT's own GET reply; only used for its target-08 requests.
+
+    HeadsetControl identifies 0A62 as the self-addressed XT, and maps target 08
+    to reply source 00 while checking report ID, command and status:
+    https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L370-L405
+    https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L440-L554
+    Receiver parsing deliberately keeps rejecting source 00.
+    """
+    if not reply:
+        return None
+    data = list(reply)
+    if len(data) == BRAGI_MSG_SIZE + 1 and data[0] == 0:
+        data = data[1:]
+    if len(data) != BRAGI_MSG_SIZE or data[:4] != [0x01, 0x00, 0x02, 0x00]:
+        return None
+    if any(type(byte) is not int or not 0 <= byte <= 255 for byte in data):
+        return None
+    value = int.from_bytes(bytes(data[4:8]), "little")
+    if charging:
+        return {1: True, 2: False}.get(value)
+    return value // 10 if value <= BRAGI_LEVEL_MAX else None
+
+
+
+def _parse_bragi_cable_raw(reply) -> Optional[int]:
+    """The wired M65 answer: report id 0, then ``02 00 <value LE16>``.
+
+    OpenLinkHub's m65rgbultraWU transfer reads the level at bytes 3..4 of
+    this buffer; the same shape is kept separate from the routed replies so
+    a receiver's own answer cannot be mistaken for the mouse's.
+    """
+    if not reply:
+        return None
+    data = list(reply)
+    if len(data) >= 5 and data[0] == 0x00 and data[1] == BRAGI_CMD_GET and data[2] == 0x00:
+        return data[3] | (data[4] << 8)
+    if len(data) >= 4 and data[0] == BRAGI_CMD_GET and data[1] == 0x00:
+        # Some Windows reads hand the report id back as a separate first byte.
+        return data[2] | (data[3] << 8)
+    return None
+
+
+def parse_bragi_cable(reply) -> Optional[int]:
+    """The battery level from a wired-M65 answer, or None."""
+    value = _parse_bragi_cable_raw(reply)
+    if value is None or value == 0 or value > BRAGI_LEVEL_MAX:
+        return None
+    return value // 10
+
+
+def parse_bragi_charge_cable_state(reply) -> Optional[int]:
+    """The wired M65's property 0x10 state, or None.
+
+    OpenLinkHub's m65rgbultraWU package treats byte 3 as a state code:
+    1 charging, 2 on battery, 3 full, 0 not charging. The value is kept
+    separate from the level shape because it is a state, not a percentage.
+    """
+    value = _parse_bragi_cable_raw(reply)
+    if value in (0, 1, 2, 3):
+        return value
+    return None
+
+
+def parse_bragi_charge_cable(reply) -> Optional[bool]:
+    """The charge state from the wired M65's property 0x10 answer, or None."""
+    state = parse_bragi_charge_cable_state(reply)
+    if state is None:
+        return None
+    return state == 1
 
 
 def void_request() -> List[int]:
@@ -505,32 +606,38 @@ class CorsairProvider(Provider):
                     pass
         return None
 
-    @staticmethod
-    def _control_collections(infos: List[dict]) -> List[dict]:
-        return [d for d in infos if d.get("interface_number") == CONTROL_INTERFACE
-                and (d.get("usage_page"), d.get("usage")) == (USAGE_PAGE, USAGE)]
-
     def _pick(self, infos: List[dict]) -> Optional[dict]:
-        collections = self._control_collections(infos)
-        if collections:
-            return collections[0]
-        self._diag.append(f"  no interface {CONTROL_INTERFACE} "
-                          f"{USAGE_PAGE:04x}:{USAGE:04x} collection; not opening HID")
-        return None
+        for d in infos:
+            if d.get("interface_number") == CONTROL_INTERFACE:
+                return d
+        self._diag.append(f"  no interface {CONTROL_INTERFACE} collection; "
+                          f"falling back to the first of {len(infos)}")
+        return infos[0] if infos else None
 
     def _pick_bragi(self, infos: List[dict]) -> List[dict]:
-        """Only the ff42:0001 command/reply collection from #56 and #154.
+        """The dongle's vendor collections, the one that answers first.
 
-        HeadsetControl's corsair_virtuoso_xt.hpp getCapabilityDetail(),
-        lines 97-102, identifies the same pair for the XT/SE devices:
-        https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/corsair_virtuoso_xt.hpp#L97-L102
+        It has two (0xFF42:0x0001 and 0xFF42:0x0002, from the #56 dump): the
+        exchange answers on usage 0x0001, while 0x0002 is its notice channel and
+        is not asked. When 0xFF42 is missing, the remaining collections are tried,
+        which then costs one read window.
         """
-        vend = [d for d in infos
-                if (d.get("usage_page"), d.get("usage")) == (BRAGI_VENDOR_PAGE, BRAGI_USAGE)]
+        if any(d.get("product_id") in BRAGI_EXACT_PIDS for d in infos):
+            # The M65 ids (#411): only the collection both identities answered on.
+            exact = [d for d in infos
+                     if (d.get("usage_page"), d.get("usage")) == (BRAGI_VENDOR_PAGE,
+                                                                  BRAGI_USAGE)]
+            if not exact:
+                self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} "
+                                  "collection; nothing sent")
+            return sorted(exact, key=lambda d: d.get("interface_number") or 99)
+        vend = [d for d in infos if d.get("usage_page") == BRAGI_VENDOR_PAGE]
         if not vend:
-            self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} collection; "
-                              "not opening HID")
-        return sorted(vend, key=lambda d: d.get("interface_number") or 99)
+            self._diag.append(f"  no {BRAGI_VENDOR_PAGE:04x} collection; trying all "
+                              f"{len(infos)}")
+            vend = list(infos)
+        return sorted(vend, key=lambda d: (0 if d.get("usage") == BRAGI_USAGE else 1,
+                                           d.get("interface_number") or 99))
 
     def _ask_bragi(self, dev, window: float, parse=parse_bragi) -> Optional[int]:
         """One ask's answer within a time window; the parsed value, or None."""
@@ -609,6 +716,8 @@ class CorsairProvider(Provider):
     @staticmethod
     def _routes(pid: int) -> Tuple[int, ...]:
         """The target order for a pid: the wired ids try themselves first (HSC #570)."""
+        if pid == M65_CABLE_PID:
+            return (BRAGI_ROUTE_DONGLE,)
         if pid in BRAGI_WIRED_PIDS:
             return (BRAGI_ROUTE_DONGLE, BRAGI_ROUTE_MOUSE)
         if pid in (0x0A3E, 0x0A64):
@@ -619,13 +728,27 @@ class CorsairProvider(Provider):
                       route: int = BRAGI_ROUTE_MOUSE) -> Optional[bool]:
         """The charge state on the receivers that report one (property 0x10),
         or None."""
-        if pid not in BRAGI_BARE_PIDS or time.monotonic() >= deadline:
+        if pid not in BRAGI_CHARGE_PIDS or time.monotonic() >= deadline:
             return None
         if not self._write_bragi(dev, BRAGI_PROP_CHARGE, route=route, pid=pid):
             return None
+        if pid == 0x1BB5:
+            state = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
+                                             deadline - time.monotonic()),
+                                    parse=parse_bragi_charge_cable_state)
+            if state is None:
+                self._diag.append("  no charge-state answer")
+                return None
+            self._diag.append("  charge state: " +
+                              {1: "charging", 2: "on battery", 3: "full"}
+                              .get(state, "not charging"))
+            return state == 1
+        charge_parse = parse_bragi_charge
+        if pid == BRAGI_XT_CABLE_PID and route == BRAGI_ROUTE_DONGLE:
+            charge_parse = lambda reply: parse_bragi_xt_cable(reply, charging=True)
         value = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
                                          deadline - time.monotonic()),
-                                parse=parse_bragi_charge)
+                                parse=charge_parse)
         if value is None:
             self._diag.append("  no charge-state answer")
             return None
@@ -664,8 +787,11 @@ class CorsairProvider(Provider):
             for i, route in enumerate(routes):
                 if not self._write_bragi(dev, route=route, pid=pid):
                     return None
+                parse = (parse_bragi_xt_cable
+                         if pid == BRAGI_XT_CABLE_PID and route == BRAGI_ROUTE_DONGLE
+                         else parse_bragi_cable if pid == M65_CABLE_PID else parse_bragi)
                 first = self._ask_bragi(dev, min(BRAGI_WINDOW_S,
-                                                 deadline - time.monotonic()))
+                                                 deadline - time.monotonic()), parse=parse)
                 if first is not None:
                     break
                 if i + 1 < len(routes):
@@ -677,7 +803,7 @@ class CorsairProvider(Provider):
             if not self._write_bragi(dev, route=route, pid=pid):
                 return None
             second = self._ask_bragi(dev, min(BRAGI_CONFIRM_WINDOW_S,
-                                              deadline - time.monotonic()))
+                                              deadline - time.monotonic()), parse=parse)
             if second is None:
                 self._diag.append("  (the confirming ask stayed silent; taking the "
                                   "single reading)")
@@ -798,19 +924,28 @@ class CorsairProvider(Provider):
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} {shown}")
         return caps_by_path
 
-    def _probe_matrix(self, infos: List[dict]) -> None:
-        """Probe the sourced 64/65-byte shapes on matching control collections.
+    def _probe_matrix(self, infos: List[dict],
+                      caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]]) -> None:
+        """Probe only: try the battery frame in each framing, on every collection.
 
-        #28 and PR #176 establish the two framing variants, not arbitrary
-        caps-sized reports or permission to write to sibling notice channels.
+        The first collection that takes a write is reused for one more ask, so the
+        next build can start from it. A write Windows refuses never reaches the
+        dongle, which is the state #28's logs were stuck in.
         """
-        self._diag.append("  probe: write shapes on documented control collections")
-        order = self._control_collections(infos)
+        self._diag.append("  probe: write shapes, collection by collection")
+        order = sorted(infos,
+                       key=lambda d: (0 if d.get("interface_number") == CONTROL_INTERFACE else 1,
+                                      0 if (d.get("usage_page") or 0) >= 0xFF00 else 1))
         frame = make_request(HEADSET_ENDPOINT, BATTERY_SUB, CMD_BATTERY)
         for d in order:
+            key = d.get("path")
+            key = bytes(key) if isinstance(key, (bytes, bytearray)) else None
+            caps = caps_by_path.get(key) if key is not None else None
             where = (f"iface={d.get('interface_number')} "
                      f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
             shapes = [("write65-rid0", frame), ("write64-norid", frame[1:])]
+            if caps and caps[1] and caps[1] != len(frame):
+                shapes.append((f"write{caps[1]}-rid0", (frame + [0x00] * caps[1])[:caps[1]]))
             dev = hid.device()
             try:
                 dev.open_path(d.get("path"))
@@ -1016,12 +1151,13 @@ class CorsairProvider(Provider):
             self._diag.append(f"[Corsair] pid={pid:04x} '{name}' "
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            caps_by_path: Dict[bytes, Optional[Tuple[int, int, int]]] = {}
             if in_probe():
                 self._diag.append(f"  path: {d.get('path', b'')!r}")
-                self._probe_caps(mine)
+                caps_by_path = self._probe_caps(mine)
             reply = self._query(d["path"])
             if reply is None and in_probe():
-                self._probe_matrix(mine)
+                self._probe_matrix(mine, caps_by_path)
             level = parse_level(reply)
             if level is None:
                 continue
@@ -1031,6 +1167,13 @@ class CorsairProvider(Provider):
         for pid, name in BRAGI_PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
+                continue
+            # The M65's cable and receiver can both be present while charging. The
+            # cable is asked first; when it answered, the receiver has no level to
+            # add and asking it would only spend its read budget.
+            if pid == 0x1BA6 and BRAGI_KEYS[0x1BB5] in found:
+                self._diag.append("[Corsair bragi] pid=1ba6 'Corsair M65 RGB Ultra "
+                                  "Wireless' - cable identity already read; receiver skipped")
                 continue
             self._diag.append(f"[Corsair bragi] pid={pid:04x} '{name}'")
             deadline = time.monotonic() + BRAGI_POLL_BUDGET_S
@@ -1061,15 +1204,12 @@ class CorsairProvider(Provider):
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
             if not mine:
                 continue
-            # HeadsetControl corsair_void_rich.hpp getCapabilityDetail(), lines
-            # 49-60: battery requests use ffc5:0001, never another vendor page.
-            # https://github.com/Sapd/HeadsetControl/blob/master/lib/devices/corsair_void_rich.hpp#L49-L60
-            vend = [d for d in mine
-                    if (d.get("usage_page"), d.get("usage")) == (VOID_VENDOR_PAGE, VOID_USAGE)]
+            vend = [d for d in mine if d.get("usage_page") == VOID_VENDOR_PAGE]
             self._diag.append(f"[Corsair void] pid={pid:04x} '{name}'"
-                              + ("" if vend else f" (no {VOID_VENDOR_PAGE:04x}:{VOID_USAGE:04x} "
-                                 "collection; not opening HID)"))
-            for d in sorted(vend, key=lambda x: x.get("interface_number") or 0):
+                              + ("" if vend else f" (no {VOID_VENDOR_PAGE:04x} collection)"))
+            for d in sorted(vend or mine,
+                            key=lambda x: (0 if x.get("usage") == VOID_USAGE else 1,
+                                           x.get("interface_number") or 0)):
                 self._diag.append(f"  iface={d.get('interface_number')} "
                                   f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
                 seen.add(d["path"])

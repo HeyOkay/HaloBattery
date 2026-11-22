@@ -116,7 +116,7 @@ class MchoseTargetTests(unittest.TestCase):
                 mock.patch.object(self.provider, '_read_collection',
                                   side_effect=AssertionError('audio received mouse frame')):
             result = self.poll(entries)
-        self.assertEqual(audio.call_args_list, [mock.call(b'dongle'), mock.call(b'headset')])
+        self.assertEqual(audio.call_args_list, [mock.call(b'dongle', 0x6008), mock.call(b'headset', 0x600A)])
         self.assertEqual([(s.key, s.level, s.kind) for s in result],
                          [('mchose:3837:6008', 90, 'headset')])
         self.device_factory.assert_not_called()

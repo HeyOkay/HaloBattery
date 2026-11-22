@@ -16,9 +16,6 @@ receiver never answered (#287: "no link" on every poll). Byte 3 is the charger s
 battery, 4 while charging - the only two values the captures contain - so it is reported as
 charging while 4 and not charging otherwise; a value never seen is logged rather than
 treated as a claim about the cable.
-
-Only the captured ff00:0001 collection on interface 1 is queried; the capture
-does not authorize a fallback to other vendor, keyboard or consumer collections.
 """
 from __future__ import annotations
 
@@ -39,8 +36,6 @@ NAME = "Alienware Pro Wireless Gaming Keyboard"
 KEY = f"alienware:{PID:04x}"
 
 VENDOR_PAGE = 0xFF00             # the receiver's vendor collection (#287 diagnostics)
-VENDOR_USAGE = 0x0001
-VENDOR_INTERFACE = 1             # Command Center capture: SET_REPORT wIndex 1
 REPORT_ID = 0x00                 # wValue 0x0300 in the capture
 REPORT_SIZE = 64                 # the frame itself, without the report id
 WIRE_SIZE = REPORT_SIZE + 1      # what hidapi is handed: [report id, frame...]
@@ -82,11 +77,9 @@ def parse_reply(frame) -> Optional[Tuple[int, bool]]:
 def pick(infos: List[dict]) -> Optional[dict]:
     """The vendor collection; the keyboard/consumer ones carry no battery exchange."""
     for d in infos:
-        if (d.get("usage_page") == VENDOR_PAGE
-                and d.get("usage") == VENDOR_USAGE
-                and d.get("interface_number") == VENDOR_INTERFACE):
+        if d.get("usage_page") == VENDOR_PAGE:
             return d
-    return None
+    return infos[0] if infos else None
 
 
 class AlienwareProvider(Provider):
@@ -106,13 +99,11 @@ class AlienwareProvider(Provider):
         except Exception as e:  # pragma: no cover
             log.warning("hid.enumerate(alienware): %s", e)
             return []
-        mine = [d for d in infos if d.get("vendor_id") == VID and d.get("product_id") == PID]
+        mine = [d for d in infos if d.get("product_id") == PID]
         if not mine:
             return []
         d = pick(mine)
-        if d is None:
-            self._diag.append("[Alienware] captured ff00:0001 collection on interface 1 "
-                              "not found; no battery request sent")
+        if d is None:  # pragma: no cover - pick() only returns None for an empty list
             return []
         self._diag.append(f"[Alienware] pid={PID:04x} '{NAME}' "
                           f"iface={d.get('interface_number')} "
@@ -153,6 +144,13 @@ class AlienwareProvider(Provider):
                     return parsed
         except Exception as e:  # pragma: no cover - hidapi raises OSError
             self._diag.append(f"  read: {e}")
+        finally:
+            # hidapi closed an unreferenced device when it was collected; the native
+            # transport keeps every device it opened until close() is called.
+            try:
+                dev.close()
+            except Exception:
+                pass
         return None
 
     def diagnostics(self) -> List[str]:

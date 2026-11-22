@@ -11,7 +11,7 @@ namespace HaloBattery.Settings
         public void ApplyState(UiState state) => throw new InvalidOperationException("Unexpected UI");
         public void ShowSettingsWindow(string? page, string? key, long? id) => throw new InvalidOperationException("Unexpected UI");
         public void NavigateFromBackend(string page, string? key) => throw new InvalidOperationException("Unexpected UI");
-        public void ApplyPreview(string? key, string png) => throw new InvalidOperationException("Unexpected UI");
+        public void ApplyPreview(string? key, string png, System.Text.Json.JsonElement? transition = null) => throw new InvalidOperationException("Unexpected UI");
         public void ApplyIconCatalogResponse(System.Text.Json.JsonElement message) => throw new InvalidOperationException("Unexpected UI");
         public Task ShutdownSettingsWindowAsync() => throw new InvalidOperationException("Unexpected UI");
     }

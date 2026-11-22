@@ -69,8 +69,15 @@ def select_endpoint(inventory):
                 or tuple(info.get(field) for field in fields) != (VID, PID, 2, 0xFFFF, 0)):
             continue
         path = info.get("path")
-        if isinstance(path, (bytes, str)) and path:
-            selected[path.lower()] = info
+        if not isinstance(path, (bytes, str)):
+            continue
+        try:
+            normalized = path.decode("utf-8") if isinstance(path, bytes) else path
+            normalized.encode("utf-8")
+        except UnicodeError:
+            continue
+        if normalized and "\0" not in normalized:
+            selected[normalized.casefold()] = info
     if len(selected) != 1:
         raise _DiagnosticError("expected exactly one Tachi receiver status endpoint")
     return next(iter(selected.values()))

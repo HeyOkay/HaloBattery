@@ -4,7 +4,7 @@ Protocol source (MIT), marcinjakubowski/zoneout at
 49ebedb178f10c84c7e42e0e946c0ac971d08376:
   src/zoneout/protocol.py L8-10,L33-43: exact 054c:0fa8 and status offsets.
   src/zoneout/device.py L139-167: 64-byte output query 06, checksum A2,
-    then input reads; SPECS.md documents report ID 2, magic 96 C3, category 41.
+    then input reads. SPECS.md defines charging 0/1 and the status offsets.
 https://github.com/marcinjakubowski/zoneout/blob/49ebedb178f10c84c7e42e0e946c0ac971d08376/src/zoneout/device.py#L139-L167
 The Windows collection (interface 5 FF04:0001) and test-build level confirmation
 are in HaloBattery #387. Charging decoding is sourced, but the reporter did not
@@ -37,14 +37,18 @@ POLL_BUDGET = 3.0
 def parse_status(data) -> Optional[Tuple[int, bool, bool]]:
     """Return level, charging, charging-known for a complete audio reply.
 
-    The source has no response sequence/checksum validation. Do not invent one
-    or require the response to echo the entire request header.
+    The source has no response sequence/checksum validation or verified status
+    response category. Do not require it to echo the request's magic/category.
     """
     if not isinstance(data, (bytes, bytearray, list, tuple)) or len(data) != REPORT_LEN:
         return None
     if any(type(value) is not int or not 0 <= value <= 255 for value in data):
         return None
-    if data[0] != 0x02 or bytes(data[6:10]) != bytes.fromhex("96 C3 41 06"):
+    if data[0] != 0x02 or data[9] != 0x06:
+        return None
+    # Our exact outgoing query is not a battery measurement. Reject its echo
+    # without inventing any fixed header for the actual status response.
+    if bytes(data) == QUERY:
         return None
     level, charge = data[15], data[14]
     if level > 100:

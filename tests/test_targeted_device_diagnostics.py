@@ -13,8 +13,8 @@ from halo import diagnostic_guard as G
 from halo.hid_transport import HidDevice, ReportCaps, TransportRuntime
 import test_device_diagnostics_entrypoint as entrytests
 import test_experimental_hid as native
-import test_aj159_native as aj159tests
-import test_sony_h9ii as sonytests
+import test_diagnostic_aj159 as aj159tests
+import test_device_387_sony_h9ii as sonytests
 import test_logitech_pro_x3 as x3tests
 from providers import ajazz, sony_h9ii, logitech_centurion
 
@@ -37,7 +37,7 @@ def endpoint(device, path=b"selected-receiver", **changes):
 class AdapterSelectionTests(unittest.TestCase):
     def setUp(self):
         self.reader = Mock()
-        self.reader._ask_aj159.return_value = (70, True)
+        self.reader._diagnose_aj159.return_value = (70, True)
         self.reader._read.return_value = (60, False, True)
         self.reader._read_x3.return_value = (78, False, False)
         self.reader.poll.side_effect = AssertionError("family poll must never run")
@@ -52,7 +52,7 @@ class AdapterSelectionTests(unittest.TestCase):
         return tester.probe_experimental(acknowledged=True), tester
 
     def assert_no_read(self):
-        self.reader._ask_aj159.assert_not_called()
+        self.reader._diagnose_aj159.assert_not_called()
         self.reader._read.assert_not_called()
         self.reader._read_x3.assert_not_called()
         self.reader.poll.assert_not_called()
@@ -73,7 +73,7 @@ class AdapterSelectionTests(unittest.TestCase):
         self.loader.assert_not_called()
 
     def test_single_exact_target_calls_only_its_existing_reader(self):
-        for device, level, method in (("aj159", 70, "_ask_aj159"),
+        for device, level, method in (("aj159", 70, "_diagnose_aj159"),
                                       ("inzone-h9ii", 60, "_read"),
                                       ("logitech-pro-x3", 78, "_read_x3")):
             self.reader.reset_mock()
@@ -85,7 +85,7 @@ class AdapterSelectionTests(unittest.TestCase):
             result, _ = self.probe(device, entries)
             self.assertEqual(result["percentage"], level)
             self.module.hidlist.enumerate.assert_called_once_with(TARGETS[device][0])
-            for other in ("_ask_aj159", "_read", "_read_x3", "poll"):
+            for other in ("_diagnose_aj159", "_read", "_read_x3", "poll"):
                 if other != method:
                     getattr(self.reader, other).assert_not_called()
             called = getattr(self.reader, method)
@@ -118,7 +118,7 @@ class AdapterSelectionTests(unittest.TestCase):
 
     def test_no_reading_or_malformed_reader_results_never_become_valid_level(self):
         for device in TARGETS:
-            method = {"aj159": "_ask_aj159", "inzone-h9ii": "_read", "logitech-pro-x3": "_read_x3"}[device]
+            method = {"aj159": "_diagnose_aj159", "inzone-h9ii": "_read", "logitech-pro-x3": "_read_x3"}[device]
             values = [(None, True), (True, True), (101, True), (70, False)] if device == "aj159" else [
                 None, (None, False, False), (True, False, True), (-1, False, True),
                 (101, False, True), (70, 0, True), (70, False, 1), (70,)]
@@ -129,7 +129,7 @@ class AdapterSelectionTests(unittest.TestCase):
 
     def test_unknown_charge_and_percentage_boundaries_are_preserved(self):
         for device in TARGETS:
-            method = {"aj159": "_ask_aj159", "inzone-h9ii": "_read", "logitech-pro-x3": "_read_x3"}[device]
+            method = {"aj159": "_diagnose_aj159", "inzone-h9ii": "_read", "logitech-pro-x3": "_read_x3"}[device]
             for level in (0, 100):
                 getattr(self.reader, method).return_value = ((level, True) if device == "aj159"
                                                            else (level, False, False))
@@ -179,7 +179,7 @@ class TargetedEntryPointTests(entrytests.DiagnosticEntryPointTests):
                               "--diagnostic-output", str(path)])
             self.assertEqual(stopped.exception.code, 0)
             result = json.loads(path.read_text(encoding="utf-8"))
-            self.assertFalse(result["release_hold"])
+            self.assertEqual(result["release_hold"], device == "logitech-pro-x3")
             self.assertEqual(result["freshness"], "unverified")
             self.provider_factory.assert_called_once_with(device)
             self.runtime.provider_scope.assert_called_once_with(device + "-local-tester")

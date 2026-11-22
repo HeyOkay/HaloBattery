@@ -107,19 +107,20 @@ class BarracudaXCableTest(unittest.TestCase):
 
 
 class BarracudaXReceiverTest(unittest.TestCase):
-    """0550's whole-build report does not authorize a PA exchange (#332, #264)."""
+    """Receiver 1532:0550 (#332, #264): the mouse request fails, so the PA frames are tried."""
 
     def info(self):
         return dict(product_id=0x0550, vendor_id=0x1532, serial_number="", path=b"p",
                     product_string="Razer Barracuda X 2.4", interface_number=3,
                     usage_page=0xFF00, usage=0x0001)
 
-    def test_unconfirmed_pa_is_held_when_the_mouse_request_fails(self):
+    def test_falls_back_to_pa_when_the_mouse_request_fails(self):
         p = razer.RazerProvider()
         with patch("providers.razer.hidlist.enumerate", return_value=[self.info()]),                 patch.object(p, "_poll_group", return_value=None),                 patch.object(p, "_poll_pa", return_value=(razer.STATUS_OK, 80, True)) as pa:
             out = p.poll()
-        self.assertEqual(out, [])
-        pa.assert_not_called()
+        self.assertEqual([(d.name, d.level, d.charging) for d in out],
+                         [("Razer Barracuda X 2.4", 80, True)])
+        pa.assert_called_once()
 
     def test_a_working_mouse_style_reply_is_kept(self):
         p = razer.RazerProvider()

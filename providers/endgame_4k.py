@@ -29,14 +29,23 @@ def select_endpoint(inventory, transport):
     pids = (RECEIVER,) if transport == "receiver" else MODELS
     selected = {}
     for info in inventory:
+        if not isinstance(info, dict):
+            continue
         if (any(type(info.get(field)) is not int for field in
                 ("vendor_id", "product_id", "usage_page", "usage"))
                 or info.get("vendor_id") != VID or info.get("product_id") not in pids
                 or (info.get("usage_page"), info.get("usage")) != (0xFF01, 2)):
             continue
         path = info.get("path")
-        if isinstance(path, (bytes, str)) and path:
-            selected[path.lower()] = info
+        if not isinstance(path, (bytes, str)):
+            continue
+        try:
+            normalized = path.decode("utf-8") if isinstance(path, bytes) else path
+            normalized.encode("utf-8")
+        except UnicodeError:
+            continue
+        if normalized and "\0" not in normalized:
+            selected[normalized.casefold()] = info
     if len(selected) != 1:
         raise ProtocolError("expected exactly one endpoint on the selected transport")
     return next(iter(selected.values()))
@@ -78,14 +87,9 @@ class Endgame4kProvider(Provider):
             if wired and pid != endpoint["product_id"]:
                 raise ProtocolError("cabled identity does not match selected device")
             phase = "battery"
-            samples = []
-            for _ in range(3):
-                samples.append(battery(reader.exchange(BATTERY)))
-                if wired or (len(samples) > 1 and samples[-1] == samples[-2]):
-                    break
-            else:
-                raise ProtocolError("battery samples did not agree")
-            # Agreement is a noise filter, not command/reply correlation.
+            # One explicitly acknowledged B4 only. Repeated stale replies cannot
+            # establish freshness; never resend or guess a recovery exchange.
+            samples = [battery(reader.exchange(BATTERY))]
             return {"model": MODELS[pid], "mouse_pid": f"{pid:04x}",
                     "firmware_bytes": firmware, "transport": transport,
                     "percentage": None if wired else samples[-1],

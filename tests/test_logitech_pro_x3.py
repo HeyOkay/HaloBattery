@@ -15,6 +15,7 @@ import test_experimental_hid as native
 from halo.hid_transport import HidDevice, ReportCaps, TransportRuntime
 from halo.native_io import Completion
 from providers import logitech_centurion as provider
+from halo.device_test_adapters import TargetedDeviceTester
 
 
 def wire(hexadecimal):
@@ -95,14 +96,17 @@ class ProX3Tests(unittest.TestCase):
         factory = mock.Mock(side_effect=devices)
         with mock.patch.object(provider, 'hid', SimpleNamespace(device=factory)), \
                 mock.patch.object(provider.hidlist, 'enumerate', return_value=entries):
-            result = reader.poll()
+            with mock.patch("halo.device_test_adapters._load_provider", return_value=(provider, reader)):
+                reading = TargetedDeviceTester("logitech-pro-x3").probe_experimental(acknowledged=True)
+        result = [] if reading is None else [SimpleNamespace(
+            level=reading["percentage"], charging=bool(reading["charging"]),
+            charging_known=reading["charging_known"])]
         return result, factory
 
     def test_captured_78_uses_exact_three_read_requests_without_features_or_setup(self):
         device = Device()
         [status], _ = self.poll(device)
         self.assertEqual((status.level, status.charging, status.charging_known), (78, False, True))
-        self.assertEqual((status.online, status.source, status.kind), (True, 'logitech', 'headset'))
         self.assertEqual(device.writes, REQUESTS)
         self.assertEqual(device.reads, [(64, 100)] * 5)
         self.assertTrue(device.closed)
@@ -210,21 +214,20 @@ class ProX3Tests(unittest.TestCase):
         [old], _ = self.poll(first, reader=reader)
         [current], _ = self.poll(second, reader=reader)
         self.assertEqual((old.level, current.level), (78, 43))
-        self.assertEqual(old.key, current.key)
         self.assertEqual(second.writes[0], REQUESTS[0])
         self.assertEqual(second.writes[1], wire('50 23 0a 00 07 11 00 05 00 00 01 01 04'))
         self.assertEqual(second.writes[2], wire('50 23 08 00 07 11 00 03 00 09 01'))
         self.assertEqual(reader._features, {b'x2': (3, {0x0104: 4})})
 
-    def test_two_receivers_with_duplicate_serials_have_separate_stable_path_keys(self):
-        reader = provider.LogitechCenturionProvider()
-        result, _ = self.poll([Device(), Device(replies(43))],
-                              [info(b'X3-A'), info(b'X3-B')], reader)
-        self.assertEqual([s.level for s in result], [78, 43])
-        self.assertNotEqual(result[0].key, result[1].key)
-        [again], _ = self.poll(Device(), [info(b'x3-a')], reader)
-        self.assertEqual(result[0].key, again.key)
-        self.assertEqual(reader.legacy_key_aliases(), {})
+    def test_two_receivers_refuse_diagnostic_and_normal_x3_stays_held(self):
+        result, factory = self.poll([], [info(b"X3-A"), info(b"X3-B")])
+        self.assertEqual(result, [])
+        factory.assert_not_called()
+        self.assertEqual(provider.ENABLED_PIDS, frozenset((0x0AF7,)))
+        with mock.patch.object(provider.hidlist, "enumerate", return_value=[info()]), mock.patch.object(provider, "hid") as backend:
+            self.assertEqual(provider.LogitechCenturionProvider().poll(), [])
+            backend.device.assert_not_called()
+
 
     def test_duplicate_enumeration_per_receiver_sends_only_three_requests(self):
         device = Device()
@@ -267,7 +270,7 @@ class NativeProX3Tests(unittest.TestCase):
                     device=lambda: HidDevice(runtime, metadata=metadata))), \
                     mock.patch.object(provider.hidlist, 'enumerate', return_value=[info()]):
                 with runtime.provider_scope('logitech_centurion') as scope:
-                    self.assertEqual(provider.LogitechCenturionProvider().poll(), [])
+                    self.assertIsNone(TargetedDeviceTester("logitech-pro-x3").probe_experimental(acknowledged=True))
             self.assertFalse(scope.failed, scope.error)
             self.assertEqual(api.writes, REQUESTS[:2])
             self.assertEqual(api.read_calls, 3)  # root, ACK, one reused silent read
@@ -292,7 +295,7 @@ class NativeProX3Tests(unittest.TestCase):
                     device=lambda: HidDevice(runtime, metadata=metadata))), \
                     mock.patch.object(provider.hidlist, 'enumerate', return_value=[info()]):
                 with runtime.provider_scope('logitech_centurion') as scope:
-                    self.assertEqual(provider.LogitechCenturionProvider().poll(), [])
+                    self.assertIsNone(TargetedDeviceTester("logitech-pro-x3").probe_experimental(acknowledged=True))
             self.assertTrue(scope.failed)
             self.assertIn('read error', scope.error)
             self.assertEqual(api.writes, REQUESTS[:1])
@@ -323,8 +326,8 @@ class NativeProX3Tests(unittest.TestCase):
                     with mock.patch.object(provider, 'hid', SimpleNamespace(device=lambda: device)), \
                             mock.patch.object(provider.hidlist, 'enumerate', return_value=[info()]):
                         with runtime.provider_scope('logitech_centurion') as scope:
-                            [status] = provider.LogitechCenturionProvider().poll()
-                    self.assertEqual(status.level, 78)
+                            result = TargetedDeviceTester("logitech-pro-x3").probe_experimental(acknowledged=True)
+                    self.assertEqual(result["percentage"], 78)
                     self.assertFalse(scope.failed, scope.error)
                     self.assertEqual(api.writes, [r.ljust(size, b'\0') for r in REQUESTS])
                     self.assertEqual(api.read_sizes, [size] * 5)
@@ -353,7 +356,7 @@ class NativeProX3Tests(unittest.TestCase):
                     device=lambda: HidDevice(runtime, metadata=metadata))), \
                     mock.patch.object(provider.hidlist, 'enumerate', return_value=[info()]):
                 with runtime.provider_scope('logitech_centurion'):
-                    self.assertEqual(provider.LogitechCenturionProvider().poll(), [])
+                    self.assertIsNone(TargetedDeviceTester("logitech-pro-x3").probe_experimental(acknowledged=True))
             self.assertEqual(api.writes, [REQUESTS[0] + b'\0'])
         finally:
             self.assertTrue(runtime.close(.5))

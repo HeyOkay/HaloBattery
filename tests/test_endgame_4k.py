@@ -107,7 +107,6 @@ class ProviderTests(unittest.TestCase):
                          ("XM2w 4k", 75, None, False, "unverified"))
         self.assertEqual([bytes(call.args[0]) for call in self.device.send_feature_report.call_args_list],
                          [bytes.fromhex("a1 0e 00 00") + bytes(60),
-                          bytes.fromhex("a1 b4 00 00") + bytes(60),
                           bytes.fromhex("a1 b4 00 00") + bytes(60)])
         self.device.get_feature_report.assert_called_with(0xA1, 64)
         self.device.close.assert_called_once_with()
@@ -201,9 +200,9 @@ class ProviderTests(unittest.TestCase):
     def test_busy_then_success_continues_without_resending_identity(self):
         self.device.get_feature_report.side_effect = [reply(status=3), ORIGINAL_ID, LEVEL75, LEVEL75]
         self.assertEqual(self.probe()["percentage"], 75)
-        self.assertEqual(self.device.get_feature_report.call_count, 4)
+        self.assertEqual(self.device.get_feature_report.call_count, 3)
         self.assertEqual([call.args[0][1] for call in self.device.send_feature_report.call_args_list],
-                         [14, 180, 180])
+                         [14, 180])
 
     def test_failed_status_never_uses_stale_valid_looking_payload(self):
         self.device.get_feature_report.side_effect = [reply(95, 8)]
@@ -217,17 +216,17 @@ class ProviderTests(unittest.TestCase):
         self.device.get_feature_report.side_effect = [reply(95, 8)]
         self.assertIsNone(self.probe())
 
-    def test_two_identical_old_battery_successes_remain_explicitly_unverified(self):
+    def test_single_old_battery_success_remains_explicitly_unverified(self):
         # Reproduces #428's known limit, rather than blessing agreement as fresh.
         result = self.probe()
-        self.assertEqual(result["samples"], [75, 75])
+        self.assertEqual(result["samples"], [75])
         self.assertEqual(result["freshness"], "unverified")
         self.assertEqual(self.provider.poll(), [])
 
-    def test_unstable_three_samples_rejected_and_budget_prevents_followup(self):
+    def test_does_not_resend_for_consensus_and_budget_prevents_followup(self):
         self.device.get_feature_report.side_effect = [ORIGINAL_ID, reply(30), reply(35), reply(30)]
-        self.assertIsNone(self.probe())
-        self.assertEqual(self.device.send_feature_report.call_count, 4)
+        self.assertEqual(self.probe()["percentage"], 30)
+        self.assertEqual(self.device.send_feature_report.call_count, 2)
         self.device.reset_mock()
         def expired_send(data):
             self.clock = 10

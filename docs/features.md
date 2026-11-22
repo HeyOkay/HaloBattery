@@ -5,7 +5,7 @@
 
 ## The icon
 
-- **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. Controller logos are chosen manually; the default is a generic controller.
+- **Centre**: Lucide device pictograms inside a thin circular ring (1 logical pixel at 16×16). The pictogram can be turned off or replaced by the percentage. A device that only reports coarse steps shows its number like any other device; the tooltip and status file keep the “about NN%” wording. A level the device did not report as a number (a wired controller shown as full on its cable, a level remembered from before the cable was plugged in) keeps the pictogram. Controller logos are chosen manually and the default is a generic controller.
 - **Custom pictograms**: the Devices page can search a reviewed [Iconify catalogue](iconify.md), preview a symbol inside the real ring and save it for one device. Monochrome symbols follow the theme; colored artwork keeps its original colors, including fixed parts of mixed icons. Selections work offline. Search uses pages of 50 candidates with round arrow and number buttons; neighboring previews are prepared ahead of time. Temporary gallery caches are cleared when Settings closes. Complete attribution and licenses are available in Settings; the existing percentage and ring-only modes retain priority.
 - **Ring thickness**: choose the current thin ring or the classic thicker ring on the Tray icons page. The same style applies to previews, charging animations and the no-device indicator.
 - **Display scaling**: tray artwork is rendered at the taskbar's physical icon size and refreshed when its DPI changes, keeping the thin ring and pictograms sharp.
@@ -24,6 +24,14 @@ new measurement. Refresh retries a paused provider. No process is started for
 each device or protocol. Drivers that refuse cancellation can still occupy the
 fixed worker budget; Diagnostics distinguishes unavailable readings from an
 ordinary sleeping device.
+
+The native HID adapter keeps the last transport diagnostic as text for
+`device.error()`. Reading it performs no native call, including before opening
+or after closing a device; a successful transport operation clears it to
+`Success`. The bounded adapter deliberately lets a `send_feature_report()`
+deadline raise `TimeoutError` (an `OSError`) instead of returning HIDAPI's `-1`.
+Callers keep that failure distinct from a valid reply while cancellation and
+native handle cleanup continue under the existing owner.
 
 If the native HID module is missing or blocked, HaloBattery explains the failure
 and keeps Settings and Windows Bluetooth support available. USB/2.4 GHz support
@@ -103,8 +111,8 @@ panel state are restored before the window is shown. Closing Settings releases i
 the saved page and scroll position while the app splash covers loading.
 Window preferences are stored natively in `settings-window.json` inside the
 active installed or portable profile. Settings remain available when no devices are
-connected. The interface keeps seven languages: English, Spanish,
-French, Japanese, Russian, Simplified Chinese and Traditional Chinese.
+connected. The interface supports nine languages: English, Spanish,
+French, Japanese, Kazakh, Ukrainian, Russian, Simplified Chinese and Traditional Chinese.
 
 Scrolling beyond the top or bottom of a settings page fills a small neutral
 ring. Continuing past its resistance threshold opens the adjacent page; a pause
@@ -146,42 +154,29 @@ back, while the ring fades, slides and scales through native Composition animati
   for Rainmeter, Stream Deck and scripts. It includes device `name`, `level`,
   `charging`, `online`, `kind`, `seconds_left` and tooltip `text`, plus `running`
   and `updated_unix`. Turning the option off deletes the file.
-- **About**: version, diagnostics, the data folder, project page and issue reporting.
-
-## Opt-in device diagnostics
-
-The packaged EXE can run the [Endgame 4K](protocols.md#endgame-gear-xm2w-4k-op1w-4k-4k-dongle)
-and [Lamzu Tachi](protocols.md#lamzu-tachi-explicit-aurora-diagnostic) testers
-without Python. These checks require `--acknowledge-experimental` and an explicit
-new `--diagnostic-output` JSON file. They do not load the normal app or modify its
-profile, and they do not enable those devices in normal polling. Protocol notes
-include commands and the remaining hardware/freshness limits.
-All device diagnostics, including Endgame and Tachi, acquire the same instance
-guard as ordinary startup before loading HID or constructing a target reader.
-They refuse another running HaloBattery or diagnostic, and retain the guard
-until process exit if native cleanup cannot be confirmed.
-
-AJ159, INZONE H9 II and PRO X3 also have one-device receiver checks. They reuse
-the existing sourced readers without querying other models in the same family.
-Close HaloBattery and the manufacturer's software first; all diagnostics
-refuse to run while another HaloBattery or diagnostic instance is active. Connect only one
-matching receiver and use a new report filename for each run:
-
-```powershell
-.\HaloBattery.exe --diagnose-device aj159 --acknowledge-experimental --diagnostic-output .\aj159-test.json
-.\HaloBattery.exe --diagnose-device inzone-h9ii --acknowledge-experimental --diagnostic-output .\h9ii-test.json
-.\HaloBattery.exe --diagnose-device logitech-pro-x3 --acknowledge-experimental --diagnostic-output .\pro-x3-test.json
-```
-
-The JSON distinguishes an accepted percentage, unknown charging and failed
-native cleanup. It does not establish reply freshness or confirm hardware
-compatibility. AJ179, H9 and PRO X2 are not queried by these targeted checks.
-Kysona Uranus and Stealth 600X remain excluded until their exact exchanges
-are supported by evidence.
+- **About**: version, diagnostics, the data folder, the website, the Discord
+  community, the GitHub page, issue reporting, and authors and licenses for the
+  interface fonts, Lucide glyphs and downloaded icons.
 
 ## Updates
 
 The app checks for a new release once a day (or at once with **Settings → General → Check for updates now**) and adds **Update to vX.Y.Z** to the menu when there is one. One click downloads it, checks it, closes the app, replaces the program files and starts the new version, which then shows what is new in a small window. Settings, the battery history and `portable.txt` are kept. From version 1.14.0 or older, or when the app sits in a folder it cannot write to (e.g. Program Files), update by hand: tray menu → **Exit**, then replace the folder; **Start with Windows** follows the new copy. If you used the old single-file `HaloBattery.exe`, delete it.
+
+Before replacing files, the updater saves `.halobattery-update.json` beside the
+executable. Startup removes only that transaction’s `.old` backups after it
+verifies a completed install or complete rollback against the executable hash
+and an independent stage-local ownership receipt. The receipt binds the owning
+app, staging root, file inventory and transaction token; an edited path alone
+cannot authorize deletion. Cleanup keeps that receipt until other staged files
+are removed, so a locked file can be retried. If the receipt is lost after all
+backups were already removed, startup finishes the transaction without deleting
+the unowned staging remainder; inspect that remainder manually.
+Interrupted updates, failed restores and unreadable recovery records keep the
+backups and downloaded files, and block another in-app install. Exit the app
+before repairing or restoring those files by hand; keep the recovery record
+until recovery is complete. Old backups without a transaction record are also
+left in place for manual inspection. Saved Iconify artwork and native window
+settings are preserved during replacement.
 
 ## SmartScreen and antivirus warnings
 
@@ -191,14 +186,59 @@ Windows SmartScreen may warn about an unrecognized app on first launch, because 
 
 To keep the settings, the log and the battery history next to the app instead of in `%APPDATA%\HaloBattery` (for a USB stick or a folder you sync), create an empty file named `portable.txt` in the app's folder, next to `HaloBattery.exe` (or `halo_battery.pyw` when running from source), and restart the app. The folder must be writable: if it is not (e.g. inside `C:\Program Files`), the app keeps using `%APPDATA%\HaloBattery`. Settings are not moved over by themselves: copy `config.json` from `%APPDATA%\HaloBattery` to keep them. **Start with Windows** still adds an entry to the registry of the current user.
 
+Setup and uninstall close only the app and Settings from the selected install
+folder. Uninstall preserves settings, history, custom icons and other user files
+stored beside the executable. Deleting `%APPDATA%\HaloBattery` remains an
+explicit choice in interactive uninstall; silent uninstall keeps that data.
+Uninstall removes the installer’s recorded program files and `_internal`
+contents. An additional top-level program file introduced by an in-app update
+can remain if it was never recorded by Setup; the install folder is removed
+only when empty. Inspect such leftovers manually rather than deleting the
+folder recursively, which would also remove portable user data.
+
 ## Run from source
 
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
 2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
-3. Install .NET SDK 10.0.401 for the native settings window. From the repository
+3. Install .NET SDK 10.0.404 for the native settings window. From the repository
    root, run `python -m pip install -r requirements.txt`,
    `python tools/make_icon.py halo.ico`, then `./scripts/build_settings.ps1`
    in PowerShell. Keep its `.build/settings-ui` output in place.
 4. Run `scripts\install_and_run.bat`, then right-click the tray icon → **Settings… → General → Start with Windows**.
 
 `scripts\probe.bat` polls once and prints what was found in a console window. `scripts\build_exe.bat` builds the app yourself into `dist\HaloBattery`. Releases are built automatically: pushing a tag like `v1.8.0` makes GitHub Actions build the app and attach the zip (`.github/workflows/release.yml`).
+
+## Phone Link mobile battery
+
+Phone Link appears under Device types. Its selected mobile device appears in
+the tray and Devices with a phone pictogram when its identity can be proved.
+This source is independent of Windows Bluetooth battery reporting: no Bluetooth
+connection is required by HaloBattery, and Phone Link may obtain status over Wi-Fi.
+
+It reads the Windows 11 Phone Link Start-menu companion cache, not the phone.
+Only the selected companion device's battery is available; this does not provide
+real-time telemetry or every linked phone's level. An unchanged, previously
+accepted level remains visible as **last reported**, rather than disappearing
+after five minutes. The ring and percentage stay visible; the source is marked
+offline/unconfirmed and old charging animation, alerts and use-time estimates
+are disabled. On a cold start, a cache older than three hours cannot seed a
+reading. This is an admission policy, not a measurement or heartbeat guarantee.
+Missing/unsupported cache or ambiguous identity clears admission. HaloBattery
+will not launch Phone Link or change device settings.
+
+The initial card parser recognizes the observed English status format even
+when HaloBattery uses another UI language. Other card formats are refused.
+Unknown charger state is shown as unknown and cannot trigger battery alerts or
+use-time estimates. See [source and verification limits](protocols.md#phone-link-selected-cache).
+
+Ongoing updates depend on Phone Link's background synchronization. HaloBattery
+does not keep it alive or refresh it by opening its window. If Phone Link omits
+charging status, HaloBattery cannot reconstruct it from the battery percentage.
+
+### Guarded device diagnostics
+
+Explicit [local diagnostic commands](device-diagnostics.md) are separate from
+normal polling and require acknowledgement before opening hardware. Reports
+contain sanitized status and phase information, not raw HID paths or serials.
+Families with no enabled normal target are hidden from provider switches;
+saved preferences are retained and mixed families remain available.

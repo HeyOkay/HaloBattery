@@ -16,9 +16,6 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
-
-# Independent wire fixtures: HeadsetControl corsair_void_v2w.hpp; Virtuoso reply captures in HaloBattery #204.
-# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -37,8 +34,8 @@ def entry(pid, path, iface, page, usage, name=DONGLE):
             "path": path, "product_string": name, "serial_number": ""}
 
 
-def bragi_reply(value=550, route=0x01, cmd=0x02, err=0x00,
-                report_id=False, size=64):
+def bragi_reply(value=550, route=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET, err=0x00,
+                report_id=False, size=C.BRAGI_MSG_SIZE):
     """A reply frame of the shape the dongle sends; value is in tenths of a percent."""
     payload = bytearray(size)
     payload[0] = route
@@ -49,12 +46,12 @@ def bragi_reply(value=550, route=0x01, cmd=0x02, err=0x00,
     return ([0x00] + list(payload)) if report_id else list(payload)
 
 
-def bragi_se_reply(value=960, source=0x01, cmd=0x02,
-                   err=0x00, report_id=False, size=64):
+def bragi_se_reply(value=960, source=C.BRAGI_ROUTE_CHILD, cmd=C.BRAGI_CMD_GET,
+                   err=0x00, report_id=False, size=C.BRAGI_MSG_SIZE):
     """The Virtuoso receivers' answer shape (probe-measured, #204): the source
     byte sits between the route and the command - `01 01 02 00 <v LE>`."""
     payload = bytearray(size)
-    payload[0] = 0x01
+    payload[0] = C.BRAGI_ROUTE_CHILD
     payload[1] = source
     payload[2] = cmd
     payload[3] = err
@@ -129,7 +126,7 @@ VOID = "CORSAIR VOID WIRELESS v2 Gaming Receiver"
 
 def void_reply(tenths=553):
     """A battery reply: the level as a 0..1000 value across bytes 4 and 5."""
-    payload = bytearray(64)
+    payload = bytearray(C.MSG_SIZE_READ)
     payload[4] = tenths & 0xFF
     payload[5] = (tenths >> 8) & 0xFF
     return list(payload)
@@ -223,11 +220,9 @@ class VoidPollTest(unittest.TestCase):
             os.environ["HALO_PROBE"] = "1"
             C.caps_for = lambda path: (64, 65, 65) if caps is None else caps.get(path)
         C.time = FakeClock()
-        opened = self.opened = []
 
         class Device:
             def open_path(self, path):
-                opened.append(path)
                 if path not in fakes:
                     raise OSError("cannot open")
                 self.impl = fakes[path]
@@ -309,45 +304,28 @@ class VoidPollTest(unittest.TestCase):
         self.assertTrue(any("caps: iface=3 ff13:0001 in/out/feat=64/0/32" in line
                             for line in diag))
 
-    def test_probe_never_writes_to_notice_channel_or_caps_sized_frame(self):
-        # PR #176's hardware report identifies ff42:0001 as the output
-        # collection; ff42:0002 has no output report. A synthetic 63-byte caps
-        # value cannot authorize a truncated battery request on either path.
+    def test_the_probe_matrix_finds_the_collection_that_takes_the_write(self):
+        # the #28 shape: every write on the protocol collection refused with -1,
+        # while another collection of the same receiver accepts the same frame
         main = FakeRefusingReceiver(heartbeat=None, replies=[])
-        sibling = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME)
-        caps = {b"void-iface4-0001": (64, 63, 65),
+        sib = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME)
+        caps = {b"void-iface4-0001": (64, 63, 65),   # declares a 63-byte output report
                 b"void-iface4-0002": (64, 65, 65)}
         out, diag = self.poll({b"void-iface4-0001": main,
-                               b"void-iface4-0002": sibling}, probe=True, caps=caps)
+                               b"void-iface4-0002": sib}, probe=True, caps=caps)
         self.assertEqual(out, [])
-        self.assertTrue(any("write shapes on documented control collections" in line for line in diag))
+        self.assertTrue(any("probe: write shapes, collection by collection" in line
+                            for line in diag))
         self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0001 -> -1")
                             for line in diag))
-        self.assertTrue(any(line.startswith("  probe: write64-norid iface=4 ff42:0001 -> -1")
+        self.assertTrue(any(line.startswith("  probe: write65-rid0 iface=4 ff42:0002 -> 65")
                             for line in diag))
-        self.assertEqual(sibling.writes, [])
-        self.assertTrue(main.writes)
-        self.assertTrue(all(len(w) in (64, 65) for w in main.writes))
-
-    def test_missing_control_collection_never_opens_unrelated_hid_in_probe_or_poll(self):
-        for probe in (False, True):
-            for iface, page, usage in ((3, 0xFF42, 1), (4, 0xFF42, 2),
-                                       (4, 0x0001, 2), (4, 0xFF13, 1)):
-                with self.subTest(probe=probe, iface=iface, page=page, usage=usage):
-                    self.entries = [entry(0x2A08, b"unrelated", iface, page, usage)]
-                    fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
-                    out, diag = self.poll({b"unrelated": fake}, probe=probe)
-                    self.assertEqual(out, [])
-                    self.assertEqual(fake.writes, [])
-                    self.assertEqual(self.opened, [])
-                    self.assertTrue(any("not opening HID" in line for line in diag))
-
-    def test_control_usage_is_selected_even_when_notice_channel_comes_first(self):
-        self.entries = list(reversed(void_entries()))
-        fake = FakeVoidReceiver(heartbeat=HEARTBEAT_FRAME, replies=[void_reply(553)])
-        out, _ = self.poll({b"void-iface4-0001": fake})
-        self.assertEqual([s.level for s in out], [55])
-        self.assertTrue(fake.writes)
+        self.assertTrue(any(line.startswith("  probe: write63-rid0 iface=4 ff42:0001 -> -1")
+                            for line in diag))
+        self.assertTrue(any("probe: first answer (" in line for line in diag))
+        self.assertTrue(any("takes the write" in line for line in diag))
+        self.assertEqual(len(sib.writes), 2)          # the accepted shape, then the re-ask
+        self.assertEqual(sib.writes[0], sib.writes[1])   # the re-ask reuses the accepted shape
 
     def test_the_normal_poll_never_asks_for_caps(self):
         called = []

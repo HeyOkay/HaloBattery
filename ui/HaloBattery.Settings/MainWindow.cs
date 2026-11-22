@@ -33,9 +33,8 @@ public sealed partial class MainWindow : Window
  private readonly Frame frame=new();
  private readonly Border card=new(){CornerRadius=new(12),Margin=new(0,0,8,8)};
  private readonly Border pill=new(){Height=40,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Center};
- private readonly SvgImageSource darkHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderDark.svg")),lightHeaderLogo=new(new Uri("ms-appx:///Assets/AppIconHeaderLight.svg"));
  private const double HeaderButtonSize=40,HeaderIconSize=20,HeaderEdgeInset=12,HeaderButtonGap=4;
- private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0,0,HeaderEdgeInset,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
+ private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
  private readonly ColumnDefinition rail=new(){Width=new(228)};
 
  private readonly string themeOverride,diagnostics;
@@ -44,7 +43,8 @@ public sealed partial class MainWindow : Window
  private Color accent;
  private readonly FontFamily bodyFont=new("Segoe UI Variable");
  // Статичные начертания с хинтингом: вариативный Outfit по умолчанию Thin, и WinUI дорисовывал жирность сам - отсюда «лесенка».
- internal FontFamily TitleFont=>new(State.Language=="ru"?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
+ internal bool UsesCyrillicTitles=>State.Language is "ru" or "uk" or "kk";
+ internal FontFamily TitleFont=>new(UsesCyrillicTitles?"ms-appx:///Assets/Fonts/Onest-Bold.ttf#Onest":"ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit");
  internal static readonly FontFamily MonoFont=new("Cascadia Mono, Consolas");
  internal bool Dark=>dark;
  internal bool AnimationsEnabled=>settings.AnimationsEnabled;
@@ -105,7 +105,6 @@ public sealed partial class MainWindow : Window
   ApplyTheme();
   root.Loaded+=(_,_)=>{AttachWindowLayoutRoot();UpdateDragRegion();UpdateMinimumWidth();};
   BuildHeader();
-  InitializeBrandHover();
   InitializeStartupSplash();
  }
  [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
@@ -165,7 +164,7 @@ public sealed partial class MainWindow : Window
   if(displayedMaximized==maximized)return;
   displayedMaximized=maximized;
   // These Lucide paths span 18 grid units; Close spans 12. Match their
-  // visible bounds and stroke width while keeping every hit target 40 x 40.
+  // visible bounds and stroke width while keeping this hit target 40 x 40.
   var glyph=(FrameworkElement)LucideIcon(maximized?"minimize-2":"maximize-2",HeaderIconSize*2/3,null,2.25);
   glyph.Tag=maximized?"restore":"maximize";glyph.Opacity=ChromeGlyphOpacity(maximizeButton);maximizeButton.Content=glyph;
   var label=T(maximized?"settings.restore":"settings.maximize");
@@ -179,7 +178,7 @@ public sealed partial class MainWindow : Window
   button.HorizontalContentAlignment=HorizontalAlignment.Center;button.VerticalContentAlignment=VerticalAlignment.Center;button.Padding=new(0);button.CornerRadius=new(10);
   if(!dark)
   {
-   button.Resources["ButtonBackgroundPointerOver"]=Brush("#1F000000");
+   button.Resources["ButtonBackgroundPointerOver"]=Brush(NavigationHighlightColor);
    button.Resources["ButtonBackgroundPressed"]=Brush("#2C000000");
    button.Resources["ButtonForegroundPointerOver"]=TextBrush;
    button.Resources["ButtonForegroundPressed"]=TextBrush;
@@ -193,6 +192,7 @@ public sealed partial class MainWindow : Window
   {
    button.Resources["ButtonBackgroundPointerOver"]=Brush(ExitHoverBackground);
    button.Resources["ButtonBackgroundPressed"]=Brush(ExitPressedBackground);
+   ConfigureCloseCornerTarget(button);
   }
   BindChromeGlyph(button,()=>button.Content as FrameworkElement,close:glyph=="x");
   ToolTipService.SetToolTip(button,label);AutomationProperties.SetName(button,label);
@@ -201,18 +201,13 @@ public sealed partial class MainWindow : Window
  private void BuildHeader()
  {
   header.Children.Clear();
-  var textAccent=new SolidColorBrush(Desaturate(accent,0.8,dark?0.76:-1));
   hamburger=HeaderButton("menu",MenuName);hamburger.Margin=new(HeaderEdgeInset,0,0,0);hamburger.HorizontalAlignment=HorizontalAlignment.Left;hamburger.Click+=(_,_)=>ToggleRail();header.Children.Add(hamburger);
-  pill.Background=Brush("#00000000");var content=new Grid();foreach(var width in new[]{GridLength.Auto,GridLength.Auto})content.ColumnDefinitions.Add(new(){Width=width});
-  var logo=new Image{Source=dark?darkHeaderLogo:lightHeaderLogo,Width=22,Height=22,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,2,0)};content.Children.Add(logo);
-  var brand=new TextBlock{FontSize=16,FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-SemiBold.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.SemiBold,Foreground=TextBrush,CharacterSpacing=-12,VerticalAlignment=VerticalAlignment.Center,TextLineBounds=TextLineBounds.Tight};brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Halo",FontFamily=new FontFamily("ms-appx:///Assets/Fonts/Outfit-Medium.ttf#Outfit"),FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=TextBrush});brand.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run{Text="Battery",Foreground=textAccent});Grid.SetColumn(brand,1);content.Children.Add(brand);
-  brandLabel=brand;brandHovered=false;brand.Opacity=RestingBrandOpacity;
-  brand.OpacityTransition=settings.AnimationsEnabled?new ScalarTransition{Duration=TimeSpan.FromMilliseconds(BrandFadeMilliseconds)}:null;
-  pill.Child=content;pill.IsHitTestVisible=false;header.Children.Add(pill);
+  pill.Background=Brush("#00000000");
+  pill.Child=BuildNativeHeaderBrand();pill.IsHitTestVisible=false;header.Children.Add(pill);
   windowButtons.Children.Clear();var minimize=HeaderButton("minus",T("settings.minimize"));maximizeButton=HeaderButton("maximize-2",T("settings.maximize"));displayedMaximized=null;var close=HeaderButton("x",T("settings.close"));foreach(var button in new[]{minimize,maximizeButton,close})windowButtons.Children.Add(button);minimize.Click+=(_,_)=>((OverlappedPresenter)AppWindow.Presenter).Minimize();maximizeButton.Click+=(_,_)=>{var p=(OverlappedPresenter)AppWindow.Presenter;if(p.State==OverlappedPresenterState.Maximized)p.Restore();else p.Maximize();UpdateMaximizeButton();};close.Click+=(_,_)=>Close();header.Children.Add(windowButtons);UpdateMaximizeButton();PositionPill();
   SetStartupChromeVisibility();
  }
- // В развёрнутом окне страница и омнибокс центрируются по всему окну, а не по области справа от панели вкладок.
+ // В развёрнутом окне страница центрируется по всему окну, а не по области справа от панели вкладок.
  // Если места не хватает - сдвигаются вправо ровно настолько, чтобы не заходить под панель и не вылезать за подложку.
  private double PageWidth(double frameWidth)=>Math.Max(0,Math.Min(contentWidth,frameWidth));
  private double PageLeft(double frameWidth)
@@ -278,6 +273,7 @@ public sealed partial class MainWindow : Window
   ResetContentWheelObservation();
   ResetOverscrollForNavigation();
   ResetCardSpotlights();
+  ClearControlSpotlights();
   var next=State.Pages.Any(p=>p.Id==page)?page:State.Pages.FirstOrDefault()?.Id??"general";
   var switching=frame.Content is not null&&next!=current;
   // Перестройка той же страницы (после действия, смены переключателя) сохраняет раскрытые карточки.
@@ -451,11 +447,12 @@ public sealed partial class MainWindow : Window
   }
   if(primary){b.Background=Brush($"#{accent.R:X2}{accent.G:X2}{accent.B:X2}");b.Foreground=Brush(dark?"#000000":"#FFFFFF");b.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;}
   if(!enabled){ToolTipService.SetToolTip(b,Later);AutomationProperties.SetHelpText(b,Later);}
+  if(!chrome)EnableControlSpotlight(b);
   return b;
  }
  internal StackPanel PageContent(string title)
  {
-  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,State.Language=="ru"?28:30);heading.FontFamily=TitleFont;heading.FontWeight=State.Language=="ru"?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=State.Language=="ru"?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
+  var page=new StackPanel{MaxWidth=contentWidth,Spacing=12,Padding=new(44,36,44,36),HorizontalAlignment=HorizontalAlignment.Stretch};var heading=Text(title,UsesCyrillicTitles?28:30);heading.FontFamily=TitleFont;heading.FontWeight=UsesCyrillicTitles?Microsoft.UI.Text.FontWeights.Bold:Microsoft.UI.Text.FontWeights.SemiBold;heading.CharacterSpacing=UsesCyrillicTitles?-11:-10;heading.Loaded+=(_,_)=>PrepareOverscrollHeading(heading);page.Children.Add(heading);return page;
  }
  internal void Section(StackPanel parent,string name){var text=Text(name);text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;text.Margin=new(0,14,0,0);parent.Children.Add(text);}
  internal CardView Card(string title,string description,UIElement? action=null,object? icon=null)=>MakeCard(title,description,action,icon??"info",false);
@@ -494,6 +491,7 @@ public sealed partial class MainWindow : Window
   var item=new Style(typeof(ComboBoxItem));item.Setters.Add(new Setter(ComboBoxItem.CornerRadiusProperty,new CornerRadius(15)));item.Setters.Add(new Setter(ComboBoxItem.MinHeightProperty,30.0));item.Setters.Add(new Setter(ComboBoxItem.FontSizeProperty,13.0));item.Setters.Add(new Setter(ComboBoxItem.PaddingProperty,new Thickness(12,0,12,0)));item.Setters.Add(new Setter(ComboBoxItem.MarginProperty,new Thickness(4,0,4,4)));box.ItemContainerStyle=item;
   box.Resources["ComboBoxDropdownContentMargin"]=new Thickness(0,4,0,0);
   ConfigureComboSelection(box);
+  EnableControlSpotlight(box);
   return box;
  }
  // Ширина поля - по самому длинному пункту (+ отступы и стрелка), чтобы пункты меню целиком помещались; потом не меняется.
@@ -512,7 +510,13 @@ public sealed partial class MainWindow : Window
  internal ScrollViewer Scroll(StackPanel content)
  {
   content.HorizontalAlignment=HorizontalAlignment.Left;content.MaxWidth=double.PositiveInfinity;
-  content.SizeChanged+=(_,_)=>InvalidateCardSpotlightGeometry();
+  content.SizeChanged+=(_,e)=>
+  {
+   // Expander rows stay in their card's Canvas while only its visible height
+   // changes. Rebase card origins without rediscovering every row's ancestry.
+   if(e.NewSize.Width==e.PreviousSize.Width && cards.Any(c=>c.IsAnimating))InvalidateCardSpotlightBounds();
+   else InvalidateCardSpotlightGeometry();
+  };
   // The content receives bubbling wheel input before its ScrollViewer parent
   // starts native scrolling. A transparent fill also catches gaps between cards.
   var host=new Grid{HorizontalAlignment=HorizontalAlignment.Stretch,Background=Brush("#00000000")};host.Children.Add(content);

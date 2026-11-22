@@ -69,6 +69,7 @@ public sealed partial class MainWindow
     private void OnSettingsWindowHidden()
     {
         StopRail();
+        ClosePopupSpotlights();
         ResetCardSpotlights();
         ResetContentWheelObservation();
         rail.Width=new(expanded?228:64);
@@ -77,6 +78,7 @@ public sealed partial class MainWindow
         ResetOverscrollForNavigation();
         wheelNavigationGuard.Reset();
         StopPageEntryWheelFilter();
+        previewPresenter?.Settle();
         previewTimer?.Stop();
         previewPending=false;
         previewGeneration++;

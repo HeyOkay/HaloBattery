@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import queue
+import re
 import subprocess
 import threading
 from types import SimpleNamespace
@@ -131,7 +132,9 @@ class SettingsHostTests(unittest.TestCase):
         self.assertEqual(state["devices"][0]["kind"], "mouse")
         self.assertIsNone(state["devices"][0]["charging"])
         self.assertEqual(state["devices"][0]["level"], 42)
-        self.assertEqual(len(state["options"]["languages"]), 7)
+        self.assertEqual(state["options"]["languages"],
+                         [dict(value=code, label=language.name)
+                          for code, language in host.i18n.LANGUAGES.items()])
         self.manager._publish(self.session)
         self.assertEqual(self.drain(), [])
 
@@ -146,6 +149,29 @@ class SettingsHostTests(unittest.TestCase):
         self.manager._publish(self.session)
         self.assertEqual(self.drain(), [])
         self.controller.preview.assert_not_called()
+
+    def test_unknown_charge_remains_nullable_in_device_wire_state(self):
+        status = self.controller.snapshot.return_value["devices"][0]["status"]
+        for known, charging, expected in ((False, False, None), (False, True, None),
+                                           (True, False, False), (True, True, True)):
+            with self.subTest(known=known, charging=charging):
+                status.charging_known = known
+                status.charging = charging
+                state = self.manager._state(self.session)
+                self.assertIs(state["devices"][0]["charging"], expected)
+
+    def test_last_reported_phone_exports_retained_level_with_offline_unknown_charging(self):
+        from providers.base import DeviceStatus
+        phone=DeviceStatus('phone_link:test','Phone',46,False,False,'phone_link',kind='phone',
+            charging_known=False,ui_message='state.phone_link_last_reported',ui_params={'level':46})
+        self.controller.snapshot.return_value['devices']=[dict(key=phone.key,name=phone.name,kind='phone',
+            status=phone,state='46% (last reported by Phone Link)')]
+        item=self.manager._state(self.session)['devices'][0]
+        self.assertEqual(item['level'],46)
+        self.assertFalse(item['online'])
+        self.assertFalse(item['paused'])
+        self.assertIsNone(item['charging'])
+        self.assertIn('last reported',item['description'])
 
     def test_unavailable_saved_icon_is_explained_for_only_its_device_and_clears(self):
         model = self.controller.snapshot.return_value
@@ -216,6 +242,34 @@ class SettingsHostTests(unittest.TestCase):
         worker.assert_not_called()
         self.controller.action.assert_not_called()
 
+    def test_website_and_discord_reach_the_controller_and_take_no_arguments(self):
+        self.hello()
+        result, _ = self.command("openWebsite", {}, 1)
+        self.assertTrue(result["ok"])
+        self.controller.action.assert_called_once_with("open_website")
+        result, _ = self.command("openDiscord", {}, 2)
+        self.assertTrue(result["ok"])
+        self.controller.action.assert_called_with("open_discord")
+        result, _ = self.command("openDiscord", {"url": "https://example.com"}, 3)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errorCode"], "invalidCommand")
+        self.assertEqual(self.controller.action.call_count, 2)
+
+    def test_every_command_the_settings_pages_send_is_accepted(self):
+        # A mistyped command name compiles in C# and only fails when clicked.
+        ui = Path(host.__file__).resolve().parent.parent / "ui" / "HaloBattery.Settings"
+        sent = set()
+        for path in ui.glob("MainWindow*.cs"):
+            if path.stem.endswith("Verification"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            sent |= set(re.findall(r'ActionCard\(p, "[^"]+", "[^"]+", "(\w+)"', text))
+            sent |= set(re.findall(r'ActionButton\("[^"]+", "(\w+)"', text))
+        self.assertLessEqual({"openWebsite", "openDiscord", "openProject", "openIssue"}, sent)
+        for name in sorted(sent):
+            with self.subTest(command=name):
+                self.manager._command(self.session, name, {})
+
     def test_stale_whats_new_worker_does_not_open_a_window(self):
         self.manager._session = host._Session("about", None)
         self.manager._show_whats_new(self.session)
@@ -237,6 +291,30 @@ class SettingsHostTests(unittest.TestCase):
         image = Image.open(io.BytesIO(base64.b64decode(reply["png"])))
         self.assertEqual(image.size, (80, 80))
         self.assertEqual(image.format, "PNG")
+
+    def test_preview_transition_is_optional_and_forwarded_only_when_requested(self):
+        self.hello()
+        metadata = dict(background="png", level=.42, color=[255, 255, 255, 230],
+                        width=5., radius=36.875, eligible=True)
+        self.controller.preview_transition.return_value = (self.controller.preview.return_value, metadata)
+        self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=True))
+        self.controller.preview_transition.assert_called_once_with("b", size=80)
+        reply, = self.drain()
+        self.assertEqual(reply["transition"], metadata)
+        self.manager._handle(self.session, dict(type="preview", id=10, deviceKey="b", transition=False))
+        reply, = self.drain()
+        self.assertNotIn("transition", reply)
+        self.controller.preview.assert_called_once_with("b", size=80)
+
+    def test_preview_transition_rejects_non_boolean_and_extra_fields(self):
+        self.hello()
+        for value in (None, 0, 1, "true", [], {}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=value))
+        with self.assertRaises(ValueError):
+            self.manager._handle(self.session, dict(type="preview", id=9, deviceKey="b", transition=True, extra=1))
+        self.controller.preview.assert_not_called()
+        self.controller.preview_transition.assert_not_called()
 
     def test_selection_normalizes_missing_devices_and_refuses_bad_levels(self):
         self.session.device_key = "gone"
