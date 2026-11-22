@@ -52,6 +52,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
+- Refresh documented device-test evidence and distinguish pending support fixes
+  from released behavior.
+
 ### Added
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
