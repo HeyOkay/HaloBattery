@@ -647,9 +647,23 @@ The same feature-report exchange as the Beast X Max (`00 00 02 02 00 83` out, `a
 
 ### WLmouse Beast X Max
 
-**Connection:** 8K receiver (36A7:A880) and USB cable
+**Connection:** 8K receiver (`36A7:A880`) or USB cable (`36A7:A881`).
 
-Feature request `02 02 00 83`; if there is no reply, the mouse heartbeat is used. Receiver and cable share one icon. A receiver whose mouse is switched off is walked only every fifth poll once nothing is shown (each walk refuses on every vendor collection, ~0.75 s apiece, then listens ~2 s), and at once when the receiver's device set changes (#62 item 5)
+Use the existing report-0 feature query on `ffff:0000`. The protocol framing
+and preferred collection come from
+[incconutwo/mouse-battery-tray, devices.py](https://github.com/incconutwo/mouse-battery-tray/blob/main/devices.py#L80-L175).
+The cable identity is confirmed by the owner's 22 November 2026 capture:
+`WLMOUSE BEAST MAX`, interface 2, `ffff:0000`, reply
+`00 a1 00 02 02 00 83 01 60 00 00 00` = 96% and charging through the production
+transport. The owner also confirmed the updated Desktop build works both on
+the cable and after unplugging it back to the receiver.
+
+Active requests are limited to the four explicit PIDs (`A887`, `A868`, `A880`,
+`A881`) on `ffff:0000`. Other collections and unlisted identities receive no
+feature query; the existing passive vendor heartbeat fallback is retained.
+The cable is not a receiver: its charging reading wins without querying the
+silent receiver, and unplugging it restores the receiver with the same icon
+and device key. Silent-device backoff is unchanged.
 
 ### Ninjutso Sora V3 (093a:eb02)
 

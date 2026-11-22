@@ -252,6 +252,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Test build pending on the reporter's unit.
 
 ### Fixed
+
+- Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
+  preserving one icon across cable/receiver transitions and limiting feature
+  requests to documented device identities and battery collections.
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
