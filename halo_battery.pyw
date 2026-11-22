@@ -160,7 +160,8 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        RedSquareProvider,
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
-                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider)
+                       AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
+                       SonyH9IIProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
@@ -300,6 +301,7 @@ PROVIDER_LABELS = {
     "shield": "NVIDIA SHIELD controllers",
     "skullcandy": "Skullcandy headsets",
     "sony_inzone": "Sony INZONE H9 / H5",
+    "sony_h9ii": "Sony INZONE H9 II",
     "steam": "Steam Controller (2025)",
     "steelseries": "SteelSeries",
     "steelseries_elite": "SteelSeries Arctis Nova Elite",
@@ -327,7 +329,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             InphicProvider(), TurtleBeachProvider(), SkullcandyProvider(), RapooProvider(), AjazzProvider(),
             BlackSharkMtkProvider(),
             IRocksProvider(),
-            SonyInzoneProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
+            SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(),
             EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), LogitechG325Provider(), JblQuantum350Provider()]
 

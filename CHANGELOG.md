@@ -168,6 +168,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
+- Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
+  control channel, using the read-only status query from
+  marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test
+  build (#387); this bounded, exact-target implementation has offline tests,
+  with fresh hardware and charging-transition confirmation still pending.
 - AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
