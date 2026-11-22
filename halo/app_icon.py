@@ -5,17 +5,19 @@ from pathlib import Path
 from PIL import Image
 
 
-@lru_cache(maxsize=1)
-def _source() -> Image.Image:
+def _open(name: str) -> Image.Image:
     # PyInstaller places this module and the bundled assets under _internal.
-    path = Path(__file__).resolve().parent.parent / "assets" / "app-icon.png"
+    path = Path(__file__).resolve().parent.parent / "assets" / name
     with Image.open(path) as image:
         return image.convert("RGBA")
 
 
+# Only the sizes in use are cached. The source is read again for each new size instead of
+# being kept: the 1024 px artwork held 4 MB of RAM for the app's whole run, while the app
+# asks for a handful of small sizes, each once.
 @lru_cache(maxsize=16)
 def _resized(size: int) -> Image.Image:
-    source = _source()
+    source = _open("app-icon.png")
     if source.size == (size, size):
         return source
     return source.resize((size, size), Image.Resampling.LANCZOS)
@@ -28,17 +30,10 @@ def render(size: int) -> Image.Image:
     return _resized(size).copy()
 
 
-@lru_cache(maxsize=1)
-def _dark_header_source() -> Image.Image:
-    # Rasterized from app-icon-header-dark.svg; Settings uses that same SVG.
-    path = Path(__file__).resolve().parent.parent / "assets" / "app-icon-header-dark.png"
-    with Image.open(path) as image:
-        return image.convert("RGBA")
-
-
 @lru_cache(maxsize=16)
 def _dark_header_resized(size: int) -> Image.Image:
-    return _dark_header_source().resize((size, size), Image.Resampling.LANCZOS)
+    # Rasterized from app-icon-header-dark.svg; Settings uses that same SVG.
+    return _open("app-icon-header-dark.png").resize((size, size), Image.Resampling.LANCZOS)
 
 
 def render_header(size: int, light: bool) -> Image.Image:

@@ -10,6 +10,84 @@ from halo import flyout
 
 
 class FlyoutShutdownTests(unittest.TestCase):
+    def test_concurrent_first_menu_and_window_start_only_one_owner(self):
+        host = flyout.FlyoutHost(object())
+        entered, release = threading.Event(), threading.Event()
+        second_constructed, window_entered = threading.Event(), threading.Event()
+        real_thread = threading.Thread
+        owners, results, errors = [], [], []
+        callback = mock.Mock()
+        host._root = types.SimpleNamespace(after=lambda delay, fn: fn())
+        host._main = host._ready.set
+        host._show = mock.Mock()
+
+        def owner_factory(*args, **kwargs):
+            owner = real_thread(*args, **kwargs)
+            owners.append(owner)
+            if len(owners) == 1:
+                entered.set()
+                if not release.wait(2):
+                    raise AssertionError("first owner construction was not released")
+            else:
+                second_constructed.set()
+            return owner
+
+        def menu():
+            try:
+                results.append(host.show(None, None, (0, 0)))
+            except Exception as error:
+                errors.append(error)
+
+        def window():
+            window_entered.set()
+            try:
+                results.append(host.call(callback))
+            except Exception as error:
+                errors.append(error)
+
+        menu_caller = real_thread(target=menu)
+        window_caller = real_thread(target=window)
+        with mock.patch.object(flyout.threading, "Thread", side_effect=owner_factory):
+            menu_caller.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                window_caller.start()
+                self.assertTrue(window_entered.wait(1))
+                # Keep the first constructor paused while a second first-use
+                # callback arrives. It must wait instead of constructing Tk again.
+                raced = second_constructed.wait(.15)
+            finally:
+                release.set()
+                menu_caller.join(2)
+                if window_caller.ident is not None:
+                    window_caller.join(2)
+        for owner in owners:
+            owner.join(1)
+        self.assertFalse(menu_caller.is_alive())
+        self.assertFalse(window_caller.is_alive())
+        self.assertFalse(raced)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(owners), 1)
+        self.assertIs(host._thread, owners[0])
+        self.assertEqual(results, [True, True])
+        host._show.assert_called_once_with(None, None, (0, 0))
+        callback.assert_called_once_with()
+        host.start()
+        self.assertIs(host._thread, owners[0])
+
+    def test_failed_owner_start_can_be_retried(self):
+        host = flyout.FlyoutHost(object())
+        failed, ready = mock.Mock(), mock.Mock()
+        failed.start.side_effect = RuntimeError("thread unavailable")
+        with mock.patch.object(flyout.threading, "Thread", side_effect=[failed, ready]):
+            with self.assertRaisesRegex(RuntimeError, "thread unavailable"):
+                host.start()
+            self.assertIsNone(host._thread)
+            host.start()
+            host.start()
+        self.assertIs(host._thread, ready)
+        ready.start.assert_called_once_with()
+
     def test_stop_never_calls_tk_when_the_owner_loop_cannot_dispatch(self):
         entered, release = threading.Event(), threading.Event()
         class StalledRoot:

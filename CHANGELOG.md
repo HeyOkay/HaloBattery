@@ -11,6 +11,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Use independent protocol fixtures and cover the six originally surviving
   battery/history mutations without changing device requests or controller identities.
 
+- Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
+  1 MB (single colour) or 4-8 MB (colour) of raw pixels.
+- Custom Iconify tray icons no longer load the whole icon-library registry at start-up
+  (about 4 MB, with a 12 MB peak while reading it); it is read when Settings browses
+  icons or an older selection has to be checked.
+- Start the tray menu's window system when the menu (or another window) first opens,
+  not at start-up: about 4 MB less for sessions that never open the menu, at the
+  cost of about 70 ms on the first open.
+- Use less memory while running: the app no longer keeps its full-size (1024 px)
+  icon artwork in memory after drawing the small icons it needs (about 4 MB), and
+  saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
+
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
 
@@ -43,7 +55,14 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and fade the header wordmark on hover. Share Close
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
+- Refresh documented device-test evidence and distinguish pending support fixes
+  from released behavior.
+
 ### Added
+- Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
+  the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
+  ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
+  confirmed that the tray icon and charging animation appear on their headset.
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,

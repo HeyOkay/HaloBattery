@@ -90,6 +90,8 @@
 | [Razer BlackShark V2 HyperSpeed](protocols.md#razer-blackshark-v2-hyperspeed-mediatek) | 2.4 GHz receiver (`1532:0565`) or USB-C cable (`1532:056E`) | yes (level and charging confirmed by reporter) |
 | [Razer BlackShark V2 Pro (2020)](protocols.md#razer-blackshark-v2-pro-2020) | 2.4 GHz receiver | yes |
 | [Razer BlackShark V2 Pro (2023)](protocols.md#razer-blackshark-v2-pro-2023) | 2.4 GHz receiver | yes |
+| [Razer BlackShark V3](protocols.md#razer-blackshark-v3-blackshark-v3-pro) | 2.4 GHz receiver (1532:057A) | unverified |
+| [Razer BlackShark V3 Pro](protocols.md#razer-blackshark-v3-blackshark-v3-pro) | 2.4 GHz receiver (1532:0577) | tray icon and charging animation confirmed by reporter in #519 |
 | [Razer BlackShark V3 X HyperSpeed](protocols.md#razer-blackshark-v3-x-hyperspeed) | 2.4 GHz receiver (1532:057D) or USB cable (1532:057C) | yes (battery and charging) |
 | [Razer BlackWidow V3 Pro](protocols.md#razer-blackwidow-v3-pro) | 2.4 GHz receiver or USB cable | no |
 | [Razer DeathAdder V4 Pro](protocols.md#razer-deathadder-v4-pro) | 2.4 GHz receiver | yes |
@@ -112,7 +114,7 @@
 | [SteelSeries Arctis Nova Pro Wireless (`1038:12E0`, `1038:12E5` X)](protocols.md#steelseries-arctis-nova-pro-wireless-103812e0-103812e5-x) | Wireless base station, interface 3 or 4 | no |
 | [SteelSeries Rival 3 Wireless](protocols.md#steelseries-rival-3-wireless) | 2.4 GHz dongle | no |
 | [VAXEE E1 Wireless (and other 3057 models)](protocols.md#vaxee-wireless-mice-3057) | 4K dongle or USB cable | yes (E1 Wireless; other models untested) |
-| [VGN Dragonfly 4K (receiver and cable)](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 4K dongle or USB cable | confirmed (receiver) |
+| [VGN Dragonfly 4K (receiver and cable)](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 4K dongle or USB cable | confirmed (receiver and cable) |
 | [WLmouse Beast X and Beast X Mini Pro](protocols.md#wlmouse-beast-x-and-beast-x-mini-pro) | 8K or 1K receiver, or USB cable | likely |
 | [WLmouse Beast X Max](protocols.md#wlmouse-beast-x-max) | 8K receiver or USB cable (`36A7:A881`) | yes (receiver, cable charging and unplug recovery) |
 | [Wraith W1 / W1 Freestyle](protocols.md#wraith-w1) | 2.4 GHz receiver or USB cable | unverified |

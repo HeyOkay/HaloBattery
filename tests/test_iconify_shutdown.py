@@ -4,6 +4,7 @@ import threading
 from types import SimpleNamespace
 import unittest
 import urllib.parse
+import weakref
 
 from halo.iconify_catalog import IconifyCatalog, _hash, canonical_icon
 from halo.iconify_host import IconCatalogJobs
@@ -166,6 +167,21 @@ class CatalogShutdownTests(unittest.TestCase):
         jobs.close()
         self.assertTrue(jobs._cleanup_done.wait(2))
         self.assertEqual(created, [])
+
+
+    def test_closed_window_drops_its_owned_catalog(self):
+        refs = []
+
+        def factory():
+            catalog = Catalog()
+            refs.append(weakref.ref(catalog))
+            return catalog
+
+        jobs = self.jobs(None, factory=factory)
+        jobs._catalog()
+        jobs.close()
+        self.assertTrue(jobs._cleanup_done.wait(2))
+        self.assertIsNone(refs[0]())
 
 
 if __name__ == "__main__":
