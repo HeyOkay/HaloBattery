@@ -55,10 +55,12 @@ NAMED = [
     (0x3537, "", "GameSir controller"),
     (0x045E, "controller", "Xbox controller"),
 ]
-# Named from the product string, but deliberately NOT part of NAMED: NAMED_VIDS also
-# decides whose Windows.Gaming.Input reports are trusted, and trusting the Ultimate 2's
-# placeholder (remain=full=1000) would turn it into a false 100% (#110, #191, #461).
-NAMED_PIDS = {0x310B: ("8BitDo Ultimate 2", 0x2DC8)}
+# Named per slot from the identity Windows.Gaming.Input reports for that slot. It is
+# deliberately not in NAMED: NAMED_VIDS also decides whose Windows.Gaming.Input reports
+# are trusted, and trusting this pad's placeholder (remain=full=1000) would publish a
+# false 100% (#110, #191, #461). Presence of the receiver alone never names a slot -
+# an idle Ultimate 2 next to another pad must not rename that pad (#523 review).
+NAMED_PAD_IDS = {(0x2DC8, 0x310B): "8BitDo Ultimate 2"}
 
 
 # the vendors whose controllers this provider reads; Windows.Gaming.Input also reports
@@ -175,11 +177,6 @@ def bluetooth_ids(paths) -> set:
 def controller_name(hid_devices: List[dict]):
     """-> (display name, vendor id). The vendor id lets the poll tell whether the
     controller is on Bluetooth when Windows.Gaming.Input reports nothing."""
-    for d in hid_devices:
-        if d.get("vendor_id") == 0x2DC8:
-            named = NAMED_PIDS.get(d.get("product_id"))
-            if named is not None:
-                return named
     for vid, word, name in NAMED:
         for d in hid_devices:
             if d.get("vendor_id") == vid and word in (d.get("product_string") or "").lower():
@@ -268,11 +265,6 @@ class XInputProvider(Provider):
                 hid_devices += hidlist.enumerate(vid)
             except Exception:
                 pass
-        # Enumerated for its name only: this vendor's WGI reports are still ignored.
-        try:
-            hid_devices += hidlist.enumerate(0x2DC8)
-        except Exception:
-            pass
         base_name, base_vid = controller_name(hid_devices)
 
         now = time.time()
@@ -335,6 +327,11 @@ class XInputProvider(Provider):
         )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
+        # Naming only: the Ultimate 2's Windows report is a placeholder, so it never
+        # reaches `reports` (its level must not be trusted); its identity still names
+        # the slot it belongs to, and only while the pairing is exact.
+        pad_identity = ([(r.vid, r.pid) for r in all_reports]
+                        if len(all_reports) == len(slots) else [])
         if len(reports) != len(slots):
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
@@ -433,6 +430,8 @@ class XInputProvider(Provider):
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
             name = (rep.name if rep and rep.name else None) or base_name
+            if n < len(pad_identity):
+                name = NAMED_PAD_IDS.get(pad_identity[n], name)
             if vendor_reading is not None:
                 # the pad's own report: level, charging state and its name
                 name = vendor_reading.name

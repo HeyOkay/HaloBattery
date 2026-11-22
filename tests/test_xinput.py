@@ -70,23 +70,6 @@ XBOX_BT_HID = {"vendor_id": 0x045E, "product_id": 0x02FD, "interface_number": -1
                "path": b"\\\\?\\HID#VID_045E&PID_02FD&IG_00#a&1b2c3d4&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}"}
 
 
-class NamingTest(unittest.TestCase):
-    def test_the_ultimate_2_is_named_from_its_product_string(self):
-        devs = [{"vendor_id": 0x2DC8, "product_id": 0x310B,
-                 "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}]
-        self.assertEqual(("8BitDo Ultimate 2", 0x2DC8), X.controller_name(devs))
-
-    def test_another_8bitdo_device_stays_generic(self):
-        devs = [{"vendor_id": 0x2DC8, "product_id": 0x9999,
-                 "product_string": "8BitDo Receiver"}]
-        self.assertEqual(("Gamepad", None), X.controller_name(devs))
-
-    def test_the_vendor_id_stays_out_of_the_trusted_wgi_set(self):
-        # NAMED_VIDS also decides whose WGI reports are trusted; the Ultimate 2's
-        # remain=full=1000 placeholder must keep being ignored (#110, #191).
-        self.assertNotIn(0x2DC8, X.NAMED_VIDS)
-
-
 class ProviderTest(unittest.TestCase):
     def setUp(self):
         self._saved = (X.load_xinput, X.hidlist, X.wgi.query)
@@ -102,6 +85,45 @@ class ProviderTest(unittest.TestCase):
         X.wgi.query = lambda diag: list(reports)
         p = X.XInputProvider()
         return p, p.poll()
+
+
+class NamingTest(ProviderTest):
+    """#523 review: a name may only come from the slot's own report."""
+
+    U2 = (0x2DC8, 0x310B)
+    XBOX_HID = {"vendor_id": 0x045E, "product_id": 0x02FD,
+                "product_string": "Controller (Xbox One For Windows)"}
+
+    def test_the_pad_is_named_from_its_own_wgi_report(self):
+        _p, res = self.poll({0: (X.TYPE_WIRED, 0)}, [wgi_report(*self.U2, 1000, 1000)])
+        self.assertEqual([s.name for s in res], ["8BitDo Ultimate 2"])
+
+    def test_an_idle_receiver_does_not_rename_the_pad_in_the_slot(self):
+        # the Ultimate 2 receiver is enumerated, but the slot holds an Xbox pad with
+        # no WGI data: the generic vendor name must stay, never 8BitDo's.
+        receiver = {"vendor_id": 0x2DC8, "product_id": 0x310B,
+                    "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}
+        _p, res = self.poll({0: (X.TYPE_NIMH, 2)}, [],
+                            hid_devices=[self.XBOX_HID, receiver])
+        self.assertEqual([s.name for s in res], ["Xbox controller"])
+
+    def test_two_slots_each_keep_their_own_name(self):
+        _p, res = self.poll({0: (X.TYPE_WIRED, 0), 1: (X.TYPE_WIRED, 0)},
+                            [wgi_report(0x045E, 0x02FD, 800, 1000),
+                             wgi_report(*self.U2, 1000, 1000)])
+        names = [s.name for s in res]
+        # a shared-name suffix may be appended when several pads are shown
+        self.assertTrue(names[1].startswith("8BitDo Ultimate 2"), names)
+        self.assertNotIn("8BitDo", names[0])
+
+    def test_no_wgi_data_keeps_the_generic_name(self):
+        receiver = {"vendor_id": 0x2DC8, "product_id": 0x310B,
+                    "product_string": "8BitDo Ultimate 2 Wireless Controller for PC"}
+        _p, res = self.poll({0: (X.TYPE_NIMH, 2)}, [], hid_devices=[receiver])
+        self.assertEqual([s.name for s in res], ["Gamepad"])
+
+    def test_the_vendor_id_stays_out_of_the_trusted_wgi_set(self):
+        self.assertNotIn(0x2DC8, X.NAMED_VIDS)
 
 
 class XboxBluetoothTest(ProviderTest):
