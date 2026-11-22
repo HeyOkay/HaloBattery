@@ -53,6 +53,7 @@
   <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="[2.1.9]" />
   <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="[2.5.1]" />
   <Content Include="../../assets/fonts/*.ttf;../../assets/fonts/OFL-*.txt" Link="Assets/Fonts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../docs/licenses/qlementine-icons-LICENSE.txt" Link="Assets/Licenses/QlementineIcons-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../halo.ico" Link="Assets/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-dark.svg" Link="Assets/AppIconHeaderDark.svg" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../assets/app-icon-header-light.svg" Link="Assets/AppIconHeaderLight.svg" CopyToOutputDirectory="PreserveNewest" />

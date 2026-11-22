@@ -30,6 +30,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add an outline Discord shortcut at the bottom of the navigation rail, with
+  a tooltip and a native fade to Discord's brand color on hover.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
