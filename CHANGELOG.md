@@ -36,6 +36,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
+  (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
+  dongle carries over a COM port instead. Shows the level and charging state,
+  and the headset as offline while it is switched off. Confirmed on an H5:
+  50 % on battery, the charging state on the cable, and the icon going away
+  while the headset was off.
 - Add an outline Discord shortcut at the bottom of the navigation rail, with
   a tooltip and a native fade to Discord's brand color on hover.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`

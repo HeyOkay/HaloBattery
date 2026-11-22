@@ -158,7 +158,7 @@ MESSAGES = {
     "provider.rapoo": "Мыши и клавиатуры Rapoo",
     "provider.shield": "Контроллеры NVIDIA SHIELD",
     "provider.skullcandy": "Гарнитуры Skullcandy",
-    "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_inzone": "Sony INZONE H9 / H5",
     "provider.turtlebeach": "Гарнитуры Turtle Beach",
     "state.not_reported": "пока нет данных",
     "state.charging_unknown": "{state}, состояние зарядки неизвестно",
