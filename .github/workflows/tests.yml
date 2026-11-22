@@ -1,7 +1,7 @@
 name: Tests
 
 # Required checks for pull requests into pre-release and main.
-# "tests" runs the unit tests (fake HID, no hardware) and the --probe smoke test.
+# "tests" runs unit/smoke tests and builds the complete Windows release package.
 # "branch-policy" only allows pre-release or hotfix/* branches to target main.
 
 on:
@@ -20,18 +20,38 @@ permissions:
 
 jobs:
   tests:
+    needs: [compatibility, lint]
+    # A failed dependency must fail this required check, rather than skip it.
+    if: always()
     runs-on: windows-latest
     steps:
+      - name: Require compatibility and lint checks
+        shell: pwsh
+        env:
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+        run: |
+          if ($env:COMPATIBILITY_RESULT -ne 'success' -or $env:LINT_RESULT -ne 'success') {
+            throw 'Compatibility and lint checks must both succeed.'
+          }
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
 
       - name: Install dependencies
         run: python -m pip install --require-hashes -r requirements-build.txt
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
 
       - name: Unit tests
         run: python -m unittest discover -s tests -v
@@ -39,6 +59,90 @@ jobs:
       - name: Smoke test
         # imports every module and runs one full poll on the runner (no devices there)
         run: python halo_battery.pyw --probe
+
+      - name: Build HaloBattery
+        shell: pwsh
+        run: |
+          python tools/make_icon.py halo.ico
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/make_version.py version_info.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
+          python tools/build_exe.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Build the installer
+        id: setup
+        shell: pwsh
+        run: |
+          $iscc = ./scripts/get_inno.ps1
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "setup=dist/HaloBattery-$ver-setup.exe" >> $env:GITHUB_OUTPUT
+
+      - name: Validate build artifacts
+        shell: pwsh
+        env:
+          SETUP_PATH: ${{ steps.setup.outputs.setup }}
+        run: |
+          foreach ($path in @('dist/HaloBattery/HaloBattery.exe',
+                             'dist/HaloBattery/_internal/settings-ui/HaloBattery.Settings.exe',
+                             $env:SETUP_PATH)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing build artifact: $path" }
+            if ((Get-Item -LiteralPath $path).Length -eq 0) { throw "Empty build artifact: $path" }
+          }
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-check-${{ github.sha }}
+          path: |
+            dist/HaloBattery
+            ${{ steps.setup.outputs.setup }}
+          if-no-files-found: error
+          retention-days: 7
+
+  compatibility:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13.17", "3.14.10"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+  lint:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12.10"
+      - name: Install linter
+        run: python -m pip install --require-hashes -r requirements-lint.txt
+      - name: Lint Python
+        run: python -m ruff check halo_battery.pyw halo providers tools tests
 
   branch-policy:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'

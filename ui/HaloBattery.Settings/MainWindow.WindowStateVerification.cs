@@ -146,6 +146,34 @@ public sealed partial class MainWindow
             extended.Replace("\"monitor\":", "\"extra\":0,\"monitor\":"),
             extended.Replace("\"width\":1000", "\"width\":1000,\"width\":1001") };
         Check("invalid extended preference types and duplicate fields rejected",invalidExtended.All(json=>!WindowStateStore.TryParse(json,out _)));
+        using(var legacyDocument=JsonDocument.Parse(extended))
+        {
+            var legacyFields=legacyDocument.RootElement.EnumerateObject().Where(item=>item.Name is not ("page" or "selectedDeviceKey" or "scrollOffset" or "expandedCards"))
+                .ToDictionary(item=>item.Name,item=>item.Value.Clone());
+            Check("legacy eight-field state migrates with default view",WindowStateStore.TryParse(JsonSerializer.Serialize(legacyFields),out var eight) && eight==positioned);
+        }
+        var withView=positioned with { Page="advanced",SelectedDeviceKey="hid:fixture/device",ScrollOffset=329.25,ExpandedCards="0101" };
+        await store.SaveAsync(withView);
+        Check("page device scroll and expanded cards round trip",await store.LoadAsync()==withView);
+        var viewJson=await File.ReadAllTextAsync(store.FilePath);
+        var invalidViews=new[] {
+            viewJson.Replace("\"page\":\"advanced\"","\"page\":1"),
+            viewJson.Replace("\"page\":\"advanced\"","\"page\":\"unknown\""),
+            viewJson.Replace("\"selectedDeviceKey\":\"hid:fixture/device\"","\"selectedDeviceKey\":true"),
+            viewJson.Replace("\"selectedDeviceKey\":\"hid:fixture/device\"","\"selectedDeviceKey\":\"\""),
+            viewJson.Replace("\"scrollOffset\":329.25","\"scrollOffset\":\"329.25\""),
+            viewJson.Replace("\"scrollOffset\":329.25","\"scrollOffset\":-1"),
+            viewJson.Replace("\"scrollOffset\":329.25","\"scrollOffset\":10000001"),
+            viewJson.Replace("\"scrollOffset\":329.25","\"scrollOffset\":1e999"),
+            viewJson.Replace("\"expandedCards\":\"0101\"","\"expandedCards\":[false,true]"),
+            viewJson.Replace("\"expandedCards\":\"0101\"","\"expandedCards\":\"0102\""),
+            viewJson.Replace("\"expandedCards\":\"0101\"","\"expandedCards\":\""+new string('1',257)+"\""),
+            viewJson.Replace("\"selectedDeviceKey\":\"hid:fixture/device\"","\"selectedDeviceKey\":\""+new string('d',1025)+"\""),
+            viewJson.Replace("\"page\":\"advanced\"","\"page\":\"advanced\",\"page\":\"general\"") };
+        Check("invalid view preference types bounds and duplicates rejected",invalidViews.All(json=>!WindowStateStore.TryParse(json,out _)));
+        var boundaryView=withView with { SelectedDeviceKey=null,ScrollOffset=10000000,ExpandedCards=new string('1',256) };
+        await store.SaveAsync(boundaryView);
+        Check("view preference boundary values round trip",await store.LoadAsync()==boundaryView);
         var first=new SettingsWindowState(1000,700,false);
         var latest=new SettingsWindowState(1100,750,true);
         await store.SaveAsync(first);

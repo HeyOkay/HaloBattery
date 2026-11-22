@@ -38,7 +38,7 @@ class ParseTest(unittest.TestCase):
         req = G.make_request(65)
         self.assertEqual(65, len(req))
         self.assertEqual(0x00, req[0])
-        self.assertEqual(G.BATTERY_COMMAND, req[1:7])
+        self.assertEqual([0x00, 0x00, 0x02, 0x02, 0x00, 0x83], req[1:7])
         self.assertEqual([0] * 58, req[7:])
 
     def test_the_documented_reply(self):
@@ -53,15 +53,15 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(two[1])
         self.assertTrue(three[1])
 
-    def test_a_waking_mouse_is_read(self):
-        self.assertEqual((80, False), G.parse_reply(reply(80, status=0xA2)))
+    def test_a_waking_mouse_is_not_yet_a_confirmed_reading(self):
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA2)))
 
     def test_an_asleep_mouse_is_not_a_reading(self):
-        self.assertIsNone(G.parse_reply(reply(80, status=G.STATUS_ASLEEP)))
+        self.assertIsNone(G.parse_reply(reply(80, status=0xA4)))
 
     def test_other_frames_are_refused(self):
         bad = list(CAPTURED_75)
-        bad[G.FUNC_INDEX] = 0x81
+        bad[6] = 0x81
         self.assertIsNone(G.parse_reply(bad))
         self.assertIsNone(G.parse_reply(reply(101)))
         self.assertIsNone(G.parse_reply([0x00, 0xA1, 0x00]))
@@ -118,6 +118,110 @@ class PollTest(unittest.TestCase):
                            "mouse")])
         self.assertEqual([bytes(G.make_request(65))], dev.sent)
 
+    def _provider(self, replies):
+        dev = FakeDevice(replies)
+        G.feature_length = lambda path: 65
+        G.time = types.SimpleNamespace(time=lambda: self.now[0], sleep=lambda s: None)
+        G.hid = types.SimpleNamespace(device=lambda: dev)
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
+        return G.GloriousProvider()
+
+    def test_a_foreign_reply_is_a_busy_channel_not_a_sleeping_mouse(self):
+        # #281: SignalRGB writes lighting frames to the same feature report, so the
+        # read-back is its status frame (level 0xFF) instead of the battery answer.
+        foreign = [0x00, 0xA1, 0x00, 0x02, 0x08, 0x02, 0x00, 0x01, 0xFF] + [0x00] * 56
+        provider = self._provider([foreign])
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertTrue(any("another app" in line for line in provider._diag))
+
+    def test_a_refused_write_marks_the_reading_stale_and_names_the_holder(self):
+        # #281, second form: SignalRGB controlling the mouse refuses the write
+        # itself, so the app marks the reading stale rather than calling the mouse
+        # asleep - and the refusal must not abort the poll (#281 review).
+        class Refusing(FakeDevice):
+            def send_feature_report(self, data):
+                raise OSError("feature write failed")
+
+        provider = self._provider([])
+        G.hid = types.SimpleNamespace(device=lambda: Refusing([]))
+        out = provider.poll()                 # no exception: other devices must go on
+        self.assertEqual([(None, False, True)],
+                         [(s.level, s.online, s.polling_stale) for s in out])
+        self.assertTrue(any("holds the feature report" in line for line in provider._diag))
+
+    def test_an_asleep_or_waking_reply_is_not_a_competing_writer(self):
+        # A4 and A2 are this exchange's own answers: no level yet, not a foreign frame.
+        for status in (0xA2, 0xA4):
+            provider = self._provider([reply(80, status=status)])
+            out = provider.poll()
+            self.assertEqual([(None, False)], [(s.level, s.online) for s in out], hex(status))
+            self.assertFalse(any("another app" in line for line in provider._diag), hex(status))
+            self.assertTrue(any("no battery answer" in line for line in provider._diag),
+                            hex(status))
+
+    def test_a_refused_collection_still_tries_the_next_one(self):
+        infos = [
+            {"path": b"first", "interface_number": 1, "usage_page": 0xFFA0,
+             "usage": 0x0001, "product_id": G.PID, "product_string": "Model O Wireless"},
+            {"path": b"second", "interface_number": 1, "usage_page": 0xFFFF,
+             "usage": 0x0001, "product_id": G.PID, "product_string": "Model O Wireless"},
+        ]
+
+        class RefusingFirst(FakeDevice):
+            current = None
+
+            def open_path(self, path):
+                super().open_path(path)
+                self.current = path
+
+            def send_feature_report(self, data):
+                if self.current == b"first":
+                    raise OSError("feature write failed")
+                return super().send_feature_report(data)
+
+        provider = self._provider([])
+        G.hid = types.SimpleNamespace(device=lambda: RefusingFirst([CAPTURED_75]))
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(infos))
+        out = provider.poll()
+        self.assertEqual([(75, False)], [(s.level, s.polling_stale) for s in out])
+
+    def test_a_refused_device_does_not_hide_the_next_one(self):
+        class RefusingFirstDevice(FakeDevice):
+            current = None
+
+            def open_path(self, path):
+                super().open_path(path)
+                self.current = path
+
+            def send_feature_report(self, data):
+                if self.current == b"ffa0":
+                    raise OSError("feature write failed")
+                return super().send_feature_report(data)
+
+        provider = self._provider([])
+        G.hid = types.SimpleNamespace(device=lambda: RefusingFirstDevice([CAPTURED_75]))
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO + O_MINUS))
+        out = provider.poll()
+        self.assertEqual([("glorious:2022", None, True), ("glorious:2024", 75, False)],
+                         [(s.key, s.level, s.polling_stale) for s in out])
+
+    def test_a_busy_first_device_does_not_excuse_the_second(self):
+        foreign = [0x00, 0xA1, 0x00, 0x02, 0x08, 0x02, 0x00, 0x01, 0xFF] + [0x00] * 56
+        provider = self._provider([foreign])
+        G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO + O_MINUS))
+        out = provider.poll()
+        self.assertEqual([(None, False), (None, False)],
+                         [(s.level, s.online) for s in out])
+        self.assertEqual(1, sum(1 for line in provider._diag if "another app" in line))
+        self.assertEqual(1, sum(1 for line in provider._diag if "no battery answer" in line))
+
+    def test_silence_is_reported_as_silence(self):
+        provider = self._provider([])
+        out = provider.poll()
+        self.assertEqual([(None, False)], [(s.level, s.online) for s in out])
+        self.assertTrue(any("no battery answer" in line for line in provider._diag))
+
     def test_charging_is_reported(self):
         out, _dev = self.poll([CAPTURED_75_CHARGING])
         self.assertTrue(out[0].charging)
@@ -158,7 +262,7 @@ class PollTest(unittest.TestCase):
         G.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
         self.assertEqual(75, provider.poll()[0].level)
         # the next answer is an asleep status: no new level, the icon greys out
-        dev.replies = [reply(75, status=G.STATUS_ASLEEP)]
+        dev.replies = [reply(75, status=0xA4)]
         self.now[0] += 30
         out = provider.poll()
         self.assertEqual([(75, False, False)], [(s.level, s.charging, s.online) for s in out])
@@ -169,6 +273,31 @@ class PollTest(unittest.TestCase):
     def test_no_receiver_reports_nothing(self):
         out, _dev = self.poll([], infos=[])
         self.assertEqual([], out)
+
+
+O_MINUS = [{"path": b"ffff0", "interface_number": 2,
+            "usage_page": 0xFFFF, "usage": 0x0000,
+            "product_id": 0x2024, "product_string": "Model O- Wireless"}]
+WIRED_O_MINUS = {"path": b"wired-o-minus", "interface_number": 0,
+                 "product_id": 0x2013, "product_string": "Model O-"}
+
+
+class FamilyTest(PollTest):
+    def test_the_model_o_minus_is_read_with_its_own_key(self):
+        out, dev = self.poll([CAPTURED_75], infos=O_MINUS)
+        self.assertEqual([(s.key, s.name, s.level, s.kind) for s in out],
+                         [("glorious:2024", "Glorious Model O- Wireless", 75, "mouse")])
+        self.assertEqual([bytes(G.make_request(65))], dev.sent)
+
+    def test_the_model_o_minus_cable_counts_as_charging(self):
+        out, _dev = self.poll([CAPTURED_75], infos=O_MINUS + [WIRED_O_MINUS])
+        self.assertEqual((75, True, True), (out[0].level, out[0].charging, out[0].online))
+
+    def test_two_glorious_mice_keep_separate_icons(self):
+        infos = self.INFO + O_MINUS
+        out, _dev = self.poll([CAPTURED_75, CAPTURED_75_CHARGING], infos=infos)
+        self.assertEqual([(s.key, s.level) for s in out],
+                         [("glorious:2022", 75), ("glorious:2024", 75)])
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -11,10 +11,13 @@ Link:     WinRT BluetoothDevice.ConnectionStatus (BluetoothLEDevice for LE),
 One physical device is several PnP nodes in Windows: the root node
 (BTHENUM\\DEV_<MAC>, BTHLE\\DEV_<MAC>) and service nodes. Nodes of one device
 are matched by the MAC address found in every node's instance id.
-Everything is fetched with a SINGLE PowerShell call.
+Everything is fetched with a SINGLE PowerShell call - or, in the app, read in-process by
+bluetooth_native (same data, no PowerShell process; PowerShell stays the fallback).
 Windows 10/11 only; on by default (toggle in the tray menu).
 """
 from __future__ import annotations
+
+from dataclasses import replace
 
 import json
 import queue
@@ -26,6 +29,7 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
+from . import bluetooth_native
 from .base import DeviceStatus, Provider, log
 
 K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
@@ -155,7 +159,7 @@ AUDIO_SERVICES = ("0000110b-", "0000111e-", "00001108-", "00001131-")   # A2DP s
 
 
 def kind_from_class(raw, le: bool) -> str:
-    """headset / mouse / keyboard / gamepad from the Bluetooth Class of Device
+    """Device kind from the Bluetooth Class of Device
     (classic) or the GAP Appearance value (LE); "" if unknown or other."""
     try:
         raw = int(raw)
@@ -163,12 +167,21 @@ def kind_from_class(raw, le: bool) -> str:
         return ""
     if le:
         cat, sub = raw >> 6, raw & 0x3F
+        # Bluetooth SIG Assigned Numbers: GAP 0x0040 is Generic Phone.
+        # https://www.bluetooth.com/specifications/assigned-numbers/
+        if cat == 1 and sub == 0:
+            return "phone"
         if cat == 0x0F:                               # HID
             return {1: "keyboard", 2: "mouse", 3: "gamepad", 4: "gamepad"}.get(sub, "")
         if cat == 0x25:                               # wearable audio device
             return "headset"
         return ""
     major, minor = (raw >> 8) & 0x1F, (raw >> 2) & 0x3F
+    # Phone major class 2; minor 0..3 = generic/cellular/cordless/smartphone.
+    # ClassOfDevice is already present in the existing Windows snapshot;
+    # this classification adds no Bluetooth request or name-based guessing.
+    if major == 2 and minor in (0, 1, 2, 3):
+        return "phone"
     if major == 4:                                    # audio / video
         return "headset" if minor in (1, 2, 6) else ""   # wearable headset, hands-free, headphones
     if major == 5:                                    # peripheral
@@ -199,6 +212,24 @@ def _as_list(v):
     if v is None:
         return []
     return [v] if isinstance(v, dict) else list(v)
+
+
+def _battery_level(value) -> Optional[int]:
+    """Windows battery properties are integral percentages; never clamp them."""
+    if type(value) is int:
+        return value if 0 <= value <= 100 else None
+    if isinstance(value, str) and len(value) <= 16:
+        text = value.strip()
+        if re.fullmatch(r"[0-9]{1,3}", text):
+            level = int(text)
+            return level if 0 <= level <= 100 else None
+    return None
+
+
+def _last_known(status: DeviceStatus) -> DeviceStatus:
+    """Retain an earlier percentage without treating it as a current reading."""
+    return replace(status, online=False, charging=False, charging_known=False,
+                   polling_stale=True)
 
 
 def group_devices(data: dict, diag: List[str],
@@ -238,10 +269,12 @@ def group_devices(data: dict, diag: List[str],
         g = slot(mac)
         key = (p.get("key") or "").upper()
         if key == K_BAT.upper():
-            try:
-                g["level"] = int(p.get("data"))
-            except (TypeError, ValueError):
+            level = _battery_level(p.get("data"))
+            if level is None:
+                diag.append(f"[Bluetooth] {mac}: refusing invalid battery level "
+                            f"{str(p.get('data'))[:100]}")
                 continue
+            g["level"] = level
             d = info.get(p.get("id")) or {}
             g["name"] = g["name"] or d.get("name")
             g["status_ok"] = g["status_ok"] or str(d.get("status", "")).upper() == "OK"
@@ -271,7 +304,7 @@ def group_devices(data: dict, diag: List[str],
         if level is not None:
             last_levels[mac] = level
         elif mac in last_levels:
-            level, cached = last_levels[mac], True
+            level, cached = _battery_level(last_levels[mac]), True
         if level is None:
             continue
         name = (g["root_name"] or g["aep_name"] or g["name"] or f"Bluetooth {mac}").strip()
@@ -290,29 +323,64 @@ def group_devices(data: dict, diag: List[str],
                     f"connected: WinRT={g['aep_conn']} PnP={g['pnp_conn']} "
                     f"-> {'shown' if shown else 'hidden'} [{src}], kind: {kind or 'unknown'}")
         if shown:
-            out.append(DeviceStatus(f"bt:{mac}", name, level, False, True, "bluetooth", kind=kind))
+            out.append(DeviceStatus(f"bt:{mac}", name, level, False, not cached, "bluetooth",
+                                    kind=kind, charging_known=not cached,
+                                    polling_stale=cached))
     if not by_mac:
         diag.append("[Bluetooth] no Bluetooth devices found")
     return out
 
 
 # How many polls in a row (one per minute) a device may be missing before its
-# icon is removed. Smooths over brief PowerShell failures and polls where
-# Windows reports a headset as disconnected for a moment.
+# icon is removed. Only successful snapshots advance this counter; query failures
+# retain the previous reading as last known without implying disconnection.
 MISS_LIMIT = 2
 
 
 class BluetoothProvider(Provider):
     name = "bluetooth"
 
-    def __init__(self):
+    def __init__(self, native: bool = False):
+        # native: read one-shot snapshots in-process (bluetooth_native) before trying PowerShell
+        self.native = native
         self._diag: List[str] = []
         self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
         self._misses: Dict[str, int] = {}
         self._levels: Dict[str, int] = {}           # MAC -> last known battery level
+        # The cache above has one owner at a time: the watcher that claimed it, or None for
+        # one-shot polls. A watcher the app has retired can still come back from a Windows
+        # call that blocked; its snapshot must not rewrite the cache (#513 review).
+        self._owner: Optional[object] = None
+        self._lock = threading.Lock()
+
+    def claim(self, owner: object) -> None:
+        """From now on only `owner`'s snapshots change the cache. Every watcher claims the
+        provider when it is created, so the newest watcher always wins."""
+        with self._lock:
+            self._owner = owner
+
+    def release(self, owner: object) -> None:
+        """Retire `owner`: its later snapshots are dropped. Returns only after a snapshot it is
+        handling right now has finished, so nothing of it lands after this call."""
+        with self._lock:
+            if self._owner is owner:
+                self._owner = None
 
     def _query(self) -> Optional[str]:
-        """Raw JSON from PowerShell, or None on failure."""
+        """Raw JSON snapshot, or None on failure: read in-process first when `native` is on,
+        from PowerShell otherwise or when that read fails."""
+        if self.native:
+            try:
+                snap = bluetooth_native.one_shot_snapshot()
+                self._diag.append(f"[Bluetooth] native: {len(snap['devs'])} nodes, "
+                                  f"{len(snap['props'])} properties, {len(snap['roots'])} device(s)")
+                return json.dumps(snap)
+            except Exception as e:
+                # Not retried: a read that timed out may still be blocked in Windows, and
+                # another one must not start beside it (#513 review).
+                self.native = False
+                self._diag.append(f"[Bluetooth] native read failed ({type(e).__name__}: "
+                                  f"{str(e)[:150]}), using PowerShell from now on")
         try:
             flags = 0x08000000  # CREATE_NO_WINDOW
             proc = subprocess.run(
@@ -325,7 +393,8 @@ class BluetoothProvider(Provider):
             if err:
                 self._diag.append(f"[Bluetooth] stderr: {err[:300]}")
             if proc.returncode != 0:
-                self._diag.append(f"[Bluetooth] PowerShell exited with code {proc.returncode}")
+                self._diag.append(f"[Bluetooth] FAILURE: PowerShell exited with code {proc.returncode}")
+                return None
             self._diag.append(f"[Bluetooth] PowerShell: {len(raw)} bytes of output")
             return raw
         except subprocess.TimeoutExpired:
@@ -339,25 +408,34 @@ class BluetoothProvider(Provider):
         if sys.platform != "win32":
             return []
         raw = self._query()
-        fresh = self.parse(raw) if raw is not None else None
-        result = self.merge(fresh)
-        for line in self._diag:          # every poll goes to the log in detail, to investigate disappearing icons
-            log.info(line)
+        with self._lock:
+            fresh = self.parse(raw) if raw is not None else None
+            result = self.merge(fresh)
+            for line in self._diag:      # every poll goes to the log in detail, to investigate disappearing icons
+                log.info(line)
         return result
 
-    def handle(self, raw: str) -> List[DeviceStatus]:
-        """One snapshot line from the watcher -> the devices to show."""
-        self._diag = []
-        result = self.merge(self.parse(raw))
-        for line in self._diag:
-            log.info(line)
+    def handle(self, raw: str, owner: Optional[object] = None) -> Optional[List[DeviceStatus]]:
+        """One snapshot line from the watcher -> the devices to show.
+
+        None, with the cache untouched, when `owner` is not the cache's owner: a watcher
+        that was retired while a Windows call blocked must not overwrite what its
+        successor has read since (#513 review)."""
+        with self._lock:
+            if owner is not self._owner:
+                log.info("[Bluetooth] dropped a snapshot from a retired watcher")
+                return None
+            self._diag = []
+            result = self.merge(self.parse(raw))
+            for line in self._diag:
+                log.info(line)
         return result
 
     def merge(self, fresh: Optional[List[DeviceStatus]]) -> List[DeviceStatus]:
         """Smoothing: a missing device is kept for MISS_LIMIT-1 more polls."""
         if fresh is None:
-            self._diag.append("[Bluetooth] poll failed, keeping the previous icons")
-            fresh = []
+            self._diag.append("[Bluetooth] poll failed, keeping the previous icons as last known")
+            return [_last_known(status) for status in self._shown.values()]
         now = {st.key: st for st in fresh}
         for key, st in now.items():
             self._shown[key] = st
@@ -370,7 +448,7 @@ class BluetoothProvider(Provider):
             if self._misses[key] < MISS_LIMIT:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: missing from the reply, "
                                   f"keeping the icon (miss {self._misses[key]}/{MISS_LIMIT})")
-                out.append(self._shown[key])
+                out.append(_last_known(self._shown[key]))
             else:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: removing the icon "
                                   f"({self._misses[key]} misses in a row)")
@@ -388,7 +466,27 @@ class BluetoothProvider(Provider):
         except ValueError:
             self._diag.append(f"[Bluetooth] FAILURE: could not parse the output: {raw[:300]}")
             return None
-        return group_devices(data, self._diag, self._levels)
+        # A failed/truncated schema is not an authoritative empty snapshot.
+        # PowerShell may serialize a singleton array as one object.
+        if not isinstance(data, dict) or "devs" not in data:
+            self._diag.append("[Bluetooth] FAILURE: invalid snapshot object")
+            return None
+        for field in ("devs", "props", "aep"):
+            values = data.get(field)
+            if (values is not None and not isinstance(values, (list, dict))
+                    or isinstance(values, list) and any(not isinstance(value, dict)
+                                                       for value in values)):
+                self._diag.append(f"[Bluetooth] FAILURE: invalid {field} collection")
+                return None
+        try:
+            levels = dict(self._levels)
+            statuses = group_devices(data, self._diag, levels)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            self._diag.append("[Bluetooth] FAILURE: invalid snapshot fields")
+            return None
+        self._levels.clear()
+        self._levels.update(levels)
+        return statuses
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
@@ -417,6 +515,7 @@ class BluetoothWatcher:
         self._stop = threading.Event()
         self._proc: Optional[subprocess.Popen] = None
         self._thread = threading.Thread(target=self._run, daemon=True)
+        provider.claim(self)                    # the cache is this watcher's until it is retired
 
     def command(self) -> List[str]:
         script = WATCH_SCRIPT.replace("%PPID%", str(os.getpid()))
@@ -428,6 +527,12 @@ class BluetoothWatcher:
 
     def running(self) -> bool:
         return self._thread.is_alive() and not self.failed
+
+    @property
+    def alive(self) -> bool:
+        """True while the worker thread runs, even after `failed` - the app keeps at
+        most one abandoned watcher and never starts another of the same kind."""
+        return self._thread.is_alive()
 
     def stop(self) -> None:
         self._stop.set()
@@ -498,9 +603,11 @@ class BluetoothWatcher:
                     continue
                 got_output = True
                 try:
-                    devices = self.provider.handle(text)
+                    devices = self.provider.handle(text, owner=self)
                 except Exception:
                     log.exception("bluetooth watcher")
+                    continue
+                if devices is None:               # retired: a queued line after stop()
                     continue
                 self.snapshots += 1
                 self.on_update(devices)
@@ -524,3 +631,123 @@ class BluetoothWatcher:
                 self.failed = True
                 return
             self._stop.wait(5)
+
+
+class NativeBluetoothWatcher:
+    """The watcher's job without PowerShell: a thread in the app reads the same snapshot through
+    bluetooth_native and keeps WATCH_SCRIPT's cadence - the WinRT connection state every 2 s, a
+    full snapshot right after a device connects or disconnects (then at +3, +8 and +15 s) and once
+    a minute. This saves the ~80 MB PowerShell process. Each snapshot goes through the provider's
+    usual parse and grouping. After FAIL_LIMIT failed rounds in a row it gives up (failed = True)
+    and the app starts the PowerShell watcher instead. A round that never returns (a Windows
+    call that hangs) counts as a failure after STALL_TIMEOUT, like the PowerShell watcher's stall."""
+
+    INTERVAL = 2.0
+    FULL_EVERY = 60.0
+    AFTER_CHANGE = (0, 3, 8, 15)
+    FAIL_LIMIT = 3
+
+    def __init__(self, provider: BluetoothProvider, on_update: Callable[[List[DeviceStatus]], None],
+                 reader_factory: Optional[Callable[[], object]] = None,
+                 clock: Callable[[], float] = time.monotonic):
+        self.provider = provider
+        self.on_update = on_update
+        self.snapshots = 0
+        self.stalls = 0
+        self._failed = False
+        self._reader_factory = reader_factory or bluetooth_native.NativeReader
+        self._clock = clock
+        self._beat = clock()                    # end of the last round: the stall check
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="bt-native-watcher", daemon=True)
+        provider.claim(self)                    # the cache is this watcher's until it is retired
+
+    def start(self) -> "NativeBluetoothWatcher":
+        self._beat = self._clock()
+        self._thread.start()
+        return self
+
+    @property
+    def failed(self) -> bool:
+        if not self._failed and self._thread.is_alive() and self._clock() - self._beat > STALL_TIMEOUT:
+            self.stalls += 1
+            log.warning("bluetooth watcher: in-process round stuck for %.0f s, using PowerShell",
+                        self._clock() - self._beat)
+            self._failed = True
+            self._stop.set()                    # the stuck thread exits if its call ever returns
+        return self._failed
+
+    def running(self) -> bool:
+        return self._thread.is_alive() and not self.failed
+
+    @property
+    def alive(self) -> bool:
+        """True while the worker thread runs, even after `failed` - a stalled call
+        can return minutes later."""
+        return self._thread.is_alive()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _emit(self, snap: dict) -> None:
+        if self._stop.is_set():                 # retired while the call was blocked
+            return
+        try:
+            devices = self.provider.handle(json.dumps(snap), owner=self)
+        except Exception:
+            log.exception("bluetooth watcher")
+            return
+        if devices is None:                     # no longer the cache's owner: a late result
+            return
+        self.snapshots += 1
+        self.on_update(devices)
+
+    def _run(self) -> None:
+        try:
+            reader = self._reader_factory()     # on this thread: WinRT is set up per thread
+        except Exception as e:
+            log.warning("bluetooth watcher: in-process reader unavailable (%s), using PowerShell", e)
+            self._failed = True
+            return
+        try:
+            if not reader.winrt_ok:
+                log.warning("bluetooth watcher: WinRT unavailable in-process (%s), "
+                            "using the PnP connection flag", reader.winrt_error)
+            roots: List[dict] = []
+            prev: Optional[str] = None
+            queue: List[float] = []
+            next_full = 0.0
+            first, failures = True, 0
+            while not self._stop.is_set():
+                try:
+                    now = self._clock()
+                    due = first
+                    if not first:
+                        if roots and reader.winrt_ok:
+                            key = bluetooth_native.connection_key(reader.connections(roots))
+                            if key != prev:
+                                prev = key
+                                queue = [now + s for s in self.AFTER_CHANGE]
+                        while queue and queue[0] <= now:
+                            queue.pop(0)
+                            due = True
+                    if due or now >= next_full:
+                        snap = reader.snapshot()
+                        self._emit(snap)
+                        roots = snap["roots"]
+                        prev = bluetooth_native.connection_key(snap["aep"])
+                        next_full = self._clock() + self.FULL_EVERY
+                        first = False
+                    failures = 0
+                except Exception:
+                    failures += 1
+                    log.exception("bluetooth watcher: in-process round failed (%d/%d)",
+                                  failures, self.FAIL_LIMIT)
+                    if failures >= self.FAIL_LIMIT:
+                        self._failed = True
+                        return
+                self._beat = self._clock()
+                if self._stop.wait(self.INTERVAL):
+                    break
+        finally:
+            reader.close()

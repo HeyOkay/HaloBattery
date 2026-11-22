@@ -92,10 +92,44 @@ class NumberSettingTests(HideRenameTestCase):
     def test_charging(self):
         self.assertEqual(self.texts_drawn(mouse(40, charging=True), {"percent_in_icon": True}), {"40"})
 
-    def test_rough_levels_and_no_level_keep_the_pictogram(self):
+    def test_approximate_levels_use_the_number_without_a_marker(self):
         self.assertEqual(self.texts_drawn(mouse(55, approx="about 55% (medium)"),
-                                          {"percent_in_icon": True}), {""})
+                                          {"percent_in_icon": True}), {"55"})
         self.assertEqual(self.texts_drawn(mouse(None), {"percent_in_icon": True}), {""})
+
+    def test_approximate_and_exact_levels_both_show_the_number(self):
+        self.assertEqual(self.texts_drawn(mouse(55, approx="about 55%"),
+                                          {"percent_in_icon": True}), {"55"})
+        self.assertEqual(self.texts_drawn(mouse(55), {"percent_in_icon": True}), {"55"})
+
+    def test_a_coarse_full_grade_shows_100(self):
+        from providers import xinput
+        level, charging, approx = xinput.interpret(xinput.TYPE_ALKALINE, 3, None)
+        self.assertEqual((level, approx[:6]), (100, "about "))
+        self.assertEqual(self.texts_drawn(mouse(level, charging, approx=approx),
+                                          {"percent_in_icon": True}), {"100"})
+
+    def test_placeholder_levels_are_not_drawn_as_numbers(self):
+        # #450 review: approx also marks levels the device never reported as a
+        # number. A wired XInput pad's invented 100 % (or its last wireless level)
+        # and a Logitech level from before the cable went in must not become a
+        # hard number in the ring.
+        from providers import xinput
+        wired = xinput.interpret(xinput.TYPE_WIRED, 0, None)
+        self.assertEqual(wired, (100, True, "on cable, charging"))
+        stale_wired = xinput.interpret(xinput.TYPE_WIRED, 0, 40)
+        cases = {
+            "wired pad placeholder": mouse(wired[0], wired[1], approx=wired[2]),
+            "wired pad last level": mouse(stale_wired[0], stale_wired[1], approx=stale_wired[2]),
+            "logitech level before the cable": mouse(
+                40, True, approx="charging (about 40% before it was plugged in)"),
+            "remembered level": mouse(70, online=False,
+                                      approx="70% (last known; no fresh reply)"),
+            "charging state unknown": mouse(60, approx="60%, charging state unknown"),
+        }
+        for label, st in cases.items():
+            with self.subTest(label):
+                self.assertEqual(self.texts_drawn(st, {"percent_in_icon": True}), {""})
 
     def test_menu_toggles(self):
         app = make_app()

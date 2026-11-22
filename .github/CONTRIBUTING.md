@@ -82,11 +82,22 @@ AI coding agents: read [AGENTS.md](../AGENTS.md) first.
   ```
 
 - Add a line to `CHANGELOG.md` under `[Unreleased]`. For a device, also add a row to the table in `docs/devices.md` and a section in `docs/protocols.md` that tells how the device is read and names the source.
-- CI installs from `requirements-build.txt` (exact versions and hashes, Python 3.12, Windows, with PyInstaller). `requirements.txt` stays the loose list. After you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
+- CI packages with Python 3.12.10 and also runs the full unit suite on Python
+  3.13.17 and 3.14.10. Ruff checks correctness errors without a formatting rewrite.
+  Both compatibility and lint must pass before the required `tests` check can
+  succeed. To run lint locally, install `requirements-lint.txt` with
+  `python -m pip install --require-hashes -r requirements-lint.txt`, then run
+  `python -m ruff check halo_battery.pyw halo providers tools tests`.
+- CI installs from `requirements-build.txt` (exact versions and hashes, Windows,
+  with PyInstaller). `requirements.txt` stays the loose source-run list. After
+  you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
 
   ```
   uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements-build.txt
   ```
+- Native dependency locks, compiler pins and verified local packaging are
+  described in [Building](../docs/building.md). Do not silently regenerate locks
+  during an ordinary build.
 - Do not change `VERSION`; only release pull requests do.
 - In the description (the template asks for it) write:
   - which issue it closes;
@@ -102,9 +113,30 @@ Look at the open issues and pull requests first, so that two people do not do th
 - `main`: stable, released code only. Tags `vX.Y.Z` are cut from `main`; `.github/workflows/release.yml` builds and publishes on a tag. The app's updater uses `/releases/latest`, so only `main` releases reach users.
 - `pre-release`: integration branch. **All contributions open pull requests against `pre-release`.** They need passing CI (no approval required); any maintainer with write access merges them. Squash merge.
 - Release: a maintainer opens a "Release X.Y.Z" pull request from `pre-release` into `main`. It bumps `VERSION` in `halo_battery.pyw` and moves the CHANGELOG `[Unreleased]` section to `[X.Y.Z] - date`. It needs passing CI and approval from a code owner (see `.github/CODEOWNERS`). Merge with a merge commit (not squash), then tag on `main`.
+- Stable publication requires repository release immutability and the owner-set
+  `STABLE_RELEASE_IMMUTABILITY_ENABLED=true` variable. The workflow uploads to a
+  new draft, verifies asset digests and provenance attestations, then publishes.
+  It refuses existing releases/drafts; inspect a partial failure before recovery.
+  See [Building](../docs/building.md#stable-release-publication).
 - Hotfix: branch `hotfix/<name>` from `main`, pull request into `main` (code-owner approval).
 - After **every** release or hotfix, merge `main` back into `pre-release` (fast-forward when possible), so the two never drift apart.
-- **Test builds**: every merge into `pre-release` publishes the [Pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) (`.github/workflows/prerelease.yml`). It is one rolling GitHub release, marked as a pre-release, so the app's updater never offers it. Testers download it there and report bugs with its commit id.
+- **Test builds**: every push to `pre-release` runs tests and builds Actions
+  artifacts (`.github/workflows/prerelease.yml`), without publishing a release.
+  To publish a selected candidate, use **Actions > Pre-release build > Run
+  workflow**, select `pre-release` and enable **Publish this candidate**
+  (`publish_prerelease`), or run
+  `gh workflow run prerelease.yml --ref pre-release -f publish_prerelease=true`.
+  If Actions still shows the older default-branch form without this input, use
+  the CLI command above to pass it to the selected `pre-release` ref.
+  The boolean input defaults to false; ordinary manual runs only build artifacts.
+  Publication is allowed only from `pre-release` and creates a separate
+  [pre-release](https://github.com/HeyOkay/HaloBattery/releases). Each
+  `pre-<version>-<short SHA>-<run ID>-<attempt>` tag points
+  to the exact build commit; previous builds and source archives stay unchanged.
+  These releases never become the stable updater's Latest release. A failed
+  publication can leave a draft for inspection; a rerun uses a new tag and never
+  overwrites the old attempt.
+
 
 ```
 feat/* fix/* device/* --PR (squash)--> pre-release --release PR (merge commit)--> main --tag vX.Y.Z--> release
@@ -122,8 +154,8 @@ Before opening the release PR:
 
 1. Read new issue replies, PR review comments and hardware-test results, including
    follow-ups on the community fork. Record unresolved work in the original tracker.
-2. Check the latest `Tests` run and rolling pre-release build. Test the packaged app
-   and installer, and verify the updater points to `HeyOkay/HaloBattery`.
+2. Check the latest `Tests` run and selected pre-release candidate. Test the
+   packaged app and installer, and verify the updater points to `HeyOkay/HaloBattery`.
 3. Review known regressions and experimental device paths. A passing simulated test
    is not hardware confirmation. Do not promote guessed protocol changes without a
    named source and the required tester confirmation.

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "dependencies": {
+    "Microsoft.NET.ILLink.Tasks": {
+      "resolved": "10.0.15",
+      "archiveSha512": "q/cuZxi8XPwa4dpK+7y9t3KoL7T6qQZUtIqqN96YKx1Kcgr/bhD0K3U+OaLlrWVn6R23UrsEr8FARqKYVuE3Zg=="
+    },
+    "Microsoft.WindowsAppSDK.InteractiveExperiences": {
+      "resolved": "2.1.9",
+      "archiveSha512": "3WQp3t0txhg+RHw1j4UENtUviBq5n+bDnCqgY0wDhoRglvoRK1O6YsvWOMXnL5e2IxwIVuwZF0CXhvD5pKUeBw=="
+    },
+    "Microsoft.WindowsAppSDK.Runtime": {
+      "resolved": "2.5.1",
+      "archiveSha512": "WOuScR3S99XeYTk7A3uYaZidAvOWjgzFCLvoGbcYf+tTnsbZHqtsZaSRsCF142KstnjDIrxjktH3NpPZyu0MIA=="
+    },
+    "Microsoft.WindowsAppSDK.WinUI": {
+      "resolved": "2.3.9",
+      "archiveSha512": "tOdVUPFfkZe5+BJxGFnJplY+1e1CFog0xqz8lEQvkic1nMEvh0BVzU/z86GBZtDvLxjCNg5UTXmDtOBq0nCgVQ=="
+    },
+    "Microsoft.Web.WebView2": {
+      "resolved": "1.0.3719.77",
+      "archiveSha512": "Cpq7EGgijiCN0lg1RlTZuZcRkzyo/USU9cEJMSPh6FG4PLjmTEpJ5NKuJqQ06ONnVVARCcTLf31IjjhFJUrApw=="
+    },
+    "Microsoft.Windows.SDK.BuildTools": {
+      "resolved": "10.0.26100.4654",
+      "archiveSha512": "kXdAbJ9Vu1gFheVpgqdxFqbamlponIVeVEnnkIzuvLkcaGrQOoJwaZSRcrhwICgc1UZCoPUE4FWZKxHWTW4s3Q=="
+    },
+    "Microsoft.Windows.SDK.BuildTools.MSIX": {
+      "resolved": "1.7.251221100",
+      "archiveSha512": "3OEJjmDvPQH649p73taTt2n4AeY9dMg/gaDdZHQZh4xOOTAjdfuzuuw2FxSedpQuP9Pbki7FNGoE1mM4kjf0Mw=="
+    },
+    "Microsoft.WindowsAppSDK.Base": {
+      "resolved": "2.0.4",
+      "archiveSha512": "Mjy6K7l9kj1+5UNPg8y/fkHx2be0TdLYaIWJsf7SlkZHEcFd6bl5L8uSjPNYK0Xz5vfaYELO5yKszHHIbaO75A=="
+    },
+    "Microsoft.WindowsAppSDK.Foundation": {
+      "resolved": "2.3.12",
+      "archiveSha512": "BXx9Vu6ZTn2F6PdAx1iaPa2fdCFyPegPIZ/m4+8DMp2Ur3orvUVAA/f2Sv9mBykfyVPD9dh2NQKj0JFYS/4w1g=="
+    },
+    "Microsoft.AspNetCore.App.Runtime.win-x64": {
+      "resolved": "10.0.15",
+      "archiveSha512": "GbC1BsO6jqVOj7LrAagG7x4Qi9rFt7ylOEHqXmZw+k9zeKMAlt8A4QBHt0C6XDg/cN93LBsL/WWTPEZAnEWJ7g=="
+    },
+    "Microsoft.NETCore.App.Runtime.win-x64": {
+      "resolved": "10.0.15",
+      "archiveSha512": "MEGAkRGHrAXYA2t/Lo0mDxH+/O5NLqgWTcVh70iOZJTpoOCL/jKfOgDqYoDi3W9WcnviL4DhMl+5lWC8cxttSw=="
+    },
+    "Microsoft.Windows.SDK.NET.Ref": {
+      "resolved": "10.0.26100.57",
+      "archiveSha512": "BG2X8tqoPJu7Lde8hlg/3bF9QwOW3VsxI7MGPEQM5+i4YG0WgNeesIeia2VTRkVEnoC9SdxpFGJtdGQHHIBwcA=="
+    },
+    "Microsoft.WindowsDesktop.App.Runtime.win-x64": {
+      "resolved": "10.0.15",
+      "archiveSha512": "vUp++3z72ONuBlzCplThiiZHdunYILGH37bfKjzzWG75nsllieq9m63DSGkf6budzAgOXQ9/+jWBeaS4qlUUEw=="
+    }
+  }
+}

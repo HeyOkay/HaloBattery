@@ -3,7 +3,7 @@ from string import Formatter
 import unittest
 
 from halo import i18n
-from halo.locales import en, es, fr, ja, pl, ru, zh_CN, zh_TW
+from halo.locales import en, es, fr, ja, kk, pl, ru, uk, zh_CN, zh_TW
 
 
 class SettingsCatalogTests(unittest.TestCase):
@@ -13,7 +13,8 @@ class SettingsCatalogTests(unittest.TestCase):
         self.assertIn("settings.no_devices", expected)
         self.assertIn("settings.quiet_hint", expected)
         self.assertIn("settings.close", expected)
-        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("pl", pl), ("ru", ru),
+        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("kk", kk),
+                             ("pl", pl), ("ru", ru), ("uk", uk),
                              ("zh-CN", zh_CN), ("zh-TW", zh_TW)):
             with self.subTest(language=code):
                 actual = {key for key in module.MESSAGES if key.startswith("settings.")}
@@ -33,14 +34,17 @@ class SettingsCatalogTests(unittest.TestCase):
                 self.assertEqual(module.MESSAGES["preferences.language"], expected)
 
     def test_settings_placeholders_render_in_every_language(self):
-        values = {"level": "25%", "error": "Example failure", "version": "1.2.3", "page": "24"}
+        values = {"level": "25%", "error": "Example failure", "version": "1.2.3", "page": "24",
+                  "preferences": "Basic preferences"}
         expected_fields = {
             "settings.default_low": {"level"},
             "settings.error": {"error"},
+            "settings.open_failed": {"preferences"},
             "settings.version": {"version"},
             "settings.iconify_page": {"page"},
         }
-        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("pl", pl), ("ru", ru),
+        for code, module in (("en", en), ("es", es), ("fr", fr), ("ja", ja), ("kk", kk),
+                             ("pl", pl), ("ru", ru), ("uk", uk),
                              ("zh-CN", zh_CN), ("zh-TW", zh_TW)):
             for key, value in module.MESSAGES.items():
                 if not key.startswith("settings."):

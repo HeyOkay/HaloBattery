@@ -1,8 +1,12 @@
 # Community consolidation and follow-up register
 
-Reviewed 2026-11-10 for the 1.17.0 release candidate. Development is consolidated in **HeyOkay/HaloBattery**, on
-`pre-release`. `main` and the stable release remain unchanged. Weekly promotion is a
-[manual release review](../.github/CONTRIBUTING.md#weekly-manual-release-review).
+The historical acceptance record below was prepared for 1.17.0. Development is
+consolidated in **HeyOkay/HaloBattery**, on `pre-release`.
+[Release #370](https://github.com/HeyOkay/HaloBattery/pull/370) was merged and
+published as stable 1.17.0 on 2026-11-12. The #413 follow-ups are proposed through
+separate pull requests into `pre-release`. Checked tracking items record local
+verification; consult the linked pull requests for integration and release status.
+Weekly promotion is a [manual release review](../.github/CONTRIBUTING.md#weekly-manual-release-review).
 
 The historical [fork handover register](https://github.com/ahmedkhursheed23/HaloBattery/issues/39)
 contains the issue-by-issue baseline through upstream #357. Its statements about pending
@@ -28,8 +32,10 @@ This verifies ZIP-to-installer migration, not an upgrade from an earlier install
 Sandbox had no physical devices, so this adds no hardware-compatibility claim;
 the contributor evidence and remaining limitations below still apply.
 
-Before promotion to `main` and a stable tag, [#370](https://github.com/HeyOkay/HaloBattery/pull/370)
-still requires another lead's formal approval of its final head.
+Casparas approved the final [#370](https://github.com/HeyOkay/HaloBattery/pull/370)
+candidate, which was merged as `a20391e2a630eddf4ce8b1dc00a9a40e342aa2fc`.
+The acceptance above applies to that release; it does not validate later #413
+changes or replace the remaining device-specific tests below.
 
 ## Confirmed follow-ups
 
@@ -50,12 +56,12 @@ still requires another lead's formal approval of its final head.
 
 | Thread | Current evidence and next action |
 | --- | --- |
-| [#321](https://github.com/HeyOkay/HaloBattery/issues/321), [#324](https://github.com/HeyOkay/HaloBattery/issues/324), [fork #48](https://github.com/ahmedkhursheed23/HaloBattery/issues/48) | Excluded from 1.17.0: current Endgame 4K reader fails with `short send (-1)` and cannot open the held target. The separate corrected reader has positive level/charging observations followed by an unresolved detection-loss report. Review the forthcoming correction against public sources and model-specific recovery tests; confirmed XM2we support is unaffected. [Public correction status](https://github.com/nqble/HaloBattery/blob/main/docs/endgame/4k-status.md). |
-| [#343](https://github.com/HeyOkay/HaloBattery/issues/343), [#298](https://github.com/HeyOkay/HaloBattery/issues/298) | Two recent PRO X 3 logs remain negative: no receiver feature reply; probe output/feature writes return -1. Matching collections to PRO X 2 did not establish protocol compatibility. Need report descriptors and a G HUB battery capture. PRO X 3 (`046d:0b45`) is excluded from 1.17.0 before opening HID; confirmed PRO X 2 (`046d:0af7`) remains enabled. |
-| [#289](https://github.com/HeyOkay/HaloBattery/issues/289), [#251](https://github.com/HeyOkay/HaloBattery/issues/251) | AJ159 test2 still reports no link; all five collections refuse the write. Trying the fifth collection fixes a coverage bug but does not establish support. Need vendor capture before claiming AJ159/Kysona works. These paths came from fork #31, explicitly held in the historical register. Both alternate targets are disabled in 1.17.0 before opening HID; confirmed AJ179 support remains enabled. |
+| [#321](https://github.com/HeyOkay/HaloBattery/issues/321), [#324](https://github.com/HeyOkay/HaloBattery/issues/324), [fork #48](https://github.com/ahmedkhursheed23/HaloBattery/issues/48) | Normal polling stays held. The old XM2we-derived request has been replaced locally with the pinned Vole/stuffz A1 identity/battery contract, available only through an explicit acknowledged diagnostic tester, now reachable from the packaged EXE as well as source (see the protocol notes). Equal samples do not prove reply freshness; persistent status-08 and detection-loss reports still need resolution. No reset, pairing or guessed recovery commands are enabled. Confirmed XM2we support is unchanged. |
+| [#343](https://github.com/HeyOkay/HaloBattery/issues/343), [#298](https://github.com/HeyOkay/HaloBattery/issues/298) | Historical PRO X 2-style `51` probes were negative. A separate local X3 route now follows HeadsetControl's exact `046d:0b45` `50 23` read-only Root/bridge/battery exchange, dynamically resolving the feature indices. The pinned upstream author tested Ubuntu receiver firmware 1.02; Windows integration and charging transitions are not newly hardware-verified here. Confirmed PRO X 2 behavior is unchanged. A packaged `--diagnose-device logitech-pro-x3` check now selects only the exact X3 endpoint and refuses concurrent HaloBattery access; see [opt-in diagnostics](features.md#opt-in-device-diagnostics). |
+| [#289](https://github.com/HeyOkay/HaloBattery/issues/289), [#251](https://github.com/HeyOkay/HaloBattery/issues/251) | AJ159 test4 supersedes the old negative test2: owner diagnostics show GET05/65 returning70% after SET0/F7. The local exact3151:402d/interface2 FFFF:2 port uses that independently sourced Aiacos exchange and native feature lengths; charging is unknown. Kysona3151:5031 remains unopened because product-table membership does not prove that exchange. AJ179 is unchanged. A packaged `--diagnose-device aj159` check now targets the sourced AJ159 endpoint alone, including when an AJ179 is connected; it refuses concurrent HaloBattery access. |
 | [#239](https://github.com/HeyOkay/HaloBattery/issues/239) | Stealth 600X Gen 3 remains unconfirmed and is excluded from 1.17.0 before opening HID. Atlas Air from the same fork PR #23 now has reporter confirmation (above) and remains enabled with Stealth Pro II and Stealth 700 Gen 3. |
-| [#294](https://github.com/HeyOkay/HaloBattery/issues/294) | Sony INZONE H9 II (`054c:0fa8`) is excluded before serial open in 1.17.0. Fork #30 was held in the historical register: its H9 init frames are unconfirmed on H9 II, and no new reporter confirmation is present. Sourced H9 (`054c:0e53`) support remains enabled. |
-| [#262](https://github.com/HeyOkay/HaloBattery/issues/262) | Lamzu Tachi (`37b0:000c`) is excluded before HID open in 1.17.0. The Lamzu half of fork #34 was held: collection layout alone supports the Sinowealth hypothesis and no new confirmation is present. Glorious and the other Lamzu providers remain enabled. |
+| [#294](https://github.com/HeyOkay/HaloBattery/issues/294), [#387](https://github.com/HeyOkay/HaloBattery/issues/387) | H9 II remains excluded from H9 serial initialization. The local separate HID provider follows zoneout's exact054c:0fa8/interface5 FF04:1 audio-status write/read. A previous Windows test-build level was owner-confirmed; the new native integration and charging transitions are not hardware-verified here. H9 serial behavior remains unchanged. The packaged `--diagnose-device inzone-h9ii` check uses only that H9 II endpoint and refuses concurrent HaloBattery access. |
+| [#262](https://github.com/HeyOkay/HaloBattery/issues/262) | Normal Tachi polling stays held. The official Aurora model table and getBatPer source now establish the read-only83 command on the owner-recorded exact37b0:000c/interface2 FFFF:0 collection. An acknowledged diagnostic tester, available from the packaged EXE or source, uses that path only, with no Glorious fallback. Dorsal's real-firmware emulator bypasses the physical receiver, and no owner result after test2 verifies that transport or charging. |
 | [#238](https://github.com/HeyOkay/HaloBattery/issues/238) | Latest diagnostics still use 1.15.0. Retest OMNI Keris II Origin with upstream pre-release. Azoth 96 HE uses SPEEDNOVA 1ad0; that shared receiver id does not prove the Harpe mouse protocol applies to this keyboard. Cetra Open 1cac is a separate unsupported device. |
 | [#351](https://github.com/HeyOkay/HaloBattery/issues/351), [fork #41](https://github.com/ahmedkhursheed23/HaloBattery/issues/41) | X11 and G800 Bluetooth success is reported. G800's 2.4 GHz side still needs a receiver diagnostic/capture. Keep the combined request partially open. |
 | [#82](https://github.com/HeyOkay/HaloBattery/issues/82), [#297](https://github.com/HeyOkay/HaloBattery/issues/297) | Old WARG follow-up was never confirmed; the later Compx path is integrated. Request a current pre-release result in #297 instead of treating the closed multi-device thread as proof of success. |
@@ -69,7 +75,25 @@ still requires another lead's formal approval of its final head.
 ## Stable-release boundary
 
 No version bump, stable tag or promotion to `main` is part of this consolidation.
-The rolling pre-release build remains for testing. Resolve or exclude the experimental
-protocol holds above before the first manual stable promotion. Existing installed fork
-builds still check the fork; users must install the canonical build manually unless a
-separate bridge release is coordinated. Do not silently rewrite historical fork releases.
+Separate per-build pre-releases remain for testing; the historical rolling release is preserved. Resolve or explicitly exclude
+the experimental protocol holds above before a future stable promotion. The fork now carries the canonical 1.17.0 files as its latest bridge release,
+so its installed 1.16.0 updater can offer the official package. That exact automatic
+upgrade route still needs a real installed-copy check; this local follow-up publishes
+neither a new bridge nor a stable release.
+
+
+## Closed-issue review for #413 (2026-11-17)
+
+The full discussions were reread before changing their tracking state. An
+unanswered test build is not treated as reporter confirmation.
+
+| Thread | Corrected disposition |
+| --- | --- |
+| [#93](https://github.com/HeyOkay/HaloBattery/issues/93) | Reopened: the optional single-icon mode has no implementation. This remains a feature request. |
+| [#105](https://github.com/HeyOkay/HaloBattery/issues/105) | Reopened for retest: current code includes the original Hitscan receiver and HSK Pro ACE; the old reply saying HSK is unsupported is outdated. |
+| [#109](https://github.com/HeyOkay/HaloBattery/issues/109) | Reopened: recover the captured VT9 Pro BB reader and obtain confirmation from the packaged build. Capture decoding alone is not an app test. |
+| [#82](https://github.com/HeyOkay/HaloBattery/issues/82) | Reopened: Hyzen was confirmed; retest WARG on the later CompX path and keep Steam recovery distinct from existing puck confirmation. |
+| [#70](https://github.com/HeyOkay/HaloBattery/issues/70) | Remains closed as not planned, rather than completed: repeated reporter tests found only a constant receiver value, not battery information. |
+| [#13](https://github.com/HeyOkay/HaloBattery/issues/13) | Reopened: Logitech and Nova 5 were confirmed, but the exact Keychron V3 Ultra still needs a retest after the output-report correction. |
+
+No new hardware testing or maintainer comments were added by this review.

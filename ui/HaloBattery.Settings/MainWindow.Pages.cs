@@ -17,10 +17,15 @@ public sealed partial class MainWindow
     private readonly List<Action> pageBindings = new();
     private DispatcherTimer? previewTimer;
     private Image? previewImage;
+    private DevicePreview? previewPresenter;
+    private CardView? previewCard;
+    private string? previewPage;
+    private long previewRequestGeneration;
     private InfoBar? pageError;
     private string? previewDeviceKey;
     private string lastError = "";
     private long previewGeneration;
+    private Action? pendingEditorCommit;
 
     private bool BoolCfg(string key, bool fallback = false) => State.Settings.TryGetValue(key, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : fallback;
     private int IntCfg(string key, int fallback = 0) => State.Settings.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : fallback;
@@ -33,23 +38,26 @@ public sealed partial class MainWindow
         foreach (var (name, value) in values) text = text.Replace("{" + name + "}", Convert.ToString(value, System.Globalization.CultureInfo.CurrentCulture) ?? "");
         return text;
     }
-    private void SetGlobal(string key, object? value) => Bridge.SendCommand("setGlobal", new { key, value });
+    private void SetGlobal(string key, object? value) => Bridge.SendCommand("setGlobal", SettingsJson.Object(("key", key), ("value", value)));
     public void ApplyState(UiState state)
     {
-        if (closing) return;
+        if (IsClosingSettings) return;
         var old = State;
         var oldSelection = selectedDeviceKey;
         State = state;
-        selectedDeviceKey = state.SelectedDeviceKey ?? state.Devices.FirstOrDefault()?.Key;
+        // Native navigation survives a fresh process. An actual backend device
+        // selection change still takes precedence over that retained selection.
+        if (state.SelectedDeviceKey != old.SelectedDeviceKey || !state.Devices.Any(d => d.Key == selectedDeviceKey))
+            selectedDeviceKey = state.SelectedDeviceKey ?? state.Devices.FirstOrDefault()?.Key;
         previewDirty = true;
+        if (pagesInitializing && !buildingStartupContent && !pagesInitialized) return;
         if (!pagesInitialized)
         {
             pagesInitialized = true;
-            Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; pageBindings.Clear(); };
-            Navigate(string.IsNullOrEmpty(State.Page) ? "general" : State.Page, false);
+            Closed += (_, _) => { previewTimer?.Stop(); previewGeneration++; previewPresenter?.Dispose(); pageBindings.Clear(); };
+            Navigate(InitialSettingsPage(pendingStartupPage,pendingStartupDeviceKey), false);
             return;
         }
-        if (pagesInitializing) return;
         // Status/charging/progress updates refresh the existing controls. The only
         // structural changes are localization, device identity and provider families.
         var rebuild = old.Language != state.Language ||
@@ -85,6 +93,13 @@ public sealed partial class MainWindow
         StopIconCatalog();
         pageBindings.Clear();
         RefreshGeneralFooter(page);
+        previewCard?.DetachAction();
+        previewCard = null;
+        if (previewPage != page)
+        {
+            previewPresenter?.Dispose();
+            previewPresenter = null;
+        }
         previewImage = null;
         previewDirty = true;
         previewGeneration++;
@@ -107,11 +122,11 @@ public sealed partial class MainWindow
         return new Page { Content = Scroll(content), Background = Brush("#00000000") };
     }
 
-    private sealed record Choice(JsonElement Value, string Label)
+    private sealed partial record Choice(JsonElement Value, string Label)
     {
         public override string ToString() => Label;
     }
-    private static Choice Pick(object? value, string label) => new(JsonSerializer.SerializeToElement(value), label);
+    private static Choice Pick(object? value, string label) => new(SettingsJson.Element(value), label);
     private static List<Choice> Picks(IEnumerable<UiOption> options) => options.Select(o => new Choice(o.Value, o.Label)).ToList();
     private ComboBox ChoiceBox(string name, Func<List<Choice>> options, Func<object?> value, Action<object?> changed)
     {
@@ -123,7 +138,7 @@ public sealed partial class MainWindow
             // An open native flyout owns its selection until it closes.
             if (combo.IsDropDownOpen) return;
             var choices = options();
-            var next = JsonSerializer.Serialize(choices.Select(c => new { value = c.Value, label = c.Label }));
+            var next = SettingsJson.Choices(choices.Select(c => (c.Value, c.Label)));
             if (next != signature)
             {
                 combo.Items.Clear();
@@ -131,7 +146,7 @@ public sealed partial class MainWindow
                 signature = next;
                 FitComboBox(combo);
             }
-            var selected = JsonSerializer.SerializeToElement(value()).GetRawText();
+            var selected = SettingsJson.Element(value()).GetRawText();
             combo.SelectedItem = combo.Items.Cast<Choice>().FirstOrDefault(c => c.Value.GetRawText() == selected);
             combo.IsEnabled = combo.Items.Count > 0;
         });
@@ -194,24 +209,26 @@ public sealed partial class MainWindow
     private void BuildDevices(StackPanel p)
     {
         var selector = ChoiceBox(T("settings.select_device"), () => State.Devices.Select(d => Pick(d.Key, d.Name + (d.Hidden ? " - " + T("settings.hidden") : ""))).ToList(), () => selectedDeviceKey,
-            value => Bridge.SendCommand("selectDevice", new { deviceKey = value }));
+            value => Bridge.SendCommand("selectDevice", SettingsJson.Object(("deviceKey", value))));
         p.Children.Add(Card(T("settings.select_device"), "", selector, "smartphone-nfc"));
         if (SelectedDevice is { } device)
         {
             // Detached controls can lose focus after a backend selection change.
             // Every callback on this page therefore keeps its original stable key.
             var deviceKey = device.Key;
-            void ChangeDevice(string field, object? value) => Bridge.SendCommand("setDevice", new { deviceKey, field, value });
+            void ChangeDevice(string field, object? value) => Bridge.SendCommand("setDevice", SettingsJson.Object(("deviceKey", deviceKey), ("field", field), ("value", value)));
             AddPreview(p, true);
             // The native editor is top-aligned inside its ScrollViewer; leave
             // balanced space around its single line in the 30-DIP field.
             var name = new TextBox { Text = device.Name, MaxLength = 60, Height = 30, MinHeight = 30, Width = 240, MinWidth = 0, FontSize = 13, Padding = new(14, 6, 14, 6), CornerRadius = new(15), BorderThickness = new(0), Background = Brush(dark ? "#303030" : "#ECECEC"), Foreground = TextBrush, VerticalContentAlignment = VerticalAlignment.Center };
+            EnableControlSpotlight(name);
             AutomationProperties.SetName(name, T("settings.rename"));
             var committed = device.Name;
             void Commit()
             {
                 if (name.Text != committed) { committed = name.Text; ChangeDevice("name", name.Text); }
             }
+            pendingEditorCommit=Commit;
             name.LostFocus += (_, _) => Commit();
             name.KeyDown += (_, e) =>
             {
@@ -260,7 +277,7 @@ public sealed partial class MainWindow
         AddPreview(p, false);
         Section(p, T("settings.content"));
         p.Children.Add(Card(T("settings.content"), "", ChoiceBox(T("settings.content"), () => new() { Pick("pictogram", T("settings.pictogram")), Pick("percent", T("settings.percentage")), Pick("ring", T("settings.ring_only")) }, () => ContentMode,
-            mode => Bridge.SendCommand("setIconContent", new { mode })), "circle"));
+            mode => Bridge.SendCommand("setIconContent", SettingsJson.Object(("mode", mode)))), "circle"));
         GlobalChoice(p, "filled_icons", "preferences.icon_style", () => new() { Pick(false, T("icon_style.outline")), Pick(true, T("icon_style.filled")) }, () => BoolCfg("filled_icons"));
         var fallback = GlobalToggle(p, "badges", "settings.fallback", icon: "mouse");
         pageBindings.Add(() => fallback.Visibility = ContentMode == "percent" ? Visibility.Visible : Visibility.Collapsed);
@@ -299,7 +316,7 @@ public sealed partial class MainWindow
             var providerName = State.Providers[i].Name;
             var provider = State.Providers[i];
             var control = ToggleControl(provider.Label, () => State.Providers.FirstOrDefault(s => s.Name == providerName)?.Enabled == true,
-                enabled => Bridge.SendCommand("setProvider", new { name = providerName, enabled }));
+                enabled => Bridge.SendCommand("setProvider", SettingsJson.Object(("name", providerName), ("enabled", enabled))));
             var row = DetailRow(provider.Label, control, i != 0);
             if (row is FrameworkElement element) element.Margin = new(60, 0, 24, 0);
             providers.AddBody(row);
@@ -313,7 +330,7 @@ public sealed partial class MainWindow
         GlobalToggle(p, "update_check", "preferences.updates", icon: "refresh-cw");
         ActionCard(p, "preferences.check_now", "settings.check", "checkUpdate", icon: "download");
         var install = Button("", true);
-        install.Click += (_, _) => Bridge.SendCommand("startUpdate", new { });
+        install.Click += (_, _) => Bridge.SendCommand("startUpdate", SettingsJson.Object());
         var progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 4, HorizontalAlignment = HorizontalAlignment.Stretch };
         var update = Card("", "", install, "download");
         update.SetFooter(progress);
@@ -343,9 +360,10 @@ public sealed partial class MainWindow
         Section(p, T("settings.support"));
         ActionCard(p, "menu.diagnostics", "settings.open", "diagnostics", icon: "wrench");
         ActionCard(p, "settings.data_folder", "settings.open", "openData", State.DataDir, "folder-open");
+        ActionCard(p, "settings.website", "settings.open", "openWebsite");
+        ActionCard(p, "settings.discord", "settings.open", "openDiscord");
         ActionCard(p, "settings.project", "settings.open", "openProject");
         ActionCard(p, "settings.issue", "settings.open", "openIssue");
-        p.Children.Add(Card(T("settings.fonts"), "Lucide · ISC / MIT", icon: "info"));
         var licenses = Button(T("settings.iconify_licenses"), true);
         licenses.Click += (_, _) => RequestAllIconLicenses();
         p.Children.Add(Card(T("settings.iconify_licenses"), "", licenses, "info"));
@@ -353,14 +371,16 @@ public sealed partial class MainWindow
 
     private void AddPreview(StackPanel p, bool devicePage)
     {
-        previewImage = new Image { Stretch = Stretch.Fill, UseLayoutRounding = true, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(previewImage).IsPixelSnappingEnabled = true;
+        previewPresenter ??= new DevicePreview();
+        previewImage = previewPresenter.Image;
+        previewPage = current;
         var previewGlyph = devicePage ? DeviceKindGlyph(SelectedDevice?.Kind) : "eye";
-        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewImage, previewGlyph);
+        var preview = Card(devicePage ? SelectedDevice?.Name ?? "" : T("settings.preview"), "", previewPresenter, previewGlyph);
+        previewCard = preview;
         p.Children.Add(preview);
         pageBindings.Add(() =>
         {
-            if (previewDeviceKey != selectedDeviceKey) previewDirty = true;
+            if (previewDeviceKey != selectedDeviceKey) { previewDirty = true; previewGeneration++; }
             previewDeviceKey = selectedDeviceKey;
             if (devicePage && SelectedDevice is { } d)
             {
@@ -383,7 +403,7 @@ public sealed partial class MainWindow
         var size = 80 / Scale;
         if (previewImage.Width != size || previewImage.Height != size)
         {
-            previewImage.Width = previewImage.Height = size;
+            previewPresenter?.Resize(Scale);
             previewDirty = true;
         }
     }
@@ -398,34 +418,58 @@ public sealed partial class MainWindow
                 ResizePreview();
                 var device = State.Devices.FirstOrDefault(d => d.Key == previewDeviceKey);
                 var animate = BoolCfg("animation") && device is { Charging: true, Online: true };
-                if (!previewPending && (previewDirty || animate) && Bridge.RequestPreview(previewDeviceKey))
+                if (!previewPending && (previewDirty || animate) && Bridge.RequestPreview(previewDeviceKey, previewDirty))
                 {
                     previewPending = true;
+                    previewRequestGeneration = previewGeneration;
                     previewDirty = false;
                 }
             };
         }
         previewTimer.Start();
     }
-    public async void ApplyPreview(string? deviceKey, string pngBase64)
+    private static async Task<BitmapImage> DecodePreviewAsync(string pngBase64)
     {
-        if (closing || previewImage is null || deviceKey != previewDeviceKey) { previewPending = false; return; }
-        var generation = previewGeneration;
+        var bytes = Convert.FromBase64String(pngBase64);
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(bytes); await writer.StoreAsync(); await writer.FlushAsync(); writer.DetachStream();
+        }
+        stream.Seek(0);
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        if (bitmap.PixelWidth != 80 || bitmap.PixelHeight != 80)
+            throw new InvalidDataException("Preview must be 80 physical pixels");
+        return bitmap;
+    }
+
+    public async void ApplyPreview(string? deviceKey, string pngBase64, JsonElement? transition = null)
+    {
+        // Bind a reply to the page generation in which it was requested, not the
+        // generation when its asynchronous PNG decode happens to complete.
+        var generation = previewRequestGeneration;
+        bool Current() => generation == previewGeneration && deviceKey == previewDeviceKey &&
+            !closing && previewPresenter is not null && previewImage is not null;
         try
         {
-            var bytes = Convert.FromBase64String(pngBase64);
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+            if (!Current()) return;
+            var presenter = previewPresenter!;
+            var bitmap = await DecodePreviewAsync(pngBase64);
+            BitmapImage? background = null;
+            DevicePreview.Ring? ring = null;
+            if (transition is { } data)
             {
-                writer.WriteBytes(bytes); await writer.StoreAsync(); await writer.FlushAsync(); writer.DetachStream();
+                ring = DevicePreview.Ring.Read(data);
+                background = await DecodePreviewAsync(data.GetProperty("background").GetString() ?? "");
             }
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            if (generation != previewGeneration || deviceKey != previewDeviceKey || closing || bitmap.PixelWidth != 80 || bitmap.PixelHeight != 80) return;
-            if (previewImage is not null) { ResizePreview(); previewImage.Source = bitmap; }
+            if (!Current() || !ReferenceEquals(previewPresenter, presenter)) return;
+            ResizePreview();
+            var motion = AnimationsEnabled && AppWindow.IsVisible && !pagesInitializing &&
+                AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
+            presenter.Apply(deviceKey, bitmap, background, ring, motion);
         }
         catch (Exception error) { System.Diagnostics.Debug.WriteLine(error); }
-        finally { previewPending = false; }
+        finally { previewPending = false; startupPreviewReady?.TrySetResult(true); }
     }
 }

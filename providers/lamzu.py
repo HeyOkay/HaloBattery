@@ -156,6 +156,11 @@ ATLANTIS_PIDS = {
     0xF50F: "LAMZU Thorn (wired)",
 }
 THORN_KEY = "lamzu:3554f510"
+# F50F is shared by the Thorn's cable and the Atlantis Pro's cable. The product
+# string is the only distinction Windows exposes, so the Atlantis cable uses the
+# same key as the Atlantis V2 receiver (`pulsar:3554f50d`) and its own name.
+ATLANTIS_CABLE_KEY = "pulsar:3554f50d"
+ATLANTIS_CABLE_NAME = "LAMZU Atlantis Pro (wired)"
 THORN_ASLEEP_KEEP = 300
 
 
@@ -164,7 +169,7 @@ class LamzuAtlantisProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[str, int, bool, float]] = None
+        self._last: Optional[Tuple[str, str, int, bool, float]] = None
 
     def _pick_compx(self, infos: List[dict]) -> Optional[dict]:
         control = [d for d in infos if (d.get("usage_page"), d.get("usage")) == COMPX_CONTROL_USAGE]
@@ -224,6 +229,15 @@ class LamzuAtlantisProvider(Provider):
         for pid in sorted(groups, key=lambda p: p != 0xF50F):
             group = groups[pid]
             name = ATLANTIS_PIDS[pid]
+            key = THORN_KEY
+            if pid == 0xF50F:
+                product = next((str(d.get("product_string") or "").strip()
+                                for d in group
+                                if "ATLANTIS" in str(d.get("product_string") or "").upper()),
+                               "")
+                if product:
+                    name = product if "wired" in product.lower() else product + " (wired)"
+                    key = ATLANTIS_CABLE_KEY
             self._diag.append(f"[Lamzu Thorn] pid=3554:{pid:04x} '{name}'")
             d = self._pick_compx(group)
             if d is None:
@@ -238,12 +252,12 @@ class LamzuAtlantisProvider(Provider):
             mv = compx_voltage_mv(raw)
             if mv:
                 self._diag.append(f"  {mv} mV")
-            self._last = (name, level, charging, now)
-            return [DeviceStatus(THORN_KEY, name, level, charging, True, "lamzu", kind="mouse")]
+            self._last = (key, name, level, charging, now)
+            return [DeviceStatus(key, name, level, charging, True, "lamzu", kind="mouse")]
 
-        if present and self._last and now - self._last[3] < THORN_ASLEEP_KEEP:
-            name, level, charging, _seen = self._last
-            return [DeviceStatus(THORN_KEY, name, level, charging, False, "lamzu",
+        if present and self._last and now - self._last[4] < THORN_ASLEEP_KEEP:
+            key, name, level, charging, _seen = self._last
+            return [DeviceStatus(key, name, level, charging, False, "lamzu",
                                  kind="mouse", wake_on_input=True)]
         if not present:
             self._last = None
