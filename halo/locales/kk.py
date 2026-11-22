@@ -122,6 +122,7 @@ MESSAGES = {
     'state.charging': '{state}, зарядталуда',
     'state.asleep': '{state} (соңғы белгілі мән, құрылғы ұйқы режимінде)',
     'provider.ajazz': 'AJAZZ тінтуірлері',
+'provider.akko_s9': 'Akko Verge S9 Ultra құлаққабы',
     'provider.alienware': 'Alienware Pro Wireless пернетақтасы',
     'provider.atk_keyboard': 'ATK V75X пернетақтасы',
     'provider.atk_nearlink': 'ATK X1 Nearlink тінтуірлері',

@@ -134,6 +134,7 @@ MESSAGES = {
     "state.charging": "{state}，充电中",
     "state.asleep": "{state}（上次记录的电量，设备休眠中）",
     "provider.ajazz": "AJAZZ 鼠标",
+"provider.akko_s9": "Akko Verge S9 Ultra 耳机",
     "provider.alienware": "Alienware Pro Wireless 键盘",
     "provider.atk_keyboard": "ATK V75X 键盘",
     "provider.atk_nearlink": "ATK X1 Nearlink 鼠标",

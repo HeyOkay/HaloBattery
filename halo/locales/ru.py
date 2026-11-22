@@ -132,6 +132,7 @@ MESSAGES = {
     "state.charging": "{state}, заряжается",
     "state.asleep": "{state} (последнее значение, устройство спит)",
     "provider.ajazz": "Мыши AJAZZ",
+"provider.akko_s9": "Наушники Akko Verge S9 Ultra",
     "provider.alienware": "Клавиатура Alienware Pro Wireless",
     "provider.atk_keyboard": "Клавиатура ATK V75X",
     "provider.atk_nearlink": "Мыши ATK X1 Nearlink",

@@ -794,6 +794,20 @@ The cable is not a receiver: its charging reading wins without querying the
 silent receiver, and unplugging it restores the receiver with the same icon
 and device key. Silent-device backoff is unchanged.
 
+### Akko Verge S9 Ultra
+
+**Connection:** 2.4 GHz dongle (`36EB:1087`, product `Akko S9 Ultra_Dongle`); Bluetooth carries a level through Windows and needs no reader here.
+
+The dongle is one HID interface (interface 3) whose reports are 64 bytes with **report id `0x02`**, next to the headset's audio interfaces. The vendor app's traffic was captured with USBPcap in [#505](https://github.com/HeyOkay/HaloBattery/issues/505):
+
+    request  02 10 01 00 00 ...   link status:  02 10 01 00 01 ...  headset on
+                                                  02 10 01 00 00 ...  off or out of range
+    request  02 12 01 00 00 ...   battery:      02 12 01 00 64 ...  100 %
+                                                  02 12 01 00 63 ...  99 %
+                                                  02 12 01 01 00 ...  no level reported
+
+Every frame ends with a two-byte trailer over its first 62 bytes (the all-zero `02 10 01 00` request carries `4B 43`, the all-zero `02 12 01 00` request `71 12` and the `02 10 01 00 01` reply `71 E1`; fitted to all 16 distinct frames in the captures). The provider checksums its requests and refuses a reply whose trailer does not match. Byte 4 is the level, a plain 0-100 percentage; the two captures read 100 and 99 while the vendor app showed the same numbers. Byte 3 reads 0 whenever a level came back and 1 in the one phase where the vendor app had no value either, so its meaning is not established and it is logged only. **The exchange has no charging flag, and the vendor app did not show charging on the dongle either** - `charging_known` stays False rather than guessing. The vendor app's `0x03` frame (a 16-byte value at startup) was not needed by any later battery read and is not sent. **Unverified in this app**: a test build is with the reporter of #505.
+
 ### Ninjutso Sora V3 (093a:eb02)
 
 **Connection:** 2.4 GHz receiver `093a:eb02` or USB cable `093a:e010`; the

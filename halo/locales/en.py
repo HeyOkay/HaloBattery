@@ -133,6 +133,7 @@ MESSAGES = {
     "state.charging": "{state}, charging",
     "state.asleep": "{state} (last known value, device asleep)",
     "provider.ajazz": "AJAZZ mice",
+"provider.akko_s9": "Akko Verge S9 Ultra headset",
     "provider.alienware": "Alienware Pro Wireless keyboard",
     "provider.atk_keyboard": "ATK V75X keyboard",
     "provider.atk_nearlink": "ATK X1 Nearlink mice",

@@ -133,6 +133,7 @@ MESSAGES = {
     "state.charging": "{state}, en charge",
     "state.asleep": "{state} (dernière valeur connue, périphérique en veille)",
     "provider.ajazz": "Souris AJAZZ",
+"provider.akko_s9": "Casque Akko Verge S9 Ultra",
     "provider.alienware": "Clavier Alienware Pro Wireless",
     "provider.atk_keyboard": "Clavier ATK V75X",
     "provider.atk_nearlink": "Souris ATK X1 Nearlink",
