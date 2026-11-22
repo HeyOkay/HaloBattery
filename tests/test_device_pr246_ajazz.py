@@ -39,6 +39,10 @@ ANNOUNCED75 = [0xC0, 0x01, 0x4B] + [0x00] * 29
 ANNOUNCED74 = [0xC0, 0x01, 0x4A] + [0x00] * 29
 # The 3151 8K receiver's AJ-series status reply: GET_FEATURE 0x05, 75 %.
 SERIES75 = [0x05, 0x00, 0x00, 0x4B, 0x01, 0x01, 0x01, 0x02]
+# The reporter's reply on test build 4 (#289 diagnostics): 70 %.
+SERIES_CAPTURED70 = [0x05, 0x00, 0x00, 0x46, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00]
+# Not documented for this path, so refused: the reference's unnumbered Linux hidraw
+# frame (Windows hidapi always returns the report id first) and an F7-prefixed frame.
 SERIES_UNNUMMED75 = [0x00, 0x00, 0x4B, 0x01, 0x01, 0x01, 0x02]
 SERIES_AM75 = [0xF7, 0x00, 0x4B]
 
@@ -62,6 +66,7 @@ class FakeCollection:
         self.feature_reply = feature_reply
         self.sent = []
         self.feature_sent = []
+        self.feature_reads = []         # the report ids asked for with GET_FEATURE
         self.opened = 0
         self.reads = 0
 
@@ -89,6 +94,7 @@ def fake_device_class(cols, order_log):
             return len(data)
 
         def get_feature_report(self, report_id, n):
+            self.c.feature_reads.append(report_id)
             if report_id == 0x05 and self.c.feature_reply is not None:
                 return list(self.c.feature_reply) + [0] * (n - len(self.c.feature_reply))
             return []
@@ -183,8 +189,28 @@ class PollTest(unittest.TestCase):
 
     def test_series_status_frame_reads_75(self):
         self.assertEqual(A.parse_series_reply(SERIES75, 0x05), 75)
-        self.assertEqual(A.parse_series_reply(SERIES_UNNUMMED75, 0x05), 75)
-        self.assertEqual(A.parse_series_reply(SERIES_AM75, 0xF7), 75)
+
+    def test_the_captured_289_reply_reads_70(self):
+        # #289, test build 4 on the reporter's AJ159 PRO: 05 00 00 46 01 00 01 02 ...
+        self.assertEqual(A.parse_series_reply(SERIES_CAPTURED70, 0x05), 70)
+
+    def test_series_unknown_header_bytes_are_refused(self):
+        # #427 review: an unknown first byte fell through to a fixed offset, so any
+        # in-range byte there became a battery reading
+        self.assertIsNone(A.parse_series_reply([0x99, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x99, 70], 0xF7))
+        self.assertIsNone(A.parse_series_reply([0x99, 0x00, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x04, 0x00, 0x00, 70], 0x05))
+
+    def test_series_forms_without_the_documented_header_are_refused(self):
+        # only `05 00 00 <level>` is documented for Windows hidapi, which returns the
+        # report id first: the leading-zero shapes, the unnumbered Linux frame, an
+        # F7-prefixed frame and a 0x05 frame for another request are all refused
+        self.assertIsNone(A.parse_series_reply([0x00, 0x05, 0x00, 0x00, 70], 0x05))
+        self.assertIsNone(A.parse_series_reply([0x00, 0xF7, 0x00, 70], 0xF7))
+        self.assertIsNone(A.parse_series_reply(SERIES_UNNUMMED75, 0x05))
+        self.assertIsNone(A.parse_series_reply(SERIES_AM75, 0xF7))
+        self.assertIsNone(A.parse_series_reply(SERIES75, 0xF7))
 
     def test_series_junk_padding_is_refused(self):
         self.assertIsNone(A.parse_series_reply([0x05, 0xAD, 0x00, 0x63], 0x05))
@@ -288,6 +314,23 @@ class PollTest(unittest.TestCase):
         self.assertEqual(1, len(self.order))
         self.assertEqual(entries[4]["path"], self.order[0])
         self.assertEqual([len(p) for p in cols[entries[4]["path"]].feature_sent], [33])
+
+    def test_the_captured_reply_shows_70_with_charging_unknown(self):
+        # release configuration: the AJ159 PRO is enabled and its reply has no
+        # charging flag, so the charging state stays explicitly unknown
+        out = self.alt(0, "AJAZZ 2.4G 8K", reply_frame=SERIES_CAPTURED70)
+        self.assertEqual([(s.key, s.level, s.online, s.charging_known) for s in out],
+                         [("ajazz:402d", 70, True, False)])
+
+    def test_only_status_report_05_is_requested(self):
+        # a link that is not up yet answers 05 00 00 00 ...: no level is shown, and
+        # no other report id is asked for while every poll length is tried
+        out = self.alt(0, "AJAZZ 2.4G 8K", reply_frame=[0x05] + [0x00] * 7)
+        self.assertEqual([(s.key, s.level, s.charging_known) for s in out],
+                         [("ajazz:402d", None, False)])
+        vendor = self.last_cols[b"alt-vendor"]
+        self.assertTrue(vendor.feature_reads)
+        self.assertEqual({0x05}, set(vendor.feature_reads))
 
     def test_the_collection_that_takes_the_write_is_remembered(self):
         entries = receiver_entries()

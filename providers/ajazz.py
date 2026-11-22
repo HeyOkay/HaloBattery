@@ -141,7 +141,8 @@ ANNOUNCE_LEVEL_INDEX = 2
 SERIES_POLL_OPCODE = 0xF7
 SERIES_POLL_LENGTHS = (33, 65, 67)
 SERIES_SETTLE_S = 0.05
-SERIES_REPORT_IDS = (0x05, 0xF7)
+SERIES_REPORT_ID = 0x05          # the status report; the only one with a documented layout
+SERIES_LEVEL_INDEX = 3           # `05 00 00 <level>`: hidapi on Windows returns the id first
 SERIES_CONTROL_USAGE = (0xFFFF, 0x02)
 
 MOUSE_USAGE = (0x0001, 0x0002)   # never opened: the OS owns the pointer stream
@@ -188,36 +189,26 @@ def parse_reply(frame) -> Optional[Tuple[int, str, Optional[bool]]]:
     return None
 
 
-def parse_series_reply(frame, report_id: int) -> Optional[int]:
+def parse_series_reply(frame, report_id: int = SERIES_REPORT_ID) -> Optional[int]:
     """Level from the 3151 8K receiver's AJ-series status report, or None.
 
-    The documented GET_FEATURE reply is 0x05 (`05 00 00 64 ...`, level at byte
-    3 on Windows). The AM Infinity firmware behind the same 0xF7 exchange uses
-    report 0xF7 (`F7 00 64 ...`, level at byte 2). Both carry zero padding
-    between the report id and the level; a different value there is the junk a
-    wireless reconnect can return and is refused. Zero means the 2.4G link is
+    Only the documented layout is accepted (#427 review): GET_FEATURE report
+    0x05, which hidapi on Windows returns with the report id first -
+    `05 00 00 64 01 01 01 02`, level at byte 3 (Aiacos/ajazz-control-center,
+    aj_series_battery.md), captured on the AJ159 PRO as `05 00 00 46 ...` =
+    70 % (#289). Any other report id or first byte is refused, and so is a
+    non-zero byte between the report id and the level - the junk a wireless
+    reconnect can return. The reference's unnumbered frame is a Linux hidraw
+    read, which this Windows path never receives. Zero means the 2.4G link is
     not up yet, so it is never shown as an empty battery.
     """
-    if not frame:
+    if report_id != SERIES_REPORT_ID or not frame:
         return None
     f = list(frame)
-    if report_id == 0xF7:
-        if f[0] == 0xF7:
-            base = 2
-        elif len(f) > 1 and f[0] == 0 and f[1] == 0xF7:
-            base = 3
-        else:
-            base = 1
-    else:
-        if f[0] == 0x05:
-            base = 3
-        elif len(f) > 1 and f[0] == 0 and f[1] == 0x05:
-            base = 4
-        else:
-            base = 2
-    if len(f) <= base or any(f[1:base]):
+    if (len(f) <= SERIES_LEVEL_INDEX or f[0] != SERIES_REPORT_ID
+            or any(f[1:SERIES_LEVEL_INDEX])):
         return None
-    level = f[base]
+    level = f[SERIES_LEVEL_INDEX]
     return level if 1 <= level <= 100 else None
 
 
@@ -357,25 +348,26 @@ class AjazzProvider(Provider):
                 accepted = True
                 self._diag.append(f"    feature poll len={length} -> {wrote}")
                 time.sleep(SERIES_SETTLE_S)
-                for report_id in SERIES_REPORT_IDS:
-                    for read_length in (length, 65, 33):
-                        try:
-                            reply = dev.get_feature_report(report_id, read_length)
-                        except (OSError, ValueError, AttributeError) as e:
-                            self._diag.append(f"    get_feature {report_id:02x} len={read_length}: {e}")
-                            continue
-                        if not reply:
-                            continue
-                        level = parse_series_reply(reply, report_id)
-                        self._diag.append(f"    report {report_id:02x}: {hexdump(reply, 12)}"
-                                          + (f"  -> {level} %" if level is not None
-                                             else "  (no level in it)"))
-                        if level is not None:
-                            return (level, "status", None), True
+                # only status report 0x05 has a documented layout (#427 review)
+                for read_length in (length, 65, 33):
+                    try:
+                        reply = dev.get_feature_report(SERIES_REPORT_ID, read_length)
+                    except (OSError, ValueError, AttributeError) as e:
+                        self._diag.append(f"    get_feature {SERIES_REPORT_ID:02x} "
+                                          f"len={read_length}: {e}")
+                        continue
+                    if not reply:
+                        continue
+                    level = parse_series_reply(reply, SERIES_REPORT_ID)
+                    self._diag.append(f"    report {SERIES_REPORT_ID:02x}: {hexdump(reply, 12)}"
+                                      + (f"  -> {level} %" if level is not None
+                                         else "  (no level in it)"))
+                    if level is not None:
+                        return (level, "status", None), True
             if not accepted:
                 self._diag.append("    no feature report accepted on this collection")
             else:
-                self._diag.append("    no charge in 0x05 or 0xf7 (mouse off or asleep, "
+                self._diag.append("    no charge in report 05 (mouse off or asleep, "
                                   "or the 2.4G link is not up)")
             return None, accepted
         finally:
