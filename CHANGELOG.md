@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Identify the next pre-release as 1.18.0 and allow its updater to install the
+  stable 1.18.0 when available. Preview What's new uses the bundled changelog.
+
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
 

@@ -127,6 +127,22 @@ def is_newer(latest: str, current: str) -> bool:
     return a + (0,) * (n - len(a)) > b + (0,) * (n - len(b))
 
 
+def is_update_available(latest: str, current: str, *, current_prerelease: bool = False) -> bool:
+    """A stable release also replaces a preview of the same numeric version.
+
+    Keep is_newer strict for version history and reject pre-release tags in the
+    stable API parser. The caller gets the current channel from bundled metadata,
+    never a user preference or a release's filename.
+    """
+    if is_newer(latest, current):
+        return True
+    a, b = parse_version(latest), parse_version(current)
+    if current_prerelease is not True or a is None or b is None:
+        return False
+    n = max(len(a), len(b))
+    return a + (0,) * (n - len(a)) == b + (0,) * (n - len(b))
+
+
 def parse_release(data: dict) -> Release:
     """A release from GitHub's REST API -> Release. Raises ValueError on a tag that is
     not a version."""

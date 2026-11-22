@@ -14,6 +14,14 @@ included in the application. The optional `--wheelhouse` argument to
 `tools/build_exe.py` uses a supplied offline wheel directory with the same hash
 requirements. Build and test tools are not runtime dependencies of HaloBattery.
 
+`tools/build_exe.py` defaults to `--channel stable`. The pre-release workflow
+passes `--channel pre-release`; use that option for a local preview build too.
+Each build writes fresh bundled channel metadata matching `VERSION`, including
+stable builds, so upgrading replaces the preview marker. The updater accepts a
+stable release of the same numeric version only when running its preview.
+Preview What's new reads the bundled `[Unreleased]` changelog without requesting
+an unpublished stable tag. Stable tags and update parsing remain numeric.
+
 ## Native Settings
 
 `scripts/build_settings.ps1` defaults to `-PublishMode Auto`: self-contained

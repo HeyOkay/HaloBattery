@@ -8,8 +8,10 @@ instead, preserving its files and paths without guessing which DLLs to delete.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -46,7 +48,23 @@ def native_payload_entries(directory: Path) -> list[tuple[str, str, str]]:
             for path in sorted(directory.rglob("*")) if path.is_file()]
 
 
-def freeze_python(python: Path, native_ui: Path, distpath: Path, workpath: Path) -> None:
+def write_build_info(workpath: Path, channel: str) -> Path:
+    """Always regenerate identity, including stable builds reusing a preview's work directory."""
+    if channel not in ("stable", "pre-release"):
+        raise ValueError("unsupported build channel")
+    text = (ROOT / "halo_battery.pyw").read_text(encoding="utf-8")
+    versions = re.findall(r'^VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"\r?$', text, re.MULTILINE)
+    if len(versions) != 1:
+        raise ValueError("expected one numeric VERSION in halo_battery.pyw")
+    workpath.mkdir(parents=True, exist_ok=True)
+    metadata = workpath / "build-info.json"
+    metadata.write_text(json.dumps({"schema": 1, "channel": channel, "version": versions[0]}) + "\n",
+                        encoding="utf-8")
+    return metadata
+
+
+def freeze_python(python: Path, native_ui: Path, distpath: Path, workpath: Path,
+                  channel: str = "stable") -> None:
     """Freeze with the caller's freshly created and hash-verified interpreter."""
     payload = native_payload_entries(native_ui)
     for required in (ROOT / "halo.ico", ROOT / "version_info.txt"):
@@ -54,9 +72,11 @@ def freeze_python(python: Path, native_ui: Path, distpath: Path, workpath: Path)
             raise FileNotFoundError(f"Generate the build asset first: {required}")
     specpath = workpath / "spec" / "HaloBattery.spec"
     specpath.parent.mkdir(parents=True, exist_ok=True)
+    metadata = write_build_info(workpath, channel)
     # Runtime legal metadata already contains the full grants/NOTICE texts.
     # Developer audit inputs and duplicate plaintext exports stay in source.
-    datas = [(str(ROOT / "halo/iconify_data/registry.json.gz"), "halo/iconify_data"),
+    datas = [(str(metadata), "halo"), (str(ROOT / "CHANGELOG.md"), "."),
+             (str(ROOT / "halo/iconify_data/registry.json.gz"), "halo/iconify_data"),
              (str(ROOT / "halo/iconify_data/manifests"), "halo/iconify_data/manifests"),
              (str(ROOT / "docs/licenses"), "licenses"),
              (str(ROOT / "docs/credits.md"), "licenses"),
@@ -105,6 +125,8 @@ def main() -> None:
     parser.add_argument("--native-ui", type=Path, default=ROOT / ".build/settings-ui")
     parser.add_argument("--distpath", type=Path, default=ROOT / "dist")
     parser.add_argument("--workpath", type=Path, default=ROOT / ".build/pyinstaller")
+    parser.add_argument("--channel", choices=("stable", "pre-release"), default="stable",
+                        help="Bundled build identity; only pre-release builds offer an equal-version stable update")
     parser.add_argument("--wheelhouse", type=Path,
                         help="Install the hashed build requirements from this offline wheel directory")
     parser.add_argument("--prepare-local-build", action="store_true",
@@ -131,7 +153,7 @@ def main() -> None:
         if args.prepare_local_build:
             prepare_local_build(python, args.native_ui,
                                 args.native_intermediate or workpath.parent / "settings-ui-obj")
-        freeze_python(python, args.native_ui, args.distpath, workpath)
+        freeze_python(python, args.native_ui, args.distpath, workpath, args.channel)
 
 
 if __name__ == "__main__":
