@@ -48,3 +48,6 @@ provider constants; this is not a repository-wide independence guarantee.
 The source records distinguish protocol/descriptor evidence from hardware
 confirmation. All tests use fake devices or pure parsers; no hardware/network
 validation or new device-compatibility claim is implied.
+
+See [Independent protocol fixture evidence](protocol-fixture-evidence.md) for the
+pinned source records behind the protocol fixtures.

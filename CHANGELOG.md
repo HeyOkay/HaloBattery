@@ -8,9 +8,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Use independent protocol fixtures and cover the six originally surviving
-  battery/history mutations without changing device requests or controller identities.
-
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
   1 MB (single colour) or 4-8 MB (colour) of raw pixels.
 - Custom Iconify tray icons no longer load the whole icon-library registry at start-up
@@ -57,6 +54,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Refresh documented device-test evidence and distinguish pending support fixes
   from released behavior.
+
+- Use independent protocol fixtures and cover the six originally surviving
+  battery/history mutations without changing device requests or controller identities.
 
 ### Added
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
