@@ -272,7 +272,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Glorious Model O: when another app (SignalRGB) is writing to the same vendor
   feature report, the diagnostics now say the channel is busy instead of
-  reporting the mouse as asleep (#281).
+  reporting the mouse as asleep, and a refused write marks that reading stale
+  without stopping any other mouse (#281).
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.

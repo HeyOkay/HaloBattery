@@ -35,7 +35,7 @@ length.
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
@@ -102,6 +102,16 @@ def parse_reply(r) -> Optional[Tuple[int, bool]]:
     return level, r[CHARGING_INDEX] != 0
 
 
+def is_battery_frame(r) -> bool:
+    """True for any reply of the battery exchange, including "not awake yet".
+
+    A waking mouse answers 0xA2 and a sleeping one 0xA4; both carry the 0x83
+    function and mean "no level yet", not "another app overwrote the answer".
+    Only a frame from a different exchange is evidence of a competing writer.
+    """
+    return bool(r) and len(r) > FUNC_INDEX and r[0] == 0x00 and r[FUNC_INDEX] == 0x83
+
+
 def pick(infos: List[dict]) -> List[dict]:
     """Vendor collections, the ones Windows says can carry a 65-byte feature report first."""
     vendor = [d for d in infos if (d.get("usage_page") or 0) >= 0xFF00]
@@ -115,16 +125,16 @@ class GloriousProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._last: Dict[int, Tuple[int, float]] = {}
-        # True when a query got an answer that was not a battery frame: another app
-        # (SignalRGB, #281) is writing to the same feature report and overwrote it.
-        self._busy = False
-        # True when the write itself was refused: another app holds the report.
-        self._refused = False
+        # Collections whose answer was from a different exchange: another app
+        # (SignalRGB, #281) is writing to that feature report and overwrote it.
+        self._busy: Set[bytes] = set()
+        # Collections whose write itself was refused: another app holds the report.
+        self._refused: Set[bytes] = set()
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
-        self._busy = False
-        self._refused = False
+        self._busy.clear()
+        self._refused.clear()
         if hid is None:
             return []
         try:
@@ -145,17 +155,33 @@ class GloriousProvider(Provider):
                     f"{d.get('product_id', 0):04x} ({wired_map.get(d.get('product_id') or 0, '?')})"
                     for d in wired))
             parsed = None
+            tried: List[bytes] = []
             for d in pick(mine):
                 length = feature_length(d["path"]) or 65
                 self._diag.append(f"  trying iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
                                   f"feature={length}")
+                tried.append(d["path"])
                 parsed = self._ask(d["path"], length)
                 if parsed is not None:
                     break
             last = self._last.get(pid)
+            # Only this device's own collections count (#281 review).
+            refused = any(p in self._refused for p in tried)
+            busy = any(p in self._busy for p in tried)
             if parsed is None:
-                if self._busy:
+                if refused:
+                    # The write itself was refused. Do not take the whole provider down:
+                    # mark this device's reading stale and let the next collection, the
+                    # next device and the results collected so far continue.
+                    self._diag.append(
+                        "  another app holds the feature report (write refused): the level "
+                        "cannot be read now, the last one is kept")
+                    out.append(DeviceStatus(key, name, last[0] if last else None, bool(wired),
+                                            False, "glorious", kind="mouse",
+                                            polling_stale=True))
+                    continue
+                if busy:
                     self._diag.append(
                         "  the receiver answered, but not with the battery frame: another "
                         "app (SignalRGB?) is writing to the same report and overwrote it")
@@ -184,6 +210,8 @@ class GloriousProvider(Provider):
         return out
 
     def _ask(self, path, length: int) -> Optional[Tuple[int, bool]]:
+        self._busy.discard(path)
+        self._refused.discard(path)
         dev = hid.device()  # type: ignore[union-attr]
         try:
             dev.open_path(path)
@@ -200,8 +228,8 @@ class GloriousProvider(Provider):
                     # report: the write itself is refused, before any read (#281).
                     self._diag.append(f"    another app holds the feature report "
                                       f"(write refused: {e})")
-                    self._refused = True
-                    raise
+                    self._refused.add(path)
+                    return None
                 if sent is not None and sent != len(request):
                     self._diag.append(f"    feature write incomplete/refused ({sent})")
                     return None
@@ -212,14 +240,12 @@ class GloriousProvider(Provider):
                 parsed = parse_reply(r)
                 if parsed is not None:
                     return parsed
-                if r:
-                    self._busy = True
+                if r and not is_battery_frame(r):
+                    # A reply from a different exchange - SignalRGB's lighting status -
+                    # not this exchange's own A2/A4 sleep/wake answer.
+                    self._busy.add(path)
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    error: {e}")
-            if self._refused:
-                # Let the app mark the query unavailable rather than call the mouse
-                # asleep: the last level stays, with the honest reason.
-                raise
         finally:
             try:
                 dev.close()
