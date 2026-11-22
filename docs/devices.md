@@ -110,6 +110,7 @@
 | [Steam Controller (2025) with its puck](protocols.md#steam-controller-2025-with-its-puck) | 2.4 GHz puck | yes |
 | [Steam Controller (2025), wired `28DE:1302`](protocols.md#steam-controller-2025-with-its-puck) | USB | no — recovered path needs hardware confirmation |
 | [SteelSeries Aerox 3 Wireless](protocols.md#steelseries-aerox-3-wireless) | 2.4 GHz dongle | no |
+| [Sony INZONE H9 II](protocols.md#sony-inzone-h9-ii) | 2.4 GHz receiver (`054c:0fa8`), interface 5 `FF04:0001` | level confirmed in an earlier test build (#387); new bounded reader and charging transitions await hardware confirmation |
 | [SteelSeries Arctis and GameBuds (other models)](protocols.md#steelseries-arctis-and-gamebuds-other-models) | wireless base station or dongle | likely |
 | [SteelSeries Arctis Nova 7](protocols.md#steelseries-arctis-nova-7) | 2.4 GHz dongle | yes |
 | [SteelSeries Arctis Nova Elite](protocols.md#steelseries-arctis-nova-elite) | Wireless base station | yes |
@@ -135,7 +136,7 @@ Is your device not in the table, or does it show a wrong level? See [Add your de
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),
-Turtle Beach Stealth 600X Gen 3 (`10f5:2232`), Sony INZONE H9 II (`054c:0fa8`),
+Turtle Beach Stealth 600X Gen 3 (`10f5:2232`),
 Lamzu Tachi (`37b0:000c`) and Logitech PRO X 3 (`046d:0b45`)
 are disabled pending the [release holds](maintenance.md#open-investigations-and-release-holds).
 Their protocol code and simulated tests remain for follow-up development; the app
@@ -149,7 +150,7 @@ Devices added by integrating the open upstream pull requests; details and author
 
 | Family | Devices |
 |---|---|
-| Headsets | Logitech G535, Logitech G325, Turtle Beach Stealth Pro II (incl. Xbox 10f5:2285) / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9 / H5, ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
+| Headsets | Logitech G535, Logitech G325, Turtle Beach Stealth Pro II (incl. Xbox 10f5:2285) / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9 / H5 / H9 II (earlier H9 II level test confirmed), ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Keyboards | ATTACKSHARK X66, Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X / VGN N75 PRO, AULA F108 Pro, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), MCHOSE K87, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
 | Keyboards | Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), Teevolution Terra Pro, MCHOSE K87 / G98 Pro, MCHOSE K99 V3, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
 | Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O / O- / D / D- Wireless, Logitech MX Revolution, Teevolution Terra Pro (F520/F523), Ninjutso Sora V3 |

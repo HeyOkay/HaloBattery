@@ -1493,3 +1493,33 @@ confirmation, and this recovery has not been tested on hardware.
 **Connection:** 2.4 GHz receiver `093A:522C` or USB cable `093A:622C`; the ids are shared with Incott mice.
 
 Device-info feature report `09` / command `8F`: reply byte 3 is 18 for the W1 or 20 for the Freestyle. After that, read-only `86` button queries (0, 1, 2, 4, 3) prompt the mouse to push input report `09`, whose byte 1 is charging bit 7 plus the low 7-bit percentage. A device that does not answer 8F is left to the Incott path. Protocol from the Wraith web driver and W1 Service. **Unverified in this app.**
+
+### Sony INZONE H9 II
+
+**Connection:** receiver `054C:0FA8`, interface 5, collection `FF04:0001`.
+
+The read-only audio-status request is exactly 64 bytes:
+
+    02 0C 01 00 FC 08 96 C3 41 06 01 01 00 A2 ...
+
+Source: [marcinjakubowski/zoneout at 49ebedb](https://github.com/marcinjakubowski/zoneout/blob/49ebedb178f10c84c7e42e0e946c0ac971d08376/src/zoneout/device.py#L139-L167)
+(MIT), with the status offsets and charging values in that revision's
+[SPECS.md](https://github.com/marcinjakubowski/zoneout/blob/49ebedb178f10c84c7e42e0e946c0ac971d08376/SPECS.md).
+A complete report-id-2 reply has command `0x06` at byte 9, charging at byte 14
+(`0` or `1`) and the level at byte 15 (`0` through `100`). Other charging values
+keep the level with an unknown charging state. The source does not establish a
+status-response category, sequence or checksum, so the reader does not require
+an echo of the request header. The exact outgoing request is rejected as an echo.
+
+Only the exact receiver collection is opened. Cached native report caps are
+checked before I/O, with the canonical 64-byte frame retained. Draining stops
+after 32 reports, reply reads after 40 attempts or one second per receiver, and
+a poll has a shared three-second budget with rotation between receivers.
+Independent HID-path keys prevent one receiver's level from replacing another's.
+No H9 serial initialization, setting command or alternate transport is sent.
+
+The reporter of [#387](https://github.com/HeyOkay/HaloBattery/issues/387#issuecomment-6890208267)
+confirmed the level in an earlier test build. No successful raw reply was attached;
+the bounded reader and its native-transport integration have offline coverage but
+have not been freshly tested on H9 II hardware. Charging is source-based and its
+cable transition remains unconfirmed.

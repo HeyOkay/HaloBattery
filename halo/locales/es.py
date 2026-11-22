@@ -171,6 +171,7 @@ MESSAGES = {
     "provider.shield": "Mandos NVIDIA SHIELD",
     "provider.skullcandy": "Auriculares Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9 / H5",
+    "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Auriculares Turtle Beach",
     "state.not_reported": "aún sin datos",
     "state.charging_unknown": "{state}, estado de carga desconocido",

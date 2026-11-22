@@ -172,6 +172,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
 - **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
 - **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
+- Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
+  control channel, using the read-only status query from
+  marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test
+  build (#387); this bounded, exact-target implementation has offline tests,
+  with fresh hardware and charging-transition confirmation still pending.
 - AJAZZ AJ159 PRO (`3151:402d`, "AJAZZ 2.4G 8K") reads its level through the AJ-series feature exchange (`0xF7` poll, `GET_FEATURE 0x05`), with no charging flag. Confirmed on hardware in [#289](https://github.com/HeyOkay/HaloBattery/issues/289); the Kysona Uranus on the same transport remains held until its own confirmation.
 - Russian localization, including native settings, tray menus, notifications,
   Windows language detection and Russian plural forms.
