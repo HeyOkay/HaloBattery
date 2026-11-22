@@ -15,6 +15,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   immutable assets, instead of replacing one rolling release. Automatic merge
   builds remain available as Actions artifacts.
 
+- Read Bluetooth devices inside the app instead of in a background PowerShell
+  process, which used about 80 MB of memory on its own (#509). Same devices,
+  levels and connect/disconnect timing; PowerShell stays the fallback if the
+  in-app read fails.
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
