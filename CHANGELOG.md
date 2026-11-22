@@ -8,6 +8,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Identify supported Sony USB controllers by their own pairing address so one
+  controller keeps its identity across USB ports and Bluetooth. Keep ambiguous
+  or anonymous controllers separate instead of transferring another pad's settings.
+- Refuse invalid controller battery states and capacities; report Sony battery
+  faults without repeatedly treating the controller as newly connected. Avoid
+  assigning Windows battery reports to multiple XInput pads by list order.
 - Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
   percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
