@@ -76,6 +76,16 @@ The receiver's vendor collection on interface 4: 65-byte writes `00 02 <endpoint
 
 The routed exchange the Dark Core row describes, framed on report `0x02`: the request is a 64-byte report - `02 <target> <command> <property>`, target `0x09` the headset behind a receiver, `0x08` the device itself, command `0x02` "get property" - answered on report `0x01` with `01 01 <command echo> <status> <value:4 LE>` (`00` ok, `05` no such property, `09` refused). Property `0x0F` is the level in tenths of a percent and `0x10` the charge state (1 = charging). The wired ids read with target `0x08` first and the receivers with `0x09`, each with the other as the fallback; reads need neither a session nor software mode (HeadsetControl notes only writes need software mode), and the headset's unsolicited volume reports (report id `0x0E`) are not replies and are skipped. On Windows the frame goes out bare - the 64 bytes with `0x02` first; every report-id-prefixed form is refused with `0x57` (#204, measured on the `0A40`). One icon covers a product's receiver and cable ids together, and a reading that reports charging wins the merge. Source: HeadsetControl's reworked Virtuoso XT/SE device ([#570](https://github.com/Sapd/HeadsetControl/pull/570)), with its four XT/SE ids run on its author's hardware per the #568/#570 discussion, plus the `0A40`'s end-to-end measurement with @jeffpeng3's probe runs (#204: 96 % in both states, charge `0x10` = 1 on the cable). **Confirmed in the app on the `0A40`** - @jeffpeng3's run read 97 % over the receiver (the level frame `01 01 02 00 ca 03` twice, identical) together with the charge state; the four XT/SE ids have not answered a HaloBattery build yet and stay marked unverified
 
+
+The wired XT (`0A62`) is an explicit reply-source exception: when target `08`
+is queried, it responds as source `00`, not source `01`. Accept that form only
+for this PID and target, with a complete `01 00 02 00 <LE32 value>` GET reply.
+The wired SE and receiver routes retain their existing source checks. Source:
+[HeadsetControl target/source handling](https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L370-L405),
+[property payload](https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L440-L462),
+and [response matching](https://github.com/Sapd/HeadsetControl/blob/163c6edf744c28804d95e3653e5ea7bc9486b46c/lib/devices/corsair_virtuoso_xt.hpp#L534-L554).
+This exception has offline regression coverage; no new Corsair hardware test is claimed.
+
 ### Endgame Gear XM2w 4K, OP1w 4K (4K dongle)
 
 **Disabled in 1.17.0:** the provider does not open the 4K dongle. Owner tests in

@@ -253,6 +253,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
+  and charging reply without relaxing receiver or other model validation.
+
 - Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
   preserving one icon across cable/receiver transitions and limiting feature
   requests to documented device identities and battery collections.
