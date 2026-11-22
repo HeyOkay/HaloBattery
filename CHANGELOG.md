@@ -402,6 +402,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.
 
+- Keychron Ultra-Link 8K: fall back to an output report when the receiver
+  rejects SET_FEATURE, read the charging flag in bit 7 of byte 20, and query
+  every matching receiver collection so two 8K dongles get separate icons,
+  each keyed on its own receiver so unplugging one never renames the other
+  (#373). Only documented battery collections are opened, and the output
+  retry is made only on `ffc1:0001`. The level was confirmed on a G4 with the
+  test build; the charging indication has not been reported yet.
 - Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
   over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
   on that collection when SET_FEATURE is refused or unanswered, and report the
