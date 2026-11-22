@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: MousePower dareu_compx.py lines 135-173 at 684b5aa: checksum 55 minus byte sum.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -29,7 +32,7 @@ SHAPE = [
 
 def reply(level, charging=0, command=0x04, status=0x00, break_checksum=False, header=0x09):
     frame = [header, command, status, 0, 0, 2, level, charging] + [0] * 8
-    ck = D.checksum(frame) ^ (0xFF if break_checksum else 0)
+    ck = ((0x55 - sum(frame)) & 0xFF) ^ (0xFF if break_checksum else 0)
     return bytes(frame + [ck])
 
 

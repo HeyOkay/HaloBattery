@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: SDL src/joystick/hidapi/SDL_hidapi_8bitdo.c enhanced report battery byte14.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -38,7 +41,7 @@ class Clock:
 def enhanced(rid=0x01, battery=0x4B):
     r = [rid] + [0] * 33
     r[1] = 0x08                   # hat centred
-    r[E.BATTERY_BYTE] = battery
+    r[14] = battery
     return r
 
 

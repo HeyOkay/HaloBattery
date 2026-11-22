@@ -73,7 +73,7 @@ class ReplyParsing(unittest.TestCase):
 
     def test_level_above_100_is_refused(self):
         bad = bytearray(REPLY_51)
-        bad[P.LEVEL_INDEX] = 0xFF
+        bad[2] = 0xFF
         self.assertIsNone(P.parse_reply(bytes(bad)))
 
     def test_short_reply_is_refused(self):
@@ -81,7 +81,7 @@ class ReplyParsing(unittest.TestCase):
 
     def test_request_shape(self):
         req = P.make_request()
-        self.assertEqual(len(req), P.REQUEST_LEN)
+        self.assertEqual(len(req), 64)
         self.assertEqual(req[:2], [0x50, 0x02])
         self.assertEqual(set(req[2:]), {0})
 

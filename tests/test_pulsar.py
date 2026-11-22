@@ -25,6 +25,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: OpenMouse src/pulsar/index.ts lines 1-34 (5a4f643); jonkristian/pulsar-x3-python battery feature exchange (HaloBattery PR #213).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -107,13 +110,13 @@ CRAZYLIGHT_DONGLE = bytes.fromhex("08 04 00 00 00 02 14 00 0d ea 00 00 00 00 00 
 CRAZYLIGHT_CABLE = bytes.fromhex("08 04 00 00 00 02 19 01 0e 52 00 00 00 00 00 00 cd")
 
 
-def reply(level, power=0, mv=0, command=P.CMD_POWER, header=P.PAYLOAD_HEADER,
+def reply(level, power=0, mv=0, command=0x04, header=0x08,
           break_checksum=False):
     """A 17-byte frame of the shape the dongle sends."""
     frame = [header, command] + [0x00] * 4 + [level, power] + list(mv.to_bytes(2, "big"))
     frame += [0x00] * 6
-    assert len(frame) == P.PAYLOAD_LEN - 1
-    ck = P.checksum(frame)
+    assert len(frame) == 17 - 1
+    ck = ((0x55 - sum(frame)) & 0xFF)
     if break_checksum:
         ck ^= 0xFF
     return bytes(frame + [ck])
@@ -376,9 +379,9 @@ class PulsarTest(unittest.TestCase):
         sent, = c.sent
         self.assertEqual(P.make_request(), sent)
         self.assertEqual(17, len(sent))
-        self.assertEqual(P.PAYLOAD_HEADER, sent[0])
-        self.assertEqual(P.CMD_POWER, sent[1])
-        self.assertEqual(P.CHECKSUM_BASE, sum(sent) % 256)
+        self.assertEqual(0x08, sent[0])
+        self.assertEqual(0x04, sent[1])
+        self.assertEqual(0x55, sum(sent) % 256)
 
     def test_the_power_flag_means_charging(self):
         self.one_receiver(replies=[reply(55, 1)])
