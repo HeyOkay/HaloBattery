@@ -220,9 +220,10 @@ class MetadataAndTransportTests(unittest.TestCase):
         rel = updates.parse_release({"tag_name": "v1.17.0", "assets": [asset, asset]})
         self.assertEqual(rel.checksums_url, "")
 
-    def test_rolling_prerelease_is_still_not_a_stable_version(self):
-        with self.assertRaises(ValueError):
-            updates.parse_release({"tag_name": "prerelease-build"})
+    def test_test_build_tags_are_not_stable_update_versions(self):
+        for tag in ("prerelease-build", "pre-1.17.0-0123456-12345-1", "pre-1.17.0-0123456-12345-2"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                updates.parse_release({"tag_name": tag})
 
     def test_downgrade_redirect_is_refused_before_following(self):
         req = urllib.request.Request(ZIP_URL)

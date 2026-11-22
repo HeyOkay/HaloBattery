@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Publish each successful pre-release build separately, with matching source
+  tags and immutable assets, instead of replacing one rolling release.
+
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
