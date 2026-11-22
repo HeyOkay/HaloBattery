@@ -1,4 +1,4 @@
-"""IO Aurora over its 2.4 GHz receiver (3554:fb08).
+"""IO Aurora over its 2.4 GHz receiver (3554:fb08) or its cable (3554:fb09).
 
 The receiver identifies itself as ``IO Aurora Receiver`` and exposes the
 CompX control collection ``ff02:0002``.  CompX is the report-8 protocol used by
@@ -31,21 +31,23 @@ from .compx import (
 )
 
 VID = 0x3554
-PID = 0xFB08
+PID = 0xFB08          # the 2.4 GHz receiver, "IO Aurora Receiver"
+WIRED_PID = 0xFB09    # the same mouse on its charging cable, "IO Aurora"
 NAME = "IO Aurora"
 KEY = "io_aurora:fb08"
 PRODUCT = "io aurora receiver"
 ASLEEP_KEEP = 300
 
 
-def is_aurora(info: dict) -> bool:
+def is_aurora(info: dict, pid: Optional[int] = None) -> bool:
     product = (info.get("product_string") or "").strip().lower()
-    return info.get("product_id") == PID and "io aurora" in product
+    wanted = (PID, WIRED_PID) if pid is None else (pid,)
+    return info.get("product_id") in wanted and "io aurora" in product
 
 
-def candidate(infos: List[dict]) -> Optional[dict]:
-    """Pick the CompX control collection, never a keyboard/mouse page."""
-    mine = [d for d in infos if is_aurora(d)]
+def candidate(infos: List[dict], pid: Optional[int] = None) -> Optional[dict]:
+    """Pick the CompX control collection of one id, never a keyboard/mouse page."""
+    mine = [d for d in infos if is_aurora(d, pid)]
     control = [d for d in mine
                if (d.get("usage_page"), d.get("usage")) == CONTROL_USAGE]
     if control:
@@ -124,18 +126,23 @@ class IoAuroraProvider(Provider):
             return []
         if not any(is_aurora(d) for d in infos):
             return []
-        self._diag.append(f"[IO Aurora] pid={PID:04x} 'IO Aurora Receiver'")
-        d = candidate(infos)
-        if d is None:
-            return []
-        self._diag.append(f"  iface={d.get('interface_number')} "
-                          f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
-                          f"output={output_length(d.get('path'))}")
-        parsed = self._query(d["path"])
+        self._diag.append("[IO Aurora] looking for the receiver, then the cable")
+        parsed, source = None, None
+        for pid, label in ((PID, "receiver"), (WIRED_PID, "cable")):
+            d = candidate(infos, pid)
+            if d is None:
+                continue
+            self._diag.append(f"  pid={pid:04x} ({label}) iface={d.get('interface_number')} "
+                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x} "
+                              f"output={output_length(d.get('path'))}")
+            parsed = self._query(d["path"])
+            if parsed is not None:
+                source = label
+                break
         if parsed is not None:
             level, charging = parsed
             self._last = (level, charging, time.time())
-            self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
+            self._diag.append(f"  -> {level}%{' charging' if charging else ''} ({source})")
             return [DeviceStatus(KEY, NAME, level, charging, True, "io_aurora",
                                  kind="mouse")]
         if self._last and time.time() - self._last[2] < ASLEEP_KEEP:

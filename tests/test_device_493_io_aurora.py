@@ -31,6 +31,13 @@ class CandidateTest(unittest.TestCase):
         info = dict(AURORA, usage_page=0xFF05, usage=0x0000)
         self.assertIs(A.candidate([info, AURORA]), AURORA)
 
+    def test_the_cable_id_is_the_same_mouse(self):
+        # #493's charging diagnostics: the receiver goes away and 3554:fb09 "IO Aurora" appears
+        wired = dict(AURORA, path=b"wired", product_id=A.WIRED_PID, product_string="IO Aurora")
+        self.assertTrue(A.is_aurora(wired))
+        self.assertIs(A.candidate([AURORA, wired], A.WIRED_PID), wired)
+        self.assertIs(A.candidate([AURORA, wired], A.PID), AURORA)
+
     def test_other_products_with_the_same_vid_are_refused(self):
         other = dict(AURORA, product_id=0xF50D, product_string="LAMZU")
         self.assertIsNone(A.candidate([other]))
@@ -107,6 +114,47 @@ class PollTest(unittest.TestCase):
         out = provider.poll()
         self.assertEqual([(76, False, False)], [(s.level, s.charging, s.online) for s in out])
         self.assertTrue(out[0].wake_on_input)
+
+class WiredPollTest(unittest.TestCase):
+    """The charging identity: the receiver is gone, 3554:fb09 answers."""
+
+    class PathDevice:
+        def __init__(self, by_path):
+            self.by_path = {k: list(v) for k, v in by_path.items()}
+            self.path = None
+            self.sent = []
+
+        def open_path(self, path):
+            self.path = path
+
+        def write(self, data):
+            self.sent.append((self.path, bytes(data)))
+            return len(data)
+
+        def read(self, size, timeout):
+            q = self.by_path.get(self.path, [])
+            return q.pop(0) if q else []
+
+        def get_feature_report(self, rid, size):
+            return []
+
+        def close(self):
+            pass
+
+    def test_the_cable_reading_keeps_the_same_icon_and_shows_charging(self):
+        wired = dict(AURORA, path=b"wired", product_id=A.WIRED_PID, product_string="IO Aurora")
+        dev = self.PathDevice({b"aurora": [], b"wired": [[], reply(64, power=1)]})
+        saved = (A.hid, A.hidlist, A.time)
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        A.hid = types.SimpleNamespace(device=lambda: dev)
+        A.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: [AURORA, wired])
+        try:
+            out = A.IoAuroraProvider().poll()
+        finally:
+            A.hid, A.hidlist, A.time = saved
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online) for s in out],
+                         [(A.KEY, "IO Aurora", 64, True, True)])
+        self.assertEqual(b"wired", dev.sent[-1][0])
 
 
 if __name__ == "__main__":  # pragma: no cover

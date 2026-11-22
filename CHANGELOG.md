@@ -65,6 +65,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
   confirmed that the tray icon and charging animation appear on their headset.
+- IO Aurora (`3554:FB08` receiver): read the level with the CompX report-8
+  query, and the charging state from the mouse's own cable identity
+  (`3554:FB09`), which appears when it leaves the receiver on the cable.
+  Confirmed on a user's unit: 100 % matching IO Hub, the charging ring on the
+  PC cable and clearing when unplugged ([#493](https://github.com/HeyOkay/HaloBattery/issues/493)).
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,
