@@ -26,15 +26,18 @@ def reply(level, charging=False):
 
 
 class FakeDevice:
-    def __init__(self, replies, feature_result=None):
+    def __init__(self, replies, feature_result=None, fail_read=()):
         self.replies = list(replies)
         self.opened = []
         self.sent = []
         self.written = []
         self.feature_result = feature_result
+        self.fail_read = set(fail_read)     # paths whose read() raises, as if unplugged
+        self.current = None
 
     def open_path(self, path):
         self.opened.append(path)
+        self.current = path
 
     def send_feature_report(self, data):
         self.sent.append(bytes(data))
@@ -45,6 +48,8 @@ class FakeDevice:
         return len(data)
 
     def read(self, size, timeout):
+        if self.current in self.fail_read:
+            raise OSError("device went away")
         return self.replies.pop(0) if self.replies else []
 
     def close(self):
@@ -67,8 +72,8 @@ class PollTest(unittest.TestCase):
     def tearDown(self):
         K.hid, K.hidlist, K.time = self._saved
 
-    def poll(self, replies, infos, feature_result=None):
-        dev = FakeDevice(replies, feature_result=feature_result)
+    def poll(self, replies, infos, feature_result=None, fail_read=()):
+        dev = FakeDevice(replies, feature_result=feature_result, fail_read=fail_read)
         K.hid = types.SimpleNamespace(device=lambda: dev)
         K.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(infos))
         K.time = types.SimpleNamespace(sleep=lambda s: None)
@@ -118,6 +123,43 @@ class PollTest(unittest.TestCase):
         self.assertEqual([(s.level, s.charging) for s in out], [(80, False), (70, False)])
         self.assertEqual(2, len({s.key for s in out}))
         self.assertEqual([b"r1", b"r2"], dev.opened)
+
+    def test_the_link_km_keyboard_page_on_interface_4_is_never_queried(self):
+        # the real Link-KM layout from #270: the plain keyboard collection also
+        # sits on interface 4, so interface 4 alone is not the battery page
+        infos = self.NAPE + [
+            {"path": b"nape-keyboard4", "interface_number": 4,
+             "usage_page": 0x0001, "usage": 0x0006, "product_id": 0xD026},
+        ]
+        out, dev = self.poll([reply(66)], infos)
+        self.assertEqual([b"nape-vendor"], dev.opened)
+        self.assertEqual(66, out[0].level)
+
+    def test_a_receivers_key_does_not_depend_on_who_answers(self):
+        infos = [
+            {"path": b"r1", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028},
+            {"path": b"r2", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028},
+        ]
+        both, _ = self.poll([reply(80), reply(70)], infos)
+        first_only, _ = self.poll([reply(79)], infos)          # r2 asleep, still plugged in
+        both_again, _ = self.poll([reply(78), reply(69)], infos)
+        keys = [s.key for s in both]
+        self.assertEqual(2, len(set(keys)))
+        self.assertEqual([keys[0]], [s.key for s in first_only])
+        self.assertEqual(keys, [s.key for s in both_again])
+        self.assertEqual(79, first_only[0].level)
+
+    def test_one_receiver_going_away_does_not_hide_the_other(self):
+        infos = [
+            {"path": b"r1", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028},
+            {"path": b"r2", "interface_number": 4, "usage_page": 0xFFC1,
+             "usage": 0x0001, "product_id": 0xD028},
+        ]
+        out, _dev = self.poll([reply(64)], infos, fail_read={b"r1"})
+        self.assertEqual([64], [s.level for s in out])
 
     def test_no_reply_reports_nothing(self):
         out, _dev = self.poll([], self.NAPE)

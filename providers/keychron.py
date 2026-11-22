@@ -78,6 +78,14 @@ def parse_level(r) -> Optional[Tuple[int, bool]]:
     return level, bool(raw & 0x80)
 
 
+def _identity(info: dict) -> str:
+    """Stable per-receiver suffix: the dongle's serial when Windows exposes one,
+    else a hash of its collection path - never how many receivers answered."""
+    serial = str(info.get("serial_number") or "").strip()
+    seed = serial.encode("utf-8") if serial else bytes(info.get("path") or b"")
+    return hashlib.sha1(seed).hexdigest()[:8]
+
+
 class KeychronProvider(Provider):
     name = "keychron"
 
@@ -85,29 +93,34 @@ class KeychronProvider(Provider):
         self._diag: List[str] = []
 
     def _picks(self, infos: List[dict]) -> List[dict]:
-        """Every candidate collection, not just the first.
+        """Every battery collection, not just the first.
 
-        Two Ultra-Link 8K receivers share the same id; both interface-4
-        collections are queried so each has its own icon (#373).
+        Interface 4 is where the Ultra-Link 8K and M5 put their vendor
+        collection, but the Link-KM receiver also exposes a plain keyboard
+        collection there (0001:0006): choosing by the number alone sent the
+        b3 06 query to that silent keyboard page (#270). So interface 4 only
+        counts when it is a vendor page, and otherwise the battery page
+        ffc1:0001 is chosen explicitly - never the VIA channel (ff60) (#421).
+
+        Two Ultra-Link 8K receivers share the same id; every matching
+        collection is returned so each has its own icon (#373).
         """
-        ifaces = [d for d in infos if d.get("interface_number") == VENDOR_INTERFACE]
-        if ifaces:
-            return ifaces
-        # the Nape Pro's Link-KM receiver puts its vendor collection on interface 1
-        # (ffc1:0001), not interface 4: pick the vendor page wherever it is (#270)
+        vendor4 = [d for d in infos
+                   if d.get("interface_number") == VENDOR_INTERFACE
+                   and (d.get("usage_page") or 0) >= 0xFF00]
+        if vendor4:
+            return vendor4
         vendor = [d for d in infos if (d.get("usage_page") or 0) >= 0xFF00]
-        if vendor:
-            # Keychron's battery page is ffc1; the Nape Pro also exposes a VIA
-            # channel (ff60) that is not a battery channel.
-            battery = [d for d in vendor if d.get("usage_page") == 0xFFC1]
-            chosen = battery or vendor[:1]
-            self._diag.append(f"  no interface {VENDOR_INTERFACE} collection; using "
-                              f"iface={chosen[0].get('interface_number')} "
+        battery = [d for d in vendor
+                   if (d.get("usage_page"), d.get("usage")) == (0xFFC1, 0x0001)]
+        chosen = battery or vendor[:1]
+        if chosen:
+            self._diag.append(f"  no interface {VENDOR_INTERFACE} vendor collection; "
+                              f"using iface={chosen[0].get('interface_number')} "
                               f"{chosen[0].get('usage_page', 0):04x}:"
                               f"{chosen[0].get('usage', 0):04x}")
             return chosen
-        self._diag.append(f"  no interface {VENDOR_INTERFACE} collection; "
-                          f"falling back to the first of {len(infos)}")
+        self._diag.append(f"  no vendor collection; falling back to the first of {len(infos)}")
         return infos[:1]
 
     def _query(self, path: bytes) -> Optional[Tuple[int, bool]]:
@@ -140,7 +153,13 @@ class KeychronProvider(Provider):
                     if sent is None or sent < 0:
                         self._diag.append(f"  attempt {attempt + 1} output refused ({sent})")
                         continue
-                r = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
+                try:
+                    r = dev.read(REPORT_SIZE, READ_TIMEOUT_MS)
+                except (OSError, IOError, ValueError) as e:
+                    # the receiver was unplugged or went away mid-read: this is
+                    # this receiver's failure, not the whole poll's (#373 review)
+                    self._diag.append(f"  attempt {attempt + 1} read: {e}")
+                    return None
                 if not r:
                     self._diag.append(f"  attempt {attempt + 1}: no reply")
                     continue
@@ -169,19 +188,31 @@ class KeychronProvider(Provider):
             if not mine:
                 continue
             name = PIDS[pid]
+            candidates = self._picks(mine)
+            # Identity follows what is plugged in, not who answered this time:
+            # with two receivers present, the quieter one must not inherit the
+            # other's key (and its settings) when it finally answers (#373 review).
+            # One receiver keeps the original keychron:<pid> key, so a single
+            # dongle's history is not reset by this change.
+            multi = len(candidates) > 1
             found = []
-            for d in self._picks(mine):
+            for d in candidates:
                 self._diag.append(f"[Keychron] pid={pid:04x} '{name}' "
                                   f"iface={d.get('interface_number')} "
                                   f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                got = self._query(d["path"])
+                try:
+                    got = self._query(d["path"])
+                except Exception as e:  # one receiver must not take the poll down
+                    self._diag.append(f"  iface={d.get('interface_number')} "
+                                      f"{(d.get('usage_page') or 0):04x}:"
+                                      f"{(d.get('usage') or 0):04x}: {e}")
+                    continue
                 if got is not None:
-                    found.append((d["path"], got))
-            for path, (level, charging) in found:
-                if len(found) == 1:
-                    key = f"keychron:{pid:04x}"
-                else:
-                    key = f"keychron:{pid:04x}:{hashlib.sha1(path).hexdigest()[:8]}"
+                    found.append((d, got))
+            for d, (level, charging) in found:
+                key = f"keychron:{pid:04x}"
+                if multi:
+                    key += ":" + _identity(d)
                 out.append(DeviceStatus(key, name, level, charging, True, "keychron"))
         return out
 
