@@ -160,7 +160,7 @@ MESSAGES = {
     "provider.rapoo": "Rapoo 鼠标和键盘",
     "provider.shield": "NVIDIA SHIELD 控制器",
     "provider.skullcandy": "Skullcandy 耳机",
-    "provider.sony_inzone": "Sony INZONE H9",
+    "provider.sony_inzone": "Sony INZONE H9 / H5",
     "provider.turtlebeach": "Turtle Beach 耳机",
     "state.not_reported": "尚未报告",
     "state.charging_unknown": "{state}，充电状态未知",
