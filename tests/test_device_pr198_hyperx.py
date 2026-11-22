@@ -101,7 +101,8 @@ class KingstonTests(unittest.TestCase):
                        kingston_reply(0x03)])
         sent = self.dongle.written
         self.assertEqual(2, len(sent))
-        self.assertEqual(H.kingston_request(0x02), sent[0])
+        self.assertEqual(list(bytes.fromhex("06 00 02 00 9a 00 00 68 4a 8e 0a 00 00 00 bb 02 00"))
+                         + [0x00] * 45, sent[0])
         self.assertEqual(62, len(sent[0]))
         self.assertEqual([0x06, 0x00, 0x02, 0x00], sent[0][:4])
         self.assertEqual([0x9A, 0x00, 0x00, 0x68, 0x4A, 0x8E, 0x0A], sent[0][4:11])
@@ -200,7 +201,7 @@ class OldRevisionTests(unittest.TestCase):
         found = H.HyperXProvider().poll()
         self.assertEqual([(s.key, s.level, s.charging) for s in found],
                          [("hyperx:0696", 66, True)])
-        self.assertEqual(H.make_request(0x02), self.dongle.written[0])
+        self.assertEqual([0x06, 0xFF, 0xBB, 0x02, 0x00] + [0x00] * 47, self.dongle.written[0])
         self.assertEqual(52, len(self.dongle.written[0]))
 
     def test_a_failed_write_is_not_followed_by_a_read(self):

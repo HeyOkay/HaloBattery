@@ -153,8 +153,10 @@ class PollTest(unittest.TestCase):
         I.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
         I.IRocksProvider().poll()
         self.assertEqual(2, len(link.sent))
-        self.assertEqual(I.make_request(0x03), list(link.sent[0][1]))
-        self.assertEqual(I.make_request(0x04), list(link.sent[1][1]))
+        self.assertEqual(bytes.fromhex("08 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 4a"),
+                         link.sent[0][1])
+        self.assertEqual(bytes.fromhex("08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49"),
+                         link.sent[1][1])
 
     def test_an_offline_receiver_reads_no_cached_level(self):
         out = self.poll({1: [CAPTURED_OFFLINE], 2: [CAPTURED_75_CHARGING]})

@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Use independent protocol fixtures and cover the six originally surviving
+  battery/history mutations without changing device requests or controller identities.
+
 - Wait briefly for GitHub release-attestation availability before completing
   pre-release verification.
 

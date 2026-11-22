@@ -1,34 +1,49 @@
 # Original mutation regression mapping
 
-The six survivors in Ahmed's original [#413](https://github.com/HeyOkay/HaloBattery/issues/413)
-mutation report describe six faulty behaviors, not six new test methods.
-The mapping below records their current-source checks and publication scope.
+Ahmed's original [#413](https://github.com/HeyOkay/HaloBattery/issues/413) report
+listed six surviving mutations on pre-release `5271cc9`. The tests below cover
+those six one-line faults against the current production contracts; they do not
+reproduce the historical score on the old snapshot.
 
-| Original survivor | Fault introduced | Current regression | Publication |
-| --- | --- | --- | --- |
-| M3 | Invert the DS4 cable/charging bit | `BatteryCodeTests.test_dualshock_normal_boundaries_and_documented_full` in `tests/test_playstation_battery_validation.py` | Prerequisite [#471](https://github.com/HeyOkay/HaloBattery/pull/471) |
-| M4 | Omit charging for DualSense charge-complete state | `BatteryCodeTests.test_dualsense_normal_bins_and_explicit_charge_complete` in the same file | Prerequisite #471 |
-| M5 | Remove HyperX's 0..100 range check | `HyperXRangeTests.test_well_formed_reply_cannot_publish_an_impossible_percentage` in `tests/test_original_mutation_regressions.py` | [#477](https://github.com/HeyOkay/HaloBattery/pull/477) |
-| M6 | Remove JBL's 0..100 range check | `JblRangeTests.test_well_formed_report_cannot_publish_an_impossible_percentage` in the same file | #477 |
-| M9 | Change the history recharge threshold from `>=` to `>` | `RechargeThresholdTests.test_exact_three_point_rise_resets_history_but_two_point_jitter_does_not` in the same file | #477 |
-| M12 | Remove Astro's 0..100 range check | `AstroCollectionTests.test_truncated_garbage_and_out_of_range_replies_do_not_show_a_level` in `tests/test_astro.py` | Parallel [#472](https://github.com/HeyOkay/HaloBattery/pull/472), not a #477 prerequisite |
+All listed methods are in `tests/test_original_mutation_regressions.py`.
 
-The five methods added in `test_original_mutation_regressions.py` cover M5,
-M6 and M9: two positive-boundary methods, two impossible-value methods, and
-one exact recharge-threshold method. M3 and M4 already have prerequisite
-coverage. M12 belongs to the separate HID request safety work; #477 alone
-does not add that Astro test or claim to close all six survivors.
+| Original survivor | Fault introduced | Regression |
+| --- | --- | --- |
+| M3 | Invert the DS4 cable/charging bit | `PlayStationChargingTests.test_dualshock_cable_bit_controls_charging` |
+| M4 | Omit charging for DualSense charge-complete state | `PlayStationChargingTests.test_dualsense_charge_complete_still_counts_as_charging` |
+| M5 | Remove HyperX's 0..100 range check | `HyperXRangeTests.test_well_formed_reply_cannot_publish_an_impossible_percentage` |
+| M6 | Remove JBL's 0..100 range check | `JblRangeTests.test_well_formed_report_cannot_publish_an_impossible_percentage` |
+| M9 | Change the history recharge threshold from `>=` to `>` | `RechargeThresholdTests.test_exact_three_point_rise_resets_history_but_two_point_jitter_does_not` |
+| M12 | Remove Astro's 0..100 range check | `AstroRangeTests.test_well_formed_reply_cannot_publish_an_impossible_percentage` |
 
-The rewritten DualSense parser has an explicit `charge == 2` branch. The
-equivalent M4 mutation changes only that branch's `return 100, True` to
-`return 100, False`, preserving its percentage. This is a documented semantic
-translation, not the unchanged historical patch.
+The five original #477 methods for HyperX, JBL and history are retained. Four
+additional methods cover the current Sony charging contract and Astro's valid
+and invalid levels. The already-integrated Cloud III poll test also rejects 101;
+the dedicated HyperX checks additionally cover both reply IDs, 255 and buffer
+representations. No new device request, parser policy or controller identity is
+needed to exercise any of the six original mutations. M4 uses the unchanged
+membership mutation `(0x1, 0x2)` to `(0x1,)`, not a rewrite-specific translation.
+The current DualSense parser retains its level nibble in state 2; these tests
+preserve that behavior rather than adopt #471's forced-full branch.
 
-The original historical score on the old source is owner-supplied and has
-not been reproduced by this PR. Test counts and mutation results from other
-source snapshots are not exact-tip validation of #477. No device or network
-test is implied by the fixture/source records.
+## Integration boundary
 
-Independent inbound fixtures apply to the files changed in #477. Some unchanged
-tests still construct replies with provider constants; there is no
-repository-wide independent-fixture guarantee.
+[#477](https://github.com/HeyOkay/HaloBattery/pull/477) originally carried #471
+production changes and tests as prerequisites. This integration preserves the
+current pre-release production files instead. The new identity/validation
+suites `test_playstation_identity.py`, `test_playstation_battery_validation.py`,
+`test_wgi_nova2_placeholder.py`, `test_wgi_validation.py` and
+`test_xinput_identity.py` remain with #471: their migration rules, refusal of
+Sony error/reserved bins and stricter report lengths are separate behavior
+changes. The existing pre-release PlayStation tests are preserved unchanged.
+The narrow M3/M4 checks above retain the useful original charging coverage
+without importing those unresolved identity/parser changes. Likewise, M12
+checks the existing Astro parser without importing #472's collection changes.
+
+Independent inbound fixtures apply to the 28 existing test files changed in
+#477. iRocks and both HyperX Cloud II request expectations are also pinned to
+literal frames. Some unchanged tests elsewhere still derive fixtures from
+provider constants; this is not a repository-wide independence guarantee.
+The source records distinguish protocol/descriptor evidence from hardware
+confirmation. All tests use fake devices or pure parsers; no hardware/network
+validation or new device-compatibility claim is implied.

@@ -6,13 +6,56 @@ devices, network, application startup, threads or real history files are used.
 import unittest
 
 from halo.history import History
-from providers import hyperx_cloud3, jbl
+from providers import astro, hyperx_cloud3, jbl, playstation
 
 
 def hyperx_reply(command, level):
     # #155's 62-byte reply: 66 89 0e d7 30 ... reads 48 percent.
     # The reader also accepts the documented 0d response ID.
     return bytes((0x66, command, 0x0E, 0xD7, level)) + bytes(57)
+
+
+class PlayStationChargingTests(unittest.TestCase):
+    def test_dualshock_cable_bit_controls_charging(self):
+        # Existing DS4 status contract: bit 4 is cable/charging; low nibble is level.
+        for status, expected in ((0x00, (0, False)), (0x07, (70, False)),
+                                 (0x10, (0, True)), (0x17, (70, True)),
+                                 (0x1A, (100, True))):
+            with self.subTest(status=status):
+                self.assertEqual(playstation.parse_ds4(status), expected)
+
+    def test_dualsense_charge_complete_still_counts_as_charging(self):
+        # Pin the current parser, without adopting #471's identity/error changes:
+        # states 1 and 2 both mean cable; the current level nibble is preserved.
+        for status, expected in ((0x05, (50, False)), (0x15, (50, True)),
+                                 (0x20, (0, True)), (0x25, (50, True)),
+                                 (0x2A, (100, True))):
+            with self.subTest(status=status):
+                self.assertEqual(playstation.parse_dualsense(status), expected)
+
+
+class AstroRangeTests(unittest.TestCase):
+    @staticmethod
+    def reply(level):
+        # HeadsetControl's Astro A50 Gen 5 battery layout: 02 0c 06 00 06
+        # <handle> <left percent> <right percent> <dock>, padded to 64 bytes.
+        return bytes((0x02, 0x0C, 0x06, 0x00, 0x06, 0x0C, level, level, 0)) + bytes(55)
+
+    def test_zero_and_full_are_real_astro_levels(self):
+        for level in (0, 50, 100):
+            with self.subTest(level=level):
+                self.assertEqual(astro.parse_battery(self.reply(level)), level)
+
+    def test_well_formed_reply_cannot_publish_an_impossible_percentage(self):
+        for level in (101, 255):
+            for form in (bytes, bytearray, list):
+                with self.subTest(level=level, form=form):
+                    self.assertIsNone(astro.parse_battery(form(self.reply(level))))
+        good = self.reply(50)
+        for bad in (None, b"", good[:6], bytes((0x99,)) + good[1:],
+                    good[:4] + bytes((0x07,)) + good[5:]):
+            with self.subTest(frame=bad):
+                self.assertIsNone(astro.parse_battery(bad))
 
 
 class HyperXRangeTests(unittest.TestCase):
