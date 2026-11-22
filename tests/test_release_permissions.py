@@ -94,6 +94,14 @@ class ReleasePermissionsTests(unittest.TestCase):
         self.assertNotIn("--clobber", publish)
         self.assertNotIn("delete-asset", publish)
 
+    def test_prerelease_attestation_read_is_scoped_to_publisher(self):
+        text = (ROOT / ".github/workflows/prerelease.yml").read_text(encoding="utf-8")
+        sections = jobs(text)
+        self.assertIn("      attestations: read", sections["publish"])
+        self.assertNotIn("attestations:", sections["build"])
+        self.assertNotIn("attestations:", text.split("\njobs:", 1)[0])
+        self.assertNotIn("attestations: write", text)
+
     def test_every_downloaded_action_is_pinned(self):
         for name in WORKFLOWS:
             text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")

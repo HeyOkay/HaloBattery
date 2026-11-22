@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Wait briefly for GitHub release-attestation availability before completing
+  pre-release verification.
+
 - Publish each successful pre-release build separately, with matching source
   tags and immutable assets, instead of replacing one rolling release.
 

@@ -152,6 +152,10 @@ elif args[:2] in (["release", "verify"], ["release", "verify-asset"]):
     assert args[2] == tag and option("--repo") == "HeyOkay/HaloBattery", args
     release = state["releases"][tag]
     assert not release["draft"] and release["prerelease"] and release["immutable"], args
+    if args[1] == "verify":
+        attempts = sum(call[:2] == ["release", "verify"] for call in state["calls"])
+        if mode == "delayed-attestation" and attempts < 3: stop("no attestations for tag")
+        if mode == "invalid-attestation": stop("attestation verification failed")
     if args[1] == "verify-asset": assert release["assets"][Path(args[3]).name] == asset(args[3]), args
 else:
     # Never accept edits/deletions of old releases or arbitrary GitHub commands.
@@ -177,7 +181,9 @@ class PrereleaseTagTests(unittest.TestCase):
             (assets / "release_notes.md").write_text("Build notes $(touch EXECUTED) `touch EXECUTED`\nExact source: https://github.com/HeyOkay/HaloBattery/commit/" + SHA + "\n", encoding="utf-8")
             (root / "state.json").write_text(json.dumps(initial), encoding="utf-8")
             (root / "fake_gh.py").write_text(FAKE_GH, encoding="utf-8")
-            (root / "publisher.sh").write_text('gh() { "$FAKE_PYTHON" "$FAKE_GH" "$@"; }\n' + publisher(), encoding="utf-8")
+            (root / "publisher.sh").write_text(
+                'gh() { "$FAKE_PYTHON" "$FAKE_GH" "$@"; }\n'
+                'sleep() { [[ "$*" == "5" ]] || return 1; }\n' + publisher(), encoding="utf-8")
             environment = dict(os.environ, RELEASE_VERSION=VERSION, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
                                GITHUB_SHA=SHA, GITHUB_RUN_ID=RUN_ID, GITHUB_RUN_ATTEMPT=attempt,
                                RUNNER_TEMP=root.as_posix(), GITHUB_OUTPUT=(root / "output").as_posix(),
@@ -243,6 +249,22 @@ class PrereleaseTagTests(unittest.TestCase):
         self.assertIn("`touch EXECUTED`", release["notes"])
         self.assertEqual(sum(call[:2] == ["release", "verify-asset"] for call in final["calls"]), 3)
         self.assert_notes(final)
+
+    def test_attestation_readiness_retries_without_republishing(self):
+        result, final = self.run_publisher(mode="delayed-attestation")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sum(call[:2] == ["release", "verify"] for call in final["calls"]), 3)
+        self.assertEqual(sum(call[:2] == ["release", "upload"] for call in final["calls"]), 1)
+        self.assertEqual(sum("PATCH" in call for call in final["calls"]), 1)
+        self.assertEqual(sum(call[:2] == ["release", "verify-asset"] for call in final["calls"]), 3)
+
+    def test_persistent_attestation_failure_remains_a_failure(self):
+        result, final = self.run_publisher(mode="invalid-attestation")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(sum(call[:2] == ["release", "verify"] for call in final["calls"]), 12)
+        self.assertFalse(any(call[:2] == ["release", "verify-asset"] for call in final["calls"]))
+        self.assertEqual(sum(call[:2] == ["release", "upload"] for call in final["calls"]), 1)
+        self.assertFalse(final["releases"][self.tag()]["draft"])
 
     def test_release_creation_preserves_a_preexisting_tag(self):
         for source in (SHA, "f" * 40):
