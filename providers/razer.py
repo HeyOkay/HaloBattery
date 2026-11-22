@@ -41,6 +41,7 @@ KNOWN = {
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x057A: ("Razer BlackShark V3", 0x3F),         # its transaction id is not used
+    0x0577: ("Razer BlackShark V3 Pro", 0x3F),     # ff14 exchange, see blackshark_v3
     0x00A4: ("Razer Mouse Dock Pro", 0x1F),
     # ---- keyboards with a battery, from OpenRazer's keyboard driver (razerkbd_driver.c:
     # razer_attr_read_charge_level). The wireless id is the HyperSpeed receiver, the
@@ -435,7 +436,7 @@ class RazerProvider(Provider):
                 # Deliberately no generic/PA fallback: the 0528 hardware rejects
                 # their reads/writes. A missing fresh feature reply means no reading.
                 st = self._poll_2020(ifaces)
-            elif pid == blackshark_v3.PID:
+            elif pid in blackshark_v3.PIDS:
                 # Deliberately no generic/PA fallback either: the V3 answers neither, and
                 # sustained traffic on this dongle resets the headset's radio link.
                 st = self._poll_v3(ifaces)

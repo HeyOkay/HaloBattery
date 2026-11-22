@@ -90,6 +90,8 @@
 | [Razer BlackShark V2 HyperSpeed](protocols.md#razer-blackshark-v2-hyperspeed-mediatek) | 2.4 GHz receiver (`1532:0565`) or USB-C cable (`1532:056E`) | yes (level and charging confirmed by reporter) |
 | [Razer BlackShark V2 Pro (2020)](protocols.md#razer-blackshark-v2-pro-2020) | 2.4 GHz receiver | yes |
 | [Razer BlackShark V2 Pro (2023)](protocols.md#razer-blackshark-v2-pro-2023) | 2.4 GHz receiver | yes |
+| [Razer BlackShark V3](protocols.md#razer-blackshark-v3-blackshark-v3-pro) | 2.4 GHz receiver (1532:057A) | unverified |
+| [Razer BlackShark V3 Pro](protocols.md#razer-blackshark-v3-blackshark-v3-pro) | 2.4 GHz receiver (1532:0577) | tray icon and charging animation confirmed by reporter in #519 |
 | [Razer BlackShark V3 X HyperSpeed](protocols.md#razer-blackshark-v3-x-hyperspeed) | 2.4 GHz receiver (1532:057D) or USB cable (1532:057C) | yes (battery and charging) |
 | [Razer BlackWidow V3 Pro](protocols.md#razer-blackwidow-v3-pro) | 2.4 GHz receiver or USB cable | no |
 | [Razer DeathAdder V4 Pro](protocols.md#razer-deathadder-v4-pro) | 2.4 GHz receiver | yes |

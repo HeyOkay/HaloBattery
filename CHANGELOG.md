@@ -41,6 +41,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
+  the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
+  ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
+  confirmed that the tray icon and charging animation appear on their headset.
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,
