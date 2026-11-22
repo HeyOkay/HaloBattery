@@ -7,7 +7,7 @@ the Lamzu Thorn/Atlantis family; the request and reply shape are shared with
 
     request  08 04 00 ... <checksum>       (17 bytes)
     reply    08 04 ... <level> <power> ... <checksum>
-             level at byte 6, power at byte 7 (0 = battery, non-zero = cable)
+             level at byte 6, power at byte 7 (0/1/2 = battery/charging/full)
 
 Only the read-only power query is sent.  The model is gated on both the
 receiver id and the product string because ``3554`` is shared with Lamzu and
@@ -104,14 +104,15 @@ class IoAuroraProvider(Provider):
                 if (not isinstance(caps, dict)
                         or any(type(caps.get(kind)) is not int or not 0 <= caps[kind] <= MAX_REPORT_LEN
                                for kind in ("input", "output", "feature"))
-                        or min(caps["input"], caps["output"]) < PAYLOAD_LEN
-                        or 0 < caps["feature"] < PAYLOAD_LEN):
+                        or min(caps["input"], caps["output"]) < PAYLOAD_LEN):
                     self._diag.append("  incompatible cached report lengths; not querying")
                     return None
                 # Native write pads to this opened collection's immutable caps.
                 # Legacy hidapi returns the exact 17-byte source request length.
                 expected_write = caps["output"]
-                feature_length = caps["feature"]
+                # An optional shorter feature report can belong to another ID;
+                # it must not disable a valid interrupt query on this collection.
+                feature_length = caps["feature"] if caps["feature"] >= PAYLOAD_LEN else 0
             # A queued frame predates this request and cannot refresh its timestamp.
             # Require an empty queue before writing; do not accept a fifth stale frame.
             for _ in range(4):

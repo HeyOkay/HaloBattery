@@ -446,7 +446,8 @@ handles provide immutable cached input/output/feature capacities: the 17-byte
 request is padded by the transport and must complete to the full output capacity.
 No additional caps probe is opened. Legacy HIDAPI must complete exactly 17 bytes.
 The source's feature read is tried only after an accepted request; native feature
-buffers use the cached capacity. Failed reads keep the previous sample greyed,
+buffers use the cached capacity; a short optional feature capacity disables only the fallback, not the
+primary interrupt query. Failed reads keep the previous sample greyed,
 without updating its timestamp. Power state 3 keeps the percentage with charging
 unknown; states above 3 and malformed frames are refused. Shared CompX/LAMZU
 protocol code and its existing normal behavior are unchanged.

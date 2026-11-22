@@ -158,7 +158,7 @@ class SafetyTests(unittest.TestCase):
 
     def test_invalid_cached_caps_prevent_any_request(self):
         for caps in ({}, dict(input=17, output=0, feature=17), dict(input=16, output=17, feature=17),
-                     dict(input=17, output=16, feature=17), dict(input=17, output=17, feature=1),
+                     dict(input=17, output=16, feature=17), dict(input=17, output=17, feature=-1),
                      dict(input=17, output=True, feature=17), dict(input=17, output=17, feature="17"),
                      dict(input=17, output=32769, feature=17)):
             with self.subTest(caps=caps):
@@ -176,6 +176,19 @@ class SafetyTests(unittest.TestCase):
         no_feature = Bus(caps=dict(input=17, output=17, feature=0), feature=frame(99))
         self.assertFalse(self.poll(no_feature)[0].online)
         self.assertEqual(no_feature.features, [])
+
+    def test_short_optional_feature_capacity_does_not_disable_interrupt_query(self):
+        for feature_length in (1, 8):
+            with self.subTest(feature_length=feature_length):
+                caps = dict(input=17, output=17, feature=feature_length)
+                fresh = Bus(caps=caps, after={b"receiver": [frame(42)]})
+                self.assertTrue(self.poll(fresh)[0].online)
+                self.assertEqual(fresh.features, [])
+                self.assertEqual(len(fresh.writes), 1)
+                silent = Bus(caps=caps, feature=frame(99))
+                self.assertFalse(self.poll(silent)[0].online)
+                self.assertEqual(silent.features, [])
+                self.assertEqual(len(silent.writes), 1)
 
     def test_literal_boundaries_and_known_charge_states(self):
         for level in (0, 100):
