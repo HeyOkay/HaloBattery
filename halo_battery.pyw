@@ -57,6 +57,14 @@ else:
     # must not override its bundled packages (for example an older halo/ folder).
     sys.path.insert(0, BASE_DIR)
 
+# Explicit diagnostics dispatch before profiles, logging, UI or HID imports.
+from halo import device_diagnostics as _device_diagnostics
+_diagnostic_exit = _device_diagnostics.dispatch(sys.argv[1:])
+if _diagnostic_exit is not None:
+    raise SystemExit(_diagnostic_exit)
+
+from halo.provider_policy import available_provider_labels, provider_available
+
 APPDATA_DIR = os.environ.get("APPDATA", os.path.expanduser("~"))
 PORTABLE_MARKER = "portable.txt"   # next to the app: keep settings and the log in its folder
 
@@ -149,9 +157,10 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        DeviceStatus, DjiProvider, DarmosharkProvider,
                        EightBitDoProvider, PhoneLinkProvider,
                        GWolvesProvider, HyperXAlpha2Provider, HyperXCloud3Provider, HyperXCloud3SProvider,
-                       HyperXCloudCoreProvider, HyperXProvider, JblProvider, JblQuantum350Provider,
-                       KeychronProvider, LamzuProvider, LofreeProvider, LogitechProvider,
-                       LogitechCenturionProvider, LogitechG325Provider, LogitechG435RtkProvider,
+                       HyperXCloudCoreProvider, HyperXProvider, IoAuroraProvider, JblProvider,
+                       JblQuantum350Provider, KeychronProvider, LamzuProvider, LofreeProvider,
+                       LogitechProvider, LogitechCenturionProvider, LogitechG325Provider,
+                       LogitechG435RtkProvider,
                        MchoseProvider, NintendoProvider, NzxtProvider, PlayStationProvider, PulsarProvider,
                        RazerProvider, SteelSeriesEliteProvider, SteelSeriesProvider,
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
@@ -281,6 +290,7 @@ PROVIDER_LABELS = {
     "hyperx_ngenuity": "HyperX Pulsefire mice",
     "inphic": "Inphic / Attack Shark mice",
     "attackshark_r5": "Attack Shark R5 Ultra",
+    "io_aurora": "IO Aurora",
     "irocks": "iRocks M31R",
     "kraken_v4": "Razer Kraken V4",
     "jabra": "Jabra headsets (Link 380 / 390 dongle)",
@@ -340,7 +350,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             JblProvider(listen_first=jbl_listen_first), JblHidV3Provider(), CherryProvider(), CoolerMasterProvider(), RoyalKludgeProvider(), ZowieProvider(), FractalProvider(), LogitechProvider(), SteelSeriesProvider(), XInputProvider(),
             PlayStationProvider(), EightBitDoProvider(), BarracudaProvider(), BarracudaXProvider(), NintendoProvider(),
             AsusProvider(), GWolvesProvider(), AulaProvider(), AulaF108Provider(), LofreeProvider(), AstroProvider(), CorsairProvider(),
-            LamzuProvider(), VaxeeProvider(), AmInfinityProvider(),
+            LamzuProvider(), IoAuroraProvider(), VaxeeProvider(), AmInfinityProvider(),
             SteelSeriesEliteProvider(), LogitechCenturionProvider(), LogitechG435RtkProvider(), HyperXCloud3SProvider(), NzxtProvider(),
             SteamProvider(), EndgameWEProvider(), PhoneLinkProvider(),
             MchoseV9Provider(), DareuProvider(), ShieldProvider(), LamzuAtlantisProvider(),
@@ -1949,7 +1959,7 @@ class App:
 
         def provider_items():
             labels = [(name, tr("provider." + name) if "provider." + name in i18n.LANGUAGES["en"].catalog
-                       else label) for name, label in PROVIDER_LABELS.items()]
+                       else label) for name, label in available_provider_labels(PROVIDER_LABELS).items()]
             for name, label in sorted(labels, key=lambda kv: kv[1].lower()):
                 yield Item(label, flip_provider(name), checked=provider_on(name))
 
@@ -2256,6 +2266,8 @@ class App:
     def toggle_provider(self, name: str) -> None:
         """Turn one device type on or off. Off, its devices are not opened at all, and
         their icons go away at once rather than after the next two polls."""
+        if not provider_available(name, PROVIDER_LABELS):
+            raise ValueError("provider is not available for normal polling")
         with self.lock:
             off = self.disabled_providers()
             if name in off:
@@ -3690,6 +3702,27 @@ def main():
     # stretches it on a scaled screen, which made the menu text small and blurry
     flyout.enable_dpi_awareness()
     if "--probe" in sys.argv:
+        # Do not let a generic probe interleave with the app or a targeted
+        # diagnostic. Keep its kernel lease until process exit, including when
+        # a synchronous native call does not return.
+        from halo.diagnostic_guard import InstanceGuard
+        global _probe_instance_guard
+        error = None
+        try:
+            _probe_instance_guard = InstanceGuard()
+            if not _probe_instance_guard.acquire():
+                _probe_instance_guard.close()
+                error = "probe: HaloBattery or another diagnostic is running"
+        except OSError:
+            error = "probe: exclusive device access unavailable"
+        if error is not None:
+            log.error("%s", error)
+            if sys.stderr is not None:
+                try:
+                    print(error, file=sys.stderr)
+                except (OSError, ValueError):
+                    pass  # A missing/unusable console must not permit polling.
+            raise SystemExit(1)
         probe()
         return
     try:

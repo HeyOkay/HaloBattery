@@ -8,6 +8,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Restrict battery requests to sourced HID control collections, keep confirmed
+  cable routes, hold unsourced receiver paths, and restore Barracuda receiver
+  mode after failed reads. Correct
+  URX and MCHOSE K87 request framing; identify Azoth 96 HE on its shared receiver.
+  Barracuda `1532:0550` automatic writes are held pending a sourced capture;
+  the owner-confirmed whole-build level does not identify its battery exchange.
+
+- Identify supported Sony USB controllers by their own pairing address so one
+  controller keeps its identity across USB ports and Bluetooth. Keep ambiguous
+  or anonymous controllers separate instead of transferring another pad's settings.
+- Refuse invalid controller battery states and capacities; report Sony battery
+  faults without repeatedly treating the controller as newly connected. Avoid
+  assigning Windows battery reports to multiple XInput pads by list order.
 - Identify the next pre-release as 1.18.0 and allow its updater to install the
   stable 1.18.0 when available. Preview What's new uses the bundled changelog.
 - Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
@@ -67,6 +80,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
   confirmed that the tray icon and charging animation appear on their headset.
+- IO Aurora (`3554:FB08` receiver): read the level with the CompX report-8
+  query, and the charging state from the mouse's own cable identity
+  (`3554:FB09`), which appears when it leaves the receiver on the cable.
+  Prefer the cable and accept fresh replies only after a complete query on the
+  captured control collection; keep old readings greyed when a query fails.
+  Confirmed on a user's unit: 100 % matching IO Hub, the charging ring on the
+  PC cable and clearing when unplugged ([#493](https://github.com/HeyOkay/HaloBattery/issues/493)).
 - Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
   (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
   dongle carries over a COM port instead. Shows the level and charging state,
@@ -311,6 +331,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   same exchange krisgfx9/Wireless-Device-Battery-Monitor uses. Charging is not
   exposed by this protocol, so the level is shown with the charger unknown.
   Test build pending on the reporter's unit.
+
+- Add explicitly acknowledged local device diagnostics with exclusive device access,
+  bounded native cleanup and sanitized JSON reports. Unverified device protocols
+  stay disabled during normal use.
 
 ### Fixed
 - Extend the Settings Close button hit target to the top-right corner while

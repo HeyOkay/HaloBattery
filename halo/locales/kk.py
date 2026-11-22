@@ -133,6 +133,7 @@ MESSAGES = {
     'provider.hyperx_ngenuity': 'HyperX Pulsefire тінтуірлері',
     'provider.inphic': 'Inphic / Attack Shark тінтуірлері',
     'provider.irocks': 'iRocks M31R',
+    'provider.io_aurora': 'IO Aurora',
     'provider.jabra': 'Jabra гарнитуралары (Link 380 / 390 қабылдағышы)',
     'provider.kraken_v4': 'Razer Kraken V4',
     'provider.mchose_kb': 'MCHOSE пернетақталары',

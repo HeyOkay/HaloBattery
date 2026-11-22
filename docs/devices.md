@@ -14,6 +14,7 @@
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
 | [ASUS ROG Gladius III Aimpoint and other ROG / TUF wireless mice (list in `providers/asus.py`)](protocols.md#asus-rog-gladius-iii-aimpoint-and-other-rog--tuf-wireless-mice) | 2.4 GHz / 8K receiver or USB cable | yes on 8K; 1K/wired untried |
 | [ASUS ROG Harpe II Ace / Harpe II Extreme](protocols.md#asus-rog-harpe-ii-ace--harpe-ii-extreme) | 2.4 GHz receiver or USB cable | Harpe II Ace on its receiver |
+| [ASUS ROG Azoth 96 HE](hid-target-safety.md#asus-shared-speednova-receiver) | Shared SPEEDNOVA receiver, paired `1C12` | Level and charging confirmed in #238 test build; no new hardware retest |
 | [ASUS ROG Azoth X](protocols.md#asus-rog-omni-receiver-mice-and-keyboards) | OMNI receiver (0B05:1ACE) | yes (level confirmed by reporter) |
 | [ASUS ROG Raikiri II](protocols.md#asus-rog-raikiri-ii) | 2.4 GHz receiver, vendor collection (0B05:1C92) | yes (level and charging confirmed by reporter) |
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
@@ -60,6 +61,7 @@
 | [JBL Quantum 520 / 650 / 850 / 950 Wireless (and X variants)](protocols.md#jbl-quantum-hidv3-520-650-850-950) | 2.4 GHz receiver or USB cable | unverified in the app (WDBM tested a 650) |
 | [JBL Quantum 350 Wireless](protocols.md#jbl-quantum-350-wireless) | 2.4 GHz receiver (`0ecb:206b`) | level only; charging not exposed |
 | [Keychron Ultra-Link 8K, Keychron M5](protocols.md#keychron-ultra-link-8k-keychron-m5) | 2.4 GHz receiver and USB cable | level confirmed on hardware (M6 8K and G4, #373); charging from bit 7 of the reply, not yet seen in the app |
+| [IO Aurora](protocols.md#io-aurora) | 2.4 GHz receiver (`3554:fb08`), cable (`3554:fb09`) | yes (level and charging) |
 | [LAMZU Maya X](protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
 | [LAMZU Atlantis V2](protocols.md#lamzu-atlantis-v2) | 2.4 GHz receiver (3554:F50D) or USB cable (3554:F50F) | yes (level and charging) |
 | [Lofree Hyzen](protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
@@ -124,6 +126,14 @@
 | [Xbox-compatible controllers (other models)](protocols.md#xbox-compatible-controllers-other-models) | USB or the Xbox wireless adapter | likely |
 
 **PlayStation controllers over Bluetooth:** a DualShock 4 or DualSense sends its battery level over Bluetooth only in its "full report" mode. Switching a controller into that mode makes it invisible to games that use DirectInput until it is turned off and on again (#96), so the app does not switch it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. If you do not play such games, turn on **Preferences > PlayStation full mode (Bluetooth)** to always see the level. Over USB the level is always shown.
+
+Sony USB models `054c:05c4`, `09cc`, `0ce6` and `0df2` can supply their own pairing
+address on the gamepad collection. A valid unique address keeps their settings
+across port moves and combines their USB/Bluetooth views. The new identity reads
+have offline tests, not new hardware confirmation. Unsupported/anonymous clones,
+failed identity reads and duplicated addresses stay separate; their USB identity
+is port-dependent. Historical plain or non-MAC keys cannot safely be assigned to
+the current pad automatically, so those customizations may need to be selected again.
 
 **8BitDo controllers in D-input mode:** the battery level is only in the controller's enhanced report. Switching the controller into that mode makes it invisible to DirectInput games until it is turned off and on (tested by the reporter of #101), so the app never switches it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. The Pro 3 needs no switch: it always sends its level. In XInput mode the level is always shown.
 
@@ -198,3 +208,10 @@ on these devices by us.
 ATK V75X / VGN N75 PRO polling selects one active keyboard at a time: an ATK
 cable first, otherwise the first eligible receiver. Their saved settings/history
 keys are separate; ATK cable and receiver retain the same existing ATK key.
+
+### Explicit local diagnostics
+
+[Device diagnostics](device-diagnostics.md) can collect a single acknowledged
+reading for AJ159 PRO, INZONE H9 II, PRO X 3, XM2w 4K/v2 and LAMZU Tachi.
+This does not extend normal support: PRO X 3, Endgame 4K and Tachi remain held.
+Maya X, XM2we and other enabled siblings keep their existing normal providers.

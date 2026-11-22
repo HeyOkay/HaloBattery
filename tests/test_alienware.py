@@ -15,10 +15,14 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Alienware Command Center USBPcap, HaloBattery #287: 0e a1 25 04; 64 data bytes.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,13 +30,13 @@ from providers import alienware as A  # noqa: E402
 
 
 def frame(cmd, value, pad=0x00):
-    f = [A.REPORT_MARK, cmd, value] + [pad] * (A.REPORT_SIZE - 3)
+    f = [0x0E, cmd, value] + [pad] * (64 - 3)
     return f
 
 
-CAPTURED_37 = frame(A.BATTERY_CMD, 0x25)
-CAPTURED_37_PREFIXED = [A.REPORT_ID] + CAPTURED_37   # hidapi keeps the report id in front
-CAPTURED_CHARGING = frame(A.BATTERY_CMD, 0x13)       # 19 %, charging
+CAPTURED_37 = frame(0xA1, 0x25)
+CAPTURED_37_PREFIXED = [0x00] + CAPTURED_37   # hidapi keeps the report id in front
+CAPTURED_CHARGING = frame(0xA1, 0x13)       # 19 %, charging
 CAPTURED_CHARGING[3] = 0x04
 CAPTURED_STATE = frame(0x05, 0x00, pad=0xAC)      # the receiver's unsolicited state report
 
@@ -70,7 +74,7 @@ class PollTest(unittest.TestCase):
         A.hid = types.SimpleNamespace(device=lambda: self.device)
         self.entries = [{"path": b"kb-vendor", "interface_number": 1,
                          "usage_page": 0xFF00, "usage": 0x0001,
-                         "product_id": A.PID, "product_string": "Alienware Pro KB Gaming Receiver"}]
+                         "vendor_id": A.VID, "product_id": A.PID, "product_string": "Alienware Pro KB Gaming Receiver"}]
         A.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.entries))
         self.provider = A.AlienwareProvider()
 
@@ -82,7 +86,7 @@ class PollTest(unittest.TestCase):
     def test_the_request_carries_the_report_id_in_front(self):
         req = A.make_request()
         self.assertEqual(A.WIRE_SIZE, len(req))
-        self.assertEqual([A.REPORT_ID, 0x0E, 0xA1], req[:3])
+        self.assertEqual([0x00, 0x0E, 0xA1], req[:3])
         self.assertEqual([0] * (A.WIRE_SIZE - 3), req[3:])
 
     def test_the_captured_reply_reads_37(self):
@@ -101,8 +105,8 @@ class PollTest(unittest.TestCase):
         self.assertIsNone(A.parse_reply([]))
 
     def test_a_zero_or_oversized_level_is_refused(self):
-        self.assertIsNone(A.parse_reply(frame(A.BATTERY_CMD, 0)))
-        self.assertIsNone(A.parse_reply(frame(A.BATTERY_CMD, 101)))
+        self.assertIsNone(A.parse_reply(frame(0xA1, 0)))
+        self.assertIsNone(A.parse_reply(frame(0xA1, 101)))
 
     # ---------------------------------------------------------------- polling
 
@@ -121,6 +125,46 @@ class PollTest(unittest.TestCase):
         self.assertTrue(out[0].charging_known)      # byte 3 tells the cable apart
         self.assertEqual([b"kb-vendor"], self.device.opened)
         self.assertEqual([bytes(A.make_request())], self.device.sent)
+
+    def test_unrelated_or_incomplete_collections_are_never_opened(self):
+        expected = dict(self.entries[0])
+        for changes in (
+                {"usage_page": 0x0001, "usage": 0x0006},
+                {"usage_page": 0x000c, "usage": 0x0001},
+                {"usage": 0x0002}, {"usage": None},
+                {"interface_number": 2}, {"interface_number": None},
+                {"vendor_id": 0x1234}, {"product_id": 0x1234}):
+            with self.subTest(changes=changes):
+                self.entries = [dict(expected, **changes)]
+                with mock.patch.object(A.hid, "device") as construct:
+                    self.assertEqual(self.provider.poll(), [])
+                construct.assert_not_called()
+                self.assertEqual(self.device.opened, [])
+                self.assertEqual(self.device.sent, [])
+
+    def test_captured_collection_is_found_after_unrelated_collections(self):
+        expected = dict(self.entries[0])
+        self.entries = [
+            dict(expected, path=b"keyboard", usage_page=1, usage=6),
+            dict(expected, path=b"wrong-vendor-usage", usage=2),
+            expected,
+        ]
+        self.assertEqual(self.provider.poll()[0].level, 37)
+        self.assertEqual(self.device.opened, [b"kb-vendor"])
+        self.assertEqual(self.device.sent, [bytes(A.make_request())])
+
+    def test_missing_captured_collection_does_not_fall_back_after_previous_success(self):
+        self.provider.poll()
+        self.device.opened.clear()
+        self.device.sent.clear()
+        self.entries[0]["usage"] = 2
+        with mock.patch.object(A.hid, "device") as construct:
+            self.assertEqual(self.provider.poll(), [])
+        construct.assert_not_called()
+        self.assertEqual(self.device.opened, [])
+        self.assertEqual(self.device.sent, [])
+        self.assertTrue(any("no battery request sent" in line
+                            for line in self.provider.diagnostics()))
 
     def test_silence_keeps_the_last_level_greyed_out(self):
         self.provider.poll()

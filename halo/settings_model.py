@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+from .provider_policy import available_provider_labels, provider_available
 from . import icons
 from providers.base import DeviceStatus
 
@@ -74,7 +75,7 @@ class SettingsController:
         devices.sort(key=lambda row: row["name"].casefold())
         providers = [dict(name=name,
                          label=i18n.translate("provider." + name, language=cfg["language"]) if ctx["has_translation"]("provider." + name) else label,
-                         enabled=name not in disabled) for name, label in ctx["provider_labels"].items()]
+                         enabled=name not in disabled) for name, label in available_provider_labels(ctx["provider_labels"]).items()]
         providers.sort(key=lambda row: row["label"].casefold())
         result["providers"] = providers
         result["autostart"] = ctx["autostart_enabled"]()
@@ -148,7 +149,7 @@ class SettingsController:
         app.wake.set()
 
     def set_provider(self, name, enabled):
-        if name not in self.context["provider_labels"] or not isinstance(enabled, bool):
+        if not provider_available(name, self.context["provider_labels"]) or not isinstance(enabled, bool):
             raise ValueError("invalid provider")
         if (name not in self.app.disabled_providers()) != enabled:
             self.app.toggle_provider(name)
