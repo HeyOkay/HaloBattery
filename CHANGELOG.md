@@ -76,6 +76,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
+  (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
+  level and charging state (#525).
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter

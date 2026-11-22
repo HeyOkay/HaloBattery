@@ -113,6 +113,7 @@ MESSAGES = {
     "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.mchose": "MCHOSE 鼠标",
     "provider.attackshark_x66": "ATTACKSHARK X66",
+    "provider.attackshark_r11": "Attack Shark R11 Ultra",
     "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.nintendo": "Nintendo Switch 控制器",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
