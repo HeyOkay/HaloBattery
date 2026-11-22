@@ -540,7 +540,12 @@ reporter. **Confirmed on hardware** in #430: the receiver's power reply read
 
 ### MCHOSE K87 / G98 Pro
 
-MCHOSE's own web driver (M HUB) sends a 19-byte output report
+MCHOSE's web driver (M HUB) defines a 19-byte getBattery template and appends
+its additive checksum, producing this complete 20-byte output report:
+
+    13 4A 01 00 00 ... 00 5E
+
+The full reply is:
 
     13 4A 01 00 02 <level> <flags> ... <checksum>
 
@@ -1616,6 +1621,11 @@ confirmed the level in an earlier test build. No successful raw reply was attach
 the bounded reader and its native-transport integration have offline coverage but
 have not been freshly tested on H9 II hardware. Charging is source-based and its
 cable transition remains unconfirmed.
+
+### Sourced HID target review
+
+See [HID target safety](hid-target-safety.md) for exact collection gates, packet
+corrections, retained compatibility exceptions and hardware retest limits.
 
 ## Explicit diagnostic readers
 

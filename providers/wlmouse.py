@@ -97,6 +97,15 @@ class WLmouseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None, None
         try:
+            lengths = (65, 64)  # legacy hidapi compatibility when caps are unavailable
+            metadata = getattr(dev, "get_report_lengths", None)
+            caps = metadata() if callable(metadata) else None
+            if isinstance(caps, dict) and caps.get("feature") == 65:
+                # Windows reports the receiver's complete feature size including
+                # ID 0. A 64-byte retry cannot contain this report and returns
+                # ERROR_INVALID_PARAMETER when the mouse is asleep (#413).
+                # https://learn.microsoft.com/windows-hardware/drivers/ddi/hidsdi/nf-hidsdi-hidd_getfeature
+                lengths = (65,)
             report = [0x00] + QUERY + [0x00] * (64 - len(QUERY))
             try:
                 dev.send_feature_report(report)
@@ -104,7 +113,7 @@ class WLmouseProvider(Provider):
                 self._diag.append(f"    send: {e}")
             for _ in range(15):
                 time.sleep(0.05)
-                for length in (65, 64):
+                for length in lengths:
                     try:
                         resp = dev.get_feature_report(0, length)
                     except (OSError, ValueError):
@@ -126,11 +135,13 @@ class WLmouseProvider(Provider):
         dev = hid.device()
         try:
             dev.open_path(path)
+            metadata = getattr(dev, "get_report_lengths", None)
+            caps = metadata() if callable(metadata) else None
+            if isinstance(caps, dict) and caps.get("input") == 0:
+                self._diag.append("    passive read skipped: collection has no input reports")
+                return None, None
             dev.set_nonblocking(True)
-        except (OSError, IOError):
-            return None, None
-        deadline = time.time() + seconds
-        try:
+            deadline = time.time() + seconds
             while time.time() < deadline:
                 try:
                     data = dev.read(64)
@@ -142,6 +153,8 @@ class WLmouseProvider(Provider):
                         self._diag.append(f"    heartbeat: {hexdump(data, 8)}")
                         return batt, chg
                 time.sleep(0.02)
+        except (OSError, ValueError):
+            return None, None
         finally:
             try:
                 dev.close()
