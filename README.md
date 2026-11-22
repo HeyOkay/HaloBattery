@@ -11,11 +11,13 @@ One icon per device. No vendor software.
 [![Downloads](https://img.shields.io/github/downloads/HeyOkay/HaloBattery/total?color=2ea043)](../../releases)
 [![Windows 10 / 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install)
 [![License: MIT](https://img.shields.io/github/license/HeyOkay/HaloBattery?color=lightgrey)](LICENSE)
+[![Website](https://img.shields.io/badge/website-halobattery.app-2ea043)](https://halobattery.app)
+[![Discord](https://img.shields.io/badge/discord-join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/K796KR9xtk)
 
 ### [⬇ Download the latest version](../../releases/latest)
 
 Maintained together with the community. To help, read [Contributing](.github/CONTRIBUTING.md).<br>
-The [pre-release build](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build) has fixes that are not released yet. It is rebuilt on every merge and may have bugs.
+The [pre-release builds](https://github.com/HeyOkay/HaloBattery/releases) have fixes that are not released yet and may have bugs. Choose the newest entry marked **Pre-release**; each successful build has its own release and matching source tag.
 
 <img src="docs/icons.png" alt="Every icon state: headset, mouse, keyboard, controllers and Bluetooth at 100 % down to 15 %, charging and asleep" width="560">
 

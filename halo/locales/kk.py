@@ -140,7 +140,7 @@ MESSAGES = {
     'provider.rapoo': 'Rapoo тінтуірлері мен пернетақталары',
     'provider.shield': 'NVIDIA SHIELD контроллерлері',
     'provider.skullcandy': 'Skullcandy гарнитуралары',
-    'provider.sony_inzone': 'Sony INZONE H9',
+    'provider.sony_inzone': 'Sony INZONE H9 / H5',
     'provider.turtlebeach': 'Turtle Beach гарнитуралары',
     'state.not_reported': 'деректер әлі алынбады',
     'state.charging_unknown': '{state}, зарядталу күйі белгісіз',

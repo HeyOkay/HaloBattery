@@ -94,7 +94,7 @@ both check out, the command is the one we asked for, and the level is 0..100.
 
 Additional measured CompX IDs: Scyrox 3554:F5F7/F5F6 (#182), ATK A9 SE
 373B:10C9 (#347), Lamzu Atlantis V2 3554:F50D (#408), Cougar Revenger Pro
-3554:F5DF/F5DE/F5DC (#354).
+3554:F5DF/F5DE/F5DC (#354), Zaopin Z2 4K 3554:F526/F527.
 Pulsar X2 V3 Mini uses the Sonix feature protocol from jonkristian/pulsar-x3-python
 (#213). NK NANO 373B:1216 is dispatched separately to atk_bitmouse (#350).
 """
@@ -148,6 +148,8 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xFA09: "Compx 2.4 GHz keyboard",
         0xF520: "Teevolution Terra Pro (1K receiver)",
         0xF523: "Teevolution Terra Pro (2.4 GHz)",
+        0xF526: "Zaopin Z2 4K (wired)",
+        0xF527: "Zaopin Z2 4K (2.4 GHz)",
     },
     0x35BB: {
         0xD3FA: "HECATE mouse (wired)",

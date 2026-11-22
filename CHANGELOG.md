@@ -23,6 +23,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Use less memory while running: the app no longer keeps its full-size (1024 px)
   icon artwork in memory after drawing the small icons it needs (about 4 MB), and
   saving a tray icon no longer loads every Pillow image plugin (about 1.3 MB).
+
+- Wait briefly for GitHub release-attestation availability before completing
+  pre-release verification.
+
+- Publish selected pre-release builds manually, with matching source tags and
+  immutable assets, instead of replacing one rolling release. Automatic merge
+  builds remain available as Actions artifacts.
+
+- Read Bluetooth devices inside the app instead of in a background PowerShell
+  process, which used about 80 MB of memory on its own (#509). Same devices,
+  levels and connect/disconnect timing; PowerShell stays the fallback if the
+  in-app read fails.
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.
@@ -45,6 +57,18 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Sony INZONE H5 (`054C:0EBF`): read its dongle's vendor HID collection
+  (`FF04:0001`) with the same Sony battery frame as the INZONE H9, which that
+  dongle carries over a COM port instead. Shows the level and charging state,
+  and the headset as offline while it is switched off. Confirmed on an H5:
+  50 % on battery, the charging state on the cable, and the icon going away
+  while the headset was off.
+- Add an outline Discord shortcut at the bottom of the navigation rail, with
+  a tooltip and a native fade to Discord's brand color on hover.
+- The 8BitDo Ultimate 2 Wireless is named as such in the controller list when it
+  is the only controller connected (next to another pad it keeps the generic name),
+  and its documentation says plainly that the 2.4 GHz dongle carries no battery
+  level while Bluetooth does (#461).
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
@@ -76,6 +100,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Logitech G435 LIGHTSPEED over its Realtek receiver (`046D:0ACB`): battery as an
   approximate level, read at most once every 15 minutes and cached between reads
   because each read mutes USB audio for about 0.8 s.
+
+- Add Zaopin Z2 4K battery reporting over USB-C and the 2.4 GHz receiver.
 
 - **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
   (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
@@ -267,6 +293,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Test build pending on the reporter's unit.
 
 ### Fixed
+- Extend the Settings Close button hit target to the top-right corner while
+  preserving its visible size, position and hover/pressed feedback.
+
+- Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
+  and charging reply without relaxing receiver or other model validation.
+
+- Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
+  preserving one icon across cable/receiver transitions and limiting feature
+  requests to documented device identities and battery collections.
+
+- Glorious Model O: when another app (SignalRGB) is writing to the same vendor
+  feature report, the diagnostics now say the channel is busy instead of
+  reporting the mouse as asleep, and a refused write marks that reading stale
+  without stopping any other mouse (#281).
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
@@ -377,6 +417,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Optically center asymmetric Iconify pictograms without changing their size
   or source colors.
 
+- Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
+  over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
+  on that collection when SET_FEATURE is refused or unanswered, and report the
+  charging bit. A Keychron receiver without a battery collection is skipped:
+  its keyboard, VIA and other collections are never opened or written.
+  Confirmed on hardware by @cocowalla in #270: the Keychron M6 icon and
+  100 % level match Keychron Launcher.
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
 
 - Use single-language Language card headings in English, French and Spanish.

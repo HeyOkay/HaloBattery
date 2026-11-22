@@ -15,7 +15,7 @@
 ### [⬇ 下载最新版本](../../releases/latest)
 
 本项目由维护者和社区共同维护。参与贡献请阅读[贡献指南](.github/CONTRIBUTING.md)。<br>
-[预发布版本](https://github.com/HeyOkay/HaloBattery/releases/tag/prerelease-build)包含尚未正式发布的修复，每次合并后都会重新构建，可能存在问题。
+[预发布版本](https://github.com/HeyOkay/HaloBattery/releases)包含尚未正式发布的修复，可能存在问题。请选择最新标记为 **Pre-release** 的版本；每次成功构建都有独立的发布版本和对应的源码标签。
 
 <img src="docs/icons.png" alt="各种图标状态：耳机、鼠标、键盘、手柄和蓝牙设备，电量从 100% 到 15%，以及充电中和休眠中" width="560">
 
