@@ -206,3 +206,10 @@ on these devices by us.
 ATK V75X / VGN N75 PRO polling selects one active keyboard at a time: an ATK
 cable first, otherwise the first eligible receiver. Their saved settings/history
 keys are separate; ATK cable and receiver retain the same existing ATK key.
+
+### Explicit local diagnostics
+
+[Device diagnostics](device-diagnostics.md) can collect a single acknowledged
+reading for AJ159 PRO, INZONE H9 II, PRO X 3, XM2w 4K/v2 and LAMZU Tachi.
+This does not extend normal support: PRO X 3, Endgame 4K and Tachi remain held.
+Maya X, XM2we and other enabled siblings keep their existing normal providers.

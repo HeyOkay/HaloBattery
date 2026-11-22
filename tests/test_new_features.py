@@ -93,7 +93,10 @@ class DeviceTypeTests(HideRenameTestCase):
         prefs = item(app.build_menu(None), "Preferences").submenu
         types = item(prefs, "Device types").submenu
         labels = [i.text for i in types.items]
-        for label in hb.PROVIDER_LABELS.values():
+        for name, label in hb.PROVIDER_LABELS.items():
+            if name in {"endgame_4k", "lamzu_sw"}:
+                self.assertNotIn(label, labels)
+                continue
             self.assertIn(label, labels)
         razer = item(types, "Razer mice and headsets")
         self.assertTrue(razer.checked)
