@@ -70,6 +70,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   approximate level, read at most once every 15 minutes and cached between reads
   because each read mutes USB audio for about 0.8 s.
 
+- Add Zaopin Z2 4K battery reporting over USB-C and the 2.4 GHz receiver.
+
 - **Logitech G PRO X3 SUPERSTRIKE mouse**: recognize the LIGHTSPEED receiver
   (`046d:c54f`) and the device's alternate HID++ collections (`ff43:0301`
   short, `ff43:0302` long) while keeping existing `ff00` paths preferred.

@@ -79,6 +79,7 @@
 | [Ninjutso Sora V3](protocols.md#ninjutso-sora-v3-093aeb02) | 2.4 GHz receiver (`093a:eb02`) or USB cable (`093a:e010`) | yes (battery and charging; wireless and cable, tested by @Cynersi) |
 | [NZXT Lift Elite Wireless](protocols.md#nzxt-lift-elite-wireless-1e712101) | 2.4 GHz receiver and USB cable | yes |
 | [Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max, Taidu TSG808](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz dongle and USB cable | yes |
+| [Zaopin Z2 4K](protocols.md#zaopin-z2-4k) | 2.4 GHz 4K receiver, USB-C, and Bluetooth LE | yes |
 | [Pulsar, ATK / VXE, Redragon M916/M913, HECATE](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz receiver and USB cable | mixed (some confirmed) |
 | [Plantronics Voyager 8200 UC (BT600 adapter)](protocols.md#plantronics-voyager-8200-uc-bt600-adapter) | Bluetooth headset through the BT600 USB adapter | confirmed |
 | [Royal Kludge MG6 Pro](protocols.md#royal-kludge-mg6-pro) | 2.4 GHz receiver or USB cable | unverified |
