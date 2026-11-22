@@ -347,6 +347,24 @@ class BluetoothProvider(Provider):
         self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
         self._misses: Dict[str, int] = {}
         self._levels: Dict[str, int] = {}           # MAC -> last known battery level
+        # The cache above has one owner at a time: the watcher that claimed it, or None for
+        # one-shot polls. A watcher the app has retired can still come back from a Windows
+        # call that blocked; its snapshot must not rewrite the cache (#513 review).
+        self._owner: Optional[object] = None
+        self._lock = threading.Lock()
+
+    def claim(self, owner: object) -> None:
+        """From now on only `owner`'s snapshots change the cache. Every watcher claims the
+        provider when it is created, so the newest watcher always wins."""
+        with self._lock:
+            self._owner = owner
+
+    def release(self, owner: object) -> None:
+        """Retire `owner`: its later snapshots are dropped. Returns only after a snapshot it is
+        handling right now has finished, so nothing of it lands after this call."""
+        with self._lock:
+            if self._owner is owner:
+                self._owner = None
 
     def _query(self) -> Optional[str]:
         """Raw JSON snapshot, or None on failure: read in-process first when `native` is on,
@@ -358,8 +376,11 @@ class BluetoothProvider(Provider):
                                   f"{len(snap['props'])} properties, {len(snap['roots'])} device(s)")
                 return json.dumps(snap)
             except Exception as e:
+                # Not retried: a read that timed out may still be blocked in Windows, and
+                # another one must not start beside it (#513 review).
+                self.native = False
                 self._diag.append(f"[Bluetooth] native read failed ({type(e).__name__}: "
-                                  f"{str(e)[:150]}), using PowerShell")
+                                  f"{str(e)[:150]}), using PowerShell from now on")
         try:
             flags = 0x08000000  # CREATE_NO_WINDOW
             proc = subprocess.run(
@@ -387,18 +408,27 @@ class BluetoothProvider(Provider):
         if sys.platform != "win32":
             return []
         raw = self._query()
-        fresh = self.parse(raw) if raw is not None else None
-        result = self.merge(fresh)
-        for line in self._diag:          # every poll goes to the log in detail, to investigate disappearing icons
-            log.info(line)
+        with self._lock:
+            fresh = self.parse(raw) if raw is not None else None
+            result = self.merge(fresh)
+            for line in self._diag:      # every poll goes to the log in detail, to investigate disappearing icons
+                log.info(line)
         return result
 
-    def handle(self, raw: str) -> List[DeviceStatus]:
-        """One snapshot line from the watcher -> the devices to show."""
-        self._diag = []
-        result = self.merge(self.parse(raw))
-        for line in self._diag:
-            log.info(line)
+    def handle(self, raw: str, owner: Optional[object] = None) -> Optional[List[DeviceStatus]]:
+        """One snapshot line from the watcher -> the devices to show.
+
+        None, with the cache untouched, when `owner` is not the cache's owner: a watcher
+        that was retired while a Windows call blocked must not overwrite what its
+        successor has read since (#513 review)."""
+        with self._lock:
+            if owner is not self._owner:
+                log.info("[Bluetooth] dropped a snapshot from a retired watcher")
+                return None
+            self._diag = []
+            result = self.merge(self.parse(raw))
+            for line in self._diag:
+                log.info(line)
         return result
 
     def merge(self, fresh: Optional[List[DeviceStatus]]) -> List[DeviceStatus]:
@@ -485,6 +515,7 @@ class BluetoothWatcher:
         self._stop = threading.Event()
         self._proc: Optional[subprocess.Popen] = None
         self._thread = threading.Thread(target=self._run, daemon=True)
+        provider.claim(self)                    # the cache is this watcher's until it is retired
 
     def command(self) -> List[str]:
         script = WATCH_SCRIPT.replace("%PPID%", str(os.getpid()))
@@ -572,9 +603,11 @@ class BluetoothWatcher:
                     continue
                 got_output = True
                 try:
-                    devices = self.provider.handle(text)
+                    devices = self.provider.handle(text, owner=self)
                 except Exception:
                     log.exception("bluetooth watcher")
+                    continue
+                if devices is None:               # retired: a queued line after stop()
                     continue
                 self.snapshots += 1
                 self.on_update(devices)
@@ -627,6 +660,7 @@ class NativeBluetoothWatcher:
         self._beat = clock()                    # end of the last round: the stall check
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="bt-native-watcher", daemon=True)
+        provider.claim(self)                    # the cache is this watcher's until it is retired
 
     def start(self) -> "NativeBluetoothWatcher":
         self._beat = self._clock()
@@ -656,10 +690,14 @@ class NativeBluetoothWatcher:
         self._stop.set()
 
     def _emit(self, snap: dict) -> None:
+        if self._stop.is_set():                 # retired while the call was blocked
+            return
         try:
-            devices = self.provider.handle(json.dumps(snap))
+            devices = self.provider.handle(json.dumps(snap), owner=self)
         except Exception:
             log.exception("bluetooth watcher")
+            return
+        if devices is None:                     # no longer the cache's owner: a late result
             return
         self.snapshots += 1
         self.on_update(devices)

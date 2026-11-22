@@ -390,9 +390,18 @@ class NativeReader:
             self.winrt = None
 
 
+# The one-shot read's thread. A read that timed out can stay blocked in a Windows call; while
+# it is, the next call is refused instead of starting a second thread beside it, so at most
+# one such thread exists at any time (#513 review).
+_ONE_SHOT_LOCK = threading.Lock()
+_one_shot: Optional[threading.Thread] = None
+
+
 def one_shot_snapshot(timeout: float = 30.0) -> dict:
     """A complete snapshot read on a short-lived thread of its own, so the caller's COM
-    apartment does not matter. Raises on failure or timeout."""
+    apartment does not matter. Raises on failure or timeout, and at once while an earlier
+    read is still running."""
+    global _one_shot
     box: dict = {}
 
     def work():
@@ -406,8 +415,12 @@ def one_shot_snapshot(timeout: float = 30.0) -> dict:
             if reader is not None:
                 reader.close()
 
-    t = threading.Thread(target=work, name="bt-native-snapshot", daemon=True)
-    t.start()
+    with _ONE_SHOT_LOCK:
+        if _one_shot is not None and _one_shot.is_alive():
+            raise TimeoutError("an earlier in-process Bluetooth read is still running")
+        t = threading.Thread(target=work, name="bt-native-snapshot", daemon=True)
+        _one_shot = t
+        t.start()
     t.join(timeout)
     if t.is_alive():
         raise TimeoutError(f"native Bluetooth snapshot took longer than {timeout:.0f} s")

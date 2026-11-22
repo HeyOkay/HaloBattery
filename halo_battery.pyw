@@ -1586,8 +1586,8 @@ class App:
         # Ownership of a snapshot: bumped whenever a watcher is abandoned, so a
         # Windows call that returns minutes later cannot publish into the cache.
         self._bt_generation = 0
-        # Abandoned watchers, at most one per backend: a stalled native call may
-        # still be in flight, but nothing new of that kind is ever started.
+        # Retired watchers whose thread still runs: a native call can stay blocked in
+        # Windows, and no second in-process watcher is started next to one.
         self._bt_orphans: List[BluetoothWatcher] = []
         self.update: Optional[updates.Release] = None   # a newer release, when there is one
         self.update_wake = threading.Event()  # "check for updates now"
@@ -2622,6 +2622,19 @@ class App:
             self.bt_fresh.set()
             self.wake.bluetooth()
 
+    def _bt_retire(self, watcher) -> None:
+        """Take a watcher out of service before anything replaces it - it failed, stalled or
+        Bluetooth was switched off. A late result (a Windows call can return minutes later)
+        can no longer change the provider's cache (`release`) or reach the tray (the
+        generation), and a thread still blocked in a call is remembered, so no second
+        in-process watcher starts next to it (#513 review)."""
+        self.bt.release(watcher)
+        with self.lock:
+            self._bt_generation += 1
+        watcher.stop()
+        if watcher.alive:
+            self._bt_orphans.append(watcher)
+
     def _bt_clear(self):
         """Bluetooth switched off: drop its readings. The revision bump makes the next
         poll treat Bluetooth as completed, so its icons are removed instead of kept."""
@@ -2645,12 +2658,27 @@ class App:
                             return
                         self._bt_orphans = [w for w in self._bt_orphans if w.alive]
                         native = not self.bt_native_failed
-                        watcher = NativeBluetoothWatcher if native else BluetoothWatcher
-                        self._bt_generation += 1
-                        generation = self._bt_generation
-                        self.bt_watch = watcher(
-                            self.bt,
-                            lambda res, g=generation: self._bt_update(res, g)).start()
+                        # Never two in-process watchers: a retired one still blocked in a
+                        # Windows call is waited for, and given up on once it has stalled.
+                        blocked = [w for w in self._bt_orphans
+                                   if native and isinstance(w, NativeBluetoothWatcher)]
+                        if any(w.failed for w in blocked):
+                            log.warning("bluetooth: a retired in-process read never came back, "
+                                        "starting the PowerShell watcher")
+                            self.bt_native_failed = True
+                            self.bt.native = False
+                            native, blocked = False, []
+                        if not blocked:
+                            watcher = NativeBluetoothWatcher if native else BluetoothWatcher
+                            self._bt_generation += 1
+                            generation = self._bt_generation
+                            self.bt_watch = watcher(
+                                self.bt,
+                                lambda res, g=generation: self._bt_update(res, g)).start()
+                    if self.bt_watch is None:          # waiting for the retired call
+                        self.bt_wake.wait(2)
+                        self.bt_wake.clear()
+                        continue
                 if self.bt_watch.failed:
                     abandoned = self.bt_watch
                     if isinstance(abandoned, NativeBluetoothWatcher):
@@ -2659,17 +2687,14 @@ class App:
                         self.bt.native = False      # no in-process reads from now on
                     else:
                         self.bt_watch_failed = True
-                    self._bt_generation += 1        # whatever it returns now is late
-                    abandoned.stop()
-                    if len(self._bt_orphans) < 2:   # one per backend, never more
-                        self._bt_orphans.append(abandoned)
+                    self._bt_retire(abandoned)
                     self.bt_watch = None
                     continue
                 self.bt_wake.wait(2)
                 self.bt_wake.clear()
                 continue
             if self.bt_watch is not None:            # Bluetooth turned off in the menu
-                self.bt_watch.stop()
+                self._bt_retire(self.bt_watch)
                 self.bt_watch = None
             if self.cfg["bluetooth"]:
                 if self.bt_native_failed and getattr(self.bt, "native", False):

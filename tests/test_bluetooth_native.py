@@ -84,6 +84,21 @@ class FakeReader:
         self.closed = True
 
 
+class BlockedReader(FakeReader):
+    """snapshot() blocks like a hung Windows call until `release` is set, then reads `level`."""
+
+    def __init__(self, clock, level=10):
+        super().__init__(clock, connect_at=T0)
+        self.level = level
+        self.entered, self.release = threading.Event(), threading.Event()
+
+    def snapshot(self):
+        self.snaps.append(self.clock.t)
+        self.entered.set()
+        self.release.wait(15)
+        return snapshot(True, level=self.level)
+
+
 def run_watcher(reader, until, provider=None):
     """Runs the watcher loop on this thread until the fake clock reaches `until`."""
     updates = []
@@ -390,6 +405,250 @@ class SnapshotOwnershipTests(unittest.TestCase):
         self.assertFalse(app.bt.native)
         self.assertTrue(app.bt_watch_failed)
         self.assertLessEqual(len(app._bt_orphans), 2)
+
+
+class RetiredWatcherTests(unittest.TestCase):
+    """#513 review, second round: the call genuinely stays blocked while the app moves on, and
+    what it returns afterwards must change neither the provider's cache nor the tray."""
+
+    def app(self):
+        return SnapshotOwnershipTests.app(self)
+
+    def test_a_released_owner_cannot_change_the_cache(self):
+        provider = bluetooth.BluetoothProvider()
+        old, new = object(), object()
+        provider.claim(old)
+        provider.handle(json.dumps(snapshot(True, level=50)), owner=old)
+        provider.release(old)
+        provider.claim(new)
+        with mock.patch.object(bluetooth, "log"):
+            self.assertIsNone(provider.handle(json.dumps(snapshot(True, level=10)), owner=old))
+        self.assertEqual(provider._levels, {MAC: 50})
+
+    def test_a_late_result_after_the_handover_leaves_the_provider_cache_alone(self):
+        provider, clock = bluetooth.BluetoothProvider(), Clock()
+        reader = BlockedReader(clock, level=10)
+        published, late = [], {}
+        w = bluetooth.NativeBluetoothWatcher(provider, published.append,
+                                             reader_factory=lambda: reader, clock=clock)
+        real_handle, handled = provider.handle, threading.Event()
+
+        def spy(raw, owner=None):
+            out = real_handle(raw, owner)
+            if owner is w:
+                late["result"] = out
+                handled.set()
+            return out
+
+        provider.handle = spy  # type: ignore[method-assign]
+        with mock.patch.object(bluetooth, "log"):
+            w.start()
+            try:
+                self.assertTrue(reader.entered.wait(15))      # blocked inside "Windows"
+                successor = object()                          # the fallback taking over
+                provider.claim(successor)
+                fresh = provider.handle(json.dumps(snapshot(True, level=90)), owner=successor)
+                self.assertEqual([90], [st.level for st in fresh])
+                reader.release.set()                          # the hung call returns 10 %
+                self.assertTrue(handled.wait(15))             # ... and reaches the provider
+            finally:
+                reader.release.set()
+                w.stop()
+                w._thread.join(15)
+        self.assertFalse(w._thread.is_alive())
+        self.assertIsNone(late["result"])                     # refused by the provider itself
+        self.assertEqual(published, [])
+        self.assertEqual(provider._levels, {MAC: 90})
+        self.assertEqual([90], [st.level for st in provider._shown.values()])
+        # the next fallback poll fails: what stays on screen is the fresh 90 %, not the late 10 %
+        with mock.patch.object(provider, "_query", return_value=None), \
+                mock.patch.object(bluetooth.sys, "platform", "win32"), \
+                mock.patch.object(bluetooth, "log"):
+            kept = provider.poll()
+        self.assertEqual([(90, True)], [(st.level, st.polling_stale) for st in kept])
+
+    def test_a_stalled_native_call_returning_after_the_fallback_changes_nothing(self):
+        app = self.app()
+        app.bt = bluetooth.BluetoothProvider(native=True)
+        clock = Clock()
+        reader = BlockedReader(clock, level=10)
+        natives = []
+
+        class Native(bluetooth.NativeBluetoothWatcher):
+            def __init__(self, provider, on_update):
+                super().__init__(provider, on_update, reader_factory=lambda: reader, clock=clock)
+                natives.append(self)
+
+        class PowerShell:
+            """Stands in for the PowerShell watcher: claims the cache and reads 90 % at once."""
+            alive, failed = False, False
+
+            def __init__(self, provider, on_update):
+                self.provider, self.on_update = provider, on_update
+                provider.claim(self)
+
+            def start(self):
+                self.on_update(self.provider.handle(json.dumps(snapshot(True, level=90)), owner=self))
+                return self
+
+            def stop(self):
+                pass
+
+        waits = {"n": 0}
+
+        class Wake:
+            def wait(self, seconds):
+                waits["n"] += 1
+                if waits["n"] == 1:
+                    reader.entered.wait(15)                       # the native call is blocked
+                    clock.t = T0 + bluetooth.STALL_TIMEOUT + 1    # ... long enough to be stuck
+                else:
+                    app.stop_evt.set()
+                return True
+
+            def clear(self):
+                pass
+
+        app.bt_wake = Wake()
+        with mock.patch.object(hb, "NativeBluetoothWatcher", Native), \
+                mock.patch.object(hb, "BluetoothWatcher", PowerShell), \
+                mock.patch.object(hb.sys, "platform", "win32"), \
+                mock.patch.object(hb, "log"), mock.patch.object(bluetooth, "log"):
+            try:
+                app.bt_loop()
+                self.assertEqual([90], [st.level for st in app.bt_cache])
+            finally:
+                reader.release.set()                              # the stuck call returns 10 %
+                natives[0]._thread.join(15)
+            self.assertFalse(natives[0]._thread.is_alive())
+            self.assertEqual(natives[0].snapshots, 0)
+            self.assertEqual([90], [st.level for st in app.bt_cache])
+            self.assertEqual(app.bt._levels, {MAC: 90})
+            with mock.patch.object(app.bt, "_query", return_value=None), \
+                    mock.patch.object(bluetooth.sys, "platform", "win32"):
+                self.assertEqual([90], [st.level for st in app.bt.poll()])
+        self.assertEqual(len(natives), 1)
+        self.assertTrue(app.bt_native_failed)
+        self.assertFalse(app.bt.native)
+
+    def test_switching_bluetooth_off_and_on_keeps_one_native_call_in_flight(self):
+        app = self.app()
+        app.bt = bluetooth.BluetoothProvider(native=True)
+        clock = Clock()
+        reader = BlockedReader(clock)
+        natives, shells, peak = [], [], {"alive": 0}
+
+        class Native(bluetooth.NativeBluetoothWatcher):
+            def __init__(self, provider, on_update):
+                super().__init__(provider, on_update, reader_factory=lambda: reader, clock=clock)
+                natives.append(self)
+
+        class PowerShell:
+            alive, failed = False, False
+
+            def __init__(self, provider, on_update):
+                shells.append(self)
+                provider.claim(self)
+
+            def start(self):
+                return self
+
+            def stop(self):
+                pass
+
+        waits = {"n": 0}
+
+        class Wake:
+            """Each wait flips Bluetooth off/on in the menu while the first call stays blocked."""
+
+            def wait(self, seconds):
+                waits["n"] += 1
+                reader.entered.wait(15)
+                peak["alive"] = max(peak["alive"], sum(1 for w in natives if w.alive))
+                if waits["n"] < 12:
+                    app.cfg["bluetooth"] = not app.cfg["bluetooth"]
+                elif waits["n"] == 12:
+                    app.cfg["bluetooth"] = True
+                    clock.t = T0 + bluetooth.STALL_TIMEOUT + 1    # the retired call is stuck
+                else:
+                    app.stop_evt.set()
+                return True
+
+            def clear(self):
+                pass
+
+        app.bt_wake = Wake()
+        with mock.patch.object(hb, "NativeBluetoothWatcher", Native), \
+                mock.patch.object(hb, "BluetoothWatcher", PowerShell), \
+                mock.patch.object(hb.sys, "platform", "win32"), \
+                mock.patch.object(hb, "log"), mock.patch.object(bluetooth, "log"):
+            try:
+                app.bt_loop()
+                self.assertEqual(len(natives), 1)          # never a second one beside it
+                self.assertEqual(peak["alive"], 1)
+                self.assertEqual(len(shells), 1)           # stuck past the stall timeout
+                self.assertEqual(app._bt_orphans, natives)
+            finally:
+                reader.release.set()
+                natives[0]._thread.join(15)
+        self.assertFalse(natives[0]._thread.is_alive())
+        self.assertEqual(natives[0].snapshots, 0)
+        self.assertEqual(app.bt._levels, {})
+        self.assertTrue(app.bt_native_failed)
+        self.assertFalse(app.bt.native)
+
+
+class OneShotBoundTests(unittest.TestCase):
+    """#513 review: a one-shot read that timed out stays the only one until it returns."""
+
+    def test_repeated_timeouts_never_start_a_second_reader_thread(self):
+        entered, release = threading.Event(), threading.Event()
+        made = []
+
+        class HungReader:
+            def __init__(self):
+                made.append(self)
+
+            def snapshot(self):
+                entered.set()
+                release.wait(15)
+                return snapshot(True)
+
+            def close(self):
+                pass
+
+        def live():
+            return [t for t in threading.enumerate() if t.name == "bt-native-snapshot"]
+
+        with mock.patch.object(bluetooth_native, "NativeReader", HungReader):
+            try:
+                with self.assertRaises(TimeoutError):
+                    bluetooth_native.one_shot_snapshot(timeout=0.05)
+                self.assertTrue(entered.wait(15))
+                for _ in range(3):                          # refused at once, no new thread
+                    with self.assertRaises(TimeoutError):
+                        bluetooth_native.one_shot_snapshot(timeout=0.05)
+                self.assertEqual(len(made), 1)
+                self.assertEqual(len(live()), 1)
+            finally:
+                release.set()
+                for t in live():
+                    t.join(15)
+            self.assertEqual(live(), [])
+            self.assertEqual(bluetooth_native.one_shot_snapshot(timeout=15), snapshot(True))
+        self.assertEqual(len(made), 2)                      # the slot is free again
+
+    def test_a_failed_one_shot_read_is_not_admitted_again(self):
+        provider = bluetooth.BluetoothProvider(native=True)
+        done = mock.Mock(returncode=0, stdout=json.dumps(snapshot(True)).encode(), stderr=b"")
+        with mock.patch.object(bluetooth_native, "one_shot_snapshot",
+                               side_effect=TimeoutError("took longer than 30 s")) as native, \
+                mock.patch.object(bluetooth.subprocess, "run", return_value=done):
+            provider._query()
+            provider._query()
+        native.assert_called_once()
+        self.assertFalse(provider.native)
+        self.assertTrue(any("using PowerShell from now on" in line for line in provider.diagnostics()))
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows DLLs")
