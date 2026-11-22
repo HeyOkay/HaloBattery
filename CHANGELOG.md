@@ -8,6 +8,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Sony INZONE H5: open only its `FF04:0001` control collection, and write the
+  64-byte battery query only when that collection's report sizes can carry it,
+  so a refused write on a different dongle revision cannot fail the whole
+  INZONE provider, H9 included.
+
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver
   mode after failed reads. Correct

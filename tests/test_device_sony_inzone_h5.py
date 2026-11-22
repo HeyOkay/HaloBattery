@@ -60,6 +60,20 @@ class FakeHid:
         self.closed = True
 
 
+class CapsHid(FakeHid):
+    """A device opened through the app's HID transport: it also reports HIDP_CAPS sizes."""
+
+    def __init__(self, reads=(), lengths=None, lengths_error=None):
+        super().__init__(reads)
+        self.lengths = {"input": 64, "output": 64, "feature": 0} if lengths is None else lengths
+        self.lengths_error = lengths_error
+
+    def get_report_lengths(self):
+        if self.lengths_error:
+            raise self.lengths_error
+        return self.lengths
+
+
 class FrameTest(unittest.TestCase):
     def test_query_frame_is_the_documented_h9_query(self):
         # the serial H9 QUERY is the same frame with transaction id 1
@@ -166,6 +180,80 @@ class PollTest(unittest.TestCase):
         result, _ = self.poll(fake, entries)
         self.assertEqual(result, [])
         self.assertEqual(fake.paths, [])
+
+    def test_only_the_exact_control_usage_is_opened(self):
+        # a second FF04 collection listed first must not be opened in its place
+        fake = FakeHid([CAPTURED])
+        entries = [dict(ENTRY, usage=0x0002, path=b"h5-other-ff04"), ENTRY]
+        result, _ = self.poll(fake, entries)
+        self.assertEqual([r.level for r in result], [50])
+        self.assertEqual(fake.paths, [b"h5-control"])
+
+    def test_ff04_without_the_control_usage_is_not_opened(self):
+        fake = FakeHid([CAPTURED])
+        result, _ = self.poll(fake, [dict(ENTRY, usage=0x0002)])
+        self.assertEqual(result, [])
+        self.assertEqual(fake.paths, [])
+
+
+class ReportSizeTest(unittest.TestCase):
+    """The query is written only when the collection's HIDP_CAPS can carry it (#515 review)."""
+
+    def setUp(self):
+        patcher = mock.patch.object(S, "list_ports", None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def poll(self, fake):
+        with mock.patch.object(S.hidlist, "enumerate", return_value=[ENTRY]), \
+             mock.patch.object(S.hid, "device", return_value=fake):
+            provider = S.SonyInzoneProvider()
+            return provider.poll(), provider.diagnostics()
+
+    def test_fitting_sizes_are_read(self):
+        for lengths in ({"input": 64, "output": 64, "feature": 0},
+                        {"input": 16, "output": 65, "feature": 0}):
+            fake = CapsHid([CAPTURED], lengths)
+            result, _ = self.poll(fake)
+            self.assertEqual([r.level for r in result], [50], lengths)
+            self.assertEqual(len(fake.writes), 1)
+
+    def test_too_small_or_invalid_sizes_are_not_written(self):
+        for lengths in ({"input": 64, "output": 63, "feature": 0},
+                        {"input": 15, "output": 64, "feature": 0},
+                        {"input": 64, "feature": 0},
+                        {"input": "64", "output": 64},
+                        {"input": 64, "output": 64.0},
+                        {"input": True, "output": 64},
+                        [64, 64],
+                        None):
+            fake = CapsHid([CAPTURED])
+            fake.lengths = lengths
+            result, diag = self.poll(fake)
+            self.assertEqual(result, [], lengths)
+            self.assertEqual(fake.writes, [], lengths)
+            self.assertTrue(fake.closed)
+            self.assertTrue(any("report sizes" in line for line in diag), lengths)
+
+    def test_non_callable_metadata_is_refused(self):
+        fake = FakeHid([CAPTURED])
+        fake.get_report_lengths = {"input": 64, "output": 64}
+        result, _ = self.poll(fake)
+        self.assertEqual(result, [])
+        self.assertEqual(fake.writes, [])
+
+    def test_metadata_error_is_contained(self):
+        fake = CapsHid([CAPTURED], lengths_error=OSError("collection closed"))
+        result, diag = self.poll(fake)
+        self.assertEqual(result, [])
+        self.assertEqual(fake.writes, [])
+        self.assertTrue(fake.closed)
+        self.assertTrue(any("collection closed" in line for line in diag))
+
+    def test_plain_hidapi_device_without_metadata_is_still_read(self):
+        fake = FakeHid([CAPTURED])
+        result, _ = self.poll(fake)
+        self.assertEqual([r.level for r in result], [50])
 
 
 if __name__ == "__main__":

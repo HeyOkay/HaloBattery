@@ -51,8 +51,10 @@ FRAME_LENGTH = 14
 HID_PIDS = {0x0EBF: "Sony INZONE H5"}
 HID_KEYS = {0x0EBF: "sony_inzone_h5"}
 HID_USAGE_PAGE = 0xFF04
+HID_USAGE = 0x0001           # the H5's control collection is FF04:0001; open no other
 HID_REPORT_ID = 0x02
 HID_REPORT_SIZE = 64
+HID_REPLY_SIZE = 2 + FRAME_LENGTH  # report id, length, frame
 HID_TID = 0x0102             # echoed back; INZONE Hub shares the channel with its own ids
 HID_TYPE_RET = 0x10          # reply type (InzoneBattery TypeRet)
 HID_HEADSET_OFF = 0xFF       # level byte while the dongle is in but the headset is off
@@ -99,6 +101,28 @@ def parse_hid_reply(report, tid: int) -> Optional[Tuple[Optional[int], Optional[
     return level, {0: False, 1: True}.get(status)
 
 
+def report_sizes_fit(dev) -> bool:
+    """Whether the opened collection can carry the 64-byte query and its reply.
+
+    Windows refuses an output report longer than the collection's, and the app's HID
+    transport counts a refused native call as a failed poll for the whole provider even
+    when the provider catches it (#360), which would also take the H9 serial reading
+    down. get_report_lengths() is the transport's cached HIDP_CAPS, read without device
+    I/O; plain hidapi devices (source runs without the transport) do not have it.
+    """
+    metadata = getattr(dev, "get_report_lengths", None)
+    if metadata is None:
+        return True
+    if not callable(metadata):
+        return False
+    caps = metadata()
+    if not isinstance(caps, dict):
+        return False
+    output, reply = caps.get("output"), caps.get("input")
+    return (type(output) is int and output >= HID_REPORT_SIZE
+            and type(reply) is int and reply >= HID_REPLY_SIZE)
+
+
 class SonyInzoneProvider(Provider):
     name = "sony_inzone"
 
@@ -120,13 +144,15 @@ class SonyInzoneProvider(Provider):
         out = []
         for d in infos:
             pid = d.get("product_id")
-            if pid not in HID_PIDS or d.get("usage_page") != HID_USAGE_PAGE:
+            if pid not in HID_PIDS:
+                continue
+            if (d.get("usage_page"), d.get("usage")) != (HID_USAGE_PAGE, HID_USAGE):
                 continue
             if any(s.key == HID_KEYS[pid] for s in out):
                 continue
             name = HID_PIDS[pid]
             self._diag.append(f"[Sony] pid={pid:04x} '{name}' iface={d.get('interface_number')} "
-                              f"{HID_USAGE_PAGE:04x}:{d.get('usage', 0):04x}")
+                              f"{HID_USAGE_PAGE:04x}:{HID_USAGE:04x}")
             result = self._query_hid(d["path"])
             if result is None:
                 continue
@@ -148,6 +174,9 @@ class SonyInzoneProvider(Provider):
             self._diag.append(f"  open: {e}")
             return None
         try:
+            if not report_sizes_fit(dev):
+                self._diag.append("  report sizes too small for the 64-byte query; not querying")
+                return None
             dev.write(make_hid_report(HID_TID))
             for _ in range(HID_READ_ATTEMPTS):
                 r = dev.read(HID_REPORT_SIZE, HID_READ_TIMEOUT_MS)
