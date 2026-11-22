@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refresh documented device-test evidence and distinguish pending support fixes
+  from released behavior.
+
 - Publish each successful pre-release build separately, with matching source
   tags and immutable assets, instead of replacing one rolling release.
 
