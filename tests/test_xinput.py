@@ -107,14 +107,33 @@ class NamingTest(ProviderTest):
                             hid_devices=[self.XBOX_HID, receiver])
         self.assertEqual([s.name for s in res], ["Xbox controller"])
 
-    def test_two_slots_each_keep_their_own_name(self):
-        _p, res = self.poll({0: (X.TYPE_WIRED, 0), 1: (X.TYPE_WIRED, 0)},
-                            [wgi_report(0x045E, 0x02FD, 800, 1000),
-                             wgi_report(*self.U2, 1000, 1000)])
-        names = [s.name for s in res]
-        # a shared-name suffix may be appended when several pads are shown
-        self.assertTrue(names[1].startswith("8BitDo Ultimate 2"), names)
-        self.assertNotIn("8BitDo", names[0])
+    # slot 0: an Xbox pad on its adapter; slot 1: the Ultimate 2 on its dongle ("wired")
+    TWO_SLOTS = {0: (X.TYPE_NIMH, 3), 1: (X.TYPE_WIRED, 0)}
+    XBOX_REPORT = (0x045E, 0x0B12, 800, 1000)
+
+    def test_reversed_wgi_order_does_not_name_the_xbox_pad(self):
+        # #523 review: Windows.Gaming.Input lists the Ultimate 2 first although it is in
+        # slot 1. Equal counts do not say which report is whose, so no slot is renamed.
+        _p, res = self.poll(self.TWO_SLOTS,
+                            [wgi_report(*self.U2, 1000, 1000), wgi_report(*self.XBOX_REPORT)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.key for s in res], ["xinput:0", "xinput:1"])
+        self.assertEqual([s.name for s in res if "8BitDo" in s.name], [])
+
+    def test_two_active_slots_keep_the_generic_name_in_slot_order_too(self):
+        _p, res = self.poll(self.TWO_SLOTS,
+                            [wgi_report(*self.XBOX_REPORT), wgi_report(*self.U2, 1000, 1000)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.key for s in res], ["xinput:0", "xinput:1"])
+        self.assertEqual([s.name for s in res if "8BitDo" in s.name], [])
+
+    def test_one_slot_with_a_second_report_keeps_the_generic_name(self):
+        # one XInput slot, but Windows.Gaming.Input also lists an Ultimate 2 (an idle
+        # receiver, or a pad XInput does not see): the report is not known to be the slot's
+        _p, res = self.poll({0: (X.TYPE_NIMH, 3)},
+                            [wgi_report(*self.U2, 1000, 1000), wgi_report(*self.XBOX_REPORT)],
+                            hid_devices=[self.XBOX_HID])
+        self.assertEqual([s.name for s in res], ["Xbox controller"])
 
     def test_no_wgi_data_keeps_the_generic_name(self):
         receiver = {"vendor_id": 0x2DC8, "product_id": 0x310B,

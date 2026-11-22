@@ -872,8 +872,11 @@ fail with `read error` and the pad disappears on 2.4 GHz and USB (test build 3, 
 There is therefore no level to read over the dongle, and none is invented.
 
 Over Bluetooth the controller reports one, and the Bluetooth provider shows it - 60 % on
-the reporter's unit. The XInput provider names the pad **8BitDo Ultimate 2** from its
-product id, because Windows calls it "Xbox 360 Controller for Windows". Its
+the reporter's unit. The XInput provider names the pad **8BitDo Ultimate 2** from the
+product id in its Windows.Gaming.Input report, because Windows calls it "Xbox 360
+Controller for Windows" - but only while it is the only controller connected (one XInput
+slot, one report). Windows' report order is not the XInput slot order, so next to another
+controller the pad keeps the generic name rather than risk renaming the other one. Its
 Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 `remain=full=1000` placeholder would otherwise become a false 100 % (#110, #191).
 

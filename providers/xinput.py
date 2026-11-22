@@ -55,7 +55,9 @@ NAMED = [
     (0x3537, "", "GameSir controller"),
     (0x045E, "controller", "Xbox controller"),
 ]
-# Named per slot from the identity Windows.Gaming.Input reports for that slot. It is
+# Named from the identity in the pad's Windows.Gaming.Input report, and only while one
+# controller is involved (one XInput slot, one report): that order is not the XInput slot
+# order, so with several controllers the generic name stays (#523 review). It is
 # deliberately not in NAMED: NAMED_VIDS also decides whose Windows.Gaming.Input reports
 # are trusted, and trusting this pad's placeholder (remain=full=1000) would publish a
 # false 100% (#110, #191, #461). Presence of the receiver alone never names a slot -
@@ -328,10 +330,12 @@ class XInputProvider(Provider):
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         # Naming only: the Ultimate 2's Windows report is a placeholder, so it never
-        # reaches `reports` (its level must not be trusted); its identity still names
-        # the slot it belongs to, and only while the pairing is exact.
-        pad_identity = ([(r.vid, r.pid) for r in all_reports]
-                        if len(all_reports) == len(slots) else [])
+        # reaches `reports` (its level must not be trusted); its identity still names the
+        # pad. Equal counts do not pair reports with slots - with the Ultimate 2 listed
+        # first and an Xbox pad in slot 0 the Xbox pad was renamed (#523 review) - so,
+        # like Beitong above, only one slot with one report is an unambiguous pair.
+        single_pad_name = (NAMED_PAD_IDS.get((all_reports[0].vid, all_reports[0].pid))
+                           if len(slots) == 1 and len(all_reports) == 1 else None)
         if len(reports) != len(slots):
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
@@ -429,9 +433,7 @@ class XInputProvider(Provider):
                 vias[slot] = "bluetooth"
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
-            name = (rep.name if rep and rep.name else None) or base_name
-            if n < len(pad_identity):
-                name = NAMED_PAD_IDS.get(pad_identity[n], name)
+            name = single_pad_name or (rep.name if rep and rep.name else None) or base_name
             if vendor_reading is not None:
                 # the pad's own report: level, charging state and its name
                 name = vendor_reading.name
