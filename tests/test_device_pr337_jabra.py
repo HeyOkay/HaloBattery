@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Windows Link380/Evolve2 65 captured reply prefixes, HaloBattery PR #337.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -21,7 +24,7 @@ from providers import jabra as J  # noqa: E402
 
 def frame(hexstr):
     b = bytes.fromhex(hexstr)
-    return b + bytes(J.FRAME_SIZE - len(b))
+    return b + bytes(64 - len(b))
 
 
 # replies as captured, to seq 0x20 (name) and 0x21 (battery)
@@ -36,7 +39,7 @@ def battery(seq, flags, level):
 def name(seq, text):
     raw = text.encode()
     return bytes([0x05, 0x00, 0x04, seq, 0xC0 | (7 + len(raw)), 0x02, 0x00, len(raw)]) + raw \
-        + bytes(J.FRAME_SIZE - 8 - len(raw))
+        + bytes(64 - 8 - len(raw))
 
 
 def nak(seq):

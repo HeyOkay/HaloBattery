@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: SDL src/joystick/hidapi/SDL_hidapi_switch.c; dekuNukem Nintendo_Switch_Reverse_Engineering subcommand 02 on report01.
+# Keep protocol selectors independent of the provider constants under test.
 import os
 import sys
 import types
@@ -65,7 +68,7 @@ class FakePad:
 
     def on_write(self, data):
         self.writes.append(list(data))
-        if data[0] != N.OUTPUT_RUMBLE_AND_SUBCOMMAND or data[10] != N.SUBCOMMAND_DEVICE_INFO:
+        if data[0] != 0x01 or data[10] != 0x02:
             return
         if self.mode == "simple" or (self.mode == "late" and len(self.writes) >= 2):
             # ack byte 13 (0x80 = ack, 0x02 = data follows), subcommand id byte 14
@@ -175,7 +178,7 @@ class PollTest(ProviderTest):
         self.assertEqual(st.approx, "about 75% (medium)")
         self.assertEqual((st.key, st.kind, st.source), ("switch:2009:98b6e9123456", "gamepad", "nintendo"))
         self.assertEqual(len(pad.writes), 1)
-        self.assertEqual(pad.writes[0][10], N.SUBCOMMAND_DEVICE_INFO)
+        self.assertEqual(pad.writes[0][10], 0x02)
 
     def test_full_mode_writes_nothing(self):
         pad = FakePad("full", battery=0x90)             # level 8, charging

@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Synapse USBPcap in HaloBattery #10: PI reply marker 50 49.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -25,10 +28,26 @@ PATH = b"\\\\?\\hid#vid_1532&pid_053a&mi_03&col01#x"
 def reply(cmd, value):
     r = [0x00] * 64
     r[0], r[1], r[2] = 0x01, 0x80, 0x0A
-    r[3], r[4] = B.MARKER_REPLY
+    r[3], r[4] = (0x50, 0x49)
     r[5] = 0x08
     r[13], r[14], r[15], r[16] = cmd, 0x01, 1, value
     return r
+
+
+class WireFixtureTest(unittest.TestCase):
+    def test_capture_marker_and_command_are_independent(self):
+        # Synapse USBPcap, issue #10: PI marks the reply, command 21 reads level.
+        captured = reply(0x21, 77)
+        self.assertTrue(B.is_reply(captured))
+        self.assertEqual(B.parse_reply(captured, 0x21), [77])
+        foreign = list(captured)
+        foreign[4] = 0x4A
+        self.assertFalse(B.is_reply(foreign))
+        self.assertIsNone(B.parse_reply(captured, 0x2A))
+
+    def test_capture_query_header(self):
+        self.assertEqual(B.frame_query(0x21),
+                         bytes.fromhex("01 80 08 50 41 08 08 03 21") + bytes(55))
 
 
 class FakeReceiver:
@@ -53,7 +72,7 @@ class FakeReceiver:
                 rx.written.append(bytes(frame))
                 if rx.write_results:
                     return rx.write_results.pop(0)
-                if rx.answers is not None and frame[7] == B.TYPE_QUERY and frame[8] in rx.answers:
+                if rx.answers is not None and frame[7] == 0x03 and frame[8] in rx.answers:
                     rx.pending.append(reply(frame[8], rx.answers[frame[8]]))
                 return len(frame)
 
@@ -66,10 +85,10 @@ class FakeReceiver:
         return FakeDevice
 
     def queries(self, cmd):
-        return sum(1 for f in self.written if f[7] == B.TYPE_QUERY and f[8] == cmd)
+        return sum(1 for f in self.written if f[7] == 0x03 and f[8] == cmd)
 
     def remotes(self):
-        return [f[9] for f in self.written if f[7] == B.TYPE_REMOTE and f[8] == B.CMD_REMOTE]
+        return [f[9] for f in self.written if f[7] == 0x02 and f[8] == 0xE1]
 
 
 class ReadBatteryTest(unittest.TestCase):
@@ -87,7 +106,7 @@ class ReadBatteryTest(unittest.TestCase):
         return B.read_battery(PATH, diag), diag
 
     def test_headset_on(self):
-        rx = FakeReceiver({B.CMD_BATTERY: 77, B.CMD_CHARGING: 1})
+        rx = FakeReceiver({0x21: 77, 0x2A: 1})
         (res, _) = self.run_read(rx)
         self.assertEqual(res, ("ok", 77, True))
         self.assertEqual(rx.remotes(), [1, 0])
@@ -97,8 +116,8 @@ class ReadBatteryTest(unittest.TestCase):
         (res, diag) = self.run_read(rx)
         self.assertEqual(res, ("offline", None, False))
         self.assertIn("    no battery reply", diag)
-        self.assertEqual(rx.queries(B.CMD_BATTERY), B.ATTEMPTS)
-        self.assertEqual(rx.queries(B.CMD_CHARGING), 0)
+        self.assertEqual(rx.queries(0x21), B.ATTEMPTS)
+        self.assertEqual(rx.queries(0x2A), 0)
         # remote mode is still switched off again, as before
         self.assertEqual(rx.remotes(), [1, 0])
 
@@ -111,7 +130,7 @@ class ReadBatteryTest(unittest.TestCase):
 
     def test_failed_write_is_retried_for_remote_mode(self):
         # hidapi returns -1 from write() instead of raising
-        rx = FakeReceiver({B.CMD_BATTERY: 50, B.CMD_CHARGING: 0}, write_results=[-1])
+        rx = FakeReceiver({0x21: 50, 0x2A: 0}, write_results=[-1])
         (res, diag) = self.run_read(rx)
         self.assertEqual(res, ("ok", 50, False))
         self.assertEqual(rx.remotes(), [1, 1, 0])
@@ -119,11 +138,11 @@ class ReadBatteryTest(unittest.TestCase):
         self.assertTrue(any("write" in line for line in diag))
 
     def test_receiver_that_rejects_every_write_sends_no_queries(self):
-        rx = FakeReceiver({B.CMD_BATTERY: 50}, write_results=[-1] * B.WAKE_ATTEMPTS)
+        rx = FakeReceiver({0x21: 50}, write_results=[-1] * B.WAKE_ATTEMPTS)
         (res, diag) = self.run_read(rx)
         self.assertEqual(res, ("offline", None, False))
         self.assertIn("    receiver does not accept commands", diag)
-        self.assertEqual(rx.queries(B.CMD_BATTERY), 0)
+        self.assertEqual(rx.queries(0x21), 0)
         self.assertEqual(rx.remotes(), [1] * B.WAKE_ATTEMPTS)
 
     def test_failed_query_write_stops_that_query(self):
@@ -131,7 +150,7 @@ class ReadBatteryTest(unittest.TestCase):
         rx = FakeReceiver(None, write_results=[len(B.frame_remote(True)), -1])
         (res, _) = self.run_read(rx)
         self.assertEqual(res, ("offline", None, False))
-        self.assertEqual(rx.queries(B.CMD_BATTERY), 1)
+        self.assertEqual(rx.queries(0x21), 1)
 
 
 class PollTest(unittest.TestCase):
