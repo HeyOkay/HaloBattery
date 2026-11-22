@@ -349,6 +349,8 @@ MESSAGES = {
     "provider.logitech_g325": "Logitech G325 LIGHTSPEED",
     "provider.logitech_g435_rtk": "Logitech G435 LIGHTSPEED (046D:0ACB)",
     "provider.attackshark_x66": "ATTACKSHARK X66",
+    "provider.attackshark_r5": "Attack Shark R5 Ultra",
+    "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.wraith": "Wraith W1",

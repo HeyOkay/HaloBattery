@@ -10,6 +10,11 @@ from pathlib import Path
 import sys
 import tempfile
 
+# Registering the ICO writer up front keeps memory down: Image.save(format="ICO") on a Pillow
+# that has not registered ICO calls Image.init(), which imports every image plugin (AVIF, WebP,
+# TIFF, ...) - about 1.3 MB of RAM for the app's whole run, for formats it never uses.
+from PIL import IcoImagePlugin  # noqa: F401
+
 
 def _user32():
     return ctypes.WinDLL("user32", use_last_error=True)

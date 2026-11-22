@@ -368,7 +368,9 @@ class ColorGlyphTests(unittest.TestCase):
         restored=G.CustomGlyph.from_png(glyph.png_bytes)
         self.assertEqual(restored.digest,glyph.digest)
         self.assertEqual(restored.render(80,(0,0,0)).tobytes(),light.tobytes())
-        self.assertGreater(glyph.memory_bytes,5*1024*1024)
+        # The masters are counted, but kept compressed: tens of KB, not 5 MB of raw pixels.
+        self.assertGreater(glyph.memory_bytes,len(glyph.png_bytes))
+        self.assertLess(glyph.memory_bytes,1024*1024)
 
     def test_mixed_paired_masters_preserve_fixed_color_and_adapt_only_current_color(self):
         raster=ColorRaster(mixed=True)
@@ -392,7 +394,9 @@ class ColorGlyphTests(unittest.TestCase):
         restored=G.CustomGlyph.from_png(glyph.png_bytes)
         self.assertEqual(restored.digest,glyph.digest)
         self.assertEqual(restored.render(80,(255,255,255)).tobytes(),white.tobytes())
-        self.assertGreater(glyph.memory_bytes,9*1024*1024)
+        # Both theme masters are counted, compressed: tens of KB, not 9 MB of raw pixels.
+        self.assertGreater(glyph.memory_bytes,len(glyph.png_bytes))
+        self.assertLess(glyph.memory_bytes,1024*1024)
 
     def test_mixed_native_and_persisted_alpha_disagreement_fails_closed(self):
         with self.assertRaisesRegex(G.SvgGlyphError,'alpha'):
