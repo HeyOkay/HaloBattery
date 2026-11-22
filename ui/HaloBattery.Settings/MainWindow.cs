@@ -34,7 +34,7 @@ public sealed partial class MainWindow : Window
  private readonly Border card=new(){CornerRadius=new(12),Margin=new(0,0,8,8)};
  private readonly Border pill=new(){Height=40,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Center};
  private const double HeaderButtonSize=40,HeaderIconSize=20,HeaderEdgeInset=12,HeaderButtonGap=4;
- private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0,0,HeaderEdgeInset,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
+ private readonly StackPanel windowButtons=new(){Orientation=Orientation.Horizontal,Spacing=HeaderButtonGap,Margin=new(0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};
  private readonly ColumnDefinition rail=new(){Width=new(228)};
 
  private readonly string themeOverride,diagnostics;
@@ -164,7 +164,7 @@ public sealed partial class MainWindow : Window
   if(displayedMaximized==maximized)return;
   displayedMaximized=maximized;
   // These Lucide paths span 18 grid units; Close spans 12. Match their
-  // visible bounds and stroke width while keeping every hit target 40 x 40.
+  // visible bounds and stroke width while keeping this hit target 40 x 40.
   var glyph=(FrameworkElement)LucideIcon(maximized?"minimize-2":"maximize-2",HeaderIconSize*2/3,null,2.25);
   glyph.Tag=maximized?"restore":"maximize";glyph.Opacity=ChromeGlyphOpacity(maximizeButton);maximizeButton.Content=glyph;
   var label=T(maximized?"settings.restore":"settings.maximize");
@@ -192,6 +192,7 @@ public sealed partial class MainWindow : Window
   {
    button.Resources["ButtonBackgroundPointerOver"]=Brush(ExitHoverBackground);
    button.Resources["ButtonBackgroundPressed"]=Brush(ExitPressedBackground);
+   ConfigureCloseCornerTarget(button);
   }
   BindChromeGlyph(button,()=>button.Content as FrameworkElement,close:glyph=="x");
   ToolTipService.SetToolTip(button,label);AutomationProperties.SetName(button,label);

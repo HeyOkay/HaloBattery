@@ -36,6 +36,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and Exit HaloBattery hover colors, with themed pressed feedback.
 
 ### Added
+- Add an outline Discord shortcut at the bottom of the navigation rail, with
+  a tooltip and a native fade to Discord's brand color on hover.
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
@@ -258,6 +260,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Test build pending on the reporter's unit.
 
 ### Fixed
+
+- Extend the Settings Close button hit target to the top-right corner while
+  preserving its visible size, position and hover/pressed feedback.
+
+- Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
+  and charging reply without relaxing receiver or other model validation.
+
+- Explicitly support Beast X Max USB cable (`36A7:A881`) battery and charging,
+  preserving one icon across cable/receiver transitions and limiting feature
+  requests to documented device identities and battery collections.
 - Slightly inset pictograms inside the Classic thick ring while preserving the thin-ring layout.
 - Keep the last reported Phone Link charge visible when its cache does not
   change; stop stale charging animation and do not treat it as a live reading.
