@@ -348,7 +348,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Keychron Nape Pro (`3434:d026`): prefer the `ffc1:0001` battery collection
   over the `ff60` VIA page, retry the identical `b3 06` frame with `write()`
-  when SET_FEATURE is refused or unanswered, and report the charging bit.
+  on that collection when SET_FEATURE is refused or unanswered, and report the
+  charging bit. A Keychron receiver without a battery collection is skipped:
+  its keyboard, VIA and other collections are never opened or written.
   Confirmed on hardware by @cocowalla in #270: the Keychron M6 icon and
   100 % level match Keychron Launcher.
 - Show the closed-eye Lucide glyph when a device is hidden from the tray.
