@@ -75,7 +75,7 @@ changes or replace the remaining device-specific tests below.
 ## Stable-release boundary
 
 No version bump, stable tag or promotion to `main` is part of this consolidation.
-The rolling pre-release build remains for testing. Resolve or explicitly exclude
+Separate per-build pre-releases remain for testing; the historical rolling release is preserved. Resolve or explicitly exclude
 the experimental protocol holds above before a future stable promotion. The fork now carries the canonical 1.17.0 files as its latest bridge release,
 so its installed 1.16.0 updater can offer the official package. That exact automatic
 upgrade route still needs a real installed-copy check; this local follow-up publishes

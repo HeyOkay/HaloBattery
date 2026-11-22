@@ -54,10 +54,6 @@ class BarracudaProReceiverTest(unittest.TestCase):
 
     def test_0583_is_a_pa_receiver_and_a_wireless_candidate(self):
         self.assertIn(0x0583, blackshark.PA_PIDS)
-        # #256: the Barracuda X (2022) publishes ff00:0001 on its receiver, so it is
-        # routed through the same PA path and named from the table
-        self.assertIn(0x0536, blackshark.PA_PIDS)
-        self.assertEqual("Razer Barracuda X (2022)", razer.KNOWN[0x0536][0])
         self.assertTrue(razer.maybe_wireless(0x0583, "Razer Barracuda Pro 2.4"))
 
     def test_0583_is_polled_with_pa_frames_under_its_product_name(self):
@@ -76,6 +72,38 @@ class BarracudaProReceiverTest(unittest.TestCase):
     def test_the_older_barracuda_provider_does_not_claim_0583(self):
         from providers import barracuda
         self.assertNotEqual(barracuda.PID, 0x0583)
+
+
+class BarracudaXCableTest(unittest.TestCase):
+    """1532:0536 (#256) is the Barracuda X (2022) on its cable. Windows refused every
+    write to it, so it is neither a PA receiver nor asked anything else."""
+
+    def info(self, product):
+        return dict(product_id=0x0536, vendor_id=0x1532, serial_number="", path=b"p",
+                    product_string=product, interface_number=3,
+                    usage_page=0xFF00, usage=0x0001)
+
+    def test_0536_is_not_a_pa_receiver_or_a_known_wireless_id(self):
+        self.assertNotIn(0x0536, blackshark.PA_PIDS)
+        self.assertNotIn(0x0536, razer.KNOWN)
+
+    def test_nothing_is_sent_whatever_the_product_string_says(self):
+        # "Hid Interface" is what the reporter's unit shows; a string with "Barracuda" in
+        # it would otherwise count as wireless and get the mouse request and the PA frames
+        for product in ("Hid Interface", "Razer Barracuda X", ""):
+            with self.subTest(product=product):
+                p = razer.RazerProvider()
+                with patch("providers.razer.hidlist.enumerate",
+                           return_value=[self.info(product)]), \
+                        patch.object(p, "_poll_pa") as pa, \
+                        patch.object(p, "_poll_group") as generic, \
+                        patch("providers.razer.hid.device") as opened:
+                    out = p.poll()
+                self.assertEqual(out, [])
+                pa.assert_not_called()
+                generic.assert_not_called()
+                opened.assert_not_called()
+                self.assertTrue(any("on its cable" in line for line in p._diag))
 
 
 class BarracudaXReceiverTest(unittest.TestCase):

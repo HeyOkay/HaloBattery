@@ -46,10 +46,22 @@ class ProX3SuperstrikeTests(LogitechTestCase):
 
     def test_c0a9_wired_mouse(self):
         entries = [entry(0xC0A9, 0xFF43, 0x0302, b"long", "PRO X3")]
-        self.use(entries, {b"long": ({0xFF: self.device()}, None)})
-        results = L.LogitechProvider().poll()
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].level, 73)
+        for status, expected_charging in ((0, False), (1, True), (3, True)):
+            with self.subTest(status=status):
+                mouse = self.device()
+                mouse.features[L.F_UNIFIED] = (6, {1: [73, 0, status]})
+                bus = self.use(entries, {b"long": ({0xFF: mouse}, None)})
+                results = L.LogitechProvider().poll()
+                self.assertEqual(len(results), 1)
+                self.assertEqual(
+                    (results[0].level, results[0].charging),
+                    (73, expected_charging),
+                )
+                self.assertTrue(
+                    any(path == b"long" and packet[1] == 0xFF
+                        for path, packet in bus.writes),
+                    "Wired device must use HID++ slot 0xFF",
+                )
 
     def test_unknown_pid_must_not_claim_ff43(self):
         entries = [entry(0xC539, 0xFF43, 0x0302, b"long", "LIGHTSPEED")]
