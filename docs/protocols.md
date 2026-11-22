@@ -1533,3 +1533,49 @@ cable transition remains unconfirmed.
 
 See [HID target safety](hid-target-safety.md) for exact collection gates, packet
 corrections, retained compatibility exceptions and hardware retest limits.
+
+## Explicit diagnostic readers
+
+See [device diagnostics](device-diagnostics.md) for the acknowledgement, exact
+endpoint restrictions and known hardware limitations. These readers do not
+change normal provider allowlists.
+
+- AJ159 PRO: Aiacos/ajazz-control-center at
+  `03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3`,
+  `src/devices/mouse/src/aj_series.cpp` L225-264,290-312; same-target Windows
+  GET05/65 reply in [#289 test4](https://github.com/HeyOkay/HaloBattery/issues/289#issuecomment-6899703056).
+  Only 3151:402D interface2 FFFF:0002, a caps-sized `00 F7` feature poll,
+  30 ms wait, then GET05. Numbered `05 00 00 <level>` requires 1-100;
+  zero means unknown. Charging is unknown. The normal AJ159 reader is unchanged.
+- PRO X 3: Sapd/HeadsetControl at
+  `1d2ccd1412246d85b2f8733d739cc865ba466aab`,
+  `lib/devices/logitech_gpro_x3_lightspeed.hpp` L14-24,46-64,80-93,
+  `lib/devices/protocols/logitech_centurion_protocol.hpp`
+  L89-145,237-275,305-325,394-448,554-670 and captured fixtures in
+  `tests/test_protocols.cpp` L1589-1596,1643-1666. Only 046D:0B45 interface3
+  FFA0:0001 and three 50/23 Root/bridge/battery exchanges. No FeatureSet scan,
+  setup, settings, optional offline probe, recovery or X2 fallback.
+- Sony H9 II uses the existing reviewed `providers/sony_h9ii.py` reader without
+  changes. No response category or magic is inferred from the outgoing request.
+- Endgame 4K: johanneszab/vole
+  [PROTOCOL.md](https://github.com/johanneszab/vole/blob/4ba29dea54b4628df03cfe2f94f4576c124afd80/re/PROTOCOL.md)
+  sections1-3,12-14 and stuffz/mouse-battery-monitor `docs/ENDGAME.md` at
+  `25871cce3a8266d8d2bc05b0ca81fbb74b3a38b4`. Only 3367:1970 receiver
+  or cabled 1968/1982, FF01:0002; one A1/0E identity and one A1/B4 battery
+  command. Busy responses are re-read, not resent. No A0/config/settings or
+  recovery exchange is used. A successful reply has no command/target echo;
+  repeated agreement cannot establish freshness. The source documents that
+  a failed command can leave the link wedged until a successful 0F probe.
+  This tool deliberately does not add automatic recovery and remains held.
+- Tachi: manufacturer's Aurora `getBatPer`/`setReport`/`getReport` in
+  `https://www.xvalleyinno.top/LAMZU/static/js/index-4fe8914c.js`, SHA256
+  `5895a882e4e3570131044fa610a6e300ee835446c9909721f73b1e09951dd354`;
+  model table `Config/env-models.json` SHA256
+  `f931e5e7c11b041f74f938aeeeaf214046fc9a64af2ca822ad5afaa06cd9128b`
+  and #262 HID inventory. Dorsal at
+  `55f702fc70ce852228cf2c7d20173541e4f17420`, `src/dorsal/protocol.py`
+  L244-260 independently supports the mouse payload but bypasses a real USB
+  receiver. Only 37B0:000C interface2 FFFF:0000, report0 plus the 64-byte
+  Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
+  fallback, wired probes or alternate-size probing. Real receiver, charging
+  and recovery validation remain outstanding.
