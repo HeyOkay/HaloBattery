@@ -1009,6 +1009,46 @@ Read straight from the HID input report (USB byte 53, Bluetooth full report byte
 
 Read straight from the HID input report: exact percentage and charging state (USB byte 30, Bluetooth full report byte 32). Over Bluetooth, see the note below the table
 
+#### Sony battery validation and physical identity
+
+Battery codes follow Sony's [Linux hid-playstation driver at
+`666539e`](https://github.com/torvalds/linux/blob/666539eecdf4db623f5e3c3e55cf9f2dfad24aa4/drivers/hid/hid-playstation.c):
+DualSense parsing at lines 1610-1638, DualShock 4 at 2550-2588. Keep the existing
+10% display bins. DualSense state 2 means full independently of the level nibble;
+DS4 cable level 11 means full. Fault/reserved states are unavailable, not full or
+still connecting. For DS4 without a cable, refuse undefined bins 11-15 rather
+than applying Linux's saturation-to-full behavior. Reports must include the
+complete 64-byte USB or 78-byte Bluetooth input frame.
+
+On Sony USB `054c:05c4`/`09cc` (DS4) and `0ce6`/`0df2` (DualSense/Edge), only the
+explicit `0001:0005` gamepad collection receives one pairing-info GET_FEATURE on
+its already-open handle per poll. Sources: SDL at `c8da179`:
+[PS4 lines 266-277 and 317-344](https://github.com/libsdl-org/SDL/blob/c8da179691f909734cd1b124c930e49311428996/src/joystick/hidapi/SDL_hidapi_ps4.c#L266)
+uses report `0x12` with a 64-byte caller buffer;
+[PS5 lines 375-433](https://github.com/libsdl-org/SDL/blob/c8da179691f909734cd1b124c930e49311428996/src/joystick/hidapi/SDL_hidapi_ps5.c#L375)
+uses report `0x09` with a 128-byte caller buffer. Both read the controller address
+from bytes 6..1. Linux's `ps_get_report` (799-818), `dualsense_get_mac_address`
+(1183-1199) and `dualshock4_get_mac_address` (2148-2166) establish the echoed report
+ID and complete 20-/16-byte payloads required here. Zero/broadcast or malformed
+addresses are refused. Larger caller buffers account for HID report padding.
+
+No new pairing read is made on Bluetooth: SDL's PS5 lines 427-428 warn it can
+enable enhanced reports there. Unknown collections, other vendors, the `05c5`
+Strikepad and `0ba0` wireless adapter are excluded from these new reads. Existing
+battery-trigger behavior and the Bluetooth opt-in remain unchanged. There is no
+persistent path-to-address cache: a different pad may reuse the same USB path
+between polls. The existing bounded native transport handles these reads; no new
+worker/process or dependency is introduced. These new identity reads have only
+offline coverage in this change, not hardware confirmation.
+
+Canonical unique addresses combine only one USB and one Bluetooth connection of
+the same model. Duplicate addresses or conflicting metadata keep every endpoint
+visible. Only an actually observed MAC-formatted old key can prove a settings
+migration; plain, port-based or arbitrary old serial keys cannot prove their
+historical owner, even if one controller is present now. Ambiguous legacy settings
+must be selected again. Anonymous clones remain port-dependent; no level, list
+order or controller count is used as a physical identity.
+
 ### Steam Controller (2025) with its puck
 
 **Connection:** wired USB `28de:1302`, or puck `28de:1304` (Proteus) / `28de:1305` (Nereid).
@@ -1042,6 +1082,22 @@ above 100 is refused rather than shown.
 **Connection:** USB or the Xbox wireless adapter
 
 Any Xbox-compatible controller is read the same way as the GameSir G7 Pro: the battery level from `Windows.Gaming.Input.RawGameControllers`, with XInput's coarse level (low / medium / full) as the fallback. Controllers other than the GameSir have not been individually tested.
+
+WGI report order is not an XInput user index. Associate a level only with one
+eligible WGI report and one XInput slot; multiple pads keep their own coarse
+XInput levels. An ambiguous receiver's "wired" type has no trustworthy percentage
+or charging state, so it stays unknown. Observed disconnects invalidate per-slot
+levels and WGI associations. XInput exposes no persistent identity here; swapping
+controllers between observations without an observed disconnect cannot establish
+a new physical owner. WGI nullable Int32 capacities must satisfy
+`0 <= remaining <= full <= 2147483647`, with `full > 0`, rather than being clamped.
+
+GameSir Nova 2 Lite `3537:1098` has a captured false-full WGI report:
+`Discharging`, `remaining=full=1000`, `rate=None` ([owner comparison](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5879245780),
+[exact identity and report](https://github.com/HeyOkay/HaloBattery/issues/142#issuecomment-5885746260)).
+The same narrow rule appeared in [the prior provider fix](https://github.com/casparas123/HaloBattery/commit/f2e6a834dde1aa829f708a16f473b5f18718f752).
+Refuse that exact report on that identity only; other models and charging/idle
+reports may legitimately be full. No HID request is added for this fallback.
 
 ## Microphones
 

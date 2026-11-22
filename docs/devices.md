@@ -126,6 +126,14 @@
 
 **PlayStation controllers over Bluetooth:** a DualShock 4 or DualSense sends its battery level over Bluetooth only in its "full report" mode. Switching a controller into that mode makes it invisible to games that use DirectInput until it is turned off and on again (#96), so the app does not switch it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. If you do not play such games, turn on **Preferences > PlayStation full mode (Bluetooth)** to always see the level. Over USB the level is always shown.
 
+Sony USB models `054c:05c4`, `09cc`, `0ce6` and `0df2` can supply their own pairing
+address on the gamepad collection. A valid unique address keeps their settings
+across port moves and combines their USB/Bluetooth views. The new identity reads
+have offline tests, not new hardware confirmation. Unsupported/anonymous clones,
+failed identity reads and duplicated addresses stay separate; their USB identity
+is port-dependent. Historical plain or non-MAC keys cannot safely be assigned to
+the current pad automatically, so those customizations may need to be selected again.
+
 **8BitDo controllers in D-input mode:** the battery level is only in the controller's enhanced report. Switching the controller into that mode makes it invisible to DirectInput games until it is turned off and on (tested by the reporter of #101), so the app never switches it: the level shows while Steam or a game has already put the controller in that mode, and otherwise the icon shows the controller without a level. The Pro 3 needs no switch: it always sends its level. In XInput mode the level is always shown.
 
 The devices marked `likely` are the same code paths with other models: the rest of the Razer list
