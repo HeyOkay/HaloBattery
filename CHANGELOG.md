@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refuse malformed Attack Shark R5 battery replies instead of turning an invalid
+  percentage into 0%. Keep the X820 keyboard's unsupported charging state unknown.
 - Keep custom icon artwork compressed in memory: about 20-60 KB per icon instead of
   1 MB (single colour) or 4-8 MB (colour) of raw pixels.
 - Custom Iconify tray icons no longer load the whole icon-library registry at start-up
@@ -168,6 +170,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   26 `0x01` (cable in, battery full) is shown as charging along with `0x02`.
 - ATTACKSHARK X66 (`0C45:FEFE` receiver, `X66 2.4G`): read the Sonix
   33-byte battery reply; confirmed on hardware in #446. Charging is not exposed.
+- **Attack Shark R5 Ultra** (`373E:0047`) reads its battery over the receiver's root `ffff:0000` collection using the R6/R8/M5 Ultra feature-report protocol. Confirmed on hardware in [#372](https://github.com/HeyOkay/HaloBattery/issues/372): 91 % on the 2.4 GHz receiver.
+- **Attack Shark X820 Ultra** on its own 2.4 GHz receiver (`3151:5006`, "2.4G Wireless Keyboard") reads through the ROYUAN/MonsGeek `0xF7` status query. Confirmed at 100 % in [#372](https://github.com/HeyOkay/HaloBattery/issues/372); the wired `3151:5002` collection is not used.
 - Sony INZONE H9 II (`054C:0FA8`) support over its receiver's `FF04:0001` HID
   control channel, using the read-only status query from
   marcinjakubowski/zoneout. The reporter confirmed the level in an earlier test

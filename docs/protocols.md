@@ -591,6 +591,25 @@ The ATK X1 Pro 1K dongle (373B:101A, #230), the ATK Fire X 8K (373B:101B) and th
 its receiver publishes ff02:0002 and no ff42 at all, so it is read here rather than by
 the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange behind the 'RapidSync' product string, with its vendor collection on interface 2. Its 1K sibling `3554:F520` is the same reader and is now claimed too; **confirmed on hardware** by @7-1ME in #448 at 100% (4235 mV). The ATK X1 Pro is [confirmed on hardware by @gnrlk3nobi](https://github.com/HeyOkay/HaloBattery/issues/230#issuecomment-6631717770) in #230: it read immediately, the level stayed within about 5 % of ATK HUB in both states (the two apps sample at different moments, so the sign flips), and the charging state followed the cable. The keyboard receiver and the Fire X 8K are still waiting for their testers.
 
+### Attack Shark R5 Ultra
+
+**Connection:** 2.4 GHz receiver (373E:0047)
+
+The R5 Ultra uses the R6/R8/M5 Ultra feature-report protocol, recovered from the
+vendor WebHID driver by [mohammed-just/attack-shark-r6-cli at b343854](https://github.com/mohammed-just/attack-shark-r6-cli/blob/b3438542106999adb743858f267ddc33a167e7d7/r6ctl.py#L354-L373)
+(MIT). A 64-byte feature report with report id 0 carries `02 02 00 83` at bytes
+2-5; the reply starts with the `0xA1` marker and carries the battery percentage
+and charging flag. Either sourced byte order is accepted only when the flag is
+0/1 and the percentage is 0-100; malformed pairs cannot become a live 0% reading.
+The provider sends only that read-only battery command, tries each receiver
+collection in the reference's order, and sends no configuration, DPI, lighting or
+firmware command. **Confirmed on hardware** by the reporter of
+[#372](https://github.com/HeyOkay/HaloBattery/issues/372): the R5 read 91 % on its
+2.4 GHz receiver. The X820 Ultra on its own receiver (`3151:5006`, product
+`2.4G Wireless Keyboard`) reads through the ROYUAN/MonsGeek `0xF7` status query
+and showed 100 %; its wired id (`3151:5002`) does not carry a battery command and
+is not used. This keyboard status has no charging flag, so charging stays unknown.
+
 ### iRocks M31R
 
 **Connection:** 2.4 GHz receiver (14A5:C009) and USB cable (14A5:C010)
