@@ -697,6 +697,7 @@ class FlyoutHost:
     def __init__(self, win32: Optional[_Win32] = None):
         self._w = win32
         self._thread: Optional[threading.Thread] = None
+        self._start_lock = threading.Lock()
         self._ready = threading.Event()
         self._stop_requested = threading.Event()
         self._failed = False
@@ -716,11 +717,18 @@ class FlyoutHost:
 
     # ---------------- thread
     def start(self) -> None:
-        if self._stop_requested.is_set():
-            return
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._main, name="flyout", daemon=True)
-            self._thread.start()
+        # Tray callbacks and What's new can race on the first activation. Publish
+        # and start exactly one Tk owner; stop() remains nonblocking and Tk-free.
+        with self._start_lock:
+            if self._stop_requested.is_set() or self._thread is not None:
+                return
+            owner = threading.Thread(target=self._main, name="flyout", daemon=True)
+            self._thread = owner
+            try:
+                owner.start()
+            except Exception:
+                self._thread = None
+                raise
 
     def _main(self) -> None:
         if self._stop_requested.is_set():

@@ -1,5 +1,8 @@
 """Tray DPI/ICO tests with mocked Windows calls; no desktop or hardware access."""
+import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -146,6 +149,28 @@ class IconHandleTests(unittest.TestCase):
         native.DestroyIcon.assert_called_once_with(0x100000001)
         self.assertEqual(native.DestroyIcon.argtypes, [tray_dpi.wintypes.HANDLE])
         self.assertEqual(native.DestroyIcon.restype, tray_dpi.wintypes.BOOL)
+
+
+class IcoPluginTests(unittest.TestCase):
+    def test_saving_an_ico_does_not_load_every_pillow_plugin(self):
+        """A fresh interpreter: importing tray_dpi registers ICO, so Image.save(format="ICO")
+        does not call Image.init(), which would import every plugin (AVIF, WebP, TIFF, ...)."""
+        code = "; ".join((
+            "import io, sys",
+            "sys.path.insert(0, '.')",
+            "from halo import tray_dpi",
+            "from PIL import Image",
+            "Image.new('RGBA', (32, 32)).save(io.BytesIO(), format='ICO', sizes=[(32, 32)])",
+            "print(','.join(sorted(m for m in sys.modules if m.startswith('PIL.') and m.endswith('ImagePlugin'))))",
+        ))
+        root = Path(__file__).resolve().parent.parent
+        done = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True,
+                              timeout=120, env=dict(os.environ, PYTHONPATH=""))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        loaded = set(done.stdout.strip().split(","))
+        self.assertIn("PIL.IcoImagePlugin", loaded)
+        for plugin in ("PIL.AvifImagePlugin", "PIL.WebPImagePlugin", "PIL.TiffImagePlugin"):
+            self.assertNotIn(plugin, loaded)
 
 
 if __name__ == "__main__":
