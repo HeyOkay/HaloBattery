@@ -23,8 +23,9 @@ the dedicated HyperX checks additionally cover both reply IDs, 255 and buffer
 representations. No new device request, parser policy or controller identity is
 needed to exercise any of the six original mutations. M4 uses the unchanged
 membership mutation `(0x1, 0x2)` to `(0x1,)`, not a rewrite-specific translation.
-The current DualSense parser retains its level nibble in state 2; these tests
-preserve that behavior rather than adopt #471's forced-full branch.
+The DualSense charge-complete check uses only the unambiguous full-level
+status `0x2a`. Other state-2 level combinations remain outside this test's
+scope, so it does not fix unresolved #471 parser semantics as expectations.
 
 ## Integration boundary
 

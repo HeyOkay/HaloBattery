@@ -25,10 +25,9 @@ class PlayStationChargingTests(unittest.TestCase):
                 self.assertEqual(playstation.parse_ds4(status), expected)
 
     def test_dualsense_charge_complete_still_counts_as_charging(self):
-        # Pin the current parser, without adopting #471's identity/error changes:
-        # states 1 and 2 both mean cable; the current level nibble is preserved.
+        # State 2 with a full level must keep charging. Other state-2 level
+        # combinations belong to the separate #471 parser review.
         for status, expected in ((0x05, (50, False)), (0x15, (50, True)),
-                                 (0x20, (0, True)), (0x25, (50, True)),
                                  (0x2A, (100, True))):
             with self.subTest(status=status):
                 self.assertEqual(playstation.parse_dualsense(status), expected)
