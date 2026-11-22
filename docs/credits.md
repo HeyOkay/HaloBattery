@@ -65,6 +65,10 @@ excludes trademark rights.
   `artwork/settings/`; the native settings companion renders their vector paths. These
   glyphs use the same ISC license and included Feather MIT notice as the tray
   glyphs above; see [the bundled license](licenses/lucide-1.17.0-LICENSE.txt).
+- Discord shortcut outline: [Qlementine Icons](https://github.com/oclero/qlementine-icons),
+  Copyright 2023 Olivier Cléro, under the bundled
+  [MIT license](licenses/qlementine-icons-LICENSE.txt). The upstream SVG and pinned
+  source are recorded in `artwork/settings/qlementine-sources.json`.
 - Outfit Medium and SemiBold: Copyright 2021 The Outfit Project Authors
   ([Outfit](https://github.com/Outfitio/Outfit-Fonts)).
 - Onest Bold: Copyright 2021 The Onest Project Authors

@@ -60,7 +60,7 @@ class DotnetToolchainPinTests(unittest.TestCase):
         compatibility = workflow.split("  compatibility:\n", 1)[1].split("  lint:\n", 1)[0]
         for job in (required, compatibility):
             self.assertLess(job.index("- name: Set up .NET"), job.index("- name: Unit tests"))
-        self.assertIn("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1", workflow)
+        self.assertIn("actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73", workflow)
 
     def test_runtime_targeting_pin_stays_scoped_and_shipping_qa_aot_policy_is_preserved(self):
         project = ET.parse(PROJECT / "HaloBattery.Settings.csproj").getroot()

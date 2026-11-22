@@ -505,8 +505,9 @@ public sealed partial class MainWindow
                 new { tag, label = maximizeButton is null ? null : AutomationProperties.GetName(maximizeButton), sameButton = ReferenceEquals(originalButton, maximizeButton), samePage = ReferenceEquals(originalPage, frame.Content), scrollOffset = originalScroll.VerticalOffset },
                 new { tag = expectedTag, label = T(maximized ? "settings.restore" : "settings.maximize"), samePage = true, scrollOffset = originalOffset });
             var buttons = VerificationDescendants(header).OfType<Button>().ToArray();
-            Check("header " + expectedTag + " hit targets remain 40 square", buttons.Length == 4 && buttons.All(b => b.Width == 40 && b.Height == 40 && Math.Abs(b.ActualWidth - 40) * Scale <= 1.01 && Math.Abs(b.ActualHeight - 40) * Scale <= 1.01),
+            Check("header " + expectedTag + " other hit targets remain 40 square", buttons.Length == 4 && buttons.Where(b => !ReferenceEquals(b, closeButton)).All(b => b.Width == 40 && b.Height == 40 && Math.Abs(b.ActualWidth - 40) * Scale <= 1.01 && Math.Abs(b.ActualHeight - 40) * Scale <= 1.01),
                 buttons.Select(b => new { requestedWidth = b.Width, requestedHeight = b.Height, width = b.ActualWidth, height = b.ActualHeight }).ToArray(), new { count = 4, sizeDip = 40, tolerancePixels = 1 });
+            VerifyCloseCornerTarget((name, passed, actual) => Check(name, passed, actual, null), expectedTag);
             var brand = pill.Child as FrameworkElement;
             var bounds = brand?.TransformToVisual(header).TransformBounds(new Windows.Foundation.Rect(0, 0, brand.ActualWidth, brand.ActualHeight));
             Check("header " + expectedTag + " brand is centered", bounds is { } rect && Math.Abs(rect.X + rect.Width / 2 - header.ActualWidth / 2) * Scale <= 1.01 && Math.Abs(rect.Y + rect.Height / 2 - header.ActualHeight / 2) * Scale <= 1.01,

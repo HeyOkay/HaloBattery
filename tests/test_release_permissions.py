@@ -64,14 +64,14 @@ class ReleasePermissionsTests(unittest.TestCase):
                 self.assertNotIn("./tools/", publish)
                 self.assertNotIn("./scripts/", publish)
                 self.assertLess(publish.index("- name: Download publish assets"), publish.index("- name: Validate release assets"))
-                last_step = "- name: Attach to release" if name == "release.yml" else "- name: Replace the rolling pre-release"
+                last_step = "- name: Attach to release" if name == "release.yml" else "- name: Publish a build-specific pre-release"
                 self.assertLess(publish.index("- name: Validate release assets"), publish.index(last_step))
                 self.assertIn("if-no-files-found: error", jobs(text)["build"])
 
-    def test_manual_runs_cannot_publish(self):
+    def test_only_explicit_pre_release_dispatch_can_publish(self):
         expected = {
             "release.yml": "github.event_name == 'push' && github.ref_type == 'tag'",
-            "prerelease.yml": "github.event_name == 'push' && github.ref == 'refs/heads/pre-release'",
+            "prerelease.yml": "github.event_name == 'workflow_dispatch' && inputs.publish_prerelease && github.ref == 'refs/heads/pre-release'",
         }
         for name, condition in expected.items():
             text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
@@ -79,6 +79,33 @@ class ReleasePermissionsTests(unittest.TestCase):
             actual = re.search(r"(?m)^    if: (.+)$", publish)[1]
             self.assertEqual(actual, condition)
             self.assertIn("  workflow_dispatch:", text)
+            if name == "prerelease.yml":
+                dispatch = text.split("  workflow_dispatch:\n", 1)[1].split("\nconcurrency:", 1)[0]
+                self.assertIn("publish_prerelease:", dispatch)
+                self.assertIn("type: boolean", dispatch)
+                self.assertIn("default: false", dispatch)
+
+    def test_prerelease_reruns_keep_artifacts_and_publications_independent(self):
+        text = (ROOT / ".github/workflows/prerelease.yml").read_text(encoding="utf-8")
+        concurrency = text.split("concurrency:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertIn("github.run_id", concurrency)
+        self.assertIn("cancel-in-progress: false", concurrency)
+        artifact_names = re.findall(r"(?m)^          name: (HaloBattery-(?:Settings-symbols|pre-release-assets)-.+)$", text)
+        self.assertEqual(len(artifact_names), 2)
+        for name in artifact_names:
+            self.assertIn("github.run_id", name)
+            self.assertIn("github.run_attempt", name)
+        publish = jobs(text)["publish"]
+        self.assertNotIn("--clobber", publish)
+        self.assertNotIn("delete-asset", publish)
+
+    def test_prerelease_attestation_read_is_scoped_to_publisher(self):
+        text = (ROOT / ".github/workflows/prerelease.yml").read_text(encoding="utf-8")
+        sections = jobs(text)
+        self.assertIn("      attestations: read", sections["publish"])
+        self.assertNotIn("attestations:", sections["build"])
+        self.assertNotIn("attestations:", text.split("\njobs:", 1)[0])
+        self.assertNotIn("attestations: write", text)
 
     def test_every_downloaded_action_is_pinned(self):
         for name in WORKFLOWS:
