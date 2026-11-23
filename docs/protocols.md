@@ -953,17 +953,31 @@ Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 **Connection:** 2.4 GHz receiver (`1B1C:2B42`); the mouse on its cable is
 `1B1C:2B43`. Both expose `FF42:0001` / `FF42:0002`.
 
-This model does not answer the older 64-byte Bragi exchange. OpenLinkHub's
-`sabrev3proW` package uses the newer 512-byte Slipstream V2 transfer: a 513-byte
-output report with report id 0, endpoint 1, `01 01`, then a get-property
-request. The battery property is `0x0F`; the reply carries tenths of a percent
-as a little-endian value at bytes 5-6. Property `0x10` is asked separately for
-the charge state (1 charging, 2 on battery, 3 full). The package performs a
-login and switches the mouse to software mode before the battery read; Halo
-repeats those handshakes, then sends only the two property reads. The level is **unverified in this app** -
-the test build in [#543](https://github.com/HeyOkay/HaloBattery/issues/543)
-decides. The wired id is read through the same transfer; the receiver's paired
-device is endpoint 1.
+This model does not answer the older 64-byte Bragi exchange. It uses the newer
+Slipstream V2 transfer of OpenLinkHub's SABRE v3 packages: an output report with
+report id 0, the endpoint, `01 01`, then the command. Through the receiver
+(`sabrev3proW`) the reports are 512 bytes and the paired mouse is endpoint 1; on
+the cable (`sabrev3proWU`) they are 64 bytes and the endpoint is 0. A reply
+echoes the endpoint at byte 0 and the command at byte 3, carries the status at
+byte 4 (0 = done) and the value from byte 5. The receiver also sends frames of
+its own on that collection (`00 00 04 0d ...` arrived in place of the charge
+answer in [#543](https://github.com/HeyOkay/HaloBattery/issues/543)), so only a
+reply with the right endpoint and command counts.
+
+The battery property is `0x0F`, in tenths of a percent, little-endian: the
+receiver answered `01 00 01 02 00 84 03` (90 %) in #543. Property `0x10` is the
+charge state (1 charging, 2 on battery, 3 full). When the mouse gives no charge
+state, its cable identity `2B43` being present means it is charging from the PC.
+
+OpenLinkHub logs in (`1b 01` and a four-byte token) and switches the mouse to
+software mode (set property `0x03` to 2) before reading, and back to hardware
+mode (1) when it stops; in software mode the vendor app drives the mouse, which
+can change how its buttons behave. Halo asks the property directly first and
+adds the login, then software mode, only when the mouse refuses; after software
+mode it always switches the mouse back to hardware mode before closing the
+receiver. The level through the receiver was read by a test build; the vendor
+app's reading, the cable path and charging are **unverified** - the test build
+in #543 decides.
 
 ### ASUS ROG Raikiri II
 

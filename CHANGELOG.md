@@ -80,9 +80,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
 - Corsair SABRE v3 PRO Ultralight (`1B1C:2B42` receiver, `1B1C:2B43` on its
-  cable): read the level and charge state through the 512-byte Slipstream V2
-  exchange used by OpenLinkHub's SABRE v3 package, after the login and
-  software-mode handshakes; the older 64-byte Bragi frame is not answered
+  cable): read the level and charge state through the Slipstream V2 exchange of
+  OpenLinkHub's SABRE v3 packages - 512-byte reports to the paired mouse through
+  the receiver, 64-byte reports on the cable. The mouse is asked directly; the
+  login and software-mode handshakes are added only when it refuses, and
+  software mode is always switched back to hardware mode. A cable connecting
+  the mouse to the PC counts as charging when the mouse gives no charge state
   ([#543](https://github.com/HeyOkay/HaloBattery/issues/543)).
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
