@@ -996,6 +996,30 @@ Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24
 
 VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
 
+### MSI VERSA PRO WIRELESS and STRIKE PRO WIRELESS
+
+**VERSA PRO WIRELESS** (`0DB0:1FC6`) and **STRIKE PRO WIRELESS**
+(`0DB0:1620`) use HID interface 1, usage page `00FF`, usage `0001`.
+
+The battery query is a 65-byte HID output report:
+
+`00 0D B0 01 00 00 00 05` followed by 57 zero bytes.
+
+The 65-byte response has message type `05` at byte 7, battery percentage
+at byte 9, and external power state at byte 10 (`01` = external power
+present, `02` = external power absent). The exact power source is not
+identified. A fully charged device still reports `01` while external power
+is connected; there is no separate charge-complete value. A zero battery
+level may be reported during power-switch transitions with either external
+power state. Zero battery levels are treated as no reading, regardless of
+byte 10. The request is sent using HID output `write()`, not a feature
+report.
+
+The request and response format was verified on physical VERSA PRO WIRELESS
+and STRIKE PRO WIRELESS receivers using HidSharp 2.6.4. Halo Battery polls
+these devices on each poll (60 seconds by default) and maintains separate status
+entries for the mouse and keyboard.
+
 ### MOONDROP GM01 Pro
 
 **Connection:** 2.4 GHz dongle `35D8:0133`, interface 3 consumer collection; on its USB cable the headset has no control channel.

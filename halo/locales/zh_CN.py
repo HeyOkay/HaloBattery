@@ -158,7 +158,7 @@ MESSAGES = {
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "MonsGeek 键盘",
     "provider.redsquare": 'Red Square Alumix TKL 键盘',
-    "provider.msi": "MSI 鼠标",
+    "provider.msi": "MSI 无线设备",
     "provider.rapoo": "Rapoo 鼠标和键盘",
     "provider.shield": "NVIDIA SHIELD 控制器",
     "provider.skullcandy": "Skullcandy 耳机",

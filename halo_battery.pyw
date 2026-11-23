@@ -314,7 +314,7 @@ PROVIDER_LABELS = {
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
-    "msi": "MSI mice",
+    "msi": "MSI wireless devices",
     "nintendo": "Nintendo Switch controllers",
     "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",

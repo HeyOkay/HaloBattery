@@ -365,7 +365,7 @@ MESSAGES = {
     "provider.fantech": "Fantech Helios Go XD5",
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.redsquare": "Klawiatura Red Square Alumix TKL",
-    "provider.msi": "Myszy MSI",
+    "provider.msi": "Urządzenia bezprzewodowe MSI",
     "settings.website": "Strona internetowa",
     "settings.discord": "Społeczność na Discordzie",
     "settings.iconify_saved_unavailable": "Nie udało się zweryfikować zapisanej ikony niestandardowej. Twój wybór został zachowany, ale wyświetlana jest ikona domyślna. Otwórz Ustawienia > Urządzenia, aby wybrać ją ponownie lub przywrócić ikonę domyślną.",
