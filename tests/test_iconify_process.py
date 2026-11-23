@@ -253,3 +253,46 @@ class IconifyProcessTests(unittest.TestCase):
             encoding="utf-8", timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.assertEqual(result.returncode, 2)
         self.assertIn("protocol or execution failed", result.stderr)
+
+    def test_worker_uses_utf8_for_existing_legacy_code_page_streams(self):
+        self.check_unicode_worker_streams(("cp1251", "cp1252", "ascii"))
+
+    @unittest.skipUnless(os.name == "nt", "Inherited windowed handles are Windows-only")
+    def test_windowed_worker_preserves_unicode_on_restored_streams(self):
+        self.check_unicode_worker_streams((None,))
+
+    def check_unicode_worker_streams(self, encodings):
+        author = "Błażej Élodie 中文 日本語 Қазақша"
+        profile = str(Path(self.temp.name) / "Реєстр 中文")
+        wire = encode(dict(kind="init", protocol=1, dataDir=profile)) + encode(dict(kind="close"))
+        # Emit generated catalogue metadata, not just an echo: decoding and
+        # re-encoding UTF-8 bytes in the same legacy code page can mask the bug.
+        for encoding in encodings:
+            with self.subTest(encoding=encoding):
+                setup = ("sys.stdin=sys.stdout=sys.stderr=None" if encoding is None else
+                         f"[getattr(sys,n).reconfigure(encoding={encoding!r}, errors='strict') "
+                         "for n in ('stdin','stdout','stderr')]")
+                script = f"""import sys
+from halo import iconify_worker as worker
+{setup}
+OriginalServer = worker.WorkerServer
+class UnicodeServer(OriginalServer):
+    def handle(self, message):
+        super().handle(message)
+        if message['kind'] == 'init':
+            assert message['dataDir'] == {json.dumps(profile, ensure_ascii=True)}
+            self.send(dict(kind='fixture', profile=message['dataDir'],
+                           author={json.dumps(author, ensure_ascii=True)}))
+worker.WorkerServer = UnicodeServer
+code = worker.main()
+sys.stderr.write({json.dumps(author, ensure_ascii=True)})
+raise SystemExit(code)
+"""
+                result = subprocess.run([sys.executable, "-c", script], cwd=ROOT,
+                    input=wire.encode("utf-8"), capture_output=True, timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+                replies = [decode(line + "\n") for line in result.stdout.decode("utf-8").splitlines()]
+                self.assertEqual(replies, [{"kind": "fixture", "profile": profile, "author": author},
+                                          {"kind": "closed"}])
+                self.assertEqual(result.stderr.decode("utf-8"), author)

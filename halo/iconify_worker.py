@@ -15,6 +15,12 @@ from .iconify_process import MAX_WIRE, decode, encode
 def _standard_stream(name, number, writing=False):
     stream = getattr(sys, name)
     if stream is not None:
+        # A console/PyInstaller stream can already exist in the Windows ANSI
+        # code page. Parent Popen(encoding=...) only configures the parent end;
+        # the worker must set both its input and output protocol to UTF-8 too.
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="strict", line_buffering=writing)
         return stream
     # PyInstaller's windowed bootloader clears Python streams even when our
     # parent explicitly supplies inherited stdin/stdout/stderr pipe handles.

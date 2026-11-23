@@ -12,6 +12,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   index in one buffer without filling the browsing fingerprint cache.
 - Read the verified registry and icon manifests in small bounded chunks,
   avoiding large temporary buffers while retaining size and integrity checks.
+- Use UTF-8 on both sides of the Iconify worker pipes so non-ASCII author names,
+  searches and profile paths load correctly on Windows with legacy code pages.
 - Reuse verified selected icon masters when reopening the catalog, and release
   closed Settings sessions without waiting for cyclic garbage collection.
 - Browse and render Iconify candidates in a disposable process, releasing its
