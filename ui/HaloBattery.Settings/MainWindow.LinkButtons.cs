@@ -48,7 +48,7 @@ public sealed partial class MainWindow
         return (FrameworkElement)XamlReader.Load($"<Viewbox xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Width='20' Height='20' HorizontalAlignment='Center' VerticalAlignment='Center'><Canvas Width='16' Height='16'>{paths}</Canvas></Viewbox>");
     }
 
-    private UIElement BuildLinkButtons()
+    private StackPanel BuildLinkButtons()
     {
         var panel = new StackPanel { Spacing = nav.Spacing };
         panel.Children.Add(BuildLinkButton(KofiPaths, KofiBrandColor, KofiUrl, "Support on Ko-fi", "settings.support_kofi"));
