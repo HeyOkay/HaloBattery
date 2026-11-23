@@ -91,7 +91,7 @@
 | [Royal Kludge MG6 Pro](protocols.md#royal-kludge-mg6-pro) | 2.4 GHz receiver or USB cable | unverified |
 | [Razer Barracuda Pro (2.4 GHz)](protocols.md#razer-barracuda-pro-24-ghz) | 2.4 GHz dongle | yes |
 | [Razer Basilisk V3 Pro, Razer Basilisk Ultimate (tested by users)](protocols.md#razer-basilisk-v3-pro-razer-basilisk-ultimate) | 2.4 GHz receiver | yes |
-| [Razer Basilisk V4 Pro](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver (`1532:00E3`) | no (wired id unknown; test build in #514) |
+| [Razer Basilisk V4 Pro](protocols.md#razer-wireless-mice-other-openrazer-models) | 2.4 GHz receiver (`1532:00E3`) or USB cable (`1532:00E2`) | yes (level and charging, reporter hardware; wireless 53 % matched Synapse) |
 | [Razer BlackShark V2 HyperSpeed](protocols.md#razer-blackshark-v2-hyperspeed-mediatek) | 2.4 GHz receiver (`1532:0565`) or USB-C cable (`1532:056E`) | yes (level and charging confirmed by reporter) |
 | [Razer BlackShark V2 Pro (2020)](protocols.md#razer-blackshark-v2-pro-2020) | 2.4 GHz receiver | yes |
 | [Razer BlackShark V2 Pro (2023)](protocols.md#razer-blackshark-v2-pro-2023) | 2.4 GHz receiver | yes |
