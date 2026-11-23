@@ -31,6 +31,7 @@ import urllib.request
 API = "https://api.iconify.design"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_REGISTRY = 24 * 1024 * 1024
+MAX_MANIFEST = 8 * 1024 * 1024
 CACHE_LIMIT = 48
 CACHE_TTL = 24 * 3600
 ASSET_CACHE_LIMIT = 256
@@ -232,6 +233,21 @@ def _read_json(path, maximum=MAX_RESPONSE):
     return result
 
 
+def _read_chunks(stream, maximum):
+    # CPython's BufferedReader.read(n), including GzipFile's reader, allocates
+    # for n before seeing EOF. Read only small chunks of the permitted limit,
+    # while retaining the extra byte that detects an oversized payload.
+    with io.BytesIO() as output:
+        remaining = maximum + 1
+        while remaining:
+            chunk = stream.read(min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            output.write(chunk)
+            remaining -= len(chunk)
+        return output.getvalue()
+
+
 class IconifyCatalog:
     """Network work belongs on a worker; load selected glyphs into tray RAM once.
 
@@ -303,7 +319,7 @@ class IconifyCatalog:
             if registry is None:
                 path = self._registry_dir / "registry.json.gz"
                 with gzip.open(path, "rb") as stream:
-                    payload = stream.read(MAX_REGISTRY + 1)
+                    payload = _read_chunks(stream, MAX_REGISTRY)
                 if len(payload) > MAX_REGISTRY:
                     raise CatalogError("Oversized registry")
                 registry = json.loads(payload)
@@ -355,18 +371,21 @@ class IconifyCatalog:
             path = self._registry_dir / "manifests" / entry["icons_manifest"]
             try:
                 with path.open("rb") as stream:
-                    raw = stream.read(8 * 1024 * 1024 + 1)
-                if len(raw) > 8 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != entry["icons_sha256"]:
+                    size = os.fstat(stream.fileno()).st_size
+                    if not 0 <= size <= MAX_MANIFEST:
+                        raise CatalogError("Verified icon manifest failed integrity check", "license_unverified")
+                    raw = stream.read(size + 1)
+                if len(raw) != size or hashlib.sha256(raw).hexdigest() != entry["icons_sha256"]:
                     raise CatalogError("Verified icon manifest failed integrity check", "license_unverified")
                 with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
-                    payload = stream.read(MAX_REGISTRY + 1)
+                    payload = _read_chunks(stream, MAX_REGISTRY)
                 if len(payload) > MAX_REGISTRY:
                     raise CatalogError("Oversized verified icon manifest")
                 index = json.loads(payload)
                 self._validate_index(index)
                 if len(index) != entry["icons_count"]:
                     raise CatalogError("Verified icon manifest count changed")
-            except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            except (OSError, EOFError, ValueError, UnicodeError, RecursionError) as exc:
                 if isinstance(exc, CatalogError):
                     raise
                 raise CatalogError("Verified icon manifest unavailable", "license_unverified") from exc
