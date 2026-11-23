@@ -79,6 +79,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
+- Corsair SABRE v3 PRO Ultralight (`1B1C:2B42` receiver, `1B1C:2B43` on its
+  cable): read the level and charge state through the 512-byte Slipstream V2
+  exchange used by OpenLinkHub's SABRE v3 package, after the login and
+  software-mode handshakes; the older 64-byte Bragi frame is not answered
+  ([#543](https://github.com/HeyOkay/HaloBattery/issues/543)).
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter

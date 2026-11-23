@@ -372,6 +372,21 @@ BRAGI_EXACT_PIDS = {0x1BA6, M65_CABLE_PID}
 # #204; the wired M65 uses the same property in OpenLinkHub's m65rgbultraWU
 # package, and its Slipstream receiver uses m65rgbultraW's charge query (#411).
 BRAGI_CHARGE_PIDS = set(BRAGI_BARE_PIDS) | {0x1BB5, 0x1BA6}
+# The SABRE v3 PRO (receiver 2b42, mouse on cable 2b43) is the newer
+# 512-byte Slipstream V2 exchange, not Bragi: OpenLinkHub's sabrev3proW package
+# sends a 513-byte report and reads the level from reply bytes 5..6 (tenths of a
+# percent). The single paired device is endpoint 1.
+SABRE_V3_PIDS = {
+    0x2B43: "Corsair SABRE v3 PRO Ultralight",   # the mouse on its cable
+    0x2B42: "Corsair SABRE v3 PRO Ultralight",   # its 2.4 GHz receiver
+}
+SABRE_V3_KEY = "corsair:sabre-v3"
+SABRE_V3_MSG_SIZE = 512
+SABRE_V3_WRITE_SIZE = SABRE_V3_MSG_SIZE + 1
+SABRE_V3_ENDPOINT = 0x01
+SABRE_V3_PROP_BATTERY = 0x0F
+SABRE_V3_PROP_CHARGE = 0x10
+SABRE_V3_READ_MS = 500
 
 
 def bragi_request(prop: int = BRAGI_PROP_BATTERY,
@@ -553,6 +568,73 @@ def parse_level(r) -> Optional[int]:
     if vendor == 0 or vendor > LEVEL_MAX:
         return None
     return vendor // 10
+
+
+def sabre_v3_frame(prop: int, endpoint: int = SABRE_V3_ENDPOINT) -> bytes:
+    """A 513-byte Slipstream V2 report: report id 0, endpoint, 01 01, get-property."""
+    frame = bytearray(SABRE_V3_WRITE_SIZE)
+    frame[1] = endpoint
+    frame[2] = 0x01
+    frame[3] = 0x01
+    frame[4] = 0x02
+    frame[5] = prop
+    return bytes(frame)
+
+
+def sabre_v3_login_frame(token: bytes, endpoint: int = SABRE_V3_ENDPOINT) -> bytes:
+    frame = bytearray(SABRE_V3_WRITE_SIZE)
+    frame[1] = endpoint
+    frame[2] = 0x01
+    frame[3] = 0x01
+    frame[4] = 0x1B
+    frame[5] = 0x01
+    frame[6:10] = token[:4] + bytes(4 - len(token[:4]))
+    return bytes(frame)
+
+
+def sabre_v3_mode_frame(endpoint: int = SABRE_V3_ENDPOINT) -> bytes:
+    frame = bytearray(SABRE_V3_WRITE_SIZE)
+    frame[1] = endpoint
+    frame[2] = 0x01
+    frame[3] = 0x01
+    frame[4] = 0x01
+    frame[5] = 0x03
+    frame[6] = 0x00
+    frame[7] = 0x02
+    return bytes(frame)
+
+
+def _sabre_v3_start(r) -> int:
+    """The reply may keep the zero report id in front, or hidapi may strip it."""
+    return 1 if r and r[0] == 0x00 else 0
+
+
+def parse_sabre_v3_level(r) -> Optional[int]:
+    if not r or len(r) < 7:
+        return None
+    for start in (0, 1):
+        if len(r) < start + 7:
+            continue
+        raw = int.from_bytes(r[start + 5:start + 7], "little")
+        level = raw // 10
+        if raw % 10 == 0 and 1 <= level <= 100:
+            return level
+    return None
+
+
+def parse_sabre_v3_charge(r) -> Optional[bool]:
+    """Property 0x10: byte 5 is 1 charging, 2 on battery, 3 full (OpenLinkHub)."""
+    if not r or len(r) < 6:
+        return None
+    for start in (0, 1):
+        if len(r) < start + 6:
+            continue
+        state = r[start + 5]
+        if state == 1:
+            return True
+        if state in (2, 3):
+            return False
+    return None
 
 
 class CorsairProvider(Provider):
@@ -750,6 +832,79 @@ class CorsairProvider(Provider):
             return None
         self._diag.append("  charge state: " + ("charging" if value else "on battery"))
         return bool(value)
+
+    def _sabre_v3_read(self, dev) -> bytes:
+        try:
+            return bytes(dev.read(SABRE_V3_WRITE_SIZE, SABRE_V3_READ_MS) or b"")
+        except (OSError, IOError, ValueError) as e:
+            self._diag.append(f"  SABRE v3 read: {e}")
+            return b""
+
+    def _query_sabre_v3(self, path: bytes,
+                        pid: int) -> Optional[Tuple[int, Optional[bool]]]:
+        """The 512-byte Slipstream V2 read, ported from OpenLinkHub's sabrev3proW.
+
+        The package performs a login and switches the mouse to software mode
+        before asking property 0x0F; both are repeated here because the SABRE v3
+        does not answer the older 64-byte Bragi frame at all. Charging is a
+        separate 0x10 ask; if it stays silent the level is still usable and the
+        charger state is reported as unknown.
+        """
+        dev = hid.device()  # type: ignore[union-attr]
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  open: {e}")
+            return None
+        try:
+            self._drain(dev)
+            token = os.urandom(4)
+            for endpoint in (SABRE_V3_ENDPOINT, 0x02):
+                self._diag.append(f"  SABRE v3 endpoint {endpoint:02x}")
+                for label, frame in (
+                        ("login", sabre_v3_login_frame(token, endpoint)),
+                        ("software mode", sabre_v3_mode_frame(endpoint)),
+                ):
+                    sent = dev.write(frame)
+                    if sent is not None and sent < 0:
+                        self._diag.append(f"  {label}: write refused ({sent})")
+                        break
+                    r = self._sabre_v3_read(dev)
+                    if r:
+                        self._diag.append(f"  {label} reply: {hexdump(r, 8)}")
+                else:
+                    sent = dev.write(sabre_v3_frame(SABRE_V3_PROP_BATTERY, endpoint))
+                    if sent is not None and sent < 0:
+                        self._diag.append(f"  battery: write refused ({sent})")
+                        continue
+                    for _ in range(2):
+                        r = self._sabre_v3_read(dev)
+                        if not r:
+                            continue
+                        self._diag.append(f"  battery reply: {hexdump(r, 12)}")
+                        level = parse_sabre_v3_level(r)
+                        if level is None:
+                            continue
+                        charge = None
+                        sent = dev.write(sabre_v3_frame(SABRE_V3_PROP_CHARGE, endpoint))
+                        if sent is None or sent >= 0:
+                            cr = self._sabre_v3_read(dev)
+                            if cr:
+                                self._diag.append(f"  charge reply: {hexdump(cr, 8)}")
+                                charge = parse_sabre_v3_charge(cr)
+                        self._diag.append(
+                            f"  -> {level}%, charging="
+                            + ("unknown" if charge is None else str(charge)))
+                        return level, charge
+                self._diag.append("  no SABRE v3 answer on this endpoint")
+        except (OSError, IOError, ValueError) as e:  # pragma: no cover - hidapi
+            self._diag.append(f"  SABRE v3 error: {e}")
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+        return None
 
     def _query_bragi(self, path: bytes, deadline: float,
                      pid: int) -> Optional[Tuple[int, Optional[bool]]]:
@@ -1149,6 +1304,35 @@ class CorsairProvider(Provider):
                 continue
             out.append(DeviceStatus(f"corsair:{pid:04x}", name, level, False, True,
                                     "corsair", kind="headset"))
+        # The SABRE v3 PRO is the newer 512-byte Slipstream V2 exchange. The
+        # mouse's own identity (2b43) appears on the cable and is preferred;
+        # the receiver (2b42) is the wireless path.
+        for pid in SABRE_V3_PIDS:
+            mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
+            if not mine:
+                continue
+            d = next((i for i in mine
+                      if (i.get("usage_page"), i.get("usage")) == (BRAGI_VENDOR_PAGE,
+                                                                   BRAGI_USAGE)), None)
+            if d is None:
+                self._diag.append(f"[Corsair SABRE v3] pid={pid:04x}: no "
+                                  f"{BRAGI_VENDOR_PAGE:04x}:{BRAGI_USAGE:04x} collection")
+                continue
+            self._diag.append(f"[Corsair SABRE v3] pid={pid:04x} "
+                              f"'{SABRE_V3_PIDS[pid]}' iface={d.get('interface_number')}")
+            seen.add(d["path"])
+            got = self._query_sabre_v3(d["path"], pid)
+            if got is None:
+                continue
+            level, charging = got
+            out.append(DeviceStatus(
+                SABRE_V3_KEY, SABRE_V3_PIDS[pid], level, bool(charging), True,
+                "corsair", kind="mouse",
+                via="USB cable" if pid == 0x2B43 else "2.4 GHz receiver",
+                charging_known=charging is not None,
+            ))
+            break
+
         found: Dict[str, Tuple[int, bool, str, str]] = {}
         for pid, name in BRAGI_PIDS.items():
             mine = [d for d in infos if d["product_id"] == pid and d["path"] not in seen]
