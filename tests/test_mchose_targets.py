@@ -131,6 +131,21 @@ class MchoseTargetTests(unittest.TestCase):
                          [('mchose:3837', 85, True, True)])
         self.device_factory.assert_not_called()
 
+    def test_a_device_that_vanishes_mid_read_does_not_hide_the_others(self):
+        # Unplugging one MCHOSE device used to raise out of poll() and trip the
+        # provider's circuit, greying out every MCHOSE icon until a later poll.
+        entries = [descriptor(0x100A, b'gone'), descriptor(0x1020, b'other', vid=0x5253)]
+
+        def read(path):
+            if path == b'gone':
+                raise OSError(1167, 'The device is not connected.')
+            return (68, False, 0x0031, 9)
+
+        with mock.patch.object(self.provider, '_read_collection', side_effect=read):
+            result = self.poll(entries)
+        self.assertEqual([(s.key, s.level) for s in result], [('mchose', 68)])
+        self.assertIn('OSError', '\n'.join(self.provider.diagnostics()))
+
     def test_other_3837_products_do_not_hide_the_sourced_mouse(self):
         result = self.poll([descriptor(0x3033, b'keyboard-ff70', 3, 0xFF70, 0x0071),
                             descriptor(0x1016, b'v7-config'), descriptor(0x100B, b'allowed')])

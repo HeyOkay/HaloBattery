@@ -528,6 +528,20 @@ class MchoseProvider(Provider):
                 self._g7_low = None
         return round(median(self._g7_samples)) if self._g7_samples else None
 
+    def _read_guarded(self, reader, *args):
+        """A device that vanishes mid-read must not fail the whole provider.
+
+        Unplugging a mouse leaves its path in the enumerated list for one cycle, and
+        a native read can then raise beyond OSError (ERROR_DEVICE_NOT_CONNECTED /
+        WinError 2). Without this guard one gone device greys out every MCHOSE icon
+        until the next successful poll.
+        """
+        try:
+            return reader(*args)
+        except Exception as e:      # a dead device is a reading gap, not a provider fault
+            self._diag.append(f"    {type(e).__name__}: {e}")
+            return None
+
     def _read_collection(self, path: bytes) -> Optional[Tuple[int, int, int, int]]:
         dev = hid.device()
         try:
@@ -825,19 +839,19 @@ class MchoseProvider(Provider):
                                   f"usage={(d.get('usage_page') or 0):04x}:"
                                   f"{(d.get('usage') or 0):04x}")
                 if vid == G7_VID:
-                    got_g7 = self._read_g7(d["path"])
+                    got_g7 = self._read_guarded(self._read_g7, d["path"])
                     if got_g7:
                         found.setdefault(key, []).append((got_g7[0], got_g7[1], pid, 0))
                 elif vid == A5_VID:
-                    got_a5 = self._read_a5(d["path"])
+                    got_a5 = self._read_guarded(self._read_a5, d["path"])
                     if got_a5:
                         found.setdefault(key, []).append((got_a5[0], got_a5[1], pid, 0))
                 elif vid == NEW_VID and pid in MC_TARGETS:
-                    got_mc = self._read_mc(d["path"])
+                    got_mc = self._read_guarded(self._read_mc, d["path"])
                     if got_mc is not None:
                         found.setdefault(key, []).append((got_mc[0], got_mc[1], pid, 0))
                 elif pid in HEADSET_PIDS:
-                    got = self._read_headset(d["path"], pid)
+                    got = self._read_guarded(self._read_headset, d["path"], pid)
                     if got is not None:
                         if got[0] is None:
                             self._diag.append("    heard: asleep")
@@ -845,7 +859,7 @@ class MchoseProvider(Provider):
                             found.setdefault(key, []).append((got[0], bool(got[1]), pid, 0))
                         break     # one answer per product; the pair shares an icon
                 else:
-                    got = self._read_collection(d["path"])
+                    got = self._read_guarded(self._read_collection, d["path"])
                     if got:
                         self._models[key] = got[2]
                         found.setdefault(key, []).append((got[0], bool(got[1]), pid, got[2]))
