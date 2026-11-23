@@ -6,6 +6,10 @@ from halo import i18n
 from halo.locales import en, es, fr, ja, kk, pl, pt, ru, uk, zh_CN, zh_TW
 
 
+def _placeholders(template: str) -> set[str]:
+    return {field for _, field, _, _ in Formatter().parse(template) if field is not None}
+
+
 class SettingsCatalogTests(unittest.TestCase):
     def test_settings_catalogs_have_identical_nonempty_labels(self):
         expected = {key for key in en.MESSAGES if key.startswith("settings.")}
@@ -50,13 +54,28 @@ class SettingsCatalogTests(unittest.TestCase):
                 if not key.startswith("settings."):
                     continue
                 with self.subTest(language=code, key=key):
-                    fields = {field for _, field, _, _ in Formatter().parse(value)
-                              if field is not None}
+                    fields = _placeholders(value)
                     self.assertEqual(fields, expected_fields.get(key, set()))
                     rendered = i18n.translate(key, language=code, **values)
                     self.assertEqual(rendered, value.format(**values))
                     for field in fields:
                         self.assertIn(values[field], rendered)
+
+    def test_pt_catalog_matches_english_keys_and_placeholders(self):
+        self.assertEqual(set(pt.MESSAGES), set(en.MESSAGES))
+        for key, en_val in en.MESSAGES.items():
+            with self.subTest(key=key):
+                pt_val = pt.MESSAGES[key]
+                if isinstance(en_val, dict):
+                    self.assertIsInstance(pt_val, dict)
+                    self.assertEqual(set(pt_val), set(en_val))
+                    for form in en_val:
+                        self.assertTrue(pt_val[form].strip())
+                        self.assertEqual(_placeholders(pt_val[form]), _placeholders(en_val[form]))
+                else:
+                    self.assertIsInstance(pt_val, str)
+                    self.assertTrue(pt_val.strip())
+                    self.assertEqual(_placeholders(pt_val), _placeholders(en_val))
 
 
 if __name__ == "__main__":
