@@ -951,13 +951,17 @@ behind it with one fixed query (`getControllerVersion_CMD`), documented by
 | `81 04 00 01` | `02 04 04 00 00 01 ...` | bytes 22-23 = PID of the answering device: `0x6013` dongle, `0x6012` the controller on its cable (logged only) |
 
 Only a dongle answers the first query; a controller on its cable or switched off does
-not, and then no level is shown. The answer has no documented charging flag: the same
+not, and then no level is shown - in particular never Windows' `1000/1000` placeholder as
+100 %, since this family's dongles also report XInput's "wired" type for a pad that is off
+and not on any cable (#110). The answer has no documented charging flag: the same
 family's input report keeps the level in bits 0-6 and charging in bit 7, and a plain
 percentage never sets bit 7, so a set bit 7 is read as charging and a clear one leaves
-the charging state unknown. Both answers are written to the diagnostics raw. The pairing
-rule is the naming rule below: one XInput slot whose one Windows.Gaming.Input report is
-`2dc8:310b`. The level query is confirmed on the reporter's unit in #520; the charging
-state remains unknown in XInput mode.
+the charging state unknown. In XInput mode - on the dongle or on the cable - the
+controller publishes no charging state at all; the only charge field it does publish is
+byte 14 bit 7 of the DInput report below. Both answers are written to the diagnostics raw.
+The pairing rule is the naming rule below: one XInput slot whose one
+Windows.Gaming.Input report is `2dc8:310b`. The level query is confirmed on the
+reporters' units in #461 and #520; the charging state remains unknown in XInput mode.
 
 Over Bluetooth the controller reports one, and the Bluetooth provider shows it - 60 % on
 the reporter's unit. The XInput provider names the pad **8BitDo Ultimate 2** from the
@@ -970,18 +974,20 @@ Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 
 ### 8BitDo Ultimate 2 Wireless (DInput)
 
-**Connection:** USB cable, 2.4 GHz receiver, or Bluetooth, after starting the controller
-with **B** held while pressing **Home**. It appears as a DirectInput pad (`2dc8:6012`),
-not an Xbox pad, so games that only use XInput will not see it.
+**Connection:** 2.4 GHz receiver or Bluetooth, after starting the controller with **B**
+held while pressing **Home**. A USB cable forces XInput (the pad switches mode and cannot
+be kept in DInput), where this report is not exposed. It appears as a DirectInput pad
+(`2dc8:6012`), not an Xbox pad, so games that only use XInput will not see it.
 
 Listens only; nothing is sent. The controller streams a 34-byte input report `0x01`:
 byte 14 holds the level in bits 0-6 and the charging state in bit 7. SDL's 8BitDo HIDAPI
 driver reads exactly that field (`data[14] >> 7` for the state and `data[14] & 0x7f` for
 the level); a level of 100 is treated as charged. The same report is available over the
-dongle, the USB cable, and Bluetooth. Older v1.02 firmware sends a 12-byte report with
-no charging field; the diagnostics show the report length, so that case is distinguishable.
+dongle and over Bluetooth. Older v1.02 firmware sends a 12-byte report with no charging
+field; the diagnostics show the report length, so that case is distinguishable.
 
-**Unverified on hardware** in this app; the test build is in #520.
+**Level confirmed on the reporter's unit in #520** (DInput over the dongle, 92 %); the
+charging bit is still unverified on hardware.
 
 ### ASUS ROG Raikiri II
 

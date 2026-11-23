@@ -292,7 +292,21 @@ class XInputTests(unittest.TestCase):
         res, calls = self.poll({0: (X.TYPE_WIRED, 0)}, [wgi_report(*self.U2)], reading=None)
         self.assertEqual(calls, [True])
         [st] = res
-        self.assertEqual((st.name, st.level), ("8BitDo Ultimate 2", None))
+        self.assertEqual((st.name, st.level, st.charging, st.charging_known),
+                         ("8BitDo Ultimate 2", None, False, False))
+        self.assertEqual(st.approx, "connected, battery level not reported")
+        self.assertEqual(st.ui_message, "state.unreported")
+
+    def test_no_answer_is_not_a_level_for_any_windows_status(self):
+        # Windows reports the same 1000/1000 placeholder whatever the pad is doing;
+        # on the cable it must not become "100 % on cable" (#520, #110).
+        for status in ("Charging", "Idle", "Discharging"):
+            res, _calls = self.poll({0: (X.TYPE_WIRED, 0)},
+                                    [wgi_report(*self.U2, status=status)], reading=None)
+            [st] = res
+            self.assertIsNone(st.level, status)
+            self.assertFalse(st.charging, status)
+            self.assertFalse(st.charging_known, status)
 
     def test_an_xbox_pad_next_to_an_idle_dongle_is_never_asked(self):
         receiver = dict(VENDOR)
