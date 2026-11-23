@@ -8,6 +8,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Reduce the memory peak when Settings prepares Iconify search: build the name
+  index in one buffer without filling the browsing fingerprint cache.
+
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver
   mode after failed reads. Correct

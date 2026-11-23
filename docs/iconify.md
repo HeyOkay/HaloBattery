@@ -50,6 +50,10 @@ complete license texts, including additional notices and modifications.
 Network access, SVG parsing and native rasterization happen outside the tray and
 settings model locks. A compact verified name index is prepared in the background
 when Settings opens; search and exact candidate totals use that local index.
+Preparing it verifies each collection manifest without retaining its fingerprint
+dictionary in the browsing cache or changing that cache's order. Names are written
+to one growing buffer to avoid a second full copy during assembly. Selecting an
+icon still uses the verified fingerprint cache and its existing size limits.
 No SVG bodies are bundled. Search matches names rather than remote keyword tags.
 Each page contains up to 50 safe previews, and GridView containers are virtualized.
 Browse previews rasterize at 128/256/512 pixels; only Details/Apply prepares a
