@@ -76,6 +76,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
+  [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
+  shows a Sponsor button with Ko-fi and PayPal.
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter

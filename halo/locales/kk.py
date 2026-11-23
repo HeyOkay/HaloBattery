@@ -290,6 +290,7 @@ MESSAGES = {
     'settings.project': 'GitHub беті',
     'settings.website': 'Веб-сайт',
     'settings.discord': 'Discord қауымдастығы',
+    'settings.support_kofi': 'Ko-fi арқылы қолдау',
     'settings.issue': 'Мәселе туралы хабарлау',
     'settings.quit': 'HaloBattery қолданбасынан шығу',
     'settings.saved': 'Өзгерістер бірден қолданылады',

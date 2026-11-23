@@ -63,6 +63,25 @@ class SettingsSourcesTests(unittest.TestCase):
                 self.assertEqual(svg.attrib["viewBox"], "0 0 24 24")
                 self.assertEqual(svg.attrib["stroke-width"], "2")
 
+    def test_qlementine_shortcuts_keep_pinned_hashes_and_native_paths(self):
+        directory = ROOT / "artwork" / "settings"
+        sources = json.loads((directory / "qlementine-sources.json").read_text(encoding="utf-8"))
+        self.assertTrue((directory / sources["license"]).is_file())
+        native = (ROOT / "ui" / "HaloBattery.Settings" / "MainWindow.LinkButtons.cs").read_text(encoding="utf-8")
+        arrays = {name: re.findall(r'"(F[01] [^"]+)"', body) for name, body in
+                  re.findall(r"string\[\] (\w+)Paths =\s*\{(.*?)\};", native, re.S)}
+        for icon, array in (("discord-16", "Discord"), ("coffee-cup-16", "Kofi")):
+            with self.subTest(icon=icon):
+                record = sources["icons"][icon]
+                data = (directory / f"qlementine-{icon}.svg").read_bytes()
+                self.assertEqual(hashlib.sha256(data).hexdigest(), record["sha256"])
+                self.assertEqual(record["source"], f"https://api.iconify.design/qlementine-icons/{icon}.svg")
+                svg = ET.fromstring(data)
+                self.assertEqual(svg.attrib["viewBox"], "0 0 16 16")
+                expected = [("F0 " if path.attrib.get("fill-rule") == "evenodd" else "F1 ") + path.attrib["d"]
+                            for path in svg if path.tag.rsplit("}", 1)[-1] == "path"]
+                self.assertEqual(arrays[array], expected)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -305,6 +305,7 @@ MESSAGES = {
     "settings.project": "Сторінка на GitHub",
     "settings.website": "Вебсайт",
     "settings.discord": "Спільнота в Discord",
+    "settings.support_kofi": "Підтримати на Ko-fi",
     "settings.issue": "Повідомити про проблему",
     "settings.quit": "Вийти з HaloBattery",
     "settings.saved": "Зміни застосовуються відразу",

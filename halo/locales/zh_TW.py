@@ -296,6 +296,7 @@ MESSAGES = {
     "settings.project": "GitHub 頁面",
     "settings.website": "官方網站",
     "settings.discord": "Discord 社群",
+    "settings.support_kofi": "在 Ko-fi 上支持",
     "settings.issue": "回報問題",
     "settings.quit": "結束 HaloBattery",
     "settings.saved": "變更立即生效",
