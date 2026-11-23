@@ -986,8 +986,9 @@ the level); a level of 100 is treated as charged. The same report is available o
 dongle and over Bluetooth. Older v1.02 firmware sends a 12-byte report with no charging
 field; the diagnostics show the report length, so that case is distinguishable.
 
-**Level confirmed on the reporter's unit in #520** (DInput over the dongle, 92 %); the
-charging bit is still unverified on hardware.
+**Level confirmed on the reporter's unit in #520** (DInput over the dongle, 92 %).
+The charging bit stayed clear with the charger connected and the icon never showed
+charging, so the app shows no charging state for this controller rather than claim one.
 
 ### ASUS ROG Raikiri II
 

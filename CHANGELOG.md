@@ -80,7 +80,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
 - Read the 8BitDo Ultimate 2 in DInput mode (hold B while pressing Home) from
-  its 34-byte status report: level and charging in byte 14
+  its 34-byte status report: level in byte 14, and the charging bit in bit 7.
+  On the reporter's unit that bit stayed clear with a charger connected, so
+  charging is not shown for this controller rather than guessed
   ([#520](https://github.com/HeyOkay/HaloBattery/issues/520)). XInput mode keeps
   the level-only dongle query, where the controller reports no charging bit.
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
