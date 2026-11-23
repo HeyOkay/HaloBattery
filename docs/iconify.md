@@ -54,6 +54,11 @@ Preparing it verifies each collection manifest without retaining its fingerprint
 dictionary in the browsing cache or changing that cache's order. Names are written
 to one growing buffer to avoid a second full copy during assembly. Selecting an
 icon still uses the verified fingerprint cache and its existing size limits.
+Fresh browse sessions seed their bounded asset cache with the app's already
+verified selections, sharing compressed artwork instead of rebuilding masters.
+Reuse still requires matching current registry evidence and renderer policy.
+Closing Settings detaches its catalog jobs so their callbacks cannot keep the
+retired session and process alive until cyclic garbage collection runs.
 No SVG bodies are bundled. Search matches names rather than remote keyword tags.
 Each page contains up to 50 safe previews, and GridView containers are virtualized.
 Browse previews rasterize at 128/256/512 pixels; only Details/Apply prepares a

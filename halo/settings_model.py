@@ -275,7 +275,16 @@ class SettingsController:
         # Each settings window owns independent disposable search/preview RAM.
         # Only applied assets share the persistent, offline tray asset store.
         from .iconify_catalog import IconifyCatalog
-        return IconifyCatalog(self.context["data_dir"], transient=True)
+        catalog = IconifyCatalog(self.context["data_dir"], transient=True)
+        with self.app.lock:
+            assets = tuple(getattr(self.app, "_custom_assets", {}).values())
+        # Share already verified, compressed selections instead of rasterizing
+        # their masters again after disposable lookup files have been cleared.
+        # cached() still checks the current registry/evidence and renderer.
+        with catalog._lock:
+            for asset in assets:
+                catalog._remember(asset)
+        return catalog
 
     def custom_icon_in_use(self, icon_id):
         with self.app.lock:

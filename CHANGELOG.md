@@ -10,6 +10,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.
+- Reuse verified selected icon masters when reopening the catalog, and release
+  closed Settings sessions without waiting for cyclic garbage collection.
 
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver

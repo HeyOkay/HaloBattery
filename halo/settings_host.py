@@ -601,8 +601,11 @@ class SettingsHost:
         if not session.cleanup_lock.acquire(blocking=False):
             return
         try:
-            if session.icon_jobs is not None:
-                session.icon_jobs.close()
+            # Jobs callbacks capture this session. Detach before closing so a
+            # retired session/process does not wait for cyclic GC to release.
+            jobs, session.icon_jobs = session.icon_jobs, None
+            if jobs is not None:
+                jobs.close()
             if graceful:
                 self._send(session, {"type": "shutdown"})
             if not graceful:
