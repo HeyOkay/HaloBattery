@@ -21,6 +21,7 @@ def without_cyclic_gc():
 
 
 class _Controller:
+    context = {"data_dir": "data"}
     def create_browse_catalog(self):
         raise AssertionError("An idle catalog worker must not load a catalog")
 
@@ -48,7 +49,8 @@ class SettingsSessionLifetimeTests(unittest.TestCase):
         process = _Process()
         session = settings_host._Session("general", None, process=process)
         manager._session = session
-        # This creates the real session-capturing callbacks and real workers.
+        # This creates the real broker and session-capturing callbacks. Worker
+        # launch remains lazy, so this lifetime test does not need a subprocess.
         jobs = manager._ensure_icon_jobs(session)
         cleanup_done = jobs._cleanup_done
         streams = (process.stdin, process.stdout, process.stderr)

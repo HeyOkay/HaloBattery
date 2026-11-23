@@ -12,6 +12,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   index in one buffer without filling the browsing fingerprint cache.
 - Reuse verified selected icon masters when reopening the catalog, and release
   closed Settings sessions without waiting for cyclic garbage collection.
+- Browse and render Iconify candidates in a disposable process, releasing its
+  search indexes and rendering memory when Settings closes. Keep only selected
+  tray artwork in the app, and discard closed Settings preview frames.
 
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver

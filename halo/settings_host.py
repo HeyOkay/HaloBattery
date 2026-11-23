@@ -520,17 +520,16 @@ class SettingsHost:
                 deferred()
 
     def _ensure_icon_jobs(self, session):
-        from .iconify_host import IconCatalogJobs
+        from .iconify_process import IconifyProcessJobs
         with session.cleanup_lock:
             if not self._current(session):
                 return None
             if session.icon_jobs is None:
                 generation = session.catalog_generation
-                session.icon_jobs = IconCatalogJobs(self.controller,
+                session.icon_jobs = IconifyProcessJobs(self.controller,
                     lambda result: self._send(session, result),
                     lambda: self._catalog_changed(session),
-                    lambda: self._current(session) and generation == session.catalog_generation,
-                    catalog_factory=self.controller.create_browse_catalog)
+                    lambda: self._current(session) and generation == session.catalog_generation)
             return session.icon_jobs
 
     def _end_browse(self, session):
@@ -660,6 +659,14 @@ class SettingsHost:
                         self._queue_notification(session, self._on_failure, failure, failure=True)
         finally:
             session.cleanup_lock.release()
+            # Match the model -> host lock order used by message handling. The
+            # cleanup lock must be released before waiting for the model lock.
+            with self._model_lock:
+                with self._lock:
+                    retired = self._session is None
+                release = getattr(self.controller, "release_preview", None)
+                if retired and callable(release):
+                    release()
 
     def close(self):
         with self._lock:
