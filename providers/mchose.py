@@ -46,6 +46,10 @@ PID unchanged, so a G7 keeps a single icon the way the M7 Ultra does.
 
 The generic 0x3837 mouse query is limited to the A7 V2 Ultra identity from issue #4
 and PR #20: 3837:100b, configuration collection 0xFF01:0x01 on interface 2.
+The A7 V2 Pro (3837:100a) exposes the same collection and answers the same 0x06
+status read (measured on one unit: 85 %, not charging, on report 0x11). On its
+cable it enumerates as 3837:4018 and the same read reports charging while the
+receiver goes quiet, so one icon follows it between the two.
 https://github.com/HeyOkay/HaloBattery/issues/4
 https://github.com/HeyOkay/HaloBattery/pull/20
 The reference documents the same short 0x11 status read, but the vendor id alone
@@ -196,7 +200,16 @@ HEADSET_READ_MS = 400         # a tucked-in device answers in milliseconds
 CONFIG_PAGE = 0xFF01          # the only collection that answers
 # #4's diagnostics and #20 name this exact A7 V2 Ultra collection. Neither
 # another PID nor a vendor page is permission to send the same mouse frame.
-NEW_MOUSE_TARGETS = {0x100B: (2, CONFIG_PAGE, 0x0001)}
+# The A7 V2 Pro (3837:100A) is measured on one unit: the same interface 2
+# FF01:0001 collection answers the 0x06 status read on report 0x11 with
+# 11 f9 c8 c7 e7 bf fa d5 fd fb f6 aa ff a8 ff ff -> 85 %, not charging.
+# On its cable the mouse is 3837:4018 (the model id it reports) and the same
+# read answers 11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff -> 85 %,
+# charging; the receiver goes quiet then, as the M7 Ultra's does. Both share
+# the family key, so one icon follows the mouse between the two.
+NEW_MOUSE_TARGETS = {0x100B: (2, CONFIG_PAGE, 0x0001),
+                     0x100A: (2, CONFIG_PAGE, 0x0001),
+                     0x4018: (2, CONFIG_PAGE, 0x0001)}
 # K7 V2 Ultra+ / MagDock, captured in PR #403 (head c4eb9eeba7ea9663).
 # M HUB's getCommandBuffer / readDeviceInfo / deviceInfoToObj in
 # https://www.mchose.com.cn/assets/main-DQZs6ZzX.js, SHA256

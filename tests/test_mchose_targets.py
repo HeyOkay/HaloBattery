@@ -77,6 +77,9 @@ class MchoseTargetTests(unittest.TestCase):
             descriptor(0x100B, b'sibling-ff0b', 2, 0xFF0B, 0x0104),
             descriptor(0x100B, b'wrong-ff70', 3, 0xFF70, 0x0071),
             descriptor(0x100B, b'wrong-ff31', 2, 0xFF31, 0x0074),
+            descriptor(0x100A, b'pro-wrong-usage', 2, 0xFF01, 0x0002),
+            descriptor(0x100A, b'pro-sibling-ff0b', 2, 0xFF0B, 0x0104),
+            descriptor(0x4018, b'wired-wrong-usage', 2, 0xFF01, 0x0002),
         ]
         self.assertEqual(self.poll(fixtures), [])
         self.device_factory.assert_not_called()
@@ -95,6 +98,38 @@ class MchoseTargetTests(unittest.TestCase):
         self.assertEqual(self.opened, [b'allowed'])
         self.assertEqual(self.closed, [b'allowed'])
         self.assertEqual(self.sent, [(b'allowed', b'\x11\xf9' + b'\xff' * 19)])
+
+    def test_the_a7_v2_pro_answers_the_same_status_frame(self):
+        # Measured on one unit: 3837:100A, interface 2, FF01:0001, 0x06 on report 0x11.
+        result = self.poll([descriptor(0x100A, b'pro-sibling-ff0b', 2, 0xFF0B, 0x0104),
+                            descriptor(0x100A, b'allowed')])
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in result],
+                         [('mchose:3837', 68, False, True)])
+        self.assertEqual(self.opened, [b'allowed'])
+        self.assertEqual(self.sent, [(b'allowed', b'\x11\xf9' + b'\xff' * 19)])
+
+    def test_the_a7_v2_pro_on_its_cable_reports_charging(self):
+        # Measured while charging: 3837:4018 answers 85 %, charging, on 0x11.
+        self.reply = bytes.fromhex(
+            '11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff')
+        result = self.poll([descriptor(0x4018, b'allowed')])
+        self.assertEqual([(s.key, s.level, s.charging) for s in result],
+                         [('mchose:3837', 85, True)])
+        self.assertEqual(self.sent, [(b'allowed', b'\x11\xf9' + b'\xff' * 19)])
+
+    def test_the_dongle_and_the_cable_share_one_icon(self):
+        # On the cable the receiver goes quiet; only the mouse answers, and both
+        # identities carry the same family key.
+        entries = [descriptor(0x100A, b'dongle'), descriptor(0x4018, b'cable')]
+
+        def read(path):
+            return None if path == b'dongle' else (85, 1, 0x4018, 0)
+
+        with mock.patch.object(self.provider, '_read_collection', side_effect=read):
+            result = self.poll(entries)
+        self.assertEqual([(s.key, s.level, s.charging, s.online) for s in result],
+                         [('mchose:3837', 85, True, True)])
+        self.device_factory.assert_not_called()
 
     def test_other_3837_products_do_not_hide_the_sourced_mouse(self):
         result = self.poll([descriptor(0x3033, b'keyboard-ff70', 3, 0xFF70, 0x0071),

@@ -76,6 +76,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- MCHOSE A7 V2 Pro (`3837:100A` on its receiver, `3837:4018` on its cable):
+  the same 0x06 status read as the A7 V2 Ultra on interface 2 `FF01:0001`.
+  Level and charging confirmed on one unit - 85 %, and charging on the cable.
 - A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.

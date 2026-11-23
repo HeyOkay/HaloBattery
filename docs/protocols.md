@@ -574,15 +574,31 @@ A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the ve
 
 The same protocol as the M7 Ultra on MCHOSE's newer vendor id, which the reference driver treats identically: the diagnostics in [#4](https://github.com/HeyOkay/HaloBattery/issues/4) show the same interface shape (collections 0xFF0B:0x104 and 0xFF01:0x01 on interface 2). The status read is documented on the shorter 0x11 report, so both report ids are tried, and the mouse is named from the receiver's own product string. Icon of its own, so it and an M7 Ultra stay two devices. **Unverified** — no A7 V2 Ultra was on hand, so a level out of range is refused rather than shown
 
-The generic `3837` mouse exchange is restricted to `3837:100B`, interface 2,
-`FF01:0001`, as documented in [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
-and [#20](https://github.com/HeyOkay/HaloBattery/pull/20). VID `3837` also covers
-keyboards and products with different protocols: the K99 `3033` and V7 `1016`
-diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189) do not
-justify sending the RealTek mouse feature request to them. Those and other
+The generic `3837` mouse exchange is restricted to two sourced identities:
+`3837:100B` (A7 V2 Ultra, from [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
+and [#20](https://github.com/HeyOkay/HaloBattery/pull/20)) and `3837:100A`
+(A7 V2 Pro, measured on one unit), always interface 2, `FF01:0001`. VID `3837`
+also covers keyboards and products with different protocols: the K99 `3033` and
+V7 `1016` diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189)
+do not justify sending the RealTek mouse feature request to them. Those and other
 unmapped products remain unopened by that route. The separately confirmed V9
 headset routes `6008`/`600A` are preserved. The original `5253`, G7 and A5 Pro Max
 exchanges are unchanged.
+
+### MCHOSE A7 V2 Pro
+
+**Connection:** 2.4 GHz receiver (3837:100A, RealTek strings)
+
+The same exchange as the A7 V2 Ultra, on the same collection (interface 2,
+`FF01:0001`) and the same report ids. Measured on one unit: the 0x06 status read
+is answered on the short 0x11 report with
+`11 f9 c8 c7 e7 bf fa d5 fd fb f6 aa ff a8 ff ff` - 85 %, not charging, model
+`0x4018`, link flag `0x09`. On its cable the mouse enumerates as `3837:4018`
+(its model id, the same pattern as the M7 Ultra's `5253:0031`) and the same read
+answers `11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff` - 85 %, charging,
+flags `0x00` - while the receiver goes quiet, so the cable is the charging source.
+Both identities share the family icon key, so the mouse keeps one icon. It is
+named from the receiver's product string ("MCHOSE A7 V2 Pro").
 
 ### MCHOSE G7
 
