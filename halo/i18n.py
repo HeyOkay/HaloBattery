@@ -78,7 +78,7 @@ LANGUAGES = {
     "fr": Language("Français", fr.MESSAGES, plural_rule=_french_plural,
                    windows_primary_ids=(0x0C,)),
     "es": Language("Español", es.MESSAGES, windows_primary_ids=(0x0A,)),
-    "pt": Language("Português", pt.MESSAGES, windows_primary_ids=(0x16,)),
+    "pt": Language("Português (Brasil)", pt.MESSAGES, windows_primary_ids=(0x16,)),
     "pl": Language("Polski", pl.MESSAGES, plural_rule=_polish_plural,
                    windows_primary_ids=(0x15,), plural_forms=("one", "few", "many", "other")),
     "zh-TW": Language("繁體中文", zh_TW.MESSAGES, plural_rule=other_only,
