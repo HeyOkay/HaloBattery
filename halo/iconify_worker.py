@@ -63,6 +63,10 @@ class _Controller:
         return self.selected[:]
 
     def custom_icon_in_use(self, icon_id):
+        if self.jobs._active is not None:
+            active = self.jobs._active[0]
+            if active.get("iconId") == icon_id and "_iconInUse" in active:
+                return active["_iconInUse"]
         if self.catalog is None:
             return False
         with self.catalog._lock:
@@ -205,18 +209,15 @@ class WorkerServer:
         elif kind == "warm" and set(message) == {"kind"} and not self._closing.is_set():
             self.jobs.prewarm()
         elif kind == "request" and not self._closing.is_set():
-            if set(message) != {"kind", "request", "state", "actualSize", "revision", "selected"}:
+            fields = {"kind", "request", "state", "actualSize", "revision", "selected"}
+            if set(message) not in (fields, fields | {"inUse"}) or "inUse" in message and type(message["inUse"]) is not bool:
                 raise ValueError("Invalid icon worker request envelope")
             from .iconify_host import validate_request
-            from .iconify_process import _DIGEST
             request = message["request"]
             if not isinstance(request, dict):
                 raise ValueError("Invalid icon worker request")
             validate_request(request)
-            selected = message["selected"]
-            if (not isinstance(selected, list) or len(selected) > 20000
-                    or any(not isinstance(value, str) or not _DIGEST.fullmatch(value) for value in selected)):
-                raise ValueError("Invalid selected icon identities")
+            selected = _selected_snapshot(self.controller.selected, message["selected"])
             if request["action"] in ("apply", "restore"):
                 if type(message["revision"]) is not int or message["revision"] < 1:
                     raise ValueError("Invalid selection revision")
@@ -239,11 +240,13 @@ class WorkerServer:
                     self.jobs._pending = deque(item for item in self.jobs._pending
                                                if item[0]["action"] in ("apply", "restore"))
                 self.jobs.submit(request)
-                if request["action"] in ("search", "details", "apply"):
-                    for queued, _cancel in self.jobs._pending:
-                        if queued["id"] == request["id"]:
+                for queued, _cancel in self.jobs._pending:
+                    if queued["id"] == request["id"]:
+                        if "inUse" in message:
+                            queued["_iconInUse"] = message["inUse"]
+                        if request["action"] in ("search", "details", "apply"):
                             queued["_renderSnapshot"] = (tuple(state), size)
-                            break
+                        break
         else:
             raise ValueError("Unknown icon worker command")
 
@@ -271,6 +274,29 @@ class WorkerServer:
             self._close()
             self._finished.wait(28)
             self.send({"kind": "closed"})
+
+
+def _selected_snapshot(current, update):
+    """Apply an ordered ID delta atomically; retain every active selection."""
+    from .iconify_process import _DIGEST
+    def valid(values):
+        return (isinstance(values, list) and len(values) <= 20000
+                and all(isinstance(value, str) and _DIGEST.fullmatch(value) for value in values))
+    if update is None:
+        return current
+    if isinstance(update, list):  # Full snapshots also support private fixtures.
+        if not valid(update):
+            raise ValueError("Invalid selected icon identities")
+        return sorted(set(update))
+    if not isinstance(update, dict) or set(update) != {"add", "remove"} or not all(valid(value) for value in update.values()):
+        raise ValueError("Invalid selected icon delta")
+    add, remove, before = set(update["add"]), set(update["remove"]), set(current)
+    if add & before or not remove <= before or len(add) != len(update["add"]) or len(remove) != len(update["remove"]):
+        raise ValueError("Selected icon delta does not match previous snapshot")
+    result = (before - remove) | add
+    if len(result) > 20000:
+        raise ValueError("Too many selected icon identities")
+    return sorted(result)
 
 
 def _valid_snapshot(state, size):

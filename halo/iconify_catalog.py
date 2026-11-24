@@ -27,6 +27,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 
 API = "https://api.iconify.design"
 MAX_RESPONSE = 2 * 1024 * 1024
@@ -318,8 +319,11 @@ class IconifyCatalog:
                 return
             if registry is None:
                 path = self._registry_dir / "registry.json.gz"
-                with gzip.open(path, "rb") as stream:
-                    payload = _read_chunks(stream, MAX_REGISTRY)
+                try:
+                    with gzip.open(path, "rb") as stream:
+                        payload = _read_chunks(stream, MAX_REGISTRY)
+                except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+                    raise CatalogError("Verified icon registry unavailable", "license_unverified") from exc
                 if len(payload) > MAX_REGISTRY:
                     raise CatalogError("Oversized registry")
                 registry = json.loads(payload)
@@ -385,7 +389,7 @@ class IconifyCatalog:
                 self._validate_index(index)
                 if len(index) != entry["icons_count"]:
                     raise CatalogError("Verified icon manifest count changed")
-            except (OSError, EOFError, ValueError, UnicodeError, RecursionError) as exc:
+            except (OSError, EOFError, zlib.error, ValueError, UnicodeError, RecursionError) as exc:
                 if isinstance(exc, CatalogError):
                     raise
                 raise CatalogError("Verified icon manifest unavailable", "license_unverified") from exc

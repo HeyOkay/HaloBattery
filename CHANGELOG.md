@@ -14,6 +14,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   avoiding large temporary buffers while retaining size and integrity checks.
 - Use UTF-8 on both sides of the Iconify worker pipes so non-ASCII author names,
   searches and profile paths load correctly on Windows with legacy code pages.
+- Send selected-icon changes as bounded deltas instead of repeating the full
+  list on every browse request; report corrupt registry streams consistently.
 - Reuse verified selected icon masters when reopening the catalog, and release
   closed Settings sessions without waiting for cyclic garbage collection.
 - Browse and render Iconify candidates in a disposable process, releasing its

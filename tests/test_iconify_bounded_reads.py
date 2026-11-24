@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+import zlib
 from unittest.mock import patch
 
 from halo import iconify_catalog as catalog
@@ -167,3 +168,34 @@ class BoundedReadTests(unittest.TestCase):
                 stream = ShortReader(b"abcdefghijklmnopqrst")
                 self.assertEqual(catalog._read_chunks(stream, limit), b"abcdefghijklmnopqrst"[:limit + 1])
                 self.assertEqual(stream.tell(), min(20, limit + 1))
+
+    def test_invalid_deflate_is_reported_as_unverified_for_registry_and_manifest(self):
+        # A real invalid DEFLATE block (BTYPE=3) raises zlib.error, not OSError.
+        raw = bytes.fromhex("1f8b0800000000000003") + b"\x07" + b"\x00" * 8
+        with self.assertRaises(zlib.error):
+            gzip.decompress(raw)
+        self.assert_corrupt_gzip_unverified(raw)
+
+    def test_truncated_registry_and_bad_crc_are_reported_as_unverified(self):
+        raw = gzip.compress(catalog._json_bytes(self.registry), mtime=0)
+        corrupt = bytearray(raw)
+        corrupt[-8] ^= 1
+        for payload in (raw[:-1], bytes(corrupt)):
+            with self.subTest(payload=payload[-12:]):
+                self.assert_corrupt_gzip_unverified(payload)
+
+    def assert_corrupt_gzip_unverified(self, raw):
+        self.write_manifest(raw)
+        manifest = self.service()
+        with self.assertRaises(catalog.CatalogError) as failure:
+            manifest._entry("test:mouse")
+        self.assertEqual(failure.exception.code, "license_unverified")
+        self.assert_index_unpublished(manifest)
+        (self.root / "registry.json.gz").write_bytes(raw)
+        registry = catalog.IconifyCatalog(self.root / "data", registry_dir=self.root,
+            fetch=lambda url: self.fail("Unexpected network"))
+        with self.assertRaises(catalog.CatalogError) as failure:
+            registry.collections()
+        self.assertEqual(failure.exception.code, "license_unverified")
+        self.assertNotIn("registry", vars(registry))
+        self.assert_index_unpublished(registry)

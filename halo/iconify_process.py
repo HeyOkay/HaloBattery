@@ -23,6 +23,7 @@ class _QueuedMessage:
     def __init__(self):
         self.ready = threading.Event()
         self.wire = None
+        self.selected_bytes = 0
 
 
 def encode(value):
@@ -64,6 +65,8 @@ class IconifyProcessJobs:
         self._requests = OrderedDict()
         self._accepted = set()
         self._committed = set()
+        self._selected_snapshot = frozenset()
+        self._selected_queued_bytes = 0
         self._last_id = -1
         self._closed = False
         self._process = None
@@ -116,10 +119,30 @@ class IconifyProcessJobs:
                 bindings = getattr(self.controller, "custom_icon_bindings", None)
                 record["expectedBindings"] = bindings(request["iconId"]) if callable(bindings) else {}
             selection = action in ("apply", "restore")
+            selected = self.controller.custom_icon_ids()
+            if (not isinstance(selected, list) or len(selected) > 20000
+                    or any(not isinstance(value, str) or not _DIGEST.fullmatch(value) for value in selected)):
+                raise ValueError("Invalid selected icon identities")
+            selected = frozenset(selected)
+            selected_update = None if selected == self._selected_snapshot else {
+                "add": sorted(selected - self._selected_snapshot),
+                "remove": sorted(self._selected_snapshot - selected)}
+            selected_bytes = len(encode(selected_update).encode("utf-8")) if selected_update is not None else 0
             message = dict(kind="request", request=request, state=state, actualSize=actual_size,
-                           revision=1 if selection else None, selected=self.controller.custom_icon_ids())
+                           revision=1 if selection else None, selected=selected_update)
+            if action == "details":
+                in_use = getattr(self.controller, "custom_icon_in_use", None)
+                if callable(in_use):
+                    value = in_use(request["iconId"])
+                    if type(value) is not bool:
+                        raise ValueError("Invalid configured icon binding")
+                    message["inUse"] = value
+                elif callable(bindings) and isinstance(record["expectedBindings"], dict):
+                    message["inUse"] = bool(record["expectedBindings"])
             try:
                 encode(message)  # Reject invalid/oversized snapshots before admission.
+                if self._selected_queued_bytes + selected_bytes > MAX_WIRE:
+                    raise queue.Full
                 reserved = _QueuedMessage()
                 self._outgoing.put_nowait(reserved)
             except (queue.Full, ValueError, TypeError):
@@ -133,6 +156,9 @@ class IconifyProcessJobs:
                 if selection:
                     self._accepted.add(request["id"])
                 reserved.wire = encode(message)
+                reserved.selected_bytes = selected_bytes
+                self._selected_queued_bytes += selected_bytes
+                self._selected_snapshot = selected
                 while len(self._requests) > 32:
                     old = next((key for key in self._requests if key not in self._accepted), None)
                     if old is None:
@@ -188,15 +214,21 @@ class IconifyProcessJobs:
                     wire = self._outgoing.get(timeout=.1)
                 except queue.Empty:
                     continue
+                selected_bytes = 0
                 if isinstance(wire, _QueuedMessage):
                     while not wire.ready.wait(.1):
                         if self._stopped.is_set():
                             return
-                    wire = wire.wire
+                    selected_bytes, wire = wire.selected_bytes, wire.wire
                     if wire is None:
                         continue
-                process.stdin.write(wire)
-                process.stdin.flush()
+                try:
+                    process.stdin.write(wire)
+                    process.stdin.flush()
+                finally:
+                    if selected_bytes:
+                        with self._lock:
+                            self._selected_queued_bytes = max(0, self._selected_queued_bytes - selected_bytes)
         except (OSError, ValueError):
             try:
                 process.kill()
@@ -378,7 +410,7 @@ class IconifyProcessJobs:
                 if not exited:
                     # Retain this slot if Windows refused to end the process.
                     acquired = False
-                    log.warning("settings: icon worker did not terminate")
+                    log.error("settings: icon worker did not terminate; worker capacity retained")
                 for worker in helpers:
                     worker.join(timeout=2)
                 with self._lock:
@@ -387,6 +419,8 @@ class IconifyProcessJobs:
                     self._accepted.clear()
                     self._requests.clear()
                     self._committed.clear()
+                    self._selected_snapshot = frozenset()
+                    self._selected_queued_bytes = 0
                     self._process = None
                     while True:
                         try:
