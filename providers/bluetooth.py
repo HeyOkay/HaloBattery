@@ -461,6 +461,9 @@ class BluetoothProvider(Provider):
                                       f"{PHONE_DISCONNECT_GRACE:.0f} s grace)")
                     out.append(replace(shown, charging=False, charging_known=False))
                     continue
+                # The grace is over: the phone is a normal miss from now on, and
+                # the watcher must not keep waking for this deadline.
+                self._off_since.pop(key, None)
             self._misses[key] = self._misses.get(key, 0) + 1
             if self._misses[key] < MISS_LIMIT:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: missing from the reply, "
@@ -473,6 +476,18 @@ class BluetoothProvider(Provider):
                 self._misses.pop(key, None)
                 self._off_since.pop(key, None)
         return out
+
+    def next_phone_grace_deadline(self) -> Optional[float]:
+        """Earliest expiry among the live phone graces, for a watcher to wake for.
+
+        None when no phone is inside a grace. A deadline stays here until the
+        next merge runs after it, so a watcher that woke late still publishes
+        the greyed reading and then clears it."""
+        with self._lock:
+            deadlines = [since + PHONE_DISCONNECT_GRACE
+                         for key, since in self._off_since.items()
+                         if key in self._shown and self._shown[key].kind == "phone"]
+        return min(deadlines) if deadlines else None
 
     def parse(self, raw: str) -> Optional[List[DeviceStatus]]:
         """None - unusable output (treated as a failure), [] - there really are no devices."""
@@ -524,9 +539,12 @@ class BluetoothWatcher:
     three quick failures in a row it gives up (failed = True) and the app falls
     back to one-shot polls once a minute."""
 
-    def __init__(self, provider: BluetoothProvider, on_update: Callable[[List[DeviceStatus]], None]):
+    def __init__(self, provider: BluetoothProvider, on_update: Callable[[List[DeviceStatus]], None],
+                 clock: Callable[[], float] = time.monotonic):
         self.provider = provider
         self.on_update = on_update
+        self._clock = clock
+        self._last_text: Optional[str] = None
         self.failed = False
         self.snapshots = 0
         self.stalls = 0
@@ -560,6 +578,26 @@ class BluetoothWatcher:
                 proc.terminate()
             except OSError:
                 pass
+
+    def _publish_expired_phone_grace(self) -> None:
+        """Re-run merge on the last snapshot when a phone's grace has expired.
+
+        The child only prints on a connection change or every 60 s; without this
+        the icon would stay live until its next line, up to a minute past the
+        advertised grace. Re-reading the last snapshot is deliberate: the
+        connection flag did not change, and a failed query must not be invented."""
+        deadline = self.provider.next_phone_grace_deadline()
+        if deadline is None or self._clock() < deadline or self._last_text is None:
+            return
+        try:
+            devices = self.provider.handle(self._last_text, owner=self)
+        except Exception:
+            log.exception("bluetooth watcher")
+            return
+        if devices is None:                   # retired while the line was handled
+            return
+        self.snapshots += 1
+        self.on_update(devices)
 
     @staticmethod
     def _pump(stream, q: "queue.Queue") -> None:
@@ -598,6 +636,7 @@ class BluetoothWatcher:
                 except queue.Empty:
                     if self._stop.is_set():
                         break
+                    self._publish_expired_phone_grace()
                     if self._proc.poll() is not None and q.empty():
                         break                 # the child is gone and its output is drained
                     if time.time() - last > STALL_TIMEOUT:
@@ -620,6 +659,7 @@ class BluetoothWatcher:
                 if not text:
                     continue
                 got_output = True
+                self._last_text = text
                 try:
                     devices = self.provider.handle(text, owner=self)
                 except Exception:
@@ -735,6 +775,7 @@ class NativeBluetoothWatcher:
             prev: Optional[str] = None
             queue: List[float] = []
             next_full = 0.0
+            last_snap: Optional[dict] = None
             first, failures = True, 0
             while not self._stop.is_set():
                 try:
@@ -752,10 +793,17 @@ class NativeBluetoothWatcher:
                     if due or now >= next_full:
                         snap = reader.snapshot()
                         self._emit(snap)
+                        last_snap = snap
                         roots = snap["roots"]
                         prev = bluetooth_native.connection_key(snap["aep"])
                         next_full = self._clock() + self.FULL_EVERY
                         first = False
+                    deadline = self.provider.next_phone_grace_deadline()
+                    if deadline is not None and now >= deadline and last_snap is not None:
+                        # The connection key did not change, but the phone's grace
+                        # expired: re-run merge on the last snapshot so it greys now
+                        # instead of at the next scheduled full read.
+                        self._emit(last_snap)
                     failures = 0
                 except Exception:
                     failures += 1
@@ -765,7 +813,13 @@ class NativeBluetoothWatcher:
                         self._failed = True
                         return
                 self._beat = self._clock()
-                if self._stop.wait(self.INTERVAL):
+                wait = self.INTERVAL
+                deadline = self.provider.next_phone_grace_deadline()
+                if deadline is not None:
+                    remaining = deadline - self._clock()
+                    if 0 < remaining < wait:
+                        wait = remaining
+                if self._stop.wait(wait):
                     break
         finally:
             reader.close()

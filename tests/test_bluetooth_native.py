@@ -22,11 +22,11 @@ ROOT = "BTHENUM\\DEV_" + MAC + "\\7&123"
 T0 = 1000.0
 
 
-def snapshot(connected, level=75):
+def snapshot(connected, level=75, cls=0x0404):
     return {"devs": [{"id": ROOT, "name": "Windows Headset", "status": "OK"}],
             "props": [{"id": ROOT, "key": bluetooth.K_BAT, "data": level},
                       {"id": ROOT, "key": bluetooth.K_CONN, "data": connected}],
-            "aep": [{"addr": MAC, "conn": connected, "le": False, "err": None, "cls": 0x0404}],
+            "aep": [{"addr": MAC, "conn": connected, "le": False, "err": None, "cls": cls}],
             "aep_error": None, "roots": [{"le": False, "mac": MAC}]}
 
 
@@ -60,25 +60,29 @@ class FakeStop:
 class FakeReader:
     """Connected from `connect_at` on (never when None); records what the watcher asks."""
 
-    def __init__(self, clock, connect_at=None, winrt_ok=True, fail_checks=False):
+    def __init__(self, clock, connect_at=None, winrt_ok=True, fail_checks=False,
+                 disconnect_at=None, cls=0x0404):
         self.clock, self.connect_at = clock, connect_at
+        self.disconnect_at, self.cls = disconnect_at, cls
         self.winrt_ok = winrt_ok
         self.winrt_error = None if winrt_ok else "OSError: no WinRT"
         self.fail_checks = fail_checks
         self.checks, self.snaps, self.closed = [], [], False
 
     def connected(self):
-        return self.connect_at is not None and self.clock.t >= self.connect_at
+        if self.connect_at is None or self.clock.t < self.connect_at:
+            return False
+        return self.disconnect_at is None or self.clock.t < self.disconnect_at
 
     def connections(self, roots):
         self.checks.append(self.clock.t)
         if self.fail_checks:
             raise OSError("check failed")
-        return snapshot(self.connected())["aep"]
+        return snapshot(self.connected(), cls=self.cls)["aep"]
 
     def snapshot(self):
         self.snaps.append(self.clock.t)
-        return snapshot(self.connected())
+        return snapshot(self.connected(), cls=self.cls)
 
     def close(self):
         self.closed = True
@@ -161,6 +165,43 @@ class NativeWatcherCadenceTests(unittest.TestCase):
         self.assertEqual(len(updates), 1)
         (status,) = updates[0]
         self.assertEqual((status.key, status.level, status.online), ("bt:" + MAC, 75, True))
+
+
+class NativeWatcherPhoneGraceTests(unittest.TestCase):
+    """A phone's grace must end on the watcher's clock, not on the next 60 s read."""
+
+    def test_the_loop_publishes_the_greyed_phone_at_the_grace_deadline(self):
+        reader = FakeReader(Clock(), connect_at=T0, disconnect_at=T0 + 2, cls=0x0203)
+        updates = []
+        w = bluetooth.NativeBluetoothWatcher(
+            bluetooth.BluetoothProvider(clock=reader.clock),
+            lambda devices: updates.append((reader.clock.t, devices)),
+            reader_factory=lambda: reader, clock=reader.clock)
+        w._stop = FakeStop(reader.clock, T0 + 40)  # type: ignore[assignment]
+        with mock.patch.object(bluetooth, "log"):
+            w._run()
+
+        by_time = dict(updates)
+        self.assertIn(T0 + 32, by_time)
+        phone = by_time[T0 + 32][0]
+        self.assertEqual((phone.key, phone.level, phone.online),
+                         ("bt:" + MAC, 75, False))
+        self.assertNotIn(T0 + 78, by_time)          # stopped before the next full read
+        self.assertFalse(w.failed)
+
+    def test_a_headset_disconnect_keeps_the_plain_cadence(self):
+        reader = FakeReader(Clock(), connect_at=T0, disconnect_at=T0 + 2)
+        updates = []
+        w = bluetooth.NativeBluetoothWatcher(
+            bluetooth.BluetoothProvider(clock=reader.clock),
+            lambda devices: updates.append((reader.clock.t, devices)),
+            reader_factory=lambda: reader, clock=reader.clock)
+        w._stop = FakeStop(reader.clock, T0 + 40)  # type: ignore[assignment]
+        with mock.patch.object(bluetooth, "log"):
+            w._run()
+
+        self.assertNotIn(T0 + 32, dict(updates))    # no phone deadline for a headset
+        self.assertFalse(w.failed)
 
 
 class NativeWatcherFailureTests(unittest.TestCase):
