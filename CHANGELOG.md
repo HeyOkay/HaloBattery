@@ -90,6 +90,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Razer Basilisk V4 Pro (`1532:00E3` on its 2.4 GHz receiver, `1532:00E2` on
+  its USB cable): added to the Razer mice table, so the receiver is no longer
+  skipped as an unknown device and the cable identity reports charging through
+  the same read ([#514](https://github.com/HeyOkay/HaloBattery/issues/514)).
 - MCHOSE A7 V2 Pro (`3837:100A` on its receiver, `3837:4018` on its cable):
   the same 0x06 status read as the A7 V2 Ultra on interface 2 `FF01:0001`.
   Level and charging confirmed on one unit - 85 %, and charging on the cable.
