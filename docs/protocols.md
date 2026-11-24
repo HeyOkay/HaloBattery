@@ -969,10 +969,10 @@ behind it with one fixed query (`getControllerVersion_CMD`), documented by
 Only a dongle answers the first query; a controller on its cable or switched off does
 not, and then no level is shown - in particular never Windows' `1000/1000` placeholder as
 100 %, since this family's dongles also report XInput's "wired" type for a pad that is off
-and not on any cable (#110). The answer has no documented charging flag: the same
-family's input report keeps the level in bits 0-6 and charging in bit 7, and a plain
-percentage never sets bit 7, so a set bit 7 is read as charging and a clear one leaves
-the charging state unknown. In XInput mode - on the dongle or on the cable - the
+and not on any cable (#110). Byte 18 is a plain percentage; only 1 through 100
+are shown, with 0 ignored to avoid a false low-battery alert and values above 100
+refused. The answer has no documented charging flag, so the
+charging state stays unknown. In XInput mode - on the dongle or on the cable - the
 controller publishes no charging state at all; the only charge field it does publish is
 byte 14 bit 7 of the DInput report below. Both answers are written to the diagnostics raw.
 The pairing rule is the naming rule below: one XInput slot whose one

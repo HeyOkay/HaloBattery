@@ -18,12 +18,11 @@ src/ultimate2/protocol.py QUERY_PAD / ANSWER_PAD, device.py pad_status), which
 reverse-engineered the protocol from the official app and shows this level in its
 own GUI. No code is copied.
 
-Charging: the answer has no documented charging flag. The same family's input
-report keeps the level in bits 0-6 and the charging state in bit 7 (SDL's 8BitDo
-driver), and a plain percentage never sets bit 7, so a set bit 7 is read as
-charging; a clear one leaves the state unknown rather than "not charging". Each
-answer is logged raw, so one report taken on the charger settles it. The
-device-info query (81 04 00 01, answered 02 04 04 00 00 01 with the answering
+Charging: the answer has no documented charging flag. Its byte 18 is a plain
+percentage, not the DInput battery/charging bitfield read by SDL. Values above
+100 are refused, and the charging state stays unknown for every valid answer.
+Each answer is logged raw. The device-info query (81 04 00 01, answered
+02 04 04 00 00 01 with the answering
 device's PID at bytes 22-23: 0x6013 for a dongle, 0x6012 for the controller
 itself) is logged too, to tell a dongle from a cable.
 
@@ -58,7 +57,6 @@ QUERY_INFO = bytes([0x81, 0x04, 0x00, 0x01])
 ANSWER_INFO = bytes([0x02, 0x04, 0x04, 0x00, 0x00, 0x01])
 
 LEVEL_BYTE = 18
-LEVEL_MASK, CHARGING_BIT = 0x7F, 0x80
 FIRMWARE_LO, FIRMWARE_HI = 19, 20
 EDITION_BYTE = 23
 INFO_PID_LO, INFO_PID_HI = 22, 23      # the answering device's PID, little-endian
@@ -87,19 +85,17 @@ def frame(raw: bytes) -> bytes:
 
 
 def parse_pad_answer(data) -> Optional[Reading]:
-    """The controller's level from the dongle's answer, or None.
+    """The controller's plain percentage; this answer has no charging field.
 
     0 and anything above 100 are no reading: the controller answers while it is
     on, so a 0 would only ever become a false low-battery alert.
     """
     if not data or len(data) <= EDITION_BYTE or bytes(data[:len(ANSWER_PAD)]) != ANSWER_PAD:
         return None
-    raw = data[LEVEL_BYTE]
-    level = raw & LEVEL_MASK
-    if not 1 <= level <= 100:
+    level = data[LEVEL_BYTE]
+    if type(level) is not int or not 1 <= level <= 100:
         return None
-    charging = bool(raw & CHARGING_BIT)
-    return Reading(NAME, level, charging=charging, charging_known=charging)
+    return Reading(NAME, level, charging=False, charging_known=False)
 
 
 def parse_info_pid(data) -> Optional[int]:
@@ -172,6 +168,9 @@ def _query(path, diag: List[str]) -> Optional[Reading]:
             diag.append("    [8BitDo Ultimate 2] the controller did not answer: on its cable, "
                         "switched off, or this dongle does not pass the query on")
             return None
+        if len(answer) <= EDITION_BYTE:
+            diag.append(f"    [8BitDo Ultimate 2] short controller answer ({len(answer)} bytes)")
+            return None
         got = parse_pad_answer(answer)
         if got is None:
             diag.append(f"    [8BitDo Ultimate 2] byte {LEVEL_BYTE} = {answer[LEVEL_BYTE]:#04x}: "
@@ -179,7 +178,7 @@ def _query(path, diag: List[str]) -> Optional[Reading]:
             return None
         firmware = answer[FIRMWARE_LO] | answer[FIRMWARE_HI] << 8
         diag.append(f"    [8BitDo Ultimate 2] -> {got.level}%"
-                    f"{', charging (bit 7)' if got.charging else ', charging state not in the answer'}"
+                    ", charging state not in the answer"
                     f" (byte {LEVEL_BYTE} = {answer[LEVEL_BYTE]:#04x}, controller firmware "
                     f"{firmware / 100:.2f}, edition {answer[EDITION_BYTE]})")
         return got

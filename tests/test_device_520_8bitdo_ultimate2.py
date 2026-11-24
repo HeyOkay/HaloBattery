@@ -103,12 +103,17 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((got.name, got.level, got.charging, got.charging_known),
                          ("8BitDo Ultimate 2", 83, False, False))
 
-    def test_bit_7_reads_as_charging(self):
-        got = U.parse_pad_answer(pad_answer(0x80 | 64))
-        self.assertEqual((got.level, got.charging, got.charging_known), (64, True, True))
+    def test_percentage_boundaries_have_unknown_charging(self):
+        for byte in (1, 100):
+            with self.subTest(byte=byte):
+                got = U.parse_pad_answer(pad_answer(byte))
+                self.assertEqual((got.level, got.charging, got.charging_known), (byte, False, False))
 
-    def test_zero_and_out_of_range_bytes_are_no_level(self):
-        for byte in (0, 101, 0x7F, 0x80, 0xFF):
+    def test_zero_is_still_no_level(self):
+        self.assertIsNone(U.parse_pad_answer(pad_answer(0)))
+
+    def test_out_of_range_bytes_are_not_masked_into_a_level_or_charging(self):
+        for byte in (101, 127, 128, 200, 255, 0x80 | 64):
             with self.subTest(byte=byte):
                 self.assertIsNone(U.parse_pad_answer(pad_answer(byte)))
 
@@ -231,6 +236,22 @@ class ReadTests(unittest.TestCase):
         self.assertEqual(got.level, 71)
         self.assertEqual(world.opened, [b"cable", b"vendor"])
 
+    def test_short_controller_answers_allow_the_next_candidate_to_answer(self):
+        for length in (len(U.ANSWER_PAD), U.LEVEL_BYTE, U.LEVEL_BYTE + 1, U.EDITION_BYTE):
+            with self.subTest(length=length):
+                first = dict(VENDOR, path=b"short")
+                world = World({
+                    b"short": {U.QUERY_INFO: [info_answer()],
+                               U.QUERY_PAD: [pad_answer(21)[:length]]},
+                    **dongle(71),
+                })
+                got, diag = self.read(world, collections=(first, VENDOR))
+                self.assertEqual(got.level, 71)
+                self.assertFalse(got.charging_known)
+                self.assertEqual(world.opened, [b"short", b"vendor"])
+                self.assertEqual(world.closed, [b"short", b"vendor"])
+                self.assertIn("short controller answer", "\n".join(diag))
+
 
 class FakeDll:
     def __init__(self, slots):
@@ -282,11 +303,11 @@ class XInputTests(unittest.TestCase):
         self.assertEqual((st.name, st.level, st.charging, st.charging_known),
                          ("8BitDo Ultimate 2", 83, False, False))
 
-    def test_bit_7_charging_reaches_the_pad(self):
+    def test_invalid_high_bit_is_not_shown_as_a_level_or_charging(self):
         res, _calls = self.poll({0: (X.TYPE_WIRED, 0)}, [wgi_report(*self.U2)],
-                                reading=U.Reading(U.NAME, 64, charging=True, charging_known=True))
+                                reading=U.parse_pad_answer(pad_answer(0x80 | 64)))
         [st] = res
-        self.assertEqual((st.level, st.charging, st.charging_known), (64, True, True))
+        self.assertEqual((st.level, st.charging, st.charging_known), (None, False, False))
 
     def test_no_answer_keeps_the_pad_without_a_level(self):
         res, calls = self.poll({0: (X.TYPE_WIRED, 0)}, [wgi_report(*self.U2)], reading=None)
