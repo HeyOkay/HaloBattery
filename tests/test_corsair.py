@@ -936,11 +936,11 @@ class SabreV3Test(unittest.TestCase):
         self.assertEqual(bytes.fromhex("000101011b01a1b2c3d4"), frame[:10])
         self.assertEqual(bytes(4), C.sabre_v3_login_frame(b"")[6:10])
 
-    def test_the_measured_battery_answer_is_90_percent(self):
-        r = bytes.fromhex("01000102008403") + bytes(505)
+    def test_the_receiver_answer_from_the_test_build_is_94_percent(self):
+        r = bytes.fromhex("0100010200ac03") + bytes(505)
         status, data = C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_GET)
         self.assertEqual(0, status)
-        self.assertEqual(90, C.parse_sabre_v3_level(data))
+        self.assertEqual(94, C.parse_sabre_v3_level(data))
 
     def test_the_receivers_own_frame_is_not_an_answer(self):
         r = bytes.fromhex("0000040d00000000")
@@ -958,9 +958,20 @@ class SabreV3Test(unittest.TestCase):
         self.assertEqual((0, 90), (status, C.parse_sabre_v3_level(data)))
 
     def test_the_cable_answer_on_endpoint_0(self):
-        r = bytes.fromhex("0000010200b602")
+        r = bytes.fromhex("0000010200ca03") + bytes(505)
         status, data = C.sabre_v3_reply(r, 0x00, C.SABRE_V3_CMD_GET)
-        self.assertEqual((0, 69), (status, C.parse_sabre_v3_level(data)))
+        self.assertEqual((0, 97), (status, C.parse_sabre_v3_level(data)))
+
+    def test_the_charge_answers_from_both_paths(self):
+        # Test build 3: on battery over the receiver, charging on the PC cable.
+        on_battery = bytes.fromhex("0100010200020000") + bytes(504)
+        charging = bytes.fromhex("0000010200010000") + bytes(504)
+        for raw, endpoint, want in ((on_battery, 0x01, False), (charging, 0x00, True)):
+            reply = C.sabre_v3_reply(raw, endpoint, C.SABRE_V3_CMD_GET)
+            assert reply is not None
+            status, data = reply
+            self.assertEqual(0, status)
+            self.assertEqual(want, C.parse_sabre_v3_charge(data))
 
     def test_a_refusal_carries_its_status(self):
         r = bytes.fromhex("0100011b06000000")
