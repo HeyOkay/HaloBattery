@@ -8,6 +8,20 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Reduce the memory peak when Settings prepares Iconify search: build the name
+  index in one buffer without filling the browsing fingerprint cache.
+- Read the verified registry and icon manifests in small bounded chunks,
+  avoiding large temporary buffers while retaining size and integrity checks.
+- Use UTF-8 on both sides of the Iconify worker pipes so non-ASCII author names,
+  searches and profile paths load correctly on Windows with legacy code pages.
+- Send selected-icon changes as bounded deltas instead of repeating the full
+  list on every browse request; report corrupt registry streams consistently.
+- Reuse verified selected icon masters when reopening the catalog, and release
+  closed Settings sessions without waiting for cyclic garbage collection.
+- Browse and render Iconify candidates in a disposable process, releasing its
+  search indexes and rendering memory when Settings closes. Keep only selected
+  tray artwork in the app, and discard closed Settings preview frames.
+
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver
   mode after failed reads. Correct

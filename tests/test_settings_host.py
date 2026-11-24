@@ -17,6 +17,7 @@ from halo import settings_host as host
 
 def controller():
     model = Mock()
+    model.context = {"data_dir": Path("data")}
     status = SimpleNamespace(level=42, charging=None, online=True)
     model.snapshot.return_value = dict(cfg=dict(language="en", low=20, interval=60, icon_theme="auto",
         badges=True, percent_in_icon=False, animation=True, names={"a": "private"}),
@@ -657,7 +658,7 @@ class SettingsHostTests(unittest.TestCase):
 
     def test_hide_disposes_only_temporary_catalog_and_suppresses_old_replies(self):
         self.hello()
-        with patch("halo.iconify_host.IconCatalogJobs") as jobs_type:
+        with patch("halo.iconify_process.IconifyProcessJobs") as jobs_type:
             first = self.manager._ensure_icon_jobs(self.session)
             current = jobs_type.call_args.args[3]
             self.assertTrue(current())
