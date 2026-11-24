@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
+  mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
+  instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
+
 ### Changed
 
 - Label the MSI provider as wireless devices in Portuguese, including keyboards.

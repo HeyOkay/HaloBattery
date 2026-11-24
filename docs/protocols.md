@@ -637,6 +637,12 @@ The 4K receiver and the mouse on USB-C both answer the same 17-byte Compx
 power query (command `0x04`) on the `ff02:0002` collection of interface 1.
 The Pulsar/ATK reader uses this frame from `andrewrabert/python-pulsar-mouse-tool`.
 
+### Pulsar mice on the 8K Dongle Gen.2 (model names)
+
+**Connection:** 8K Dongle Gen.2 (3710:5406) and the X2N CrazyLight's USB cable (3710:3510)
+
+The battery is read with the command 0x04 frame of the next section. The dongle is shared by Pulsar's XS-1 generation, so its product id does not name the mouse: after a valid power reply the mouse is asked once for its model with command 0x10 in the same 17-byte frame (`08 10`, fourteen zeros, checksum). DenzoNL/lamzuctl lists it as "16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c) and Pulsar's web driver (bbb.pulsar.gg/cMouse) sends it before naming the device. The reply carries status 0 in byte 2, the customer id in byte 6 and the model id in byte 7; the name comes from the web driver's own table, devicename.json (customer id 87, entry = model id - 1), kept in `providers/pulsar_models.py`. Ids the table lacks keep the name of the product id. Confirmed on an X2N CrazyLight Mini through the dongle and on its cable, which lists the same ff02:0002 collection: both answered `08 10 00 00 00 03 57 1a e4 00 00 00 00 00 00 00 e5` (customer 87, model 26), and on the cable the power reply carried the charging flag. The same exchange is in krisgfx9/Wireless-Device-Battery-Monitor (src/drivers/kysona.cpp, PR #4096); the other model names are from the table and are not hardware-tested.
+
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
 **Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 3554:F506, 3710:3414)
