@@ -133,6 +133,30 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries(), [frame(97, False)])
         self.assertEqual((out[0].level, out[0].charging), (97, False))
 
+    def test_receiver_loss_drops_the_held_charging_level(self):
+        self.poll(entries(), [frame(100, False)])
+        held = self.poll(entries(), [frame(95, True)])
+        self.assertEqual((held[0].level, held[0].charging), (100, True))
+
+        self.assertEqual(self.poll([], []), [])
+        self.assertIsNone(self.provider._precharge)
+
+        out = self.poll(entries(), [frame(20, True)])
+        self.assertEqual((out[0].level, out[0].charging), (20, True))
+
+    def test_expired_no_reply_drops_the_held_charging_level(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [frame(100, False)])
+        self.poll(entries(), [frame(95, True)])
+
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.ASLEEP_KEEP + 1,
+                                       sleep=lambda s: None)
+        self.assertEqual(self.poll(entries(), []), [])
+        self.assertIsNone(self.provider._precharge)
+
+        out = self.poll(entries(), [frame(20, True)])
+        self.assertEqual((out[0].level, out[0].charging), (20, True))
+
     def test_a_first_reading_while_charging_uses_the_reported_level(self):
         out = self.poll(entries(), [frame(95, True)])
         self.assertEqual((out[0].level, out[0].charging), (95, True))

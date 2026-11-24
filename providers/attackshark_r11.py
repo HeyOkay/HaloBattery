@@ -114,6 +114,7 @@ class AttackSharkR11Provider(Provider):
             return []
         if not infos:
             self._last = None
+            self._precharge = None       # a new receiver is a new session
             return []
         self._diag.append(f"[Attack Shark R11] pid={PID:04x} interfaces={len(infos)}")
         picked = self._pick(infos)
@@ -139,6 +140,10 @@ class AttackSharkR11Provider(Provider):
         if last is not None and time.time() - last[2] < ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, last[0], last[1], False,
                                  "attackshark_r11", kind="mouse", wake_on_input=True)]
+        # The silence outlasted the greyed icon: the session is over, so the
+        # pre-cable level must not leak into whatever is connected next.
+        self._last = None
+        self._precharge = None
         return []
 
     def diagnostics(self) -> List[str]:
