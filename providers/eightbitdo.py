@@ -1,4 +1,5 @@
-"""8BitDo controllers in their own (D-input) mode: Pro 2, Pro 3, SN30 Pro, SF30 Pro.
+"""8BitDo controllers in their own (D-input) mode: Pro 2, Pro 3, SN30 Pro, SF30 Pro,
+and the Ultimate 2.
 
 In XInput mode these controllers show up as an Xbox controller and the XInput
 provider already reads them. In D-input mode (vendor 2DC8) they are plain HID
@@ -8,6 +9,11 @@ report, the one SDL (and so Steam) switches on:
   * SDL reads feature report 0x06 once; after that the controller streams its
     enhanced report: id 0x01 over Bluetooth, id 0x04 over USB.
   * byte 14 of that report: bits 0-6 = level in %, bit 7 = charging.
+
+The Ultimate 2 (2DC8:6012) in D-input mode (hold B while pressing Home) streams a
+34-byte input report 0x01; byte 14 carries the level in bits 0-6 and the charging
+state in bit 7, the same field SDL's 8BitDo driver reads. It is listen-only too.
+In XInput mode the dongle is read by providers/eightbitdo_ultimate2.py instead.
 
 The Pro 3 (2DC8:6009) differs: its report descriptor declares a single input report,
 id 0x04, on both transports, and that report always carries the level in byte 14.
@@ -46,9 +52,9 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 VENDOR_8BITDO = 0x2DC8
 
-# pid -> name. The ids SDL's 8BitDo driver handles, minus the Ultimate 2 Wireless /
-# Ultimate 3, whose reports differ. Only the Pro 2 over Bluetooth (6006) has a user
-# report so far (#101).
+# pid -> name. The ids SDL's 8BitDo driver handles in D-input mode, minus the
+# Ultimate 3 (a different report). The Ultimate 2 is included for its D-input mode;
+# its XInput dongle is handled by providers/eightbitdo_ultimate2.py.
 KNOWN = {
     0x6000: "8BitDo SF30 Pro",
     0x6100: "8BitDo SF30 Pro",
@@ -57,12 +63,13 @@ KNOWN = {
     0x6003: "8BitDo Pro 2",
     0x6006: "8BitDo Pro 2",
     0x6009: "8BitDo Pro 3",
+    0x6012: "8BitDo Ultimate 2",
 }
 
 # The enhanced report id: Bluetooth -> 0x01, USB -> 0x04 (SDL_hidapi_8bitdo.c).
 ENHANCED_REPORT = {True: 0x01, False: 0x04}
 # pid -> its report id on every transport (see the module docstring)
-ENHANCED_REPORT_BY_PID = {0x6009: 0x04}
+ENHANCED_REPORT_BY_PID = {0x6009: 0x04, 0x6012: 0x01}
 
 
 def enhanced_report(pid: int, bluetooth: bool) -> int:
@@ -84,6 +91,7 @@ BUDGET = 1.0
 MAX_REPORTS = 16
 
 NOT_SWITCHED = "level shown only while Steam or a game uses the controller"
+DINPUT_WAIT = "controller is on; no status report with a level arrived"
 
 
 def parse_battery(byte: int) -> Optional[Tuple[int, bool]]:
@@ -196,8 +204,13 @@ class EightBitDoProvider(Provider):
             key = f"8bitdo:{pid:04x}:{serial}"
             via = "bluetooth" if bluetooth else ""
             if res is None:
-                out.append(DeviceStatus(key, name, None, False, True, "8bitdo", NOT_SWITCHED,
-                                        kind="gamepad", via=via, ui_message="state.8bitdo_basic"))
+                if pid == 0x6012:
+                    out.append(DeviceStatus(key, name, None, False, True, "8bitdo", DINPUT_WAIT,
+                                            kind="gamepad", via=via, ui_message="state.pending"))
+                else:
+                    out.append(DeviceStatus(key, name, None, False, True, "8bitdo", NOT_SWITCHED,
+                                            kind="gamepad", via=via,
+                                            ui_message="state.8bitdo_basic"))
                 continue
             level, charging = res
             self._diag.append(f"  -> {level}%{' charging' if charging else ''}")

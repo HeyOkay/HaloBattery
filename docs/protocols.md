@@ -574,15 +574,31 @@ A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the ve
 
 The same protocol as the M7 Ultra on MCHOSE's newer vendor id, which the reference driver treats identically: the diagnostics in [#4](https://github.com/HeyOkay/HaloBattery/issues/4) show the same interface shape (collections 0xFF0B:0x104 and 0xFF01:0x01 on interface 2). The status read is documented on the shorter 0x11 report, so both report ids are tried, and the mouse is named from the receiver's own product string. Icon of its own, so it and an M7 Ultra stay two devices. **Unverified** — no A7 V2 Ultra was on hand, so a level out of range is refused rather than shown
 
-The generic `3837` mouse exchange is restricted to `3837:100B`, interface 2,
-`FF01:0001`, as documented in [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
-and [#20](https://github.com/HeyOkay/HaloBattery/pull/20). VID `3837` also covers
-keyboards and products with different protocols: the K99 `3033` and V7 `1016`
-diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189) do not
-justify sending the RealTek mouse feature request to them. Those and other
+The generic `3837` mouse exchange is restricted to two sourced identities:
+`3837:100B` (A7 V2 Ultra, from [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
+and [#20](https://github.com/HeyOkay/HaloBattery/pull/20)) and `3837:100A`
+(A7 V2 Pro, measured on one unit), always interface 2, `FF01:0001`. VID `3837`
+also covers keyboards and products with different protocols: the K99 `3033` and
+V7 `1016` diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189)
+do not justify sending the RealTek mouse feature request to them. Those and other
 unmapped products remain unopened by that route. The separately confirmed V9
 headset routes `6008`/`600A` are preserved. The original `5253`, G7 and A5 Pro Max
 exchanges are unchanged.
+
+### MCHOSE A7 V2 Pro
+
+**Connection:** 2.4 GHz receiver (3837:100A, RealTek strings)
+
+The same exchange as the A7 V2 Ultra, on the same collection (interface 2,
+`FF01:0001`) and the same report ids. Measured on one unit: the 0x06 status read
+is answered on the short 0x11 report with
+`11 f9 c8 c7 e7 bf fa d5 fd fb f6 aa ff a8 ff ff` - 85 %, not charging, model
+`0x4018`, link flag `0x09`. On its cable the mouse enumerates as `3837:4018`
+(its model id, the same pattern as the M7 Ultra's `5253:0031`) and the same read
+answers `11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff` - 85 %, charging,
+flags `0x00` - while the receiver goes quiet, so the cable is the charging source.
+Both identities share the family icon key, so the mouse keeps one icon. It is
+named from the receiver's product string ("MCHOSE A7 V2 Pro").
 
 ### MCHOSE G7
 
@@ -683,7 +699,7 @@ Same mice protocol: transaction id 0x1F, command class 0x07, command 0x80 answer
 
 **Connection:** 2.4 GHz receiver or USB cable
 
-The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. Battery is only read for the models OpenRazer itself reads.
+The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. The **Basilisk V4 Pro** (`1532:00E3` on its receiver and `1532:00E2` on its USB cable, [#514](https://github.com/HeyOkay/HaloBattery/issues/514)) is in the same table with transaction id `0x1F`; its product string does not contain a "wireless" word, so before the table entry the receiver was skipped as an unknown device. The receiver level is confirmed on the reporter's unit (53 %, matching Synapse), and the cable identity shows charging and clears when unplugged; the reporter confirmed both on test build 2. Battery is only read for the models OpenRazer itself reads.
 
 ### Glorious Model O, O-, D and D- Wireless
 
@@ -929,15 +945,39 @@ Listened to, never written: byte 14 of the controller's enhanced input report (r
 
 ### 8BitDo Ultimate 2 Wireless (XInput)
 
-**Connection:** Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`) or USB (gamepad only).
+**Connection:** Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`, level asked from the
+dongle - unverified); USB (gamepad only).
 
 An XInput pad, so Windows.Gaming.Input owns the battery report: over the dongle it
 returns its placeholder (`remain=1000`, `full=1000`), and Windows Settings shows no
-battery for the device either (checked by the reporter). The receiver's vendor
-collection (`ff7a:0001`) is silent - the diagnostics recorded `nothing received` - and
-its XInput-facing collection `0001:0005` must never be opened: reading it makes XInput
-fail with `read error` and the pad disappears on 2.4 GHz and USB (test build 3, #461).
-There is therefore no level to read over the dongle, and none is invented.
+battery for the device either (checked by the reporter). The receiver's XInput-facing
+collection `0001:0005` must never be opened: reading it makes XInput fail with
+`read error` and the pad disappears on 2.4 GHz and USB (test build 3, #461).
+
+The vendor collection (`ff7a:0001`, output report `0x81`, input report `0x02`, 64 bytes)
+sends nothing by itself - test builds 1-4 recorded `nothing received` - because it is a
+request/answer channel. 8BitDo Ultimate Software V2 asks the dongle about the controller
+behind it with one fixed query (`getControllerVersion_CMD`), documented by
+[8bitdo-ultimate2-linux](https://github.com/MiguelSanzBr/8bitdo-ultimate2-linux)
+(MIT; reverse-engineered from the official app):
+
+| Request (zero-padded to 64 bytes) | Answer | Read |
+|---|---|---|
+| `81 04 21 01 00 00 06` | `02 04 04 00 21 01 ...` | byte 18 = battery %; 19-20 = firmware x100; 23 = colorway |
+| `81 04 00 01` | `02 04 04 00 00 01 ...` | bytes 22-23 = PID of the answering device: `0x6013` dongle, `0x6012` the controller on its cable (logged only) |
+
+Only a dongle answers the first query; a controller on its cable or switched off does
+not, and then no level is shown - in particular never Windows' `1000/1000` placeholder as
+100 %, since this family's dongles also report XInput's "wired" type for a pad that is off
+and not on any cable (#110). Byte 18 is a plain percentage; only 1 through 100
+are shown, with 0 ignored to avoid a false low-battery alert and values above 100
+refused. The answer has no documented charging flag, so the
+charging state stays unknown. In XInput mode - on the dongle or on the cable - the
+controller publishes no charging state at all; the only charge field it does publish is
+byte 14 bit 7 of the DInput report below. Both answers are written to the diagnostics raw.
+The pairing rule is the naming rule below: one XInput slot whose one
+Windows.Gaming.Input report is `2dc8:310b`. The level query is confirmed on the
+reporters' units in #461 and #520; the charging state remains unknown in XInput mode.
 
 Over Bluetooth the controller reports one, and the Bluetooth provider shows it - 60 % on
 the reporter's unit. The XInput provider names the pad **8BitDo Ultimate 2** from the
@@ -947,6 +987,24 @@ slot, one report). Windows' report order is not the XInput slot order, so next t
 controller the pad keeps the generic name rather than risk renaming the other one. Its
 Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 `remain=full=1000` placeholder would otherwise become a false 100 % (#110, #191).
+
+### 8BitDo Ultimate 2 Wireless (DInput)
+
+**Connection:** 2.4 GHz receiver or Bluetooth, after starting the controller with **B**
+held while pressing **Home**. A USB cable forces XInput (the pad switches mode and cannot
+be kept in DInput), where this report is not exposed. It appears as a DirectInput pad
+(`2dc8:6012`), not an Xbox pad, so games that only use XInput will not see it.
+
+Listens only; nothing is sent. The controller streams a 34-byte input report `0x01`:
+byte 14 holds the level in bits 0-6 and the charging state in bit 7. SDL's 8BitDo HIDAPI
+driver reads exactly that field (`data[14] >> 7` for the state and `data[14] & 0x7f` for
+the level); a level of 100 is treated as charged. The same report is available over the
+dongle and over Bluetooth. Older v1.02 firmware sends a 12-byte report with no charging
+field; the diagnostics show the report length, so that case is distinguishable.
+
+**Level confirmed on the reporter's unit in #520** (DInput over the dongle, 92 %).
+The charging bit stayed clear with the charger connected and the icon never showed
+charging, so the app shows no charging state for this controller rather than claim one.
 
 ### ASUS ROG Raikiri II
 
@@ -995,6 +1053,30 @@ Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24
 **Connection:** VERSA `0DB0:9E22`; GM31 receiver `0D3C` / cable `0D3B`; GM41 receiver `0D4C` / cable `0D4B`.
 
 VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
+
+### MSI VERSA PRO WIRELESS and STRIKE PRO WIRELESS
+
+**VERSA PRO WIRELESS** (`0DB0:1FC6`) and **STRIKE PRO WIRELESS**
+(`0DB0:1620`) use HID interface 1, usage page `00FF`, usage `0001`.
+
+The battery query is a 65-byte HID output report:
+
+`00 0D B0 01 00 00 00 05` followed by 57 zero bytes.
+
+The 65-byte response has message type `05` at byte 7, battery percentage
+at byte 9, and external power state at byte 10 (`01` = external power
+present, `02` = external power absent). The exact power source is not
+identified. A fully charged device still reports `01` while external power
+is connected; there is no separate charge-complete value. A zero battery
+level may be reported during power-switch transitions with either external
+power state. Zero battery levels are treated as no reading, regardless of
+byte 10. The request is sent using HID output `write()`, not a feature
+report.
+
+The request and response format was verified on physical VERSA PRO WIRELESS
+and STRIKE PRO WIRELESS receivers using HidSharp 2.6.4. Halo Battery polls
+these devices on each poll (60 seconds by default) and maintains separate status
+entries for the mouse and keyboard.
 
 ### MOONDROP GM01 Pro
 

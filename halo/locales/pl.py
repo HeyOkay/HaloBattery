@@ -365,7 +365,7 @@ MESSAGES = {
     "provider.fantech": "Fantech Helios Go XD5",
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.redsquare": "Klawiatura Red Square Alumix TKL",
-    "provider.msi": "Myszy MSI",
+    "provider.msi": "Urządzenia bezprzewodowe MSI",
     "settings.website": "Strona internetowa",
     "settings.discord": "Społeczność na Discordzie",
     "settings.support_kofi": "Wesprzyj na Ko-fi",

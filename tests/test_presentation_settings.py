@@ -30,6 +30,7 @@ class PresentationSettingTests(HideRenameTestCase):
         new=SimpleNamespace(id='b'*64,icon_id='test:color',metadata={'source_hash':'c'*64,'renderer_revision':svg_glyph.RENDERER_VERSION},glyph=Mock())
         app._custom_assets={old.id:old};app.cfg['custom_icons']={dev().key:old.id}
         model._catalog=Mock();model._catalog.needs_upgrade.side_effect=lambda a:a.metadata['renderer_revision']!=svg_glyph.RENDERER_VERSION
+        model.icon_catalog=Mock(return_value=model._catalog)
         return old,new
 
     def legacy_catalog(self,app,model):
@@ -55,6 +56,7 @@ class PresentationSettingTests(HideRenameTestCase):
         (folder/'glyph.png').write_bytes(png)
         (folder/'source.json').write_bytes(iconify_catalog._json_bytes(source))
         model._catalog=catalog;app.cfg['custom_icons']={dev().key:asset_id}
+        model.icon_catalog=Mock(return_value=catalog)
         return catalog,asset_id,folder,png,source
 
     def test_startup_seals_verified_legacy_evidence_and_preserves_original_pixels(self):
