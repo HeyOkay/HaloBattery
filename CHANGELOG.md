@@ -65,6 +65,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   in-app read fails.
 - Keep a Bluetooth phone's icon and last level live through Windows connection
   flaps of up to 30 seconds instead of greying and removing it for a doze.
+  Expiry greys only that phone once; later missing snapshots remove it without
+  restarting the grace or changing other devices' disconnect counters.
 - Rename the Settings > About "Project page" link to "GitHub page", and move the
   interface font and Lucide credits from their own card into Authors and
   licenses.

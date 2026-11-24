@@ -350,6 +350,7 @@ class BluetoothProvider(Provider):
         self._clock = clock if clock is not None else time.monotonic
         self._diag: List[str] = []
         self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
+        self._published: Dict[str, DeviceStatus] = {}  # latest projection, including failures
         self._misses: Dict[str, int] = {}
         self._levels: Dict[str, int] = {}           # MAC -> last known battery level
         self._off_since: Dict[str, float] = {}      # phone key -> first missing snapshot
@@ -441,7 +442,8 @@ class BluetoothProvider(Provider):
         """Smoothing: a missing device is kept for MISS_LIMIT-1 more polls."""
         if fresh is None:
             self._diag.append("[Bluetooth] poll failed, keeping the previous icons as last known")
-            return [_last_known(status) for status in self._shown.values()]
+            self._published = {key: _last_known(status) for key, status in self._shown.items()}
+            return list(self._published.values())
         now = {st.key: st for st in fresh}
         for key, st in now.items():
             self._shown[key] = st
@@ -452,7 +454,7 @@ class BluetoothProvider(Provider):
             if key in now:
                 continue
             shown = self._shown[key]
-            if shown.kind == "phone":
+            if shown.kind == "phone" and self._misses.get(key, 0) == 0:
                 now_mono = self._clock()
                 since = self._off_since.setdefault(key, now_mono)
                 if now_mono - since < PHONE_DISCONNECT_GRACE:
@@ -475,13 +477,31 @@ class BluetoothProvider(Provider):
                 self._shown.pop(key, None)
                 self._misses.pop(key, None)
                 self._off_since.pop(key, None)
+        self._published = {status.key: status for status in out}
         return out
+
+    def expire_phone_graces(self, owner: Optional[object] = None) -> Optional[List[DeviceStatus]]:
+        """Publish expired phones once, without treating cached data as a new snapshot."""
+        with self._lock:
+            if owner is not self._owner:
+                return None
+            now = self._clock()
+            expired = [key for key, since in self._off_since.items()
+                       if now - since >= PHONE_DISCONNECT_GRACE]
+            if not expired:
+                return None
+            for key in expired:
+                self._off_since.pop(key, None)
+                self._misses[key] = 1
+                self._published[key] = _last_known(self._published[key])
+                log.info("[Bluetooth] %s: phone disconnect grace expired", self._shown[key].name)
+            return list(self._published.values())
 
     def next_phone_grace_deadline(self) -> Optional[float]:
         """Earliest expiry among the live phone graces, for a watcher to wake for.
 
         None when no phone is inside a grace. A deadline stays here until the
-        next merge runs after it, so a watcher that woke late still publishes
+        next merge or expiry runs after it, so a watcher that woke late still publishes
         the greyed reading and then clears it."""
         with self._lock:
             deadlines = [since + PHONE_DISCONNECT_GRACE
@@ -544,7 +564,6 @@ class BluetoothWatcher:
         self.provider = provider
         self.on_update = on_update
         self._clock = clock
-        self._last_text: Optional[str] = None
         self.failed = False
         self.snapshots = 0
         self.stalls = 0
@@ -580,23 +599,17 @@ class BluetoothWatcher:
                 pass
 
     def _publish_expired_phone_grace(self) -> None:
-        """Re-run merge on the last snapshot when a phone's grace has expired.
-
-        The child only prints on a connection change or every 60 s; without this
-        the icon would stay live until its next line, up to a minute past the
-        advertised grace. Re-reading the last snapshot is deliberate: the
-        connection flag did not change, and a failed query must not be invented."""
+        """Grey expired phones between child lines without replaying a snapshot."""
         deadline = self.provider.next_phone_grace_deadline()
-        if deadline is None or self._clock() < deadline or self._last_text is None:
+        if deadline is None or self._clock() < deadline:
             return
         try:
-            devices = self.provider.handle(self._last_text, owner=self)
+            devices = self.provider.expire_phone_graces(owner=self)
         except Exception:
             log.exception("bluetooth watcher")
             return
-        if devices is None:                   # retired while the line was handled
+        if devices is None:                   # retired, or another update already expired it
             return
-        self.snapshots += 1
         self.on_update(devices)
 
     @staticmethod
@@ -659,7 +672,6 @@ class BluetoothWatcher:
                 if not text:
                     continue
                 got_output = True
-                self._last_text = text
                 try:
                     devices = self.provider.handle(text, owner=self)
                 except Exception:
@@ -775,7 +787,6 @@ class NativeBluetoothWatcher:
             prev: Optional[str] = None
             queue: List[float] = []
             next_full = 0.0
-            last_snap: Optional[dict] = None
             first, failures = True, 0
             while not self._stop.is_set():
                 try:
@@ -793,17 +804,15 @@ class NativeBluetoothWatcher:
                     if due or now >= next_full:
                         snap = reader.snapshot()
                         self._emit(snap)
-                        last_snap = snap
                         roots = snap["roots"]
                         prev = bluetooth_native.connection_key(snap["aep"])
                         next_full = self._clock() + self.FULL_EVERY
                         first = False
                     deadline = self.provider.next_phone_grace_deadline()
-                    if deadline is not None and now >= deadline and last_snap is not None:
-                        # The connection key did not change, but the phone's grace
-                        # expired: re-run merge on the last snapshot so it greys now
-                        # instead of at the next scheduled full read.
-                        self._emit(last_snap)
+                    if deadline is not None and self._clock() >= deadline and not self._stop.is_set():
+                        devices = self.provider.expire_phone_graces(owner=self)
+                        if devices is not None:
+                            self.on_update(devices)
                     failures = 0
                 except Exception:
                     failures += 1
