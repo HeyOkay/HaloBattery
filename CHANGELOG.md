@@ -8,6 +8,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Label the MSI provider as wireless devices in Portuguese, including keyboards.
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.
 - Read the verified registry and icon manifests in small bounded chunks,
@@ -105,6 +106,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
+- Read the 8BitDo Ultimate 2 in DInput mode (hold B while pressing Home) from
+  its 34-byte status report: level in byte 14, and the charging bit in bit 7.
+  On the reporter's unit that bit stayed clear with a charger connected, so
+  charging is not shown for this controller rather than guessed
+  ([#520](https://github.com/HeyOkay/HaloBattery/issues/520)). XInput mode keeps
+  the level-only dongle query, where the controller reports no charging bit.
 - Razer BlackShark V3 Pro (`1532:0577`) on its 2.4 GHz receiver: it exposes
   the same `ff14:0001` collections as the BlackShark V3, so it is read by that path
   ([#519](https://github.com/HeyOkay/HaloBattery/issues/519)). The reporter
@@ -125,9 +132,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Add an outline Discord shortcut at the bottom of the navigation rail, with
   a tooltip and a native fade to Discord's brand color on hover.
 - The 8BitDo Ultimate 2 Wireless is named as such in the controller list when it
-  is the only controller connected (next to another pad it keeps the generic name),
-  and its documentation says plainly that the 2.4 GHz dongle carries no battery
-  level while Bluetooth does (#461).
+  is the only controller connected (next to another pad it keeps the generic name)
+  (#461).
+- 8BitDo Ultimate 2 Wireless on its 2.4 GHz dongle (`2dc8:310b`): ask the dongle for
+  the controller's battery with the query 8BitDo's own software sends
+  (`81 04 21 01 00 00 06`, level at byte 18), as documented by
+  [8bitdo-ultimate2-linux](https://github.com/MiguelSanzBr/8bitdo-ultimate2-linux).
+  Only the vendor collection is used; the answer has no charging field, so the
+  charging state stays unknown. The level is confirmed on the reporters' units;
+  ([#520](https://github.com/HeyOkay/HaloBattery/issues/520)).
 - Add battery monitoring for MSI VERSA PRO WIRELESS (`0DB0:1FC6`) and
   STRIKE PRO WIRELESS (`0DB0:1620`) ([#539](https://github.com/HeyOkay/HaloBattery/issues/539)).
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
@@ -371,6 +384,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Extend the Settings Close button hit target to the top-right corner while
   preserving its visible size, position and hover/pressed feedback.
+
+- 8BitDo Ultimate 2 on its USB cable: show no battery level rather than Windows'
+  `1000/1000` placeholder as 100 %. The pad answers its dongle only, and in XInput
+  mode - dongle or cable - it publishes no charging state either (#520).
 
 - Accept the documented Corsair Virtuoso XT USB cable (`1B1C:0A62`) battery
   and charging reply without relaxing receiver or other model validation.

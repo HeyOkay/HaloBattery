@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, gamesir, hidlist, raikiri, wgi
+from . import beitong, eightbitdo_ultimate2, flydigi, gamesir, hidlist, raikiri, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -343,6 +343,14 @@ class XInputProvider(Provider):
             len(slots) == 1 and len(all_reports) == 1
             and (all_reports[0].vid, all_reports[0].pid) == (raikiri.VID, raikiri.PID)
         )
+        # The 8BitDo Ultimate 2's dongle is asked for the pad's level the same way:
+        # only when the one slot's one Windows.Gaming.Input report is the Ultimate 2's
+        # (#520). An idle dongle next to another pad never qualifies (#523 review).
+        single_ultimate2 = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid)
+            == (eightbitdo_ultimate2.VID, eightbitdo_ultimate2.PID)
+        )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
         # Naming only: the Ultimate 2's Windows report is a placeholder, so it never
@@ -397,6 +405,11 @@ class XInputProvider(Provider):
                     vendor_reading = gamesir.read_connected(self._diag)
                 except Exception as e:
                     self._diag.append(f"[GameSir] {e}")
+            elif single_ultimate2:
+                try:
+                    vendor_reading = eightbitdo_ultimate2.read_connected(self._diag)
+                except Exception as e:     # a broken pad path must not blind XInput
+                    self._diag.append(f"[8BitDo Ultimate 2] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -462,10 +475,27 @@ class XInputProvider(Provider):
                 presentation[slot] = ("state.unreported", {})
                 charging_unknown.add(slot)
                 continue
+            if single_ultimate2 and vendor_reading is None:
+                # #520: in XInput mode the Ultimate 2 publishes its level only through
+                # its dongle's vendor query. With no answer - on its cable, or switched
+                # off - Windows has nothing but its 1000/1000 placeholder and XInput's
+                # "wired" type, which this family's dongles also report for a pad that
+                # is off and not on any cable (#110). Neither a level nor a charging
+                # state can be shown, so the placeholder is never published.
+                self._diag.append(f"[XInput] slot {slot}: the Ultimate 2 did not answer its "
+                                  "dongle (on its cable, or switched off): no level")
+                connected.append((slot, name, None, False,
+                                  "connected, battery level not reported"))
+                presentation[slot] = ("state.unreported", {})
+                charging_unknown.add(slot)
+                continue
             if vendor_reading is not None:
                 # the pad's own report: level, charging state and its name
                 name = vendor_reading.name
                 self._waiting.pop(slot, None)
+                if not getattr(vendor_reading, "charging_known", True):
+                    # a level without a charging flag: "not charging" would be a guess
+                    charging_unknown.add(slot)
                 if not vendor_reading.charging:
                     self._last[slot] = vendor_reading.level
                 connected.append((slot, name, vendor_reading.level, vendor_reading.charging,
