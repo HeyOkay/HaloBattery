@@ -1797,8 +1797,32 @@ class App:
         def detail():
             return device_state(owner.status, self.time_left_text(owner.status), language=self.cfg["language"]) if owner and owner.status else ""
 
+        # the two per-device choices people make on the spot, one level down so the
+        # top of the menu stays short; everything else stays in the Settings window
+        def low_picked(value):
+            return lambda _item: bool(owner and owner.status) and self.device_low(owner.status.key) == value
+
+        def pick_low(value):
+            return lambda icon, item: self.set_device_low(owner, value)
+
+        def default_low(_item):
+            low = self.cfg["low"]
+            return self.tr("menu.default_low", level=low) if low else self.tr("menu.default_off")
+
+        lows = [(0, self.tr("choice.off"))] + [(p, self.tr("state.level", level=p)) for p in (5, 10, 15, 20, 25, 30)]
+        this_device = Menu(
+            Item(label("menu.hide"), lambda i, it: self.hide(owner)),
+            Item(label("preferences.low"), Menu(
+                Item(default_low, pick_low(None), checked=low_picked(None), radio=True),
+                *[Item(text, pick_low(p), checked=low_picked(p), radio=True) for p, text in lows])))
+
+        # the "no devices" icon has no device to act on
+        device_items = [Item(label("menu.this_device"), this_device,
+                             visible=lambda it: owner.status is not None)] if owner is not None else []
+
         return Menu(
             flyout.HeaderItem(title, detail),
+            *device_items,
             Item(label("settings.open_app"), lambda i, it: self.open_settings(owner.key, page="devices")
                  if owner is not None else self.open_settings(), default=True),
             Item(label("menu.refresh"), lambda i, it: self.request_refresh()),

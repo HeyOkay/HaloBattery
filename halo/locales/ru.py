@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "По умолчанию ({level}%)",
     "menu.default_off": "По умолчанию (выкл.)",
     "menu.hide": "Скрыть устройство",
+    "menu.this_device": "Это устройство",
     "menu.show": "Показать {name}",
     "menu.refresh": "Обновить сейчас",
     "menu.preferences": "Настройки",

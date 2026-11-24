@@ -242,13 +242,55 @@ class CompactTrayTests(HideRenameTestCase):
         app.open_settings = mock.Mock()
         menu = app.build_tray_menu(owner)
         visible = [i for i in menu.items if i.visible]
-        self.assertEqual(len(visible), 5)
-        self.assertFalse(any(i.submenu for i in visible))
-        visible[1](None)
+        self.assertEqual(len(visible), 6)
+        # the only submenu holds the device's quick actions, nothing from Settings
+        self.assertEqual([i.text for i in visible if i.submenu], [app.tr("menu.this_device")])
+        self.assertEqual([i.text for i in visible[1].submenu.items],
+                         [app.tr("menu.hide"), app.tr("preferences.low")])
+        visible[2](None)
         app.open_settings.assert_called_once_with(owner.key, page="devices")
         app.wake.clear()
-        visible[2](None)
+        visible[3](None)
         self.assertTrue(app.wake.is_set())
+
+    def test_this_device_hides_the_device(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        key = owner.status.key
+        this_device = app.build_tray_menu(owner).items[1].submenu
+        this_device.items[0](None)
+        self.assertIn(key, app.cfg["hidden"])
+        self.assertNotIn(key, app.icons)
+
+    def test_this_device_sets_and_resets_its_own_low_alert(self):
+        app = make_app({"low": 20})
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        key = owner.status.key
+        lows = app.build_tray_menu(owner).items[1].submenu.items[1].submenu
+        texts = [i.text for i in lows.items]
+        self.assertEqual(texts[0], app.tr("menu.default_low", level=20))
+        self.assertEqual(texts[1], app.tr("choice.off"))
+        self.assertTrue(lows.items[0].checked)                 # follows Preferences at first
+        lows.items[texts.index(app.tr("state.level", level=30))](None)
+        self.assertEqual(app.device_low(key), 30)
+        self.assertTrue(lows.items[texts.index(app.tr("state.level", level=30))].checked)
+        self.assertFalse(lows.items[0].checked)
+        lows.items[1](None)                                     # Off is 0, not the default
+        self.assertEqual(app.device_low(key), 0)
+        lows.items[0](None)
+        self.assertIsNone(app.device_low(key))
+
+    def test_this_device_is_hidden_while_the_icon_has_no_status(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        menu = app.build_tray_menu(owner)
+        owner.status = None
+        self.assertFalse(menu.items[1].visible)
+        menu.items[1].submenu.items[0](None)                    # stale click: nothing happens
+        self.assertEqual(app.cfg.get("hidden", {}), {})
 
     def test_placeholder_settings_restores_the_previous_page(self):
         app = make_app()
@@ -276,11 +318,12 @@ class CompactTrayTests(HideRenameTestCase):
                         app.install_ok = state == "install"
                         app.update_progress = 42 if state == "progress" else None
                         visible = [item for item in app.build_tray_menu(owner).items if item.visible]
-                        self.assertEqual(len(visible), 5 if state is None else 6)
+                        device = 1 if owner is not None else 0     # "This device"
+                        self.assertEqual(len(visible), (5 if state is None else 6) + device)
                         for item in visible[1:]:
                             self.assertFalse(item.text.endswith(("...", "…")))
                         if state == "progress":
-                            self.assertEqual(visible[3].text, hb.update_item_text(
+                            self.assertEqual(visible[3 + device].text, hb.update_item_text(
                                 "2.0.0", False, 42, language=language))
                         if owner is not None:
                             self.assertIn("Work... mouse…", visible[0].text)

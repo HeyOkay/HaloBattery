@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "За замовчуванням ({level}%)",
     "menu.default_off": "За замовчуванням (вимкнено)",
     "menu.hide": "Приховати цей пристрій",
+    "menu.this_device": "Цей пристрій",
     "menu.show": "Показати {name}",
     "menu.refresh": "Оновити зараз",
     "menu.preferences": "Параметри",

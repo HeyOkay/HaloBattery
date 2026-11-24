@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "Padrão ({level}%)",
     "menu.default_off": "Padrão (desativado)",
     "menu.hide": "Ocultar este dispositivo",
+    "menu.this_device": "Este dispositivo",
     "menu.show": "Mostrar {name}",
     "menu.refresh": "Atualizar agora",
     "menu.preferences": "Preferências",

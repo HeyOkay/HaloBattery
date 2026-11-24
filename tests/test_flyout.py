@@ -317,6 +317,26 @@ class HeaderTests(unittest.TestCase):
         self.assertEqual(rows[1].y, 4 + rows[0].h)
         self.assertFalse(rows[0].selectable)
 
+    def test_the_bold_name_and_the_smaller_state_have_their_own_size(self):
+        style = FakeStyle()
+        style.title_line, style.detail_line = 18, 15
+        rows = flyout.build_rows(Menu(self.header("Viper", "85%"), Item("Exit", lambda: None)))
+        flyout.layout(rows, style, measure, lambda g: 10)
+        self.assertEqual(rows[0].h, 8 + 18 + 2 + 15 + 8 + 9)
+        self.assertEqual(flyout.header_line_tops(rows[0], style), [4 + 8, 4 + 8 + 18 + 2])
+
+    def test_the_name_wraps_with_the_bold_measure_and_the_state_with_the_small_one(self):
+        name, state = "Razer BlackShark V2 Pro 2023 edition", "85%, charging, about 12 h left"
+        rows = flyout.build_rows(Menu(self.header(name, state), Item("Exit", lambda: None)))
+        bold, small = (lambda t: 9 * len(t)), (lambda t: 5 * len(t))
+        w, _h = flyout.layout(rows, FakeStyle(), measure, lambda g: 10, bold, small)
+        room = flyout.header_text_width(w, FakeStyle())
+        titles = [t for t, d in rows[0].lines if not d]
+        details = [t for t, d in rows[0].lines if d]
+        self.assertTrue(all(bold(t) <= room for t in titles))
+        self.assertGreater(len(titles), 1)                   # too wide in bold: wrapped
+        self.assertEqual(details, [state])                   # fits in one small line
+
     def test_a_separator_after_the_header_is_not_doubled(self):
         rows = flyout.build_rows(Menu(self.header("No devices found", ""), Menu.SEPARATOR,
                                       Item("Exit", lambda: None)))

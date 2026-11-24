@@ -43,10 +43,14 @@ values from a still-connected device wait for confirmation without firing an ale
 
 ## Tray menu
 
-Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
-and **Exit**, plus an update action when a release is available.
+Right-click a device icon for **This device**, **Settings**, **Refresh now**,
+**Diagnostics** and **Exit**, plus an update action when a release is available.
+The top line shows the device's name in bold and its level, charging and time
+left below it. **This device** holds the two quick choices: **Hide this device**
+and **Low battery alert** for that device only (Default follows the setting in
+Settings). Hidden devices come back from the settings window.
 Double-click an icon to open settings for that exact device, even when several
-devices have the same name. Device customization and app preferences are in the
+devices have the same name. Renaming, icons and app preferences are in the
 settings window.
 
 The menu follows the Windows light or dark app theme and display scale. If it

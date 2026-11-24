@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "默认（{level}%）",
     "menu.default_off": "默认（关闭）",
     "menu.hide": "隐藏此设备",
+    "menu.this_device": "此设备",
     "menu.show": "显示 {name}",
     "menu.refresh": "立即刷新",
     "menu.preferences": "首选项",

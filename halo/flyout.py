@@ -81,6 +81,7 @@ def ui_fonts(english: Sequence[str], language: str = "en") -> Tuple[str, ...]:
 
 
 TEXT_PX = 13
+DETAIL_PX = 12                       # the header's detail line, below the bold name
 ICON_FONTS = ("Segoe Fluent Icons", "Segoe MDL2 Assets")
 CHECK, CHEVRON, MINUS, PLUS, EDIT = "\uE73E", "\uE76C", "\uE738", "\uE710", "\uE70F"
 CHECK_PX, CHEVRON_PX, BUTTON_PX = 12, 10, 11
@@ -535,6 +536,13 @@ class _Style:
             self.font.configure(size=-self.px(TEXT_PX))
         else:
             self.font = tk_font.Font(root, family=text, size=-self.px(TEXT_PX))
+        # the header: the device's name in bold, its state smaller below it
+        self.title_font = self.font.copy()
+        self.title_font.configure(weight="bold")
+        self.detail_font = self.font.copy()
+        self.detail_font.configure(size=-self.px(DETAIL_PX))
+        self.title_line = self.title_font.metrics("linespace")
+        self.detail_line = self.detail_font.metrics("linespace")
         glyph_family = self.icon_family or self.font.actual("family")
         self.check_font = tk_font.Font(root, family=glyph_family, size=-self.px(CHECK_PX))
         self.chevron_font = tk_font.Font(root, family=glyph_family, size=-self.px(CHEVRON_PX))
@@ -603,9 +611,14 @@ def build_rows(menu) -> List[_Row]:
     return rows
 
 
-def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph) -> Tuple[int, int]:
+def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph,
+           measure_title=None, measure_detail=None) -> Tuple[int, int]:
     """Set each row's y and height; -> (width, height) of the panel. A header does not
-    count for the width: its lines are wrapped to the width the other rows need."""
+    count for the width: its lines are wrapped to the width the other rows need, the
+    title with `measure_title` (bold) and the detail with `measure_detail` (smaller);
+    both default to `measure_text`."""
+    measure_title = measure_title or measure_text
+    measure_detail = measure_detail or measure_text
     px = style.px
     item_h = px(ITEM_MARGIN_Y) * 2 + px(ITEM_PAD_T) + style.line + px(ITEM_PAD_B)
     counter_h = max(item_h, px(ITEM_MARGIN_Y) * 2 + px(BUTTON_H))
@@ -630,9 +643,9 @@ def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph) -> Tupl
             row.h = sep_h
         elif row.kind == "header":
             title_w = header_w - (px(EDIT_GAP) + px(BUTTON_W) if row.edit is not None else 0)
-            row.lines = [(t, False) for t in wrap(row.title, title_w, measure_text)]
+            row.lines = [(t, False) for t in wrap(row.title, title_w, measure_title)]
             if row.detail:
-                row.lines += [(t, True) for t in wrap(row.detail, header_w, measure_text)]
+                row.lines += [(t, True) for t in wrap(row.detail, header_w, measure_detail)]
             row.h = header_height(row, style)
         else:
             row.h = counter_h if row.kind == "counter" else item_h
@@ -647,11 +660,18 @@ def header_text_width(width: int, style: _Style) -> int:
     return width - px(ITEM_MARGIN_X) * 2 - px(ITEM_PAD_L) - px(CHECK_COLUMN) - px(ITEM_PAD_R)
 
 
+def header_line_height(style: _Style, is_detail: bool) -> int:
+    """The height of a header line: the bold title's or the smaller detail's. A style
+    without those fonts uses its ordinary line for both."""
+    return getattr(style, "detail_line" if is_detail else "title_line", style.line)
+
+
 def header_height(row: _Row, style: _Style) -> int:
     """Padding, the lines (a small gap before the detail) and a separator below."""
     px = style.px
     gap = px(HEADER_LINE_GAP) if any(d for _t, d in row.lines) and len(row.lines) > 1 else 0
-    return (px(HEADER_PAD_T) + style.line * len(row.lines) + gap + px(HEADER_PAD_B)
+    lines = sum(header_line_height(style, d) for _t, d in row.lines)
+    return (px(HEADER_PAD_T) + lines + gap + px(HEADER_PAD_B)
             + px(SEP_MARGIN_Y) * 2 + px(1))
 
 
@@ -665,7 +685,7 @@ def header_line_tops(row: _Row, style: _Style) -> List[int]:
             if tops:
                 y += px(HEADER_LINE_GAP)
         tops.append(y)
-        y += style.line
+        y += header_line_height(style, is_detail)
     return tops
 
 
@@ -675,7 +695,7 @@ def edit_box(row: _Row, width: int, style: _Style) -> Tuple[int, int, int, int]:
     px = style.px
     right = width - px(ITEM_MARGIN_X) - px(ITEM_PAD_R) + px(BUTTON_W) // 4
     bw, bh = px(BUTTON_W), px(BUTTON_H)
-    mid = header_line_tops(row, style)[0] + style.line // 2
+    mid = header_line_tops(row, style)[0] + header_line_height(style, False) // 2
     top = mid - bh // 2
     return right - bw, top, right, top + bh
 
@@ -1114,7 +1134,8 @@ class _Panel:
         self.parent, self.parent_row = parent, parent_row
         self.rows = build_rows(menu)
         self.w, self.h = layout(self.rows, style, style.font.measure,
-                                lambda g: self._glyph_font(g).measure(g))
+                                lambda g: self._glyph_font(g).measure(g),
+                                style.title_font.measure, style.detail_font.measure)
         self.x = self.y = 0
         self.work: Rect = (0, 0, 0, 0)
         self.hover: Optional[int] = None
@@ -1245,7 +1266,8 @@ class _Panel:
                 continue
             if row.kind == "header":
                 for (text, is_detail), top in zip(row.lines, header_line_tops(row, st)):
-                    cv.create_text(x_text, top, text=text, font=st.font,
+                    cv.create_text(x_text, top, text=text,
+                                   font=st.detail_font if is_detail else st.title_font,
                                    fill=c["muted"] if is_detail else c["text"], anchor="nw")
                 if row.edit is not None:
                     x0, y0, x1, y1 = edit_box(row, self.w, st)

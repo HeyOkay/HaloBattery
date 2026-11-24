@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "Par défaut ({level} %)",
     "menu.default_off": "Par défaut (désactivée)",
     "menu.hide": "Masquer ce périphérique",
+    "menu.this_device": "Ce périphérique",
     "menu.show": "Afficher {name}",
     "menu.refresh": "Actualiser maintenant",
     "menu.preferences": "Préférences",

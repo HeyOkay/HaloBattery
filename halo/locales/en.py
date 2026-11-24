@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "Default ({level}%)",
     "menu.default_off": "Default (off)",
     "menu.hide": "Hide this device",
+    "menu.this_device": "This device",
     "menu.show": "Show {name}",
     "menu.refresh": "Refresh now",
     "menu.preferences": "Preferences",

@@ -22,6 +22,7 @@ MESSAGES = {
     'menu.default_low': 'Әдепкі ({level}%)',
     'menu.default_off': 'Әдепкі (өшірулі)',
     'menu.hide': 'Осы құрылғыны жасыру',
+    'menu.this_device': 'Осы құрылғы',
     'menu.show': '{name} көрсету',
     'menu.refresh': 'Қазір жаңарту',
     'menu.preferences': 'Параметрлер',

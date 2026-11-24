@@ -22,6 +22,7 @@ MESSAGES = {
     "menu.default_low": "既定（{level}%）",
     "menu.default_off": "既定（オフ）",
     "menu.hide": "このデバイスを非表示",
+    "menu.this_device": "このデバイス",
     "menu.show": "{name} を表示",
     "menu.refresh": "今すぐ取得",
     "menu.preferences": "設定",

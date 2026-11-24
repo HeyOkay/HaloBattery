@@ -9,6 +9,7 @@ MESSAGES = {
     "menu.default_low": "Domyślnie ({level}%)",
     "menu.default_off": "Domyślnie (wyłączony)",
     "menu.hide": "Ukryj urządzenie",
+    "menu.this_device": "To urządzenie",
     "menu.show": "Pokaż {name}",
     "menu.refresh": "Odśwież teraz",
     "menu.preferences": "Preferencje",
