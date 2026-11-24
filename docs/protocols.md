@@ -1039,6 +1039,11 @@ through the receiver (`01 00 01 02 00 ac 03` - 940 tenths - charge `0x02`), then
 was enough on this unit - no login or software mode was needed - and the
 reporter noticed no change in the mouse's buttons while the build ran.
 
+Source: OpenLinkHub (GPL-3.0), `src/devices/sabrev3proW/sabrev3proW.go`,
+`src/devices/sabrev3proWU/sabrev3proWU.go` and the `src/devices/slipstreamV2`
+transport, used as the protocol reference. The frames above are from the
+reporter's captures in #543.
+
 ### 8BitDo Ultimate 2 Wireless (DInput)
 
 **Connection:** 2.4 GHz receiver or Bluetooth, after starting the controller with **B**
