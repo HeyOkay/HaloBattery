@@ -297,6 +297,7 @@ MESSAGES = {
     "settings.project": "GitHub ページ",
     "settings.website": "ウェブサイト",
     "settings.discord": "Discord コミュニティ",
+    "settings.support_kofi": "Ko-fi で応援する",
     "settings.issue": "問題を報告",
     "settings.quit": "HaloBatteryを終了",
     "settings.saved": "変更はすぐに適用されます",

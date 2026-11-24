@@ -369,5 +369,6 @@ MESSAGES = {
     "provider.msi": "Myszy MSI",
     "settings.website": "Strona internetowa",
     "settings.discord": "Społeczność na Discordzie",
+    "settings.support_kofi": "Wesprzyj na Ko-fi",
     "settings.iconify_saved_unavailable": "Nie udało się zweryfikować zapisanej ikony niestandardowej. Twój wybór został zachowany, ale wyświetlana jest ikona domyślna. Otwórz Ustawienia > Urządzenia, aby wybrać ją ponownie lub przywrócić ikonę domyślną.",
 }
