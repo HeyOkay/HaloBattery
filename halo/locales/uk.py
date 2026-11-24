@@ -145,6 +145,7 @@ MESSAGES = {
     "provider.mchose_kb": "Клавіатури MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Клавіатури MonsGeek",
+    "provider.royuan": "Клавіатури ROYUAN",
     "provider.rapoo": "Миші та клавіатури Rapoo",
     "provider.shield": "Контролери NVIDIA SHIELD",
     "provider.skullcandy": "Гарнітури Skullcandy",

@@ -156,6 +156,7 @@ MESSAGES = {
     "provider.mchose_kb": "Клавиатуры MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Клавиатуры MonsGeek",
+    "provider.royuan": "Клавиатуры ROYUAN",
     "provider.redsquare": 'Клавиатура Red Square Alumix TKL',
     "provider.msi": "Беспроводные устройства MSI",
     "provider.rapoo": "Мыши и клавиатуры Rapoo",

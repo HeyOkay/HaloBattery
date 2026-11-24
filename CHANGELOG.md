@@ -95,6 +95,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- ROYUAN 2.4 GHz keyboards (`3151:4011` receiver, reported on an Epomaker TH80 ISO):
+  read the receiver's `0xF7` status feature report - keyboard level, link byte and
+  device type - from the exchange documented and hardware-measured in
+  `dniminenn/sharkfin` (GPL-3.0, protocol reference only). No charging flag. Unverified
+  in this app - a test build is with the reporter of
+  [#560](https://github.com/HeyOkay/HaloBattery/issues/560).
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

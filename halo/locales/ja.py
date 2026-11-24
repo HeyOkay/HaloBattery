@@ -158,6 +158,7 @@ MESSAGES = {
     "provider.mchose_kb": "MCHOSE キーボード",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "MonsGeek キーボード",
+    "provider.royuan": "ROYUAN キーボード",
     "provider.redsquare": 'Red Square Alumix TKL キーボード',
     "provider.msi": "MSI ワイヤレスデバイス",
     "provider.rapoo": "Rapoo マウス・キーボード",

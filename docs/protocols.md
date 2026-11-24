@@ -475,6 +475,25 @@ The original reading was confirmed by the reporter. The online check follows
 the driver's polarity, which a real ROYUAN receiver reply with its keyboard in
 use also shows (`00 64 00 00 01 01 01` after the report id, #372); it sends no
 new hardware commands.
+### ROYUAN 2.4 GHz keyboards (3151:4011)
+
+**Connection:** `3151:4011` receiver ("2.4G Wireless Keyboard"), interface 2, `FFFF:0002`.
+
+The receiver answers a status request itself, so a keyboard's level is read without
+relaying anything to the keyboard. [`dniminenn/sharkfin`](https://github.com/dniminenn/sharkfin)
+documents the exchange in `docs/PROTOCOL.md` and measured it on this receiver id with a
+paired keyboard: a 64-byte feature report (report id 0) on `FFFF:0002`, request `F7` with
+a bit7 checksum (`FF - sum`) at payload byte 7. The reply carries the keyboard level at
+payload byte 1, the keyboard link byte at 3 (zero while online - the polarity the
+MonsGeek driver reads too), and the device type at 6 (1 keyboard, 2 mouse, 3 both). A
+level of zero is the receiver answering before the keyboard has reported, not a reading.
+The status carries no charging flag, so `charging_known` stays False. Only that receiver
+id and collection are claimed, and the request is read-only. sharkfin is GPL-3.0 and is
+used as the protocol reference only; no code is taken from it. Reported on an Epomaker
+TH80 ISO in [#560](https://github.com/HeyOkay/HaloBattery/issues/560); the same receiver
+ships with other ROYUAN-built boards, so the icon names the receiver family. **Unverified
+in this app**: a test build is with the reporter of #560.
+
 ### Inphic and Attack Shark mice (1D57 receivers)
 
 **Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)

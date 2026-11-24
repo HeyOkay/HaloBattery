@@ -167,6 +167,7 @@ MESSAGES = {
     "provider.mchose_kb": "Teclados MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Teclados MonsGeek",
+    "provider.royuan": "Teclados ROYUAN",
     "provider.redsquare": 'Teclado Red Square Alumix TKL',
     "provider.msi": "Dispositivos inalámbricos MSI",
     "provider.rapoo": "Ratones y teclados Rapoo",
