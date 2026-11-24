@@ -8,7 +8,7 @@ Halo Battery: a Windows tray app (Python) that shows the battery level of wirele
 - `providers/`: one module per protocol family (`base.py` is the interface). A new device goes into the existing provider of its protocol; a new provider only for a new protocol. A new provider must be:
   - imported in `providers/__init__.py`;
   - added to `make_providers()` and `PROVIDER_LABELS` in `halo_battery.pyw`;
-  - given a `provider.*` key in all catalogs in `halo/locales/` (`en es fr ja kk pl ru uk zh_CN zh_TW`). The catalogs must keep identical keys.
+  - given a `provider.*` key in all catalogs in `halo/locales/` (`en es fr ja kk pl pt ru uk zh_CN zh_TW`). The catalogs must keep identical keys.
 - `halo/`: app modules (i18n, icons, flyout, history, updates, whatsnew, winevents) and `locales/`.
 - `tests/`: `unittest`, with fake HID devices. No hardware, no network.
 - `docs/`: `devices.md` (support table), `protocols.md` (how each device is read, with source), `features.md`, `credits.md`.

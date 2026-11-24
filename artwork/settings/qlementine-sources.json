@@ -7,6 +7,10 @@
     "discord-16": {
       "source": "https://api.iconify.design/qlementine-icons/discord-16.svg",
       "sha256": "7e743b4d8b96afcd8fb61816cbf20a62e437d2e8c85b7cbe13bfb310828f0483"
+    },
+    "coffee-cup-16": {
+      "source": "https://api.iconify.design/qlementine-icons/coffee-cup-16.svg",
+      "sha256": "196b918b0aac338663cda8f19b0e0b04b16118ccae9f53fd9713ee7bb2b5585b"
     }
   }
 }

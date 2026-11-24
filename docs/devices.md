@@ -25,6 +25,7 @@
 | [CHERRY MX 3.0S Wireless](protocols.md#cherry-mx-30s-wireless) | 2.4 GHz receiver or USB cable | unverified |
 | [Machenike L7 Arctic / L7 Mix](protocols.md#machenike-l7) | 2.4 GHz receiver or USB cable | unverified |
 | [MOONDROP GM01 Pro](protocols.md#moondrop-gm01-pro) | 2.4 GHz dongle or USB cable | unverified |
+| [MSI VERSA PRO WIRELESS / STRIKE PRO WIRELESS](protocols.md#msi-versa-pro-wireless-and-strike-pro-wireless) | 2.4 GHz receiver or USB cable | yes (level and external power state, contributor hardware) |
 | [MSI VERSA 300 ELITE, Clutch GM31 / GM41](protocols.md#msi-versa-300-elite-clutch-gm31-gm41) | 2.4 GHz receiver or USB cable | unverified |
 | [Ninjutso Sora V2; Sprime PM1](protocols.md#ninjutso-sora-v2-sprime-pm1) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
@@ -75,6 +76,7 @@
 | [Logitech MX Revolution](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | 2.4 GHz receiver (`046D:C525`) | yes (reporter confirmed) |
 | [MCHOSE A5 Pro Max](protocols.md#mchose-a5-pro-max) | 2.4 GHz receiver or USB cable | yes |
 | [MCHOSE A7 V2 Ultra](protocols.md#mchose-a7-v2-ultra) | 2.4 GHz receiver | no |
+| [MCHOSE A7 V2 Pro](protocols.md#mchose-a7-v2-pro) | 2.4 GHz receiver (`3837:100A`) or USB cable (`3837:4018`) | level and charging confirmed on one unit |
 | [MCHOSE G7](protocols.md#mchose-g7) | USB (chip 'YJX-CHIP') | yes |
 | [Attack Shark R5 Ultra](protocols.md#attack-shark-r5-ultra) | 2.4 GHz receiver (373E:0047) | yes (level confirmed; charging unverified) |
 | [Attack Shark X820 Ultra](protocols.md#attack-shark-r5-ultra) | 2.4 GHz receiver (3151:5006) | yes (level confirmed; charging unknown) |

@@ -8,8 +8,9 @@ The native WinUI 3 companion renders these outlines as vector geometry in
 `ui/HaloBattery.Settings/Lucide.cs`. The Python backend supplies tray preview
 images separately. Settings do not use a Pillow glyph atlas.
 
-The Discord shortcut uses the Qlementine `discord-16` outline. Its original SVG,
-source URL and SHA-256 are recorded in `qlementine-sources.json`. The MIT license
+The Discord and Ko-fi shortcuts use the Qlementine `discord-16` and
+`coffee-cup-16` outlines. Their original SVGs, source URLs and SHA-256 are
+recorded in `qlementine-sources.json`. The MIT license
 is included in [`qlementine-icons-LICENSE.txt`](../../docs/licenses/qlementine-icons-LICENSE.txt)
 and bundled with both the app and its native settings companion.
 
