@@ -57,6 +57,13 @@ else:
     # must not override its bundled packages (for example an older halo/ folder).
     sys.path.insert(0, BASE_DIR)
 
+# Disposable icon work must not initialize profiles, UI, providers or app mutexes.
+if "--iconify-worker" in sys.argv[1:]:
+    if sys.argv[1:] != ["--iconify-worker"]:
+        raise SystemExit(2)
+    from halo.iconify_worker import main as _iconify_worker_main
+    raise SystemExit(_iconify_worker_main())
+
 # Explicit diagnostics dispatch before profiles, logging, UI or HID imports.
 from halo import device_diagnostics as _device_diagnostics
 _diagnostic_exit = _device_diagnostics.dispatch(sys.argv[1:])
@@ -315,7 +322,7 @@ PROVIDER_LABELS = {
     "mchose_kb": "MCHOSE keyboards",
     "mchose_v9": "MCHOSE V9 Pro",
     "monsgeek": "MonsGeek keyboards",
-    "msi": "MSI mice",
+    "msi": "MSI wireless devices",
     "nintendo": "Nintendo Switch controllers",
     "ninjutso_sora_v3": "Ninjutso Sora V3",
     "nzxt": "NZXT mice",

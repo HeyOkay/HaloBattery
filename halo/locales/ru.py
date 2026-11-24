@@ -157,7 +157,7 @@ MESSAGES = {
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "Клавиатуры MonsGeek",
     "provider.redsquare": 'Клавиатура Red Square Alumix TKL',
-    "provider.msi": "Мыши MSI",
+    "provider.msi": "Беспроводные устройства MSI",
     "provider.rapoo": "Мыши и клавиатуры Rapoo",
     "provider.shield": "Контроллеры NVIDIA SHIELD",
     "provider.skullcandy": "Гарнитуры Skullcandy",

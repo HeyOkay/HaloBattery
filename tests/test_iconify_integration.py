@@ -168,6 +168,7 @@ class CustomSelectionTests(HideRenameTestCase):
         app = make_app({"custom_icons":{}}); app.bt_cache=[]; app.hid_results=[]
         app.apply([dev()]); model=SettingsController(app)
         model._catalog=Mock()
+        model.icon_catalog=Mock(return_value=model._catalog)
         asset=SimpleNamespace(id="a"*64,icon_id="lucide:mouse",glyph=Glyph())
         return app,model,asset
 

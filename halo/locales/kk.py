@@ -203,7 +203,7 @@ MESSAGES = {
     'provider.machenike': 'Machenike L7',
     'provider.mchose_k99': 'MCHOSE K99 V3',
     'provider.moondrop': 'MOONDROP GM01 Pro',
-    'provider.msi': 'MSI тінтуірлері',
+    'provider.msi': 'MSI сымсыз құрылғылары',
     'provider.ninjutso_sprime': 'Ninjutso / Sprime тінтуірлері',
     'provider.redsquare': 'Red Square Alumix TKL пернетақтасы',
     'provider.royal_kludge': 'Royal Kludge MG6 Pro',
