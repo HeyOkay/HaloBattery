@@ -27,6 +27,17 @@ def raw_snapshot(*args, **kwargs):
     return json.dumps(snapshot(*args, **kwargs))
 
 
+def phone_snapshot(level=75, *, connected=True, pnp=True, error=None):
+    data = snapshot(level, connected=connected, pnp=pnp, error=error)
+    data["devs"][0]["name"] = "Phone"
+    data["aep"][0]["cls"] = 0x0203     # major class 2, smartphone
+    return data
+
+
+def raw_phone(*args, **kwargs):
+    return json.dumps(phone_snapshot(*args, **kwargs))
+
+
 class BluetoothProviderTests(unittest.TestCase):
     def test_level_boundaries_and_invalid_values(self):
         for value in (0, 100, 55, "75"):
@@ -124,6 +135,49 @@ class BluetoothProviderTests(unittest.TestCase):
         self.assertEqual(len(first), 1)
         self.assertFalse(first[0].online)
         self.assertEqual(provider.handle(raw_snapshot(connected=False)), [])
+
+    def test_phone_connection_flap_keeps_the_live_icon_during_the_grace(self):
+        now = [100.0]
+        provider = bluetooth.BluetoothProvider(clock=lambda: now[0])
+        first = provider.handle(raw_phone(75))[0]
+        self.assertTrue(first.online)
+        self.assertEqual(first.kind, "phone")
+
+        now[0] += 1
+        flap = provider.handle(raw_phone(connected=False))[0]
+        self.assertTrue(flap.online)
+        self.assertFalse(flap.polling_stale)
+        self.assertEqual(flap.level, 75)
+        self.assertFalse(flap.charging_known)
+        self.assertEqual(provider._misses[KEY], 0)
+
+        now[0] += 29
+        still = provider.handle(raw_phone(connected=False))[0]
+        self.assertTrue(still.online)
+        self.assertFalse(still.polling_stale)
+
+        now[0] += 1
+        stale = provider.handle(raw_phone(connected=False))[0]
+        self.assertFalse(stale.online)
+        self.assertTrue(stale.polling_stale)
+        self.assertEqual(provider._misses[KEY], 1)
+
+    def test_phone_returning_within_the_grace_restarts_it(self):
+        now = [100.0]
+        provider = bluetooth.BluetoothProvider(clock=lambda: now[0])
+        provider.handle(raw_phone())
+        now[0] += 1
+        provider.handle(raw_phone(connected=False))
+        now[0] += 10
+        live = provider.handle(raw_phone())[0]
+        self.assertTrue(live.online)
+        self.assertNotIn(KEY, provider._off_since)
+
+        now[0] += 1
+        flap = provider.handle(raw_phone(connected=False))[0]
+        self.assertTrue(flap.online)
+        now[0] += 29
+        self.assertTrue(provider.handle(raw_phone(connected=False))[0].online)
 
     def test_connection_fallback_precedence_is_preserved(self):
         cases = [

@@ -72,10 +72,15 @@ XBOX_BT_HID = {"vendor_id": 0x045E, "product_id": 0x02FD, "interface_number": -1
 
 class ProviderTest(unittest.TestCase):
     def setUp(self):
-        self._saved = (X.load_xinput, X.hidlist, X.wgi.query)
+        self._saved = (X.load_xinput, X.hidlist, X.wgi.query,
+                       X.eightbitdo_ultimate2.read_connected)
+        # the Ultimate 2's dongle query opens real HID devices; tests that want an
+        # answer set their own
+        X.eightbitdo_ultimate2.read_connected = lambda diag: None
 
     def tearDown(self):
-        X.load_xinput, X.hidlist, X.wgi.query = self._saved
+        (X.load_xinput, X.hidlist, X.wgi.query,
+         X.eightbitdo_ultimate2.read_connected) = self._saved
 
     def poll(self, slots, reports, hid_devices=(), paths=()):
         X.load_xinput = lambda: FakeDll(slots)

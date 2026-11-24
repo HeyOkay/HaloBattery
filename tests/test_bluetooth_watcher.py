@@ -12,15 +12,58 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+import json
 import os
 import sys
 import threading
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from providers import bluetooth  # noqa: E402
+
+MAC = "AABBCCDDEEFF"
+ROOT = "BTHENUM\\DEV_" + MAC + "\\7&1"
+
+
+def phone_snapshot(connected):
+    return json.dumps({"devs": [{"id": ROOT, "name": "Phone", "status": "OK"}],
+                       "props": [{"id": ROOT, "key": bluetooth.K_BAT, "data": 75},
+                                 {"id": ROOT, "key": bluetooth.K_CONN, "data": connected}],
+                       "aep": [{"addr": MAC, "conn": connected, "le": False,
+                                "err": None, "cls": 0x0203}],
+                       "aep_error": None, "roots": [{"le": False, "mac": MAC}]})
+
+
+class FakeClock:
+    def __init__(self, start=1000.0):
+        self.t = start
+
+    def __call__(self):
+        return self.t
+
+
+class ScriptedQueue:
+    """Empty gets advance the fake clock, so the watcher's 1 s timeout becomes a tick."""
+
+    def __init__(self, clock, events, until, stop):
+        self.clock, self.events, self.until, self.stop = clock, list(events), until, stop
+
+    def put(self, item):
+        pass
+
+    def empty(self):
+        return False
+
+    def get(self, timeout=None):
+        if self.events and self.events[0][0] <= self.clock.t:
+            return self.events.pop(0)[1].encode()
+        self.clock.t += timeout if timeout is not None else 1.0
+        if self.clock.t >= self.until:
+            self.stop.set()
+        raise bluetooth.queue.Empty
 
 
 class BlockingStdout:
@@ -138,6 +181,37 @@ class WatcherTest(unittest.TestCase):
     def test_the_timeout_clears_the_scripts_own_cadence(self):
         # the watch script emits at least once every 60 s; the timeout must be well clear
         self.assertGreater(self._saved[1], 60.0)
+
+    def test_phone_grace_expiry_is_published_between_child_lines(self):
+        clock = FakeClock()
+        start = clock.t
+        updates = []
+        self.make_stdout = lambda: BlockingStdout([])   # lines come from the scripted queue
+        provider = bluetooth.BluetoothProvider(clock=clock)
+        w = bluetooth.BluetoothWatcher(provider,
+                                       lambda devices: updates.append((clock.t, devices)),
+                                       clock=clock)
+        q = ScriptedQueue(clock,
+                          [(start, phone_snapshot(True)),
+                           (start + 2, phone_snapshot(False))],
+                          until=start + 33, stop=w._stop)
+        try:
+            with mock.patch.object(bluetooth.queue, "Queue", lambda: q), \
+                    mock.patch.object(bluetooth, "log"):
+                w._run()
+        finally:
+            w.stop()
+            if self.procs:
+                self.procs[-1].stdout.close()
+
+        by_time = dict(updates)
+        self.assertIn(start, by_time)
+        self.assertIn(start + 2, by_time)          # the disconnect line, still inside the grace
+        self.assertIn(start + 32, by_time)         # the expiry publication, before the next line
+        phone = by_time[start + 32][0]
+        self.assertEqual((phone.key, phone.level, phone.online),
+                         ("bt:" + MAC, 75, False))
+        self.assertFalse(w.failed)
 
 
 if __name__ == "__main__":
