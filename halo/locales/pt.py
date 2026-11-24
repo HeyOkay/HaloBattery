@@ -78,6 +78,7 @@ MESSAGES = {
     "provider.am_infinity": "AM Infinity 8K (Angry Miao)",
     "provider.astro": "Astro A50",
     "provider.asus": "Mouses, teclados e headsets ASUS ROG / TUF",
+    "provider.attackshark_r11": "Attack Shark R11 Ultra",
     "provider.audeze": "Audeze Maxwell",
     "provider.barracuda": "Razer Barracuda Pro",
     "provider.barracuda_x": "Razer Barracuda X",

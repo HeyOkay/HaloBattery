@@ -93,6 +93,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
+  (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
+  level and charging state (#525).
+  While charging it keeps the higher of the pre-cable level and the reply (the
+  mouse can report a few points lower, and a plug-in poll can catch the drop).
+  Reset that hold after receiver loss or a long gap; allow 30 seconds of query
+  and scheduling delay beyond the five-minute quiet interval for fresh replies.
 - Razer Basilisk V4 Pro (`1532:00E3` on its 2.4 GHz receiver, `1532:00E2` on
   its USB cable): added to the Razer mice table, so the receiver is no longer
   skipped as an unknown device and the cable identity reports charging through

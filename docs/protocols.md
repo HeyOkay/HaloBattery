@@ -668,6 +668,21 @@ firmware command. **Confirmed on hardware** by the reporter of
 and showed 100 %; its wired id (`3151:5002`) does not carry a battery command and
 is not used. This keyboard status has no charging flag, so charging stays unknown.
 
+### Attack Shark R11 Ultra
+
+**Connection:** 2.4 GHz CompX 8K receiver (3554:FB44)
+
+The pre-cable charging level belongs to one observed session. Receiver loss or
+a silent poll more than 300 seconds after the last valid reply drops it. A fresh reply can retain
+the hold for up to 330 seconds between successful reads, allowing 30 seconds for
+query and scheduling delays beyond the five-minute fullscreen quiet interval.
+Longer gaps start a new session using the fresh reply's level. Shorter unobserved
+session changes cannot be distinguished by this timing policy.
+
+The receiver publishes the same `ff02:0002` CompX control collection as the LAMZU / Pulsar mice above - next to `ff03` / `ff04` / `ff05` vendor pages - and is read with the same 17-byte report-0x08 frame: command 0x04 asks for the power details, the level is in byte 6, the on-cable flag in byte 7, and byte 16 carries the checksum (0x55 minus the sum of bytes 0-15). Nothing is written to the mouse or keyboard collections; only that one question goes to the control collection. A frame with a wrong checksum, or a level outside 0-100, is refused rather than shown.
+
+Reported in [#525](https://github.com/HeyOkay/HaloBattery/issues/525): the id and the collection are claimed from the reporter's diagnostics. Confirmed on that unit against the vendor software at 90 % and 100 %; the charging flag held at both levels, the level stayed put instead of dropping on the cable, and the state cleared within a poll or two after unplugging.
+
 ### iRocks M31R
 
 **Connection:** 2.4 GHz receiver (14A5:C009) and USB cable (14A5:C010)
