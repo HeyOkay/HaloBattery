@@ -335,18 +335,24 @@ def group_devices(data: dict, diag: List[str],
 # icon is removed. Only successful snapshots advance this counter; query failures
 # retain the previous reading as last known without implying disconnection.
 MISS_LIMIT = 2
+# Phones routinely drop the WinRT connection flag for a few seconds while the
+# phone dozes. Do not grey or remove a phone's icon for such a flap: the grace
+# starts at the first missing snapshot and is cancelled by the next live one.
+PHONE_DISCONNECT_GRACE = 30.0
 
 
 class BluetoothProvider(Provider):
     name = "bluetooth"
 
-    def __init__(self, native: bool = False):
+    def __init__(self, native: bool = False, clock=None):
         # native: read one-shot snapshots in-process (bluetooth_native) before trying PowerShell
         self.native = native
+        self._clock = clock if clock is not None else time.monotonic
         self._diag: List[str] = []
         self._shown: Dict[str, DeviceStatus] = {}   # key -> last shown state
         self._misses: Dict[str, int] = {}
         self._levels: Dict[str, int] = {}           # MAC -> last known battery level
+        self._off_since: Dict[str, float] = {}      # phone key -> first missing snapshot
         # The cache above has one owner at a time: the watcher that claimed it, or None for
         # one-shot polls. A watcher the app has retired can still come back from a Windows
         # call that blocked; its snapshot must not rewrite the cache (#513 review).
@@ -440,10 +446,21 @@ class BluetoothProvider(Provider):
         for key, st in now.items():
             self._shown[key] = st
             self._misses[key] = 0
+            self._off_since.pop(key, None)
         out = list(now.values())
         for key in list(self._shown):
             if key in now:
                 continue
+            shown = self._shown[key]
+            if shown.kind == "phone":
+                now_mono = self._clock()
+                since = self._off_since.setdefault(key, now_mono)
+                if now_mono - since < PHONE_DISCONNECT_GRACE:
+                    self._diag.append(f"[Bluetooth] {shown.name}: phone connection flap, "
+                                      f"keeping the icon ({now_mono - since:.0f} s of "
+                                      f"{PHONE_DISCONNECT_GRACE:.0f} s grace)")
+                    out.append(replace(shown, charging=False, charging_known=False))
+                    continue
             self._misses[key] = self._misses.get(key, 0) + 1
             if self._misses[key] < MISS_LIMIT:
                 self._diag.append(f"[Bluetooth] {self._shown[key].name}: missing from the reply, "
@@ -454,6 +471,7 @@ class BluetoothProvider(Provider):
                                   f"({self._misses[key]} misses in a row)")
                 self._shown.pop(key, None)
                 self._misses.pop(key, None)
+                self._off_since.pop(key, None)
         return out
 
     def parse(self, raw: str) -> Optional[List[DeviceStatus]]:
