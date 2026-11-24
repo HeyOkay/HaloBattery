@@ -181,6 +181,28 @@ class PollTest(unittest.TestCase):
                          [(None, False, False)])
         self.assertIn("no reply on any collection", "\n".join(self.provider.diagnostics()))
 
+    def test_the_usb_cable_is_charging_with_the_last_level(self):
+        # #505: on the PC cable the headset enumerates as 36eb:0087 and the
+        # dongle's link goes down; the wired id's presence is the charging signal
+        self.poll([entry()], FakeDevice([link(True), battery(99)]))
+        dev = FakeDevice([])
+        out = self.poll([entry(pid=0x0087)], dev)
+        self.assertEqual([(s.key, s.level, s.charging, s.online, s.charging_known) for s in out],
+                         [("akko:1087", 99, True, True, True)])
+        self.assertEqual([], dev.sent)
+        self.assertIn("on the USB cable: charging with the last level",
+                      "\n".join(self.provider.diagnostics()))
+
+    def test_the_usb_cable_alone_shows_charging_without_a_number(self):
+        out = self.poll([entry(pid=0x0087)])
+        self.assertEqual([(s.level, s.charging, s.online) for s in out],
+                         [(None, True, True)])
+        self.assertIn("no level yet", "\n".join(self.provider.diagnostics()))
+
+    def test_the_cable_wins_when_the_dongle_is_still_enumerated(self):
+        out = self.poll([entry(), entry(pid=0x0087)])
+        self.assertEqual([(s.level, s.charging, s.online) for s in out], [(None, True, True)])
+
     def test_an_open_error_does_not_raise(self):
         dev = FakeDevice([], open_error=OSError("busy"))
         out = self.poll([entry()], dev)

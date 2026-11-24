@@ -17,9 +17,17 @@ captured with USBPcap in #505:
 Byte 4 is the level, a plain 0-100 percentage - the two captures read 100 and
 99 while the vendor app showed the same numbers. Byte 3 is 0 whenever a level
 came back and 1 in the one phase where the vendor app had no value either; its
-meaning is not established, so it is logged only. The exchange carries no
+meaning is not established, so it is logged only. The dongle exchange carries no
 charging flag, and the vendor app did not show a charging state on the dongle
 either (#505), so `charging_known` is False rather than a guess.
+
+Charging is on the PC cable: the headset then enumerates as `36eb:0087`
+(`Akko S9 Ultra_USB`) and the dongle's link goes down (`02 12 01 01 00`). The
+vendor app shows that wired device as a separate *Charging* card without a
+percentage, and its own `02 12` reply carries `BC` at byte 4 - outside the
+1-100 range - so it is not decoded here. The wired id's presence is the
+charging signal: the icon keeps the last level from the dongle and shows
+charging. A wall charger does not enumerate and cannot be seen.
 
 Every frame ends with a two-byte trailer over its first 62 bytes. It was
 fitted to all 16 distinct frames in the two captures - the all-zero `02 10 01 00`
@@ -46,6 +54,7 @@ except Exception:                       # pragma: no cover - only without the pa
 
 VID = 0x36EB
 PID = 0x1087
+CABLE_PID = 0x0087
 NAME = "Akko S9 Ultra"
 KEY = f"akko:{PID:04x}"
 
@@ -139,6 +148,14 @@ class AkkoS9Provider(Provider):
             log.warning("hid.enumerate(akko): %s", e)
             return []
         mine = [d for d in infos if d.get("product_id") == PID]
+        cable = [d for d in infos if d.get("product_id") == CABLE_PID]
+        if cable:
+            level = self._kept_level()
+            self._diag.append(f"[Akko] pid={CABLE_PID:04x} 'Akko S9 Ultra_USB' "
+                              "on the USB cable: charging"
+                              + (" with the last level" if level is not None
+                                 else ", no level yet"))
+            return [self._status(level, online=True, charging=True)]
         if not mine:
             return []
         self._diag.append(f"[Akko] pid={PID:04x} '{NAME}'")
@@ -229,9 +246,9 @@ class AkkoS9Provider(Provider):
         return None
 
     @staticmethod
-    def _status(level: Optional[int], online: bool) -> DeviceStatus:
-        return DeviceStatus(KEY, NAME, level, False, online, "akko_s9",
-                            kind="headset", charging_known=False)
+    def _status(level: Optional[int], online: bool, charging: bool = False) -> DeviceStatus:
+        return DeviceStatus(KEY, NAME, level, charging, online, "akko_s9",
+                            kind="headset", charging_known=charging)
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)
