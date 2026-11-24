@@ -21,10 +21,10 @@ level and the charging reply, then accepts fresh replies again once the cable
 is out.
 
 The hold belongs to one receiver session. It is dropped when the receiver
-disappears, when a silent poll outlasts ``SESSION_GAP``, or when a fresh reply
-arrives after a gap longer than ``SESSION_GAP``. The fullscreen quiet cadence is
-exactly ``SESSION_GAP`` (300 s), so that gap is still the same session; only a
-strictly longer gap starts a new one.
+disappears, when a silent poll outlasts ``ASLEEP_KEEP`` (300 s), or when a fresh
+reply arrives after ``SESSION_GAP`` (330 s). Fresh replies get 30 s of scheduling
+and query tolerance beyond the 300 s fullscreen quiet interval. This tolerance
+does not keep a silent receiver's old reading alive longer.
 
 **Confirmed on hardware** in #525: the level matched the vendor software at
 90 % and 100 %, and the charging state held at both levels and cleared within a
@@ -57,10 +57,11 @@ READ_ATTEMPTS = 6
 READ_TIMEOUT_MS = 250
 DRAIN_TIMEOUT_MS = 30
 ASLEEP_KEEP = 300               # s: then the icon goes away instead of greying forever
-# Fresh replies farther apart than this are a new session. Fullscreen quiet
-# polling runs every ASLEEP_KEEP seconds, so the comparison is strict: 300 s
-# still carries the pre-cable hold, 301 s does not.
-SESSION_GAP = ASLEEP_KEEP
+# The quiet interval is a wait, not an exact query-completion cadence. Allow
+# bounded worker-queue/query/UI overhead for fresh replies only; silence still
+# expires at ASLEEP_KEEP. Unobserved gaps within this allowance cannot establish
+# a new session, but longer gaps must not reuse the pre-cable level.
+SESSION_GAP = ASLEEP_KEEP + 30
 
 
 class AttackSharkR11Provider(Provider):
@@ -150,7 +151,7 @@ class AttackSharkR11Provider(Provider):
         else:
             self._diag.append("  no ff02:0002 control collection")
         last = self._last
-        if last is not None and time.time() - last[2] <= SESSION_GAP:
+        if last is not None and time.time() - last[2] <= ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, last[0], last[1], False,
                                  "attackshark_r11", kind="mouse", wake_on_input=True)]
         # The silence outlasted the greyed icon: the session is over, so the

@@ -173,10 +173,46 @@ class PollTest(unittest.TestCase):
         self.poll(entries(), [frame(100, False)])
         self.poll(entries(), [frame(95, True)])
 
-        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP,
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.ASLEEP_KEEP,
                                        sleep=lambda s: None)
         out = self.poll(entries(), [frame(95, True)])
         self.assertEqual((out[0].level, out[0].charging), (100, True))
+
+    def test_quiet_poll_completion_delays_preserve_the_charging_hold(self):
+        # The app waits 300 s, then queues/reads the next reply. Its completion
+        # can be later without a disconnect or a new charging session.
+        for gap in (300.001, 300.1, 301.0, 310.0, 330.0):
+            with self.subTest(gap=gap):
+                self.provider = A.AttackSharkR11Provider()
+                A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+                self.poll(entries(), [frame(100, False)])
+                self.poll(entries(), [frame(95, True)])
+                A.time = types.SimpleNamespace(time=lambda: 1000.0 + gap,
+                                               sleep=lambda s: None)
+                out = self.poll(entries(), [frame(95, True)])
+                self.assertEqual((out[0].level, out[0].charging), (100, True))
+
+    def test_a_fresh_reply_beyond_the_tolerance_uses_its_own_level(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [frame(100, False)])
+        self.poll(entries(), [frame(95, True)])
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP + 0.001,
+                                       sleep=lambda s: None)
+        out = self.poll(entries(), [frame(20, True)])
+        self.assertEqual((out[0].level, out[0].charging), (20, True))
+
+    def test_silence_expiry_does_not_borrow_the_fresh_reply_tolerance(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [frame(100, False)])
+        self.poll(entries(), [frame(95, True)])
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.ASLEEP_KEEP + 0.001,
+                                       sleep=lambda s: None)
+        self.assertEqual(self.poll(entries(), []), [])
+        self.assertIsNone(self.provider._last)
+        self.assertIsNone(self.provider._precharge)
+        A.time = types.SimpleNamespace(time=lambda: 1310.0, sleep=lambda s: None)
+        out = self.poll(entries(), [frame(20, True)])
+        self.assertEqual((out[0].level, out[0].charging), (20, True))
 
     def test_a_first_reading_while_charging_uses_the_reported_level(self):
         out = self.poll(entries(), [frame(95, True)])
@@ -204,11 +240,11 @@ class PollTest(unittest.TestCase):
         self.assertEqual((out[0].level, out[0].online, out[0].wake_on_input),
                          (85, False, True))
 
-    def test_a_silent_poll_at_exactly_the_session_gap_keeps_the_greyed_level(self):
+    def test_a_silent_poll_at_exactly_asleep_keep_keeps_the_greyed_level(self):
         A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
         self.poll(entries(), [REPLY_85_CHARGING])
 
-        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP,
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.ASLEEP_KEEP,
                                        sleep=lambda s: None)
         out = self.poll(entries(), [])
         self.assertEqual(len(out), 1)
