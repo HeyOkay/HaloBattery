@@ -191,6 +191,9 @@ class PulsarTableTest(unittest.TestCase):
     def test_lookup(self):
         self.assertEqual("Pulsar X2N CrazyLight Mini", M.model_name(87, 26))
         self.assertEqual("Pulsar X2 CrazyLight Mini", M.model_name(87, 1))
+        self.assertEqual("Pulsar X2N CrazyLight 2 Mini", M.model_name(87, 137))
+        for mid in (138, 150, 151):
+            self.assertEqual("Pulsar X2N CrazyLight 2 Medium", M.model_name(87, mid))
         self.assertIsNone(M.model_name(87, 0))
         self.assertIsNone(M.model_name(87, 111))
         self.assertIsNone(M.model_name(86, 26))

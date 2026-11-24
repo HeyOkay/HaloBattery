@@ -101,10 +101,11 @@ Pulsar X2 V3 Mini uses the Sonix feature protocol from jonkristian/pulsar-x3-pyt
 
 Pulsar's 8K Dongle Gen.2 (3710:5406) is shared by its XS-1 generation, so the mouse is
 asked for its model: command 0x10 in the same frame, which DenzoNL/lamzuctl lists as
-"16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c) and Pulsar's web
-driver (bbb.pulsar.gg/cMouse) sends before it names the device. The reply has status 0
-in byte 2, the customer id in byte 6 and the model id in byte 7; providers/pulsar_models.py
-turns them into a name. It is a read, asked once per receiver after a valid power reply.
+"16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c). The reply
+layout is from the hardware capture below: status 0 in byte 2, the customer id in byte 6
+and the model id in byte 7. The name table, and the rule that a name is entry
+(model id - 1) under the customer id, are from Pulsar's web driver (bbb.pulsar.gg/cMouse);
+providers/pulsar_models.py holds the table. It is a read, asked once per receiver after a valid power reply.
 Confirmed on an X2N CrazyLight Mini through the dongle and on its cable (3710:3510,
 which lists the same ff02:0002 collection): both answered
 08 10 00 00 00 03 57 1a e4 00 .. e5 (customer 87, model 26), and the cable's power

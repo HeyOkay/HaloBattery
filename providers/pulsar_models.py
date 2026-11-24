@@ -10,6 +10,10 @@ and editions of one shape folded into the shape's name. Model ids it only calls
 
 Confirmed on hardware for model id 26 (X2N CrazyLight Mini), through 3710:5406 and on
 its cable 3710:3510; the other names are taken from the table as published.
+
+Three entries carry no size in the file: 102 "X3 Crazylight Desert", 116 "Xlite
+Crazylight Rock" and 117 "X2H Crazylight Volcano". They are listed as Mini here because
+the same colourway also has an entry that says Medium (103, 118, 119).
 """
 from __future__ import annotations
 
@@ -30,6 +34,8 @@ _MODELS = (
     ("Pulsar X2H CrazyLight Medium", (29, 76, 98, 119)),
     ("Pulsar X2N CrazyLight Mini", (25, 26, 105)),
     ("Pulsar X2N CrazyLight Medium", (77, 78, 106)),
+    ("Pulsar X2N CrazyLight 2 Mini", (137,)),
+    ("Pulsar X2N CrazyLight 2 Medium", (138, 150, 151)),
     ("Pulsar X2F CrazyLight", (126,)),
     ("Pulsar X3 CrazyLight Mini", (19, 20, 102)),
     ("Pulsar X3 CrazyLight Medium", (72, 73, 103)),
