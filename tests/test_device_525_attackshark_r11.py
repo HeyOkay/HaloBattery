@@ -157,6 +157,27 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries(), [frame(20, True)])
         self.assertEqual((out[0].level, out[0].charging), (20, True))
 
+    def test_a_fresh_reply_after_a_long_gap_starts_a_new_session(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [frame(100, False)])
+        held = self.poll(entries(), [frame(95, True)])
+        self.assertEqual((held[0].level, held[0].charging), (100, True))
+
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP + 1,
+                                       sleep=lambda s: None)
+        out = self.poll(entries(), [frame(20, True)])
+        self.assertEqual((out[0].level, out[0].charging), (20, True))
+
+    def test_the_hold_survives_the_normal_quiet_poll_gap(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [frame(100, False)])
+        self.poll(entries(), [frame(95, True)])
+
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP,
+                                       sleep=lambda s: None)
+        out = self.poll(entries(), [frame(95, True)])
+        self.assertEqual((out[0].level, out[0].charging), (100, True))
+
     def test_a_first_reading_while_charging_uses_the_reported_level(self):
         out = self.poll(entries(), [frame(95, True)])
         self.assertEqual((out[0].level, out[0].charging), (95, True))
@@ -182,6 +203,16 @@ class PollTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual((out[0].level, out[0].online, out[0].wake_on_input),
                          (85, False, True))
+
+    def test_a_silent_poll_at_exactly_the_session_gap_keeps_the_greyed_level(self):
+        A.time = types.SimpleNamespace(time=lambda: 1000.0, sleep=lambda s: None)
+        self.poll(entries(), [REPLY_85_CHARGING])
+
+        A.time = types.SimpleNamespace(time=lambda: 1000.0 + A.SESSION_GAP,
+                                       sleep=lambda s: None)
+        out = self.poll(entries(), [])
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].level, out[0].online), (85, False))
 
     def test_a_silent_dongle_with_no_history_shows_nothing(self):
         self.assertEqual(self.poll(entries(), []), [])

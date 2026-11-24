@@ -20,6 +20,12 @@ catch a 5-point drop first. The provider publishes the higher of the pre-cable
 level and the charging reply, then accepts fresh replies again once the cable
 is out.
 
+The hold belongs to one receiver session. It is dropped when the receiver
+disappears, when a silent poll outlasts ``SESSION_GAP``, or when a fresh reply
+arrives after a gap longer than ``SESSION_GAP``. The fullscreen quiet cadence is
+exactly ``SESSION_GAP`` (300 s), so that gap is still the same session; only a
+strictly longer gap starts a new one.
+
 **Confirmed on hardware** in #525: the level matched the vendor software at
 90 % and 100 %, and the charging state held at both levels and cleared within a
 poll or two after unplugging. If the dongle stops answering, the diagnostics
@@ -51,6 +57,10 @@ READ_ATTEMPTS = 6
 READ_TIMEOUT_MS = 250
 DRAIN_TIMEOUT_MS = 30
 ASLEEP_KEEP = 300               # s: then the icon goes away instead of greying forever
+# Fresh replies farther apart than this are a new session. Fullscreen quiet
+# polling runs every ASLEEP_KEEP seconds, so the comparison is strict: 300 s
+# still carries the pre-cable hold, 301 s does not.
+SESSION_GAP = ASLEEP_KEEP
 
 
 class AttackSharkR11Provider(Provider):
@@ -124,6 +134,9 @@ class AttackSharkR11Provider(Provider):
             parsed = self._query(picked["path"])
             if parsed is not None:
                 level, charging = parsed
+                if self._last is not None and time.time() - self._last[2] > SESSION_GAP:
+                    self._last = None
+                    self._precharge = None
                 if charging:
                     if self._precharge is None and self._last is not None and not self._last[1]:
                         self._precharge = self._last[0]
@@ -137,7 +150,7 @@ class AttackSharkR11Provider(Provider):
         else:
             self._diag.append("  no ff02:0002 control collection")
         last = self._last
-        if last is not None and time.time() - last[2] < ASLEEP_KEEP:
+        if last is not None and time.time() - last[2] <= SESSION_GAP:
             return [DeviceStatus(KEY, NAME, last[0], last[1], False,
                                  "attackshark_r11", kind="mouse", wake_on_input=True)]
         # The silence outlasted the greyed icon: the session is over, so the
