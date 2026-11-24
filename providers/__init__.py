@@ -78,6 +78,7 @@ from .finalmouse import FinalmouseProvider  # noqa: F401
 from .fractal import FractalProvider  # noqa: F401
 from .atk_keyboard import AtkKeyboardProvider  # noqa: F401
 from .attackshark_x66 import AttackSharkX66Provider  # noqa: F401
+from .attackshark_r11 import AttackSharkR11Provider  # noqa: F401
 from .hyperx_alpha_wireless import HyperXAlphaWirelessProvider  # noqa: F401
 from .jabra import JabraProvider  # noqa: F401
 from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401

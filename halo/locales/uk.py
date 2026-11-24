@@ -108,6 +108,7 @@ MESSAGES = {
     "provider.mchose": "Миші MCHOSE",
     "provider.attackshark_x66": "ATTACKSHARK X66",
     "provider.attackshark_r5": "Attack Shark R5 Ultra",
+    "provider.attackshark_r11": "Attack Shark R11 Ultra",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
     "provider.nintendo": "Контролери Nintendo Switch",
     "provider.playstation": "Контролери PlayStation",
