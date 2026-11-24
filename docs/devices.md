@@ -25,6 +25,7 @@
 | [CHERRY MX 3.0S Wireless](protocols.md#cherry-mx-30s-wireless) | 2.4 GHz receiver or USB cable | unverified |
 | [Machenike L7 Arctic / L7 Mix](protocols.md#machenike-l7) | 2.4 GHz receiver or USB cable | unverified |
 | [MOONDROP GM01 Pro](protocols.md#moondrop-gm01-pro) | 2.4 GHz dongle or USB cable | unverified |
+| [MSI VERSA PRO WIRELESS / STRIKE PRO WIRELESS](protocols.md#msi-versa-pro-wireless-and-strike-pro-wireless) | 2.4 GHz receiver or USB cable | yes (level and external power state, contributor hardware) |
 | [MSI VERSA 300 ELITE, Clutch GM31 / GM41](protocols.md#msi-versa-300-elite-clutch-gm31-gm41) | 2.4 GHz receiver or USB cable | unverified |
 | [Ninjutso Sora V2; Sprime PM1](protocols.md#ninjutso-sora-v2-sprime-pm1) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
