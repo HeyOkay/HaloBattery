@@ -879,9 +879,11 @@ The transaction Lofree's own web driver (hyzen.lofree.tech) uses, on report 0x04
 
 ### Lofree Flow Lite84
 
-**Target:** `05ac:024f`, captured product `2.4G Wireless Receiver`, control
-collection `FF02:0002`. The USB ID is shared with Apple keyboards and AULA F108
-receivers, so a matching ID elsewhere never authorizes a Flow request.
+**Target:** `05ac:024f` (Apple's id, copied by Compx) and `3554:fa0a` (Compx's own
+id, #557), both with captured product `2.4G Wireless Receiver`, control
+collection `FF02:0002`. Both USB ids are shared - `05ac:024f` with Apple
+keyboards and AULA F108 receivers, `3554:fa0a` with every other Compx receiver -
+so a matching ID elsewhere never authorizes a Flow request.
 
 Source: Lofree Control HUB (`lofree.tech/home`, bundle `index-BTVblIUr.js`),
 recorded in [`providers/lofree.py`](../providers/lofree.py) and
@@ -893,8 +895,10 @@ before command `04` supplies the percentage at index 6 and charging flag at 7.
 Only that receiver product and control collection are selected. Unknown output
 caps remain compatible with the previously supported path; known incompatible
 caps refuse the request before opening a device. There is no fallback to another
-collection or to an AULA receiver. Existing community hardware confirmation
-does not represent a new hardware test of this guard.
+collection or to an AULA receiver. **Confirmed on test build 1 by the reporter of
+[#557](https://github.com/HeyOkay/HaloBattery/issues/557)**: with the Compx
+`3554:FA0A` receiver the level showed, charging appeared on the cable, and it
+cleared when unplugged.
 
 ### Logitech G502 LIGHTSPEED, G502 X PLUS
 

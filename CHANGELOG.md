@@ -474,6 +474,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
   ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Lofree Flow Lite84: read the dongle on Compx's own USB id `3554:FA0A` as well as
+  `05AC:024F`, keeping the product-string and FF02:0002 collection guard (#557).
+  Confirmed by the reporter of #557 on test build 1: level, charging on the cable,
+  and the reading cleared when unplugged.
 - Keep Lofree Flow queries on the verified receiver control collection, preventing
   fallback writes to AULA F108 and other devices sharing its USB ID (#413).
 - Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
