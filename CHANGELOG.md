@@ -8,6 +8,21 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Label the MSI provider as wireless devices in Portuguese, including keyboards.
+- Reduce the memory peak when Settings prepares Iconify search: build the name
+  index in one buffer without filling the browsing fingerprint cache.
+- Read the verified registry and icon manifests in small bounded chunks,
+  avoiding large temporary buffers while retaining size and integrity checks.
+- Use UTF-8 on both sides of the Iconify worker pipes so non-ASCII author names,
+  searches and profile paths load correctly on Windows with legacy code pages.
+- Send selected-icon changes as bounded deltas instead of repeating the full
+  list on every browse request; report corrupt registry streams consistently.
+- Reuse verified selected icon masters when reopening the catalog, and release
+  closed Settings sessions without waiting for cyclic garbage collection.
+- Browse and render Iconify candidates in a disposable process, releasing its
+  search indexes and rendering memory when Settings closes. Keep only selected
+  tray artwork in the app, and discard closed Settings preview frames.
+
 - Restrict battery requests to sourced HID control collections, keep confirmed
   cable routes, hold unsourced receiver paths, and restore Barracuda receiver
   mode after failed reads. Correct
@@ -76,6 +91,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Razer Basilisk V4 Pro (`1532:00E3` on its 2.4 GHz receiver, `1532:00E2` on
+  its USB cable): added to the Razer mice table, so the receiver is no longer
+  skipped as an unknown device and the cable identity reports charging through
+  the same read ([#514](https://github.com/HeyOkay/HaloBattery/issues/514)).
+- MCHOSE A7 V2 Pro (`3837:100A` on its receiver, `3837:4018` on its cable):
+  the same 0x06 status read as the A7 V2 Ultra on interface 2 `FF01:0001`.
+  Level and charging confirmed on one unit - 85 %, and charging on the cable.
 - A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
@@ -114,6 +136,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Only the vendor collection is used; the answer has no charging field, so the
   charging state stays unknown. The level is confirmed on the reporters' units;
   ([#520](https://github.com/HeyOkay/HaloBattery/issues/520)).
+- Add battery monitoring for MSI VERSA PRO WIRELESS (`0DB0:1FC6`) and
+  STRIKE PRO WIRELESS (`0DB0:1620`) ([#539](https://github.com/HeyOkay/HaloBattery/issues/539)).
 - MCHOSE G98 Pro (`41E4:2004`) keyboard over the same Sinowealth `13 4A 01`
   command as the K87, with the charging flag read from the reply's high
   nibble. Level and charging confirmed on the reporter's hardware in
@@ -222,6 +246,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Windows language detection and Russian plural forms.
 - Polish interface translation, including Windows language detection and Polish
   plural forms for estimates and device counts.
+- Portuguese interface translation, including Windows language detection and Portuguese plural forms for estimates and device counts.
 - License-only Iconify eligibility without independent brand/logo/Bluetooth
   name filters. Search all reviewed names with 50-candidate pages, round arrow
   and number buttons, predecoded neighboring previews and bounded parallel
@@ -251,7 +276,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
   the 80 × 80 pixel tray preview uses the actual icon renderer at 500%.
   Double-clicking a device's tray icon opens settings for that exact device.
   The compact right-click menu keeps device settings, refresh, app settings,
-  diagnostics, updates when available and exit within reach. All ten
+  diagnostics, updates when available and exit within reach. All eleven
   interface languages remain available.
 - Bundled Outfit and Onest fonts (SIL Open Font License 1.1) and Lucide
   navigation and control glyphs for the settings window.

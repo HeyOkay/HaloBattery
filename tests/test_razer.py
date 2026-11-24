@@ -86,6 +86,8 @@ OPENRAZER_CHARGE_LEVEL = {
     0x00D4: 0x1F,   # BASILISK_MOBILE_RECEIVER
     0x00D6: 0x1F,   # BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRED
     0x00D7: 0x1F,   # BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS
+    0x00E2: 0x1F,   # BASILISK_V4_PRO_WIRED (OpenRazer PR #2975)
+    0x00E3: 0x1F,   # BASILISK_V4_PRO_WIRELESS (OpenRazer PR #2975)
     0x00E5: 0x1F,   # VIPER_V4_PRO_WIRED (OpenRazer PR #2751)
     0x00E6: 0x1F,   # VIPER_V4_PRO_WIRELESS
 }
@@ -207,6 +209,15 @@ class TableTest(unittest.TestCase):
         self.assertEqual(R.KNOWN[0x0090][0], "Razer Naga Pro")
         self.assertEqual(R.KNOWN[0x00A7][0], "Razer Naga V2 Pro")
         self.assertEqual(R.KNOWN[0x00A8][0], "Razer Naga V2 Pro")
+
+    def test_the_basilisk_v4_pro_pair_is_known(self):
+        # #514: the product string has no "wireless" word, so only the table entry
+        # keeps the receiver from being skipped as an unknown device. 00E2 is the
+        # mouse on its cable and reports charging through the same commands.
+        self.assertEqual(R.KNOWN[0x00E2], ("Razer Basilisk V4 Pro", 0x1F))
+        self.assertEqual(R.KNOWN[0x00E3], ("Razer Basilisk V4 Pro", 0x1F))
+        self.assertTrue(R.maybe_wireless(0x00E2, "Razer Basilisk V4 Pro"))
+        self.assertTrue(R.maybe_wireless(0x00E3, "Razer Basilisk V4 Pro"))
 
     def test_the_blackwidow_pro_pair_is_known(self):
         # OpenRazer lists get_battery/is_charging on both the wired class (0x025A) and,

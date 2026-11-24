@@ -574,15 +574,31 @@ A third MCHOSE exchange, on a third vendor id: 64-byte feature reports on the ve
 
 The same protocol as the M7 Ultra on MCHOSE's newer vendor id, which the reference driver treats identically: the diagnostics in [#4](https://github.com/HeyOkay/HaloBattery/issues/4) show the same interface shape (collections 0xFF0B:0x104 and 0xFF01:0x01 on interface 2). The status read is documented on the shorter 0x11 report, so both report ids are tried, and the mouse is named from the receiver's own product string. Icon of its own, so it and an M7 Ultra stay two devices. **Unverified** — no A7 V2 Ultra was on hand, so a level out of range is refused rather than shown
 
-The generic `3837` mouse exchange is restricted to `3837:100B`, interface 2,
-`FF01:0001`, as documented in [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
-and [#20](https://github.com/HeyOkay/HaloBattery/pull/20). VID `3837` also covers
-keyboards and products with different protocols: the K99 `3033` and V7 `1016`
-diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189) do not
-justify sending the RealTek mouse feature request to them. Those and other
+The generic `3837` mouse exchange is restricted to two sourced identities:
+`3837:100B` (A7 V2 Ultra, from [#4](https://github.com/HeyOkay/HaloBattery/issues/4)
+and [#20](https://github.com/HeyOkay/HaloBattery/pull/20)) and `3837:100A`
+(A7 V2 Pro, measured on one unit), always interface 2, `FF01:0001`. VID `3837`
+also covers keyboards and products with different protocols: the K99 `3033` and
+V7 `1016` diagnostics in [#189](https://github.com/HeyOkay/HaloBattery/issues/189)
+do not justify sending the RealTek mouse feature request to them. Those and other
 unmapped products remain unopened by that route. The separately confirmed V9
 headset routes `6008`/`600A` are preserved. The original `5253`, G7 and A5 Pro Max
 exchanges are unchanged.
+
+### MCHOSE A7 V2 Pro
+
+**Connection:** 2.4 GHz receiver (3837:100A, RealTek strings)
+
+The same exchange as the A7 V2 Ultra, on the same collection (interface 2,
+`FF01:0001`) and the same report ids. Measured on one unit: the 0x06 status read
+is answered on the short 0x11 report with
+`11 f9 c8 c7 e7 bf fa d5 fd fb f6 aa ff a8 ff ff` - 85 %, not charging, model
+`0x4018`, link flag `0x09`. On its cable the mouse enumerates as `3837:4018`
+(its model id, the same pattern as the M7 Ultra's `5253:0031`) and the same read
+answers `11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff` - 85 %, charging,
+flags `0x00` - while the receiver goes quiet, so the cable is the charging source.
+Both identities share the family icon key, so the mouse keeps one icon. It is
+named from the receiver's product string ("MCHOSE A7 V2 Pro").
 
 ### MCHOSE G7
 
@@ -683,7 +699,7 @@ Same mice protocol: transaction id 0x1F, command class 0x07, command 0x80 answer
 
 **Connection:** 2.4 GHz receiver or USB cable
 
-The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. Battery is only read for the models OpenRazer itself reads.
+The same exchange as the Razer mice above: the 90-byte feature report, command class `0x07`, command `0x80`, transaction ids from OpenRazer's device entries. Pro Click, Pro Click V2 and V2 Vertical, Naga, Viper, DeathAdder, Basilisk, Mamba, Lancehead and others - `KNOWN` in `providers/razer.py` holds the full list. The **Viper V4 Pro** (`1532:00E5` on the cable, `1532:00E6` through the receiver, transaction id `0x1F`) is confirmed on hardware by @amlidos in #333: the level matches Synapse and the charging state follows the cable. The **Basilisk V4 Pro** (`1532:00E3` on its receiver and `1532:00E2` on its USB cable, [#514](https://github.com/HeyOkay/HaloBattery/issues/514)) is in the same table with transaction id `0x1F`; its product string does not contain a "wireless" word, so before the table entry the receiver was skipped as an unknown device. The receiver level is confirmed on the reporter's unit (53 %, matching Synapse), and the cable identity shows charging and clears when unplugged; the reporter confirmed both on test build 2. Battery is only read for the models OpenRazer itself reads.
 
 ### Glorious Model O, O-, D and D- Wireless
 
@@ -1037,6 +1053,30 @@ Feature report `0x51`, command `0x06`, 21 bytes. The reply has the marker `8A 24
 **Connection:** VERSA `0DB0:9E22`; GM31 receiver `0D3C` / cable `0D3B`; GM41 receiver `0D4C` / cable `0D4B`.
 
 VERSA and GM31 answer output request `00 0F 20 00 ...` on `FF0D:00B0` or `FF00:0001`; the reply starts `0F 20` and byte 14 is charging bit 7 plus the percentage. The GM41 only pushes `A0 <raw> 07 ...` on `FF10:0006`, mapped through MSI's curve. MSI Center's `41 80` remote-control request is deliberately not sent. **Unverified in this app.**
+
+### MSI VERSA PRO WIRELESS and STRIKE PRO WIRELESS
+
+**VERSA PRO WIRELESS** (`0DB0:1FC6`) and **STRIKE PRO WIRELESS**
+(`0DB0:1620`) use HID interface 1, usage page `00FF`, usage `0001`.
+
+The battery query is a 65-byte HID output report:
+
+`00 0D B0 01 00 00 00 05` followed by 57 zero bytes.
+
+The 65-byte response has message type `05` at byte 7, battery percentage
+at byte 9, and external power state at byte 10 (`01` = external power
+present, `02` = external power absent). The exact power source is not
+identified. A fully charged device still reports `01` while external power
+is connected; there is no separate charge-complete value. A zero battery
+level may be reported during power-switch transitions with either external
+power state. Zero battery levels are treated as no reading, regardless of
+byte 10. The request is sent using HID output `write()`, not a feature
+report.
+
+The request and response format was verified on physical VERSA PRO WIRELESS
+and STRIKE PRO WIRELESS receivers using HidSharp 2.6.4. Halo Battery polls
+these devices on each poll (60 seconds by default) and maintains separate status
+entries for the mouse and keyboard.
 
 ### MOONDROP GM01 Pro
 
