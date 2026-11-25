@@ -149,6 +149,16 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported BatteryHub batch 6
+
+Unverified in Halo: these readers come from BatteryHub's protocol notes and
+captures. Check charging transitions before calling either confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [ROCCAT Syn Max Air](protocols.md#roccat-syn-max-air) | 2.4 GHz receiver (1e7d:3a3f) | no |
+| [MAONO PD200W](protocols.md#maono-pd200w) | 2.4 GHz receiver (352f:040e) | no |
+
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),

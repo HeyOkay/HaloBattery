@@ -158,6 +158,8 @@ MESSAGES = {
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Клавиатуры MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.maono": "MAONO PD200W",
+    "provider.roccat": "ROCCAT Syn Max Air",
     "provider.monsgeek": "Клавиатуры MonsGeek",
     "provider.redsquare": 'Клавиатура Red Square Alumix TKL',
     "provider.msi": "Беспроводные устройства MSI",

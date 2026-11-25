@@ -1813,3 +1813,35 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+## Ported BatteryHub batch 6
+
+Clean-room ports of BatteryHub 1.1.1 (GPL-3.0-or-later) drivers. Neither model
+has been tested in Halo.
+
+### ROCCAT Syn Max Air
+
+The receiver (`1e7d:3a3f`) exposes usage `ff00:0001` on interface 0 with 64-byte
+unnumbered reports. The read-only request is `8A 07 06 01`; the reply is
+
+    8A 83 06 02 <coarse 0..5> 00 <mv lo> <mv hi> <mv2 lo> <mv2 hi> <charging>
+
+`8A` is the reply tag; `E0..E6` event reports are skipped. Discharging percent
+comes from the measured voltage curve (4080 mV = 100 %, 3500 mV = 0 %, with
+interpolation). While charging, terminal voltage says little about state of
+charge, so the reader shows `Charging` or `on cable, full` at 4180 mV instead of
+a percentage. No reply within 1.5 s means the headset is off or asleep.
+Source: BatteryHub `src/drivers/roccat.cpp`.
+
+### MAONO PD200W
+
+The receiver (`352f:040e`) exposes interface 3, usage `000c:0001`, with 64-byte
+input/output reports and no feature reports. The battery is a register read:
+
+    C4 09 00 00 04 42 00 <checksum lo> <checksum hi> ...
+    C4 <len> 00 00 04 <register lo> <register hi> <value lo> <value hi> ... <checksum>
+
+The request checksum is the two's complement of bytes 0..6; the reply checksum
+sits at `len - 2` and covers bytes 0..`len - 3`. Register `0x0042` carries the
+percentage. Only GET is sent; charging is not established and is marked
+unknown. Source: BatteryHub `src/drivers/maono.cpp`.
