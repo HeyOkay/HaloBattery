@@ -277,6 +277,20 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual(1, len(sent))
         self.assertIn("HID SET_REPORT", "\n".join(provider.diagnostics()))
 
+    def test_the_atk_f1_v3_on_its_cable_falls_back_to_set_report(self):
+        # #571 second report: 373b:12a7 is the same mouse on its USB cable.
+        # Nothing answers the interrupt-OUT write here, so SET_REPORT is tried.
+        bus = self.one_receiver(vid=0x373B, pid=0x12A7)
+        with mock.patch.object(P, "set_output_query", lambda path: reply(77, 1, 4050)):
+            provider = P.PulsarProvider()
+            found = provider.poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:373b12a7", d.key)
+        self.assertEqual("ATK F1 V3 Ultimate+ (wired)", d.name)
+        self.assertEqual((77, True), (d.level, d.charging))
+        self.assertIn("trying HID SET_REPORT", "\n".join(provider.diagnostics()))
+
     def test_the_teevolution_terra_pro_is_read_as_a_keyboard(self):
         # #300: 3554:f523 'Compx' 'RapidSync' - the dongle's product string does not
         # name the model, but it publishes the family's ff02:0002 collection
