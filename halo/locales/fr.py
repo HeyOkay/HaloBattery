@@ -95,6 +95,7 @@ MESSAGES = {
     "provider.dji": "DJI Mic Mini 2",
     "provider.darmoshark": "Darmoshark N5",
     "provider.gwolves": "Souris G-Wolves",
+    "provider.hid_battery": "Autres appareils HID standard",
     "provider.io_aurora": "IO Aurora",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.gs3075t": "Claviers GANSS GS3075T",

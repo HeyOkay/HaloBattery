@@ -96,6 +96,7 @@ MESSAGES = {
     "provider.dji": "DJI Mic Mini 2",
     "provider.darmoshark": "Darmoshark N5",
     "provider.gwolves": "G-Wolves 滑鼠",
+    "provider.hid_battery": "其他標準 HID 裝置",
     "provider.io_aurora": "IO Aurora",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.gs3075t": "GANSS GS3075T 鍵盤",
