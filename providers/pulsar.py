@@ -486,6 +486,7 @@ class PulsarProvider(Provider):
         # re-creates a removed icon at a new tray position, which is what the
         # 2026-10-03 screen-off report was about.
         on_cable = {RECEIVER_OF[k] for k in found if k in RECEIVER_OF}
+        out = [s for s in out if s.key not in on_cable]   # the receiver answering too
         for key in list(self._last):
             name, level, charging, seen, kind = self._last[key]
             if key in found:
