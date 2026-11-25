@@ -13,7 +13,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
 - VXE R1 Pro Max on its cable as `373B:1273` (some units use ATK's vendor id on the
   cable): the level and charging are read as on `3554:F58C`. On either cable id the
-  receiver's greyed last value no longer shows as a second icon.
+  mouse keeps its receiver's icon, which turns to charging and back, instead of a
+  second icon that stayed for a poll interval after each plug or unplug; a name,
+  hidden choice or history saved under the old cable key moves to it.
 
 ### Changed
 
