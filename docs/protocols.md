@@ -482,9 +482,9 @@ new hardware commands.
 The mouse announces its level and charging state by itself; nothing is ever written to it. The frames were decoded from INPHIC HUB, the vendor's own Windows app, which opens the status collection `000a:0000` with hidapi (and keeps `ff00:0001` for its writes). Windows hands the report id back first:
 
     standard frame    03 <model> 40 <sub> <level>
-    X6/R1 generation  03 10 40 <stage> <level/10>
+    X6/R1 generation  03 10 40 <state> <level/10>
 
-`<sub>` is `0x01` for a level, `0x02` for full (shown as 100 %) and `0x03` for charging. A frame carrying only the charging state keeps the last level on screen, as in the vendor app; a level outside 1..100 is refused. On the X3 Max `0x02` is its cable state rather than a full battery — a 67 % unit sent it a minute after plugging in — so the last level stays and the icon shows charging. The `0x10` generation is the exception: the stage byte holds the DPI stage rather than the charging sub-command, the level arrives in steps of ten, and its frames carry no charging state at all — so an R1 on the cable keeps its normal icon by design. The dongle's config ACK (`03 10 50 ...`) and DPI-button report (`03 10 10 ...`) share the shape and are rejected by the `0x40` command check.
+`<sub>` is `0x01` for a level, `0x02` for full (shown as 100 %) and `0x03` for charging. A frame carrying only the charging state keeps the last level on screen, as in the vendor app; a level outside 1..100 is refused. On the X3 Max `0x02` is its cable state rather than a full battery — a 67 % unit sent it a minute after plugging in — so the last level stays and the icon shows charging. On the R1 (`0x10`), `03 10 40 03 07` was recorded while charging at 70% over 2.4 GHz ([RichBrokie's capture and hardware test, #567](https://github.com/HeyOkay/HaloBattery/pull/567)). `03 10 40 01 08` reported 80% on battery. Both frames carry the level in steps of ten. The dongle's config ACK (`03 10 50 ...`) and DPI-button report (`03 10 10 ...`) share the shape and are rejected by the `0x40` command check.
 
 Model codes: `0x95 / 0x90 / 0x93 / 0x99` on the Inphic In9 Pro and `0x3F` on the Delux M900 Pro (see [Delux M900 Pro and VGN N75 PRO](#delux-m900-pro-and-vgn-n75-pro)) on `fa65`, `0x55` (X11), `0x4E` (X3 Max) and `0x10` (X6/R1) on the `fa60` receivers. Each receiver is read only for the codes proven on it. Frames arrive every couple of seconds; a poll that misses one keeps the last level, greys it out after a while, then drops the icon — a value is never invented.
 
@@ -636,6 +636,12 @@ The request header is flag `0x55`, command `0x05`, reserved, checksum, size and 
 The 4K receiver and the mouse on USB-C both answer the same 17-byte Compx
 power query (command `0x04`) on the `ff02:0002` collection of interface 1.
 The Pulsar/ATK reader uses this frame from `andrewrabert/python-pulsar-mouse-tool`.
+
+### Pulsar mice on the 8K Dongle Gen.2 (model names)
+
+**Connection:** 8K Dongle Gen.2 (3710:5406) and the X2N CrazyLight's USB cable (3710:3510)
+
+The battery is read with the command 0x04 frame of the next section. The dongle is shared by Pulsar's XS-1 generation, so its product id does not name the mouse: after a valid power reply the mouse is asked once for its model with command 0x10 in the same 17-byte frame (`08 10`, fourteen zeros, checksum). The command number is from DenzoNL/lamzuctl, which lists it as "16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c). The reply layout is from the hardware capture below: status 0 in byte 2, the customer id in byte 6 and the model id in byte 7. The name table and its naming rule are from Pulsar's web driver (bbb.pulsar.gg/cMouse): devicename.json, customer id 87, entry = model id - 1, kept in `providers/pulsar_models.py`. Ids the table lacks keep the name of the product id. Confirmed on an X2N CrazyLight Mini through the dongle and on its cable, which lists the same ff02:0002 collection: both answered `08 10 00 00 00 03 57 1a e4 00 00 00 00 00 00 00 e5` (customer 87, model 26), and on the cable the power reply carried the charging flag. The same exchange is in krisgfx9/Wireless-Device-Battery-Monitor (src/drivers/kysona.cpp, PR #4096); the other model names are from the table and are not hardware-tested.
 
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
@@ -1002,6 +1008,44 @@ slot, one report). Windows' report order is not the XInput slot order, so next t
 controller the pad keeps the generic name rather than risk renaming the other one. Its
 Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 `remain=full=1000` placeholder would otherwise become a false 100 % (#110, #191).
+
+### Corsair SABRE v3 PRO Ultralight
+
+**Connection:** 2.4 GHz receiver (`1B1C:2B42`); the mouse on its cable is
+`1B1C:2B43`. Both expose `FF42:0001` / `FF42:0002`.
+
+This model does not answer the older 64-byte Bragi exchange. It uses the newer
+Slipstream V2 transfer of OpenLinkHub's SABRE v3 packages: an output report with
+report id 0, the endpoint, `01 01`, then the command. Through the receiver
+(`sabrev3proW`) the reports are 512 bytes and the paired mouse is endpoint 1; on
+the cable (`sabrev3proWU`) they are 64 bytes and the endpoint is 0. A reply
+echoes the endpoint at byte 0 and the command at byte 3, carries the status at
+byte 4 (0 = done) and the value from byte 5. The receiver also sends frames of
+its own on that collection (`00 00 04 0d ...` arrived in place of the charge
+answer in [#543](https://github.com/HeyOkay/HaloBattery/issues/543)), so only a
+reply with the right endpoint and command counts.
+
+The battery property is `0x0F`, in tenths of a percent, little-endian. Property
+`0x10` is the charge state (1 charging, 2 on battery, 3 full). When the mouse
+gives no charge state, its cable identity `2B43` being present means it is
+charging from the PC.
+
+Halo sends only the plain battery and charge property reads. Refusals, silence,
+short replies and I/O errors do not trigger login or software/hardware-mode
+writes. OpenLinkHub's full-control session also uses those handshakes, but they
+were not exercised by the reporter's successful reads and are not used here.
+
+**Confirmed on the reporter's hardware** (@ahyuk44-gif, #543, test build 3): 94 %
+through the receiver (`01 00 01 02 00 ac 03` - 940 tenths - charge `0x02`), then
+97 % with `0x01` and the charging animation over the PC cable (`2B43`,
+`00 00 01 02 00 ca 03`), which cleared when unplugged. The plain property read
+was enough on this unit - no login or software mode was needed - and the
+reporter noticed no change in the mouse's buttons while the build ran.
+
+Source: OpenLinkHub (GPL-3.0), `src/devices/sabrev3proW/sabrev3proW.go`,
+`src/devices/sabrev3proWU/sabrev3proWU.go` and the `src/devices/slipstreamV2`
+transport, used as the protocol reference. The frames above are from the
+reporter's captures in #543.
 
 ### 8BitDo Ultimate 2 Wireless (DInput)
 

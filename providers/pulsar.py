@@ -8,6 +8,7 @@ Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
   * 373b:11b6  ATK A9 Ultimate (wired)               373b:11d9  ATK A9 Ultimate (2.4 GHz dongle)
   * 3554:f58a  VXE R1 Pro Max (1 kHz dongle, #87)    3554:f58c  the same mouse on its cable
   * 3710:5406  Pulsar X2 CrazyLight Mini (2.4 GHz)   3710:3414  the same mouse on the cable
+  * 3710:3510  Pulsar X2N CrazyLight on its cable (see the ReadCIDMID note below)
   * the Kysona M600 and the VXE Dragonfly R1 Pro use the same protocol (their ids are
     not in the tool, so they are not claimed here).
 
@@ -97,6 +98,19 @@ Additional measured CompX IDs: Scyrox 3554:F5F7/F5F6 (#182), ATK A9 SE
 3554:F5DF/F5DE/F5DC (#354), Zaopin Z2 4K 3554:F526/F527.
 Pulsar X2 V3 Mini uses the Sonix feature protocol from jonkristian/pulsar-x3-python
 (#213). NK NANO 373B:1216 is dispatched separately to atk_bitmouse (#350).
+
+Pulsar's 8K Dongle Gen.2 (3710:5406) is shared by its XS-1 generation, so the mouse is
+asked for its model: command 0x10 in the same frame, which DenzoNL/lamzuctl lists as
+"16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c). The reply
+layout is from the hardware capture below: status 0 in byte 2, the customer id in byte 6
+and the model id in byte 7. The name table, and the rule that a name is entry
+(model id - 1) under the customer id, are from Pulsar's web driver (bbb.pulsar.gg/cMouse);
+providers/pulsar_models.py holds the table. It is a read, asked once per receiver after a valid power reply.
+Confirmed on an X2N CrazyLight Mini through the dongle and on its cable (3710:3510,
+which lists the same ff02:0002 collection): both answered
+08 10 00 00 00 03 57 1a e4 00 .. e5 (customer 87, model 26), and the cable's power
+reply carried the charging flag. The same exchange is in
+krisgfx9/Wireless-Device-Battery-Monitor, src/drivers/kysona.cpp (its PR #4096).
 """
 from __future__ import annotations
 
@@ -107,12 +121,21 @@ import hid
 
 from . import atk_bitmouse, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
+from .pulsar_models import model_name
 from .compx import (CHECKSUM_BASE, CMD_POWER, CONTROL_USAGE, PAYLOAD_HEADER, PAYLOAD_LEN,
                     POWER_INDEX, LEVEL_INDEX, VOLTAGE_SLICE, READ_ATTEMPTS, READ_TIMEOUT_MS,
                     checksum, make_request, output_length, parse_power, voltage_mv)
 
 CONTROL_INTERFACE = 1           # the tool reads its 17-byte replies on interface 1
 FLUSH_TIMEOUT_MS = 30
+
+CMD_MODEL = 0x10
+MODEL_STATUS_INDEX = 2
+MODEL_LENGTH_INDEX = 5
+MODEL_CID_INDEX = 6
+MODEL_MID_INDEX = 7
+# Pulsar ids (vendor 0x3710) whose mouse is asked for its model, and how it is connected
+MODEL_PIDS = {0x5406: "2.4 GHz", 0x3510: "wired"}
 
 SONIX_VID = 0x3710
 SONIX_PIDS = {
@@ -189,6 +212,7 @@ PIDS: Dict[int, Dict[int, str]] = {
     0x3710: {
         0x5406: "Pulsar X2 CrazyLight Mini (2.4 GHz)",
         0x3414: "Pulsar X2 CrazyLight Mini (wired)",
+        0x3510: "Pulsar X2N CrazyLight (wired)",
     },
     # G-Wolves' shared 8K receiver: the WARG's owner ran the read-only probe from #82
     # on his unit (#297). This frame on ff02:0002 got a valid power reply (80 %, 4013
@@ -204,6 +228,26 @@ KINDS: Dict[Tuple[int, int], str] = {(0x3554, 0xFA09): "keyboard",
                                      (0x3554, 0xF520): "mouse",
                                      (0x3554, 0xF523): "mouse",
                                      (0x1B1C, 0x2B2A): "mouse"}
+
+
+def make_model_request() -> List[int]:
+    frame = [PAYLOAD_HEADER, CMD_MODEL] + [0x00] * (PAYLOAD_LEN - 3)
+    frame.append(checksum(frame))
+    return frame
+
+
+def parse_model(r) -> Optional[Tuple[int, int]]:
+    """Customer id and model id from a valid ReadCIDMID reply."""
+    if not r or len(r) < PAYLOAD_LEN:
+        return None
+    frame = list(r[:PAYLOAD_LEN])
+    if frame[0] != PAYLOAD_HEADER or frame[1] != CMD_MODEL:
+        return None
+    if frame[PAYLOAD_LEN - 1] != checksum(frame[:PAYLOAD_LEN - 1]):
+        return None
+    if frame[MODEL_STATUS_INDEX] != 0 or frame[MODEL_LENGTH_INDEX] < 2:
+        return None
+    return frame[MODEL_CID_INDEX], frame[MODEL_MID_INDEX]
 
 
 def make_sonix_request(command=SONIX_BATTERY_COMMAND) -> List[int]:
@@ -262,6 +306,8 @@ class PulsarProvider(Provider):
         self._diag: List[str] = []
         # key -> (name, level, charging, when it was last read, pictogram)
         self._last: Dict[str, Tuple[str, int, bool, float, str]] = {}
+        # key -> the name the mouse reported ("" when it did not give a known one)
+        self._models: Dict[str, str] = {}
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         """The collection to open.
@@ -300,7 +346,8 @@ class PulsarProvider(Provider):
                           f"falling back to the first of {len(infos)}")
         return infos[0] if infos else None
 
-    def _query(self, path: bytes) -> Optional[List[int]]:
+    def _query(self, path: bytes, request: Optional[List[int]] = None,
+               accept=parse_power) -> Optional[List[int]]:
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -309,16 +356,17 @@ class PulsarProvider(Provider):
             return None
         try:
             self._drain(dev)
-            dev.write(make_request())
+            dev.write(request or make_request())
             for attempt in range(READ_ATTEMPTS):
                 r = dev.read(PAYLOAD_LEN, READ_TIMEOUT_MS)
                 if not r:
                     break
                 self._diag.append(f"  reply {attempt + 1}: {hexdump(r)}")
-                if parse_power(r) is not None:
+                if accept(r) is not None:
                     return list(r)
                 time.sleep(0.02)
-            self._diag.append("  no power reply (events and short frames are ignored)")
+            what = "power" if accept is parse_power else "model"
+            self._diag.append(f"  no {what} reply (events and short frames are ignored)")
             return None
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"  query error: {e}")
@@ -328,6 +376,15 @@ class PulsarProvider(Provider):
                 dev.close()
             except Exception:
                 pass
+
+    def _model(self, key: str, path: bytes, link: str) -> str:
+        """The name the mouse reports for itself, asked once per receiver."""
+        if key not in self._models:
+            ids = parse_model(self._query(path, make_model_request(), parse_model))
+            model = model_name(*ids) if ids else None
+            self._diag.append(f"  model: {ids} -> {model}")
+            self._models[key] = f"{model} ({link})" if model else ""
+        return self._models[key]
 
     def _drain(self, dev) -> None:
         for _ in range(4):
@@ -562,6 +619,8 @@ class PulsarProvider(Provider):
                 mv = voltage_mv(reply)
                 if mv:
                     self._diag.append(f"  {mv} mV")
+                if vid == 0x3710 and pid in MODEL_PIDS:
+                    name = self._model(key, d["path"], MODEL_PIDS[pid]) or name
                 kind = KINDS.get((vid, pid), "mouse")
                 self._last[key] = (name, level, on_cable, now, kind)
                 found.add(key)
@@ -586,6 +645,7 @@ class PulsarProvider(Provider):
                                         kind=kind, wake_on_input=True))
             else:
                 del self._last[key]
+                self._models.pop(key, None)
         return out
 
     def diagnostics(self) -> List[str]:

@@ -47,12 +47,13 @@ status shapes, so both live here behind the model bytes proven on the units:
   (his diagnostics caught the `40 03` frame on the cable). The X3 Max announces
   the same shape under its own model code (0x4E): its reporter's diagnostics
   in #228 caught `03 4e 40 01 1e` = 30 %.
-- the `0x10` shape - `03 10 40 <stage> <level/10>` - is the X6/R1 generation:
+- the `0x10` shape - `03 10 40 <state> <level/10>` - is the X6/R1 generation:
   decoded in blak0p's attack-shark-linux protocol documents (validated live
   on the dongle: idle `03 10 40 01 0a` = 100 %) and caught on the R1's own
   receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %), and his
   run of the test build shows the same reading in the tray. The
-  level arrives in steps of ten and the frames carry no charging state; the
+  level arrives in steps of ten and the R1 reports 0x03 while charging, as
+  captured and tested by RichBrokie in PR #567; the
   dongle's config ACK (`03 10 50 ...`) and DPI-button (`03 10 10 ...`)
   reports are excluded by the `0x40` command check.
 """
@@ -143,16 +144,11 @@ def parse_frame(frame, models) -> Optional[Tuple[Optional[int], bool]]:
     if f[0] not in models or f[1] != CMD_BATTERY:
         return None
     if f[0] == X6_EVENT:
-        # The X6/R1 generation (blak0p's protocol documents, live-validated:
-        # idle `03 10 40 01 0a` = 100 %; the R1's own push in #69): the
-        # heartbeat's level arrives in steps of ten, and its byte 3 is the
-        # DPI stage, not a sub-command - and there is no charging state in
-        # this generation's frames. The dongle's ACK (`... 50 ..`) and the
-        # DPI-button report (`... 10 ..`) share the shape and are already
-        # refused by the command check above.
+        # Captured on an R1 via its receiver: 03 10 40 03 07 while charging,
+        # then 03 10 40 01 08 on battery. The level stays valid in both states.
         level = f[3] * X6_STEP
         if LEVEL_MIN <= level <= LEVEL_MAX:
-            return level, False
+            return level, f[2] == SUB_CHARGING
         return None
     if f[2] == SUB_CHARGING:
         return None, True
