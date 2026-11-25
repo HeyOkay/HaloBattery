@@ -1091,7 +1091,8 @@ with a 64-byte feature report
 Feature report `0xFF`, 64 bytes: `FF 07 00 FD 04 0C F1 02 01`, then the feature report
 is read back (35 ms later, three tries, as for the ROG Strix Go 2.4). The battery
 frame starts `FF 12 05 FE 0C`; bytes 11-12 are the battery voltage, little-endian.
-The level is Solaar's Li-ion curve (the one the Logitech provider uses). A voltage
+The level is Solaar's Li-ion curve (the one the Logitech provider uses) rounded up
+to Armoury Crate's 25 % steps, so it reads what Armoury Crate shows. A voltage
 outside 3000-4500 mV, another header, the `FF AA` error and an all-zero frame are no
 reading.
 
@@ -1101,13 +1102,16 @@ battery (218 of 218) and `0x05` on the USB-C cable (217 of 217). While ASUS soft
 through: on battery a short `0x0A` frame now and then, and on the cable `0x0A`,
 `0x03` and `0x05` frames of about 3 s each in turn. So `0x05` is charging at once;
 a `0x03` frame is read again 3 s later, and two `0x03` frames 3 s apart are on
-battery; `0x0A` says nothing. At most two re-reads (6 s) a poll, only while the
-answer is open. **Confirmed on hardware**: 3904 mV -> 67 % on battery, with Armoury
-Crate open at the same time; charging read on the cable.
+battery; one `0x03` frame alone leaves the charger unknown; `0x0A` says nothing. At
+most two re-reads (6 s) a poll, only while the answer is open. Once battery is
+settled, a later poll's `0x03` frame is battery at once, with no re-read, until a
+frame says anything else. **Confirmed on hardware**: 3904 mV on battery with Armoury
+Crate at 75 % (the curve's 67 %, rounded up to 75 %); charging read on the cable.
 
 Source: two USBPcap captures of Armoury Crate 6.0.0 reading the headset's Power
 page: 3970 mV with Armoury Crate at 100 %, 3913-3919 mV at 75 %. Armoury Crate
-shows 25 % steps; the curve gives 77 % and 69 %, which it rounds up. It polls about
+shows 25 % steps; the curve gives 77 % and 69 %, which it rounds up (the ROG Strix
+Go 2.4's 54 % and 28 % round up to its 75 % and 50 % the same way). It polls about
 every 9 s with this request and another one (`FF 0A 00 FD 04 00 00 05 81 AA C6 01`),
 and writes `FF 08 00 FF 04 0C F1 03 02 xx` after each read; the app sends neither.
 Bytes 16-17 (`68 10`, 4200 mV) did not change between the captures and are not read.

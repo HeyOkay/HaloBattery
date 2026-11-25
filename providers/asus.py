@@ -85,9 +85,9 @@ the `FF 08 00 FF 04 0C F1 03 02 xx` write it sends after each read:
 
 Bytes 16-17 (0x1068, 4200 mV) stayed the same in both captures; bytes 11-12 are the
 voltage, as on the Strix Go. The level is Solaar's Li-ion curve (the one logitech.py
-uses): 3970 -> 77 % and 3916 -> 69 %, which Armoury Crate rounds up to its 100 % and
-75 % quarter steps (the Strix Go's 3831 / 3743 mV -> 54 / 28 % round up to its
-reporter's 75 / 50 % as well).
+uses) rounded UP to Armoury Crate's quarter step: 3970 -> 77 -> 100 % and 3916 -> 69
+-> 75 %, the two captured readings (the Strix Go's 3831 / 3743 mV -> 54 / 28 % round
+up to its reporter's 75 / 50 % the same way).
 
 Byte 9 is the charger: measured on the headset with this provider's own read and all
 ASUS software stopped, every frame is 0x03 (byte 10 0x05) on battery (218 of 218)
@@ -96,7 +96,9 @@ and 0x05 (byte 10 0x03) on the USB-C cable (217 of 217). While ASUS software
 on battery a 0x0A frame now and then, and on the cable a rotation of 0x0A, 0x03 and
 0x05 frames of about 3 s each (a 0x03 frame ~2.5 s). So 0x05 is charging at once; a
 0x03 frame is read again 3 s later, and two 0x03 frames 3 s apart are on battery;
-0x0A says nothing. At most two re-reads (6 s), and only while the answer is open.
+0x0A says nothing. At most two re-reads (6 s), and only while the answer is open;
+once two 0x03 frames have said battery, a later poll's 0x03 frame is battery at once
+(no wait) until a frame says anything else.
 """
 from __future__ import annotations
 
@@ -165,6 +167,7 @@ TUF_H3_HEADER = 0x12                 # reply byte 1 of the battery frame
 TUF_H3_MV_RANGE = (3000, 4500)       # one Li-ion cell; anything else is not a reading
 # byte 9 (docstring): 0x03 on battery, 0x05 on the cable; other values (0x0A while ASUS
 # software talks to the dongle too) say nothing about the charger
+TUF_H3_STEP = 25                      # Armoury Crate's quarter steps (docstring)
 TUF_H3_CHARGING = {0x03: False, 0x05: True}
 TUF_H3_RECHECK_S = 3.0               # a 0x03 frame lasts ~2.5 s on the cable (docstring)
 TUF_H3_RECHECKS = 2
@@ -323,7 +326,8 @@ def parse_tuf_h3_reply(r) -> Optional[Tuple[int, Optional[bool]]]:
         return None
     # shortcut: no charger-lift correction (the Strix Go's 160 mV is that model's),
     # so the level may read high while charging; calibrate from a capture on the cable
-    return voltage_to_percent(mv), TUF_H3_CHARGING.get(state)
+    level = -(-voltage_to_percent(mv) // TUF_H3_STEP) * TUF_H3_STEP   # round up
+    return level, TUF_H3_CHARGING.get(state)
 
 
 def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
@@ -438,6 +442,7 @@ class AsusProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._failing: Dict[str, bool] = {}
+        self._settled: Dict[object, bool] = {}   # path -> last settled TUF H3 charging
 
     def _ask(self, path, request: List[int], wanted, length: int) -> Optional[List[int]]:
         """Send `request` and return the first reply that `wanted` accepts. None for an
@@ -631,6 +636,8 @@ class AsusProvider(Provider):
         the last reading's; charging stays unknown if no frame said either way."""
         if res is None:
             return None                      # off or asleep: nothing to settle
+        if res[1] is False and self._settled.get(path) is False:
+            return res                       # still on battery: no re-read
         seen = [res]
         for _ in range(TUF_H3_RECHECKS):
             states = [r[1] for r in seen]
@@ -641,7 +648,10 @@ class AsusProvider(Provider):
             if more is not None:
                 seen.append(more)
         states = [r[1] for r in seen]
-        charging = True if True in states else (False if False in states else None)
+        charging = True if True in states else (False if states.count(False) >= 2
+                                                 else None)
+        if charging is not None:
+            self._settled[path] = charging
         return seen[-1][0], charging
 
     def poll(self) -> List[DeviceStatus]:

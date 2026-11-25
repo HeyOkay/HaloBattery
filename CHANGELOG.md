@@ -12,8 +12,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
 - ASUS TUF Gaming H3 Wireless headset (`0B05:1963`): battery level from the voltage the
-  headset reports, using the read request captured from Armoury Crate, and charging
-  on the USB-C cable.
+  headset reports, in Armoury Crate's 25 % steps, using the read request captured from
+  Armoury Crate, and charging on the USB-C cable.
 
 ### Changed
 
