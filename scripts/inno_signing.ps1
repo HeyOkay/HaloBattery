@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory)][string]$WorkDirectory,
     [Parameter(Mandatory)][string]$OutputDirectory,
     [Parameter(Mandatory)][ValidatePattern('^HaloBattery-[A-Za-z0-9.-]+$')][string]$OutputBaseFilename,
-    [string]$SignedCacheDirectory
+    [string]$SignedCacheDirectory,
+    [Parameter(Mandatory)][string]$SignedHelperPath
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -24,6 +25,7 @@ function Resolve-Regular([string]$Path, [bool]$Directory) {
 }
 $CompilerPath = Resolve-Regular $CompilerPath $false
 $SourceDirectory = Resolve-Regular $SourceDirectory $true
+$SignedHelperPath = Resolve-Regular $SignedHelperPath $false
 foreach ($path in @($WorkDirectory, $OutputDirectory)) {
     New-Item -ItemType Directory -Force -Path $path | Out-Null
     $null = Resolve-Regular $path $true
@@ -33,6 +35,30 @@ $OutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
 if (Test-Path -LiteralPath (Join-Path $OutputDirectory "$OutputBaseFilename.exe")) {
     throw 'Installer output already exists; use a fresh output directory'
 }
+# Clone the verified compiler privately: only Setup.e32 is changed. Its original
+# bytes and embedded helper are pinned by the patch utility; no signing credential
+# or external signing command enters this compiler process.
+$originalTemplate = Join-Path (Split-Path $CompilerPath -Parent) 'Setup.e32'
+$null = Resolve-Regular $originalTemplate $false
+$privateCompiler = Join-Path $WorkDirectory ('compiler-' + $Stage.ToLowerInvariant())
+if (Test-Path -LiteralPath $privateCompiler) { throw 'Use a fresh private compiler directory' }
+New-Item -ItemType Directory -Path $privateCompiler | Out-Null
+foreach ($entry in Get-ChildItem -LiteralPath (Split-Path $CompilerPath -Parent) -Force -Recurse) {
+    if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $entry.LinkType) { throw 'Linked compiler input' }
+}
+Copy-Item -Path (Join-Path (Split-Path $CompilerPath -Parent) '*') -Destination $privateCompiler -Recurse
+$patchedTemplate = Join-Path $privateCompiler 'Setup.e32'
+Remove-Item -LiteralPath $patchedTemplate
+$patcher = Join-Path $repo 'tools/inno_helper.py'
+$patchMessages = @(& python $patcher patch-template --template $originalTemplate --signed-helper $SignedHelperPath --output $patchedTemplate)
+if ($LASTEXITCODE -ne 0) { throw 'Inno helper patch failed' }
+$patchReceipt = ($patchMessages -join "`n") | ConvertFrom-Json
+if ($patchReceipt.source_sha256 -cne (Get-FileHash -LiteralPath $originalTemplate -Algorithm SHA256).Hash.ToLowerInvariant() -or
+    $patchReceipt.output_sha256 -cne (Get-FileHash -LiteralPath $patchedTemplate -Algorithm SHA256).Hash.ToLowerInvariant()) {
+    throw 'Inno template receipt does not match files'
+}
+if ((Get-FileHash -LiteralPath (Join-Path $privateCompiler (Split-Path $CompilerPath -Leaf)) -Algorithm SHA256).Hash -cne
+    (Get-FileHash -LiteralPath $CompilerPath -Algorithm SHA256).Hash) { throw 'Private compiler changed' }
 $manifestPath = Join-Path $WorkDirectory 'internal-manifest.json'
 $bindingPath = Join-Path $WorkDirectory 'binding.json'
 function Get-SourceDigest {
@@ -51,6 +77,10 @@ function Get-SourceDigest {
 }
 $binding = @{ version=$AppVersion; output=$OutputBaseFilename
     compiler=(Get-FileHash -LiteralPath $CompilerPath -Algorithm SHA256).Hash
+    originalData=(Get-FileHash -LiteralPath $originalTemplate -Algorithm SHA256).Hash
+    originalHelper="388A796580234EFC95F3B1C70AD4CB44BFDDC7BA0F9203BF4902B9929B136F95"
+    signedHelper=(Get-FileHash -LiteralPath $SignedHelperPath -Algorithm SHA256).Hash
+    patchedData=$patchReceipt.output_sha256
     script=(Get-FileHash -LiteralPath $script -Algorithm SHA256).Hash
     icon=(Get-FileHash -LiteralPath (Join-Path $repo 'halo.ico') -Algorithm SHA256).Hash
     payload=(Get-SourceDigest) }
@@ -82,13 +112,14 @@ if ($Stage -eq 'Complete') {
     }
 }
 $arguments = @('/Q', "/DAppVersion=$AppVersion", "/DSourceDir=$SourceDirectory",
-    "/DSignedUninstallerCache=$cache", "/F$OutputBaseFilename", "/O$OutputDirectory", $script)
+    "/DSignedUninstallerCache=$cache", "/DSignedInnoHelper=1", "/F$OutputBaseFilename", "/O$OutputDirectory", $script)
 function Invoke-InnoCompiler {
     # Preparation deliberately stops with native exit 2. Collect it without
     # PowerShell turning that expected stop into a terminating native error.
     # This preference override is confined to this function's scope.
     $PSNativeCommandUseErrorActionPreference = $false
-    $messages = @(& $CompilerPath @arguments 2>&1)
+    $privateCompilerPath = Join-Path $privateCompiler (Split-Path $CompilerPath -Leaf)
+    $messages = @(& $privateCompilerPath @arguments 2>&1)
     return @{ messages=$messages; code=$LASTEXITCODE }
 }
 $compiled = Invoke-InnoCompiler
@@ -96,6 +127,18 @@ $messages = $compiled.messages
 $code = $compiled.code
 if ((Get-SourceDigest) -cne $binding.payload) { throw 'Installer payload changed during compilation' }
 $messages | ForEach-Object { "$_" } | Set-Content -LiteralPath (Join-Path $WorkDirectory ($Stage.ToLowerInvariant() + '.log')) -Encoding utf8
+# Reject a style/template selection that bypassed our patched Setup.e32.
+# Reading the resource is safe even before signing the generated engine.
+$helperIndex = 0
+foreach ($engine in Get-ChildItem -LiteralPath $cache -File) {
+    $extracted = Join-Path $WorkDirectory ("embedded-helper-" + $Stage.ToLowerInvariant() + "-$helperIndex.exe")
+    $null = & python $patcher extract-engine --engine $engine.FullName --output $extracted
+    if ($LASTEXITCODE -ne 0 -or
+        (Get-FileHash -LiteralPath $extracted -Algorithm SHA256).Hash -cne $binding.signedHelper) {
+        throw 'Compiler engine did not retain the verified signed helper'
+    }
+    $helperIndex++
+}
 if ($Stage -eq 'Prepare') {
     if ($code -ne 2 -or ($messages -join "`n") -notmatch 'Signed uninstaller mode is enabled') {
         throw "Unexpected Inno preparation outcome (exit $code)"

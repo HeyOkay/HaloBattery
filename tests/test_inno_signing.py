@@ -38,6 +38,15 @@ class InnoSigningTests(unittest.TestCase):
         fixture_repo = self.root / 'isolated-repo'
         (fixture_repo / 'scripts').mkdir(parents=True)
         (fixture_repo / 'installer').mkdir()
+        (fixture_repo / 'tools').mkdir()
+        (fixture_repo / 'tools/inno_helper.py').write_text(
+            "import argparse, hashlib, json\nfrom pathlib import Path\n"
+            "p=argparse.ArgumentParser(); p.add_argument('command'); p.add_argument('--template'); "
+            "p.add_argument('--signed-helper'); p.add_argument('--engine'); p.add_argument('--output'); a=p.parse_args()\n"
+            "if a.command=='extract-engine':\n Path(a.output).write_bytes((Path(__file__).parents[2]/'signed-helper.exe').read_bytes()); raise SystemExit(0)\n"
+            "data=Path(a.template).read_bytes()+Path(a.signed_helper).read_bytes()\n"
+            "Path(a.output).write_bytes(data); print(json.dumps({'source_sha256':hashlib.sha256(Path(a.template).read_bytes()).hexdigest(),'output_sha256':hashlib.sha256(data).hexdigest()}))\n",
+            encoding='utf-8')
         self.helper = fixture_repo / 'scripts/inno_signing.ps1'
         shutil.copyfile(HELPER, self.helper)
         (fixture_repo / 'installer/HaloBattery.iss').write_text('; inert compiler fixture\n', encoding='utf-8')
@@ -45,7 +54,12 @@ class InnoSigningTests(unittest.TestCase):
         self.payload = self.root / 'payload'
         self.payload.mkdir()
         (self.payload / 'HaloBattery.exe').write_bytes(b'inert payload')
-        self.compiler = self.root / 'compiler.ps1'
+        compiler_dir = self.root / 'compiler'
+        compiler_dir.mkdir()
+        (compiler_dir / 'Setup.e32').write_bytes(b'inert template')
+        self.signed_helper = self.root / 'signed-helper.exe'
+        self.signed_helper.write_bytes(b'inert signed helper')
+        self.compiler = compiler_dir / 'compiler.ps1'
         self.compiler.write_text(FAKE_COMPILER, encoding='utf-8')
         self.work = self.root / 'work'
         self.output = self.root / 'output'
@@ -53,6 +67,7 @@ class InnoSigningTests(unittest.TestCase):
     def run_stage(self, stage, *, bad=False, signed=None, stub_signed=False):
         arguments = [PWSH, '-NoProfile', '-NonInteractive', '-File', str(self.helper),
                      '-Stage', stage, '-CompilerPath', str(self.compiler),
+                     '-SignedHelperPath', str(self.signed_helper),
                      '-SourceDirectory', str(self.payload), '-AppVersion', '1.18.0',
                      '-WorkDirectory', str(self.work), '-OutputDirectory', str(self.output),
                      '-OutputBaseFilename', 'HaloBattery-test-setup']
@@ -76,7 +91,8 @@ class InnoSigningTests(unittest.TestCase):
         manifest = json.loads((self.work / 'internal-manifest.json').read_text(encoding='utf-8-sig'))
         self.assertEqual(list(manifest), ['uninst-6.7.4-0123456789.e32'])
         self.assertFalse((self.output / 'HaloBattery-test-setup.exe').exists())
-        self.assertIn('payload', json.loads((self.work / 'binding.json').read_text(encoding='utf-8-sig')))
+        binding = json.loads((self.work / 'binding.json').read_text(encoding='utf-8-sig'))
+        self.assertTrue({'payload', 'originalData', 'signedHelper', 'patchedData'} <= binding.keys())
 
     def test_other_compiler_failure_does_not_produce_a_signing_manifest(self):
         result = self.run_stage('Prepare', bad=True)
@@ -90,6 +106,15 @@ class InnoSigningTests(unittest.TestCase):
         result = self.run_stage('Complete', signed=self.work / 'unsigned-cache')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Inno input changed: payload', result.stderr)
+        self.assertFalse((self.output / 'HaloBattery-test-setup.exe').exists())
+
+    def test_complete_refuses_changed_signed_helper(self):
+        prepared = self.run_stage('Prepare')
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        self.signed_helper.write_bytes(b'changed signed helper')
+        result = self.run_stage('Complete', signed=self.work / 'unsigned-cache')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Inno input changed:', result.stderr)
         self.assertFalse((self.output / 'HaloBattery-test-setup.exe').exists())
 
     def test_complete_refuses_unsigned_cache(self):
