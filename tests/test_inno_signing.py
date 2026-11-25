@@ -12,6 +12,7 @@ PWSH = shutil.which('pwsh') or shutil.which('pwsh.exe')
 HELPER = ROOT / 'scripts/inno_signing.ps1'
 
 FAKE_COMPILER = r'''
+if ($PSNativeCommandUseErrorActionPreference -ne $false) { throw 'Native exit handling was not scoped off' }
 $cache=($args | Where-Object { $_ -like '/DSignedUninstallerCache=*' }).Substring(25)
 $output=($args | Where-Object { $_ -like '/O*' }).Substring(2)
 $name=($args | Where-Object { $_ -like '/F*' }).Substring(2)
@@ -57,12 +58,15 @@ class InnoSigningTests(unittest.TestCase):
                      '-OutputBaseFilename', 'HaloBattery-test-setup']
         if signed:
             arguments += ['-SignedCacheDirectory', str(signed)]
+        command = "$ErrorActionPreference='Stop'; $PSNativeCommandUseErrorActionPreference=$true; "
         if stub_signed:
-            command = ("function global:Get-AuthenticodeSignature { "
-                       "[pscustomobject]@{SignerCertificate='fixture';SignatureType='Authenticode'} }; & "
-                       + ' '.join(arg if arg.startswith('-') else "'" + arg.replace("'", "''") + "'"
-                                  for arg in arguments[4:]))
-            arguments = [PWSH, '-NoProfile', '-NonInteractive', '-Command', command]
+            command += ("function global:Get-AuthenticodeSignature { "
+                        "[pscustomobject]@{SignerCertificate='fixture';SignatureType='Authenticode'} }; ")
+        command += '& ' + ' '.join(arg if arg.startswith('-') else "'" + arg.replace("'", "''") + "'"
+                                  for arg in arguments[4:])
+        command += ("; if ($PSNativeCommandUseErrorActionPreference -ne $true) { throw 'Caller preference changed' }; "
+                    "if (Test-Path variable:LASTEXITCODE) { exit $LASTEXITCODE }")
+        arguments = [PWSH, '-NoProfile', '-NonInteractive', '-Command', command]
         return subprocess.run(arguments, capture_output=True, text=True, timeout=30,
                               env=dict(os.environ, BAD_COMPILER=str(bad).lower()))
 

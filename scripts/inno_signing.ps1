@@ -83,8 +83,17 @@ if ($Stage -eq 'Complete') {
 }
 $arguments = @('/Q', "/DAppVersion=$AppVersion", "/DSourceDir=$SourceDirectory",
     "/DSignedUninstallerCache=$cache", "/F$OutputBaseFilename", "/O$OutputDirectory", $script)
-$messages = @(& $CompilerPath @arguments 2>&1)
-$code = $LASTEXITCODE
+function Invoke-InnoCompiler {
+    # Preparation deliberately stops with native exit 2. Collect it without
+    # PowerShell turning that expected stop into a terminating native error.
+    # This preference override is confined to this function's scope.
+    $PSNativeCommandUseErrorActionPreference = $false
+    $messages = @(& $CompilerPath @arguments 2>&1)
+    return @{ messages=$messages; code=$LASTEXITCODE }
+}
+$compiled = Invoke-InnoCompiler
+$messages = $compiled.messages
+$code = $compiled.code
 if ((Get-SourceDigest) -cne $binding.payload) { throw 'Installer payload changed during compilation' }
 $messages | ForEach-Object { "$_" } | Set-Content -LiteralPath (Join-Path $WorkDirectory ($Stage.ToLowerInvariant() + '.log')) -Encoding utf8
 if ($Stage -eq 'Prepare') {
@@ -104,6 +113,9 @@ if ($Stage -eq 'Prepare') {
     $manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding utf8
     $binding | ConvertTo-Json | Set-Content -LiteralPath $bindingPath -Encoding utf8
     Write-Output "Prepared unsigned Inno cache: $cache"
+    # GitHub's pwsh wrapper exits using the last native exit code. Consume only
+    # this fully validated expected stop; failures above must remain failures.
+    $global:LASTEXITCODE = 0
 } else {
     if ($code -ne 0) { throw "Signed-cache Inno compilation failed (exit $code)" }
     $actual = @(Get-ChildItem -LiteralPath $cache -Force)
