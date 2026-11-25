@@ -29,6 +29,9 @@ from .jbl import JblProvider  # noqa: F401
 from .jbl_hidv3 import JblHidV3Provider  # noqa: F401
 from .jbl_quantum350 import JblQuantum350Provider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
+from .nuphy import NuphyProvider  # noqa: F401
+from .darkrim import DarkrimProvider  # noqa: F401
+from .atk_extra import AtkExtraProvider  # noqa: F401
 from .pulsar import PulsarProvider  # noqa: F401
 from .dareu import DareuProvider  # noqa: F401
 from .hyperx import HyperXProvider  # noqa: F401

@@ -95,6 +95,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Port the cleanly documented BatteryHub device families: NuPhy WH80/Halo96 V2,
+  DARKRIM SHADOW, ATK Zero / 8K Nano / Mercury / Z87, Pulsar X2 V3 / Feinmann /
+  ZYWOO and the additional Keychron 4K, 1K and keyboard models. See
+  `docs/protocols.md`, "Ported BatteryHub device families".
+  These are protocol ports with offline fixtures only: none of the new models
+  has been tested on hardware in Halo, so their charging transitions are not
+  yet confirmed.
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).
