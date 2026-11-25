@@ -139,10 +139,10 @@ class RoyuanProvider(Provider):
         mine = [d for d in infos
                 if d.get("product_id") == PID
                 and (d.get("usage_page"), d.get("usage")) == USAGE]
-        # A data cable makes the keyboard enumerate as 3151:4015 while the
-        # receiver stays plugged in. That is the only charging signal this
-        # receiver exposes: its F7 status has no usable charging byte, and a
-        # board on a wall charger cannot be seen from here at all.
+        # In wired mode (Fn+5), a data cable makes the keyboard enumerate as
+        # 3151:4015 while the receiver stays plugged in. That is the only
+        # charging signal this receiver exposes: its F7 status has no usable
+        # charging byte, and a board on a wall charger cannot be seen here.
         on_cable = any(d.get("product_id") == CABLE_PID for d in infos)
         if on_cable:
             self._diag.append(f"[ROYUAN] cable keyboard {CABLE_PID:04x} is present")

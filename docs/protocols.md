@@ -489,13 +489,14 @@ MonsGeek driver reads too), and the device type at 6 (1 keyboard, 2 mouse, 3 bot
 level of zero is the receiver answering before the keyboard has reported, not a reading.
 The status has no usable charging field: `krisgfx9/Wireless-Device-Battery-Monitor` measured
 this dongle reporting "charging" with no cable attached, so it is not trusted. The charging
-signal used here is the keyboard itself: with a USB-C **data** cable in, it enumerates as
+signal used here is the keyboard itself: when switched to wired mode (Fn+5) with a USB-C **data** cable in, it enumerates as
 `3151:4015` ("EPOMAKER TH80 ISO") while the receiver reports the keyboard offline with its
 cached level, and that presence is shown as charging. A wall charger cannot be seen from
 the PC at all. Confirmed on hardware with test build 2: wired mode showed 74 % and
 charging, while the wireless replies with and without a wall charger were identical
 except for the level byte itself (`4c` -> `59`), so the status carries no charger state
-there. Only the receiver id and collection are claimed, and the request is
+there. A cable connected while the keyboard stays in 2.4 GHz mode is not part of that
+confirmed signal. Only the receiver id and collection are claimed, and the request is
 read-only. sharkfin is GPL-3.0 and is used as the protocol reference only; no code is
 taken from it. Reported on an Epomaker TH80 ISO in
 [#560](https://github.com/HeyOkay/HaloBattery/issues/560): test build 1 read 73 % against
