@@ -1009,6 +1009,44 @@ controller the pad keeps the generic name rather than risk renaming the other on
 Windows.Gaming.Input reports are deliberately left out of the trusted set: the
 `remain=full=1000` placeholder would otherwise become a false 100 % (#110, #191).
 
+### Corsair SABRE v3 PRO Ultralight
+
+**Connection:** 2.4 GHz receiver (`1B1C:2B42`); the mouse on its cable is
+`1B1C:2B43`. Both expose `FF42:0001` / `FF42:0002`.
+
+This model does not answer the older 64-byte Bragi exchange. It uses the newer
+Slipstream V2 transfer of OpenLinkHub's SABRE v3 packages: an output report with
+report id 0, the endpoint, `01 01`, then the command. Through the receiver
+(`sabrev3proW`) the reports are 512 bytes and the paired mouse is endpoint 1; on
+the cable (`sabrev3proWU`) they are 64 bytes and the endpoint is 0. A reply
+echoes the endpoint at byte 0 and the command at byte 3, carries the status at
+byte 4 (0 = done) and the value from byte 5. The receiver also sends frames of
+its own on that collection (`00 00 04 0d ...` arrived in place of the charge
+answer in [#543](https://github.com/HeyOkay/HaloBattery/issues/543)), so only a
+reply with the right endpoint and command counts.
+
+The battery property is `0x0F`, in tenths of a percent, little-endian. Property
+`0x10` is the charge state (1 charging, 2 on battery, 3 full). When the mouse
+gives no charge state, its cable identity `2B43` being present means it is
+charging from the PC.
+
+Halo sends only the plain battery and charge property reads. Refusals, silence,
+short replies and I/O errors do not trigger login or software/hardware-mode
+writes. OpenLinkHub's full-control session also uses those handshakes, but they
+were not exercised by the reporter's successful reads and are not used here.
+
+**Confirmed on the reporter's hardware** (@ahyuk44-gif, #543, test build 3): 94 %
+through the receiver (`01 00 01 02 00 ac 03` - 940 tenths - charge `0x02`), then
+97 % with `0x01` and the charging animation over the PC cable (`2B43`,
+`00 00 01 02 00 ca 03`), which cleared when unplugged. The plain property read
+was enough on this unit - no login or software mode was needed - and the
+reporter noticed no change in the mouse's buttons while the build ran.
+
+Source: OpenLinkHub (GPL-3.0), `src/devices/sabrev3proW/sabrev3proW.go`,
+`src/devices/sabrev3proWU/sabrev3proWU.go` and the `src/devices/slipstreamV2`
+transport, used as the protocol reference. The frames above are from the
+reporter's captures in #543.
+
 ### 8BitDo Ultimate 2 Wireless (DInput)
 
 **Connection:** 2.4 GHz receiver or Bluetooth, after starting the controller with **B**

@@ -31,6 +31,7 @@
 | [Ninjutso Sora V2; Sprime PM1](protocols.md#ninjutso-sora-v2-sprime-pm1) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
 | [Corsair M65 RGB Ultra Wireless](protocols.md#corsair-m65-rgb-ultra-wireless) | Slipstream receiver or USB cable | yes (battery and charging) |
+| [Corsair SABRE v3 PRO Ultralight](protocols.md#corsair-sabre-v3-pro-ultralight) | 2.4 GHz Slipstream receiver (`1B1C:2B42`) or USB cable (`1B1C:2B43`) | yes (level and charging; receiver and cable, tested by @ahyuk44-gif) |
 | [Corsair Virtuoso RGB Wireless SE / XT](protocols.md#corsair-virtuoso-rgb-wireless-se--xt) | Slipstream receiver or USB cable | yes for the SE on the Multi-Device receiver; XT untried |
 | [Corsair Void Elite Wireless](protocols.md#corsair-void-elite-wireless) | 2.4 GHz receiver | likely |
 | [Corsair HS80 RGB Wireless (original)](protocols.md#corsair-hs80-rgb-wireless-original) | Direct USB cable or 2.4 GHz receiver | yes (charging inferred when connected by USB) |
