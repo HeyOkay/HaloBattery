@@ -1,6 +1,10 @@
 from .base import DeviceStatus, Provider  # noqa: F401
 from .aula import AulaProvider  # noqa: F401
 from .aula_f108 import AulaF108Provider  # noqa: F401
+from .crociris import CrocirisProvider  # noqa: F401
+from .scyrox import ScyroxProvider  # noqa: F401
+from .semico import SemicoProvider  # noqa: F401
+from .zebronics import ZebronicsProvider  # noqa: F401
 from .ninjutso_sprime import NinjutsoSprimeProvider  # noqa: F401
 from .moondrop import MoondropProvider  # noqa: F401
 from .msi import MsiProvider  # noqa: F401

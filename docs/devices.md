@@ -149,6 +149,20 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported BatteryHub families (second batch)
+
+Every row is unverified in Halo: the reader comes from BatteryHub's documented
+protocol, not a Halo capture. Check charging transitions before calling any of
+them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [Zebronics wireless mouse](protocols.md#zebronics) | 2.4 GHz receiver (3554:fc0a) | no |
+| [Attack Shark X98](protocols.md#semico) | 2.4 GHz receiver or USB cable (1a2c:8fff/a034) | no |
+| [AJAZZ AK820 Max Plus](protocols.md#semico) | 2.4 GHz receiver or USB cable (1a2c:8fff/a036) | no |
+| [CROCIRIS X7 / X7 Ultra Max](protocols.md#crociris) | 8K receiver (36f9:aa20) | no |
+| [Scyrox V12M](protocols.md#scyrox) | 2.4 GHz receiver (395a:0006) | no |
+
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),

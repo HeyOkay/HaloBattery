@@ -114,6 +114,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Port four more BatteryHub device families: Zebronics `3554:fc0a`, Semico
+  keyboards (`1a2c:8fff/a034/a036`), CROCIRIS X7 (`36f9:aa20`) and Scyrox
+  V12M (`395a:0006`). CROCIRIS reports charging; Zebronics, Semico and Scyrox
+  have no confirmed charging field and are marked unknown. None has been
+  hardware-tested in Halo yet. See `docs/protocols.md`, "Ported BatteryHub
+  families (second batch)".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

@@ -1813,3 +1813,53 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+## Ported BatteryHub families (second batch)
+
+These readers are clean-room ports of BatteryHub 1.1.1 (GPL-3.0-or-later), using
+its driver notes as protocol references only. Halo has not seen any of these
+models on hardware, so charging transitions remain unconfirmed.
+
+### Zebronics
+
+The CompX receiver exposes `ff02:0002`. Read-only GET_FEATURE for report id
+`06` returns an 8-byte report whose level is byte 5:
+
+    06 00 02 00 <rolling> <percent> <constant> <constant>
+
+Bytes 1..3 and 6..7 stayed constant in the BatteryHub capture, including with
+the battery removed; the receiver answers from cached state. The mouse is
+battery-only, so `charging_known` is false.
+
+### Semico
+
+Attack Shark X98 and AJAZZ AK820 Max Plus use interface 0, usage `ff02:0002`,
+65-byte reports, and the `AA 55 CC 33` status command `0x0e`:
+
+    request  00 AA 55 CC 33 0E 00 ...
+    reply    AA 55 CC 33 0E <percent> <state>
+
+State 0 is offline; 1..3 is online. The state is 1 both on battery and while
+charging on the X98, so charging is not inferred. The dongle is `8fff`; the
+X98 cable is `a034` and the AK820 Max Plus cable is `a036`.
+
+### CROCIRIS
+
+The receiver's `ff0a:0001` collection takes one read-only status request:
+
+    request  00 AA 12 00 00 ...
+    reply    55 12 02 00 <charging> <percent> <full> ...
+
+Only `charging` (0/1) and the 1..100 level are used. A zero level while the
+mouse sleeps is skipped, and the previous reading is kept dimmed for up to
+300 seconds. The `full` byte is not published because Halo's `DeviceStatus`
+has no separate full flag.
+
+### Scyrox
+
+The `ff00:0002` collection on interface 2 has 64-byte reports. The read-only
+profile request is `[08][01][00...][09]`. The receiver streams one `08 01`
+frame per profile, plus axis frames `23`/`25`; the active profile frame has
+`[3] != 0`, `[4] == [5]`, a DPI-stage count of 1..5 at `[7]`, no error at
+`[62]`, and the battery level at `[20]`. A frame with `[3] == 0` ends the
+stream. No charging field is confirmed, so it is marked unknown.
