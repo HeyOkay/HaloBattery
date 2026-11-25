@@ -45,7 +45,7 @@ The [pre-release builds](https://github.com/HeyOkay/HaloBattery/releases) have f
 
 Windows SmartScreen may warn about an unrecognized app, because the file is not code-signed: **More info → Run anyway**. The release is built by GitHub Actions straight from this repository, with public build logs.
 
-Right-click any icon to rename the device, hide it, set its alert level, change the preferences or take a diagnostics report. **[All features and settings →](docs/features.md)** (also: portable mode, running from source)
+Right-click any icon to rename or hide the device, set its alert level, refresh now, open Settings or take a diagnostics report. **[All features and settings →](docs/features.md)** (also: portable mode, running from source)
 
 ## Supported devices
 
