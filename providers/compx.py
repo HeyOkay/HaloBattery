@@ -107,3 +107,107 @@ def voltage_mv(r) -> Optional[int]:
     if not r or len(r) < VOLTAGE_SLICE[1]:
         return None
     return int.from_bytes(bytes(r[VOLTAGE_SLICE[0]:VOLTAGE_SLICE[1]]), "big")
+
+
+# --------------------------------------------------------------- SET_REPORT path
+#
+# Some 8K dongles of this family reject WriteFile on the vendor collection (the
+# ATK 373B:1278 does), and only answer the same 17-byte frame when it is sent as
+# HID SET_REPORT. hidapi has no call for that, so this path opens the collection
+# with CreateFileW, sends it with HidD_SetOutputReport and waits for the reply on
+# the same handle. The frame is the same make_request() the interrupt-OUT path
+# uses; only the transport differs. Used by providers/pulsar.py for that id.
+
+class _OVERLAPPED(ctypes.Structure):
+    _fields_ = [("Internal", ctypes.c_size_t), ("InternalHigh", ctypes.c_size_t),
+                ("Offset", ctypes.c_uint32), ("OffsetHigh", ctypes.c_uint32),
+                ("hEvent", ctypes.c_void_p)]
+
+
+_GENERIC_READ_WRITE = 0x80000000 | 0x40000000
+_FILE_FLAG_OVERLAPPED = 0x40000000
+_ERROR_IO_PENDING = 997
+
+
+def set_output_query(path, timeout_ms: int = 700) -> Optional[bytes]:
+    """Send the power query with HID SET_REPORT and return the reply, if any."""
+    if sys.platform != "win32":
+        return None
+    try:
+        name = path.decode("utf-8", "ignore") if isinstance(path, (bytes, bytearray)) else str(path)
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        hidd = ctypes.WinDLL("hid.dll")
+        k32.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+                                    ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32,
+                                    ctypes.c_void_p]
+        k32.CreateFileW.restype = ctypes.c_void_p
+        k32.ReadFile.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32,
+                                 ctypes.POINTER(ctypes.c_uint32),
+                                 ctypes.POINTER(_OVERLAPPED)]
+        k32.ReadFile.restype = ctypes.c_bool
+        k32.CreateEventW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_bool,
+                                     ctypes.c_wchar_p]
+        k32.CreateEventW.restype = ctypes.c_void_p
+        k32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        k32.WaitForSingleObject.restype = ctypes.c_uint32
+        k32.GetOverlappedResult.argtypes = [ctypes.c_void_p, ctypes.POINTER(_OVERLAPPED),
+                                            ctypes.POINTER(ctypes.c_uint32), ctypes.c_bool]
+        k32.GetOverlappedResult.restype = ctypes.c_bool
+        k32.CancelIoEx.argtypes = [ctypes.c_void_p, ctypes.POINTER(_OVERLAPPED)]
+        k32.CancelIoEx.restype = ctypes.c_bool
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.CloseHandle.restype = ctypes.c_bool
+        hidd.HidD_SetOutputReport.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32]
+        hidd.HidD_SetOutputReport.restype = ctypes.c_bool
+
+        handle = k32.CreateFileW(name, _GENERIC_READ_WRITE, 3, None, 3,
+                                 _FILE_FLAG_OVERLAPPED, None)
+        if not handle or handle == ctypes.c_void_p(-1).value:
+            return None
+    except Exception:
+        return None
+    event = None
+    try:
+        frame = bytes(make_request())
+        buf = (ctypes.c_ubyte * len(frame)).from_buffer_copy(frame)
+        if not hidd.HidD_SetOutputReport(ctypes.c_void_p(handle), buf, len(frame)):
+            return None
+        # The interrupt-IN side also carries mouse movement, so the first report
+        # after the query is not necessarily the answer. Read until a frame with
+        # the power command shows up (the reference tool tries twelve times).
+        for attempt in range(12):
+            event = k32.CreateEventW(None, True, False, None)
+            if not event:
+                return None
+            try:
+                ov = _OVERLAPPED()
+                ov.hEvent = ctypes.c_void_p(event)
+                out = (ctypes.c_ubyte * PAYLOAD_LEN)()
+                read = ctypes.c_uint32()
+                wait_ms = timeout_ms if attempt == 0 else 60
+                if not k32.ReadFile(ctypes.c_void_p(handle), out, PAYLOAD_LEN,
+                                    ctypes.byref(read), ctypes.byref(ov)):
+                    if ctypes.get_last_error() != _ERROR_IO_PENDING:
+                        return None
+                    if k32.WaitForSingleObject(ctypes.c_void_p(event), wait_ms) != 0:
+                        k32.CancelIoEx(ctypes.c_void_p(handle), ctypes.byref(ov))
+                        continue
+                    if not k32.GetOverlappedResult(ctypes.c_void_p(handle), ctypes.byref(ov),
+                                                   ctypes.byref(read), False):
+                        continue
+                data = bytes(out[:read.value])
+                if len(data) >= 2 and data[0] == PAYLOAD_HEADER and data[1] == CMD_POWER:
+                    return data
+            finally:
+                try:
+                    k32.CloseHandle(ctypes.c_void_p(event))
+                except Exception:
+                    pass
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            k32.CloseHandle(ctypes.c_void_p(handle))
+        except Exception:
+            pass

@@ -252,6 +252,31 @@ class PulsarTest(unittest.TestCase):
         self.assertEqual("mouse", d.kind)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
+    def test_the_atk_f1_v3_8k_receiver_is_read_with_set_report(self):
+        # #571: 373b:1278 'Compx Wireless mouse 8k dongle-L'. The firmware refuses
+        # WriteFile on the vendor collection, so the query goes out with HID
+        # SET_REPORT and the reply is read from the same handle.
+        bus = self.one_receiver(vid=0x373B, pid=0x1278)
+        sent = []
+
+        def fake_set_output(path):
+            sent.append(path)
+            return reply(73, 1, 4120)
+
+        with mock.patch.object(P, "set_output_query", fake_set_output):
+            provider = P.PulsarProvider()
+            found = provider.poll()
+        self.assertEqual(1, len(found))
+        d = found[0]
+        self.assertEqual("pulsar:373b1278", d.key)
+        self.assertEqual("ATK F1 V3 Ultimate+ (2.4 GHz)", d.name)
+        self.assertEqual(73, d.level)
+        self.assertTrue(d.charging)
+        self.assertEqual("mouse", d.kind)
+        self.assertEqual([], bus.written())          # no interrupt-OUT write
+        self.assertEqual(1, len(sent))
+        self.assertIn("HID SET_REPORT", "\n".join(provider.diagnostics()))
+
     def test_the_teevolution_terra_pro_is_read_as_a_keyboard(self):
         # #300: 3554:f523 'Compx' 'RapidSync' - the dongle's product string does not
         # name the model, but it publishes the family's ff02:0002 collection
@@ -517,6 +542,14 @@ class PulsarTest(unittest.TestCase):
                     P.output_length = lambda path: None
                     P.hidlist = types.SimpleNamespace(enumerate=bus.enumerate)
                     P.hid = types.SimpleNamespace(device=bus.device_class())
+                    if (vid, pid) in P.SET_REPORT_PIDS:
+                        # This dongle refuses WriteFile; the separate test above
+                        # checks the SET_REPORT path, here only the level matters.
+                        with mock.patch.object(P, "set_output_query", lambda path: reply(33)):
+                            found = P.PulsarProvider().poll()
+                        self.assertEqual(1, len(found), "no reading for %04x:%04x" % (vid, pid))
+                        self.assertEqual(33, found[0].level)
+                        continue
                     found = P.PulsarProvider().poll()
                     self.assertEqual(1, len(found), "no reading for %04x:%04x" % (vid, pid))
                     self.assertEqual(33, found[0].level)
