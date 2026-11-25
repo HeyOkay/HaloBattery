@@ -345,6 +345,50 @@ class PulsarTest(unittest.TestCase):
                          (d.key, d.name, d.level, d.charging, d.kind))
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
+    def test_the_cable_replaces_the_greyed_receiver_copy(self):
+        # one R1 Pro Max: read on its receiver, then put on its cable (the receiver
+        # goes quiet but stays plugged in), then unplugged from the cable again
+        dongle = FakeBus(0x3554, 0xF58A, [reply(25, 0, 3658)])
+        buses = [dongle]
+
+        class Both:
+            def enumerate(self, vid):
+                return [d for b in buses for d in b.enumerate(vid)]
+
+        def device():
+            class Device:
+                def open_path(self, path):
+                    bus = next(b for b in buses if any(c.info["path"] == path for c in b.cols))
+                    self.d = bus.device_class()()
+                    self.d.open_path(path)
+
+                def write(self, frame):
+                    self.d.write(frame)
+
+                def read(self, length, timeout_ms=0):
+                    return self.d.read(length, timeout_ms)
+
+                def close(self):
+                    pass
+            return Device()
+
+        P.output_length = lambda path: None
+        P.hidlist = Both()
+        P.hid = types.SimpleNamespace(device=device)
+        provider = P.PulsarProvider()
+        [d] = provider.poll()
+        self.assertEqual(("pulsar:3554f58a", 25, True), (d.key, d.level, d.online))
+
+        for cable in ((0x373B, 0x1273), (0x3554, 0xF58C)):
+            with self.subTest(cable=cable):
+                buses[:] = [dongle, FakeBus(*cable, [reply(40, 1, 3783)])]
+                [d] = provider.poll()          # one icon: the live cable reading
+                self.assertEqual((f"pulsar:{cable[0]:04x}{cable[1]:04x}", 40, True, True),
+                                 (d.key, d.level, d.charging, d.online))
+                buses[:] = [dongle]            # cable out: the receiver's value is back
+                [d] = provider.poll()
+                self.assertEqual(("pulsar:3554f58a", 25, False), (d.key, d.level, d.online))
+
     def test_zaopin_z2_4k_is_read_over_both_transports(self):
         cases = (
             (0xF526, "Zaopin Z2 4K (wired)", 45, True, 3817),

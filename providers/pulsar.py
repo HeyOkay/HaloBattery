@@ -30,6 +30,8 @@ Some R1 Pro Max units enumerate on their cable under ATK's vendor id instead, as
 lists the same eight collections (ff02:0002 on interface 1) and, read on hardware,
 answered the same command 0x04 frame with a valid checksum: 08 04 00 00 00 02 28 01
 0e c7 .. 49 (40 %, on the cable, 3783 mV), with the receiver quiet meanwhile.
+While either cable id answers, the receiver's greyed last value is not shown as
+a second icon (RECEIVER_OF); it is kept and comes back when the cable is out.
 
 The ATK and Compx builds are also handled by the OpenMouse project's ATK/VXE panel
 (@openmouse/protocol, drivers/atk): it lists 3554:f58a for the R1 Pro Max receiver
@@ -217,6 +219,11 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x3854: "G-Wolves mouse (8K receiver)",
     },
 }
+
+# cable key -> its receiver's key: while the mouse answers on the cable, the receiver
+# is quiet by design, so its greyed last value would be a second icon for one mouse
+RECEIVER_OF: Dict[str, str] = {"pulsar:3554f58c": "pulsar:3554f58a",
+                               "pulsar:373b1273": "pulsar:3554f58a"}
 
 # ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
 # and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
@@ -478,9 +485,14 @@ class PulsarProvider(Provider):
         # long it sleeps. Only a receiver pulled out drops the device: Windows
         # re-creates a removed icon at a new tray position, which is what the
         # 2026-10-03 screen-off report was about.
+        on_cable = {RECEIVER_OF[k] for k in found if k in RECEIVER_OF}
         for key in list(self._last):
             name, level, charging, seen, kind = self._last[key]
             if key in found:
+                continue
+            if key in on_cable:              # kept for when the cable comes out
+                self._diag.append(f"[Pulsar] {name}: the mouse is on its cable; "
+                                  "the receiver's last value is not shown")
                 continue
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
