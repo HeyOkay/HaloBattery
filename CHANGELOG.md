@@ -114,6 +114,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Add four single-model readers from BatteryHub: AKG N9 Hybrid (`0ecb:20d9`,
+  charging unknown), Alienware AW920H (`413c:a515`, charging byte), AULA A7Pro
+  (`38a6:0001`, external-power/full distinction) and PULSE Explore on the
+  PlayStation Link adapter (`054c:0ecc`, left/right levels, charging unknown).
+  None has been hardware-tested in Halo yet. See `docs/protocols.md`, "Ported
+  BatteryHub single-model readers".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).
