@@ -107,9 +107,13 @@ used the expected TEST policy/certificate and exact input layouts.
 ## Limits before production
 
 The certificate is self-signed. The verifier requires the pinned embedded signer
-and accepts `Valid` or `NotTrusted`; hash mismatch, missing/catalog signatures,
-changed PE contents or unexpected returned files fail. It does not install the
-test certificate into Windows trust or claim Smart App Control compatibility.
+and checks the native Windows trust result. `Valid` requires native success;
+`NotTrusted` or `UnknownError` is accepted only for exactly `CERT_E_UNTRUSTEDROOT`
+(`0x800B0109`). Other errors, hash mismatch, missing/catalog signatures, changed
+PE contents or unexpected returned files fail. Signing jobs only stage the
+returned files; token-free jobs perform complete acceptance before packaging or
+uploading the final TEST artifact. No certificate is installed into Windows trust,
+and this test does not establish Smart App Control compatibility.
 
 This test signs the application PEs and outer setup only. The generated Inno
 uninstaller and temporary setup copies still need the separately reviewed

@@ -14,6 +14,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Recognize the pinned self-signed TEST certificate's untrusted-root result on
+  Windows without trusting the certificate or accepting other signature errors.
 - Make tray device names bold with smaller status details and fit menu widths to
   their content. Double-click the highlighted name to rename it in place; Enter
   saves and Escape cancels. Add a This device submenu for hiding, low-battery
