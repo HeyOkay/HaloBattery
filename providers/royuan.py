@@ -34,6 +34,7 @@ from .base import DeviceStatus, Provider, hexdump, log
 
 VID = 0x3151
 PID = 0x4011
+CABLE_PID = 0x4015                      # the keyboard itself, seen only on a USB cable
 NAME = "ROYUAN 2.4G keyboard"
 KEY = f"royuan:{PID:04x}"
 
@@ -138,7 +139,18 @@ class RoyuanProvider(Provider):
         mine = [d for d in infos
                 if d.get("product_id") == PID
                 and (d.get("usage_page"), d.get("usage")) == USAGE]
+        # A data cable makes the keyboard enumerate as 3151:4015 while the
+        # receiver stays plugged in. That is the only charging signal this
+        # receiver exposes: its F7 status has no usable charging byte, and a
+        # board on a wall charger cannot be seen from here at all.
+        on_cable = any(d.get("product_id") == CABLE_PID for d in infos)
+        if on_cable:
+            self._diag.append(f"[ROYUAN] cable keyboard {CABLE_PID:04x} is present")
         if not mine:
+            if on_cable:
+                self._diag.append("  no receiver status; the keyboard is on its cable")
+                return [self._status(self._kept_level(), online=True,
+                                     charging=True, charging_known=True)]
             return []
         # the configuration collection sits on interface 2 where the receiver
         # lists it more than once; the others do not answer the status request
@@ -151,6 +163,11 @@ class RoyuanProvider(Provider):
             if got is None:
                 continue
             level, online = got
+            if on_cable:
+                if online:
+                    self._last = (level, time.time())
+                self._diag.append(f"  -> {level}% on its USB cable")
+                return [self._status(level, online=True, charging=True, charging_known=True)]
             if online:
                 self._last = (level, time.time())
                 self._diag.append(f"  -> {level}%")
@@ -159,6 +176,9 @@ class RoyuanProvider(Provider):
             self._diag.append("  keyboard offline (switched off or out of range)")
             return [self._status(kept, online=False)]
         self._diag.append("  no 0xF7 answer")
+        if on_cable:
+            return [self._status(self._kept_level(), online=True,
+                                 charging=True, charging_known=True)]
         return [self._status(self._kept_level(), online=False)]
 
     def _kept_level(self) -> Optional[int]:
@@ -167,9 +187,10 @@ class RoyuanProvider(Provider):
         return None
 
     @staticmethod
-    def _status(level: Optional[int], online: bool) -> DeviceStatus:
-        return DeviceStatus(KEY, NAME, level, False, online, "royuan",
-                            kind="keyboard", charging_known=False)
+    def _status(level: Optional[int], online: bool, charging: bool = False,
+                charging_known: bool = False) -> DeviceStatus:
+        return DeviceStatus(KEY, NAME, level, charging, online, "royuan",
+                            kind="keyboard", charging_known=charging_known)
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

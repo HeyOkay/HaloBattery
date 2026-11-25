@@ -142,6 +142,18 @@ class PollTests(unittest.TestCase):
     def test_another_product_is_ignored(self):
         self.assertEqual([], self.poll([entry(pid=0x4012)], FakeDevice([status(96)])))
 
+    def test_the_cable_keyboard_marks_the_receiver_as_charging(self):
+        # #560: with a USB-C data cable in, the keyboard itself appears as
+        # 3151:4015 and the receiver reports it offline with its last level.
+        dev = FakeDevice([status(81, online=False)])
+        out = self.poll([entry(pid=R.CABLE_PID, path=b"cable"), entry()], dev)
+        self.assertEqual(1, len(out))
+        s = out[0]
+        self.assertEqual((81, True, True, True, "keyboard"),
+                         (s.level, s.charging, s.online, s.charging_known, s.kind))
+        self.assertEqual([b"royuan"], dev.opened)     # the cable entry is not opened
+        self.assertIn("cable keyboard 4015 is present", "\n".join(self.provider.diagnostics()))
+
     def test_an_offline_keyboard_keeps_the_last_level_greyed(self):
         self.poll([entry()], FakeDevice([status(88)]))
         self.now[0] += 60

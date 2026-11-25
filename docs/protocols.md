@@ -487,12 +487,17 @@ a bit7 checksum (`FF - sum`) at payload byte 7. The reply carries the keyboard l
 payload byte 1, the keyboard link byte at 3 (zero while online - the polarity the
 MonsGeek driver reads too), and the device type at 6 (1 keyboard, 2 mouse, 3 both). A
 level of zero is the receiver answering before the keyboard has reported, not a reading.
-The status carries no charging flag, so `charging_known` stays False. Only that receiver
-id and collection are claimed, and the request is read-only. sharkfin is GPL-3.0 and is
-used as the protocol reference only; no code is taken from it. Reported on an Epomaker
-TH80 ISO in [#560](https://github.com/HeyOkay/HaloBattery/issues/560); the same receiver
-ships with other ROYUAN-built boards, so the icon names the receiver family. **Unverified
-in this app**: a test build is with the reporter of #560.
+The status has no usable charging field: `krisgfx9/Wireless-Device-Battery-Monitor` measured
+this dongle reporting "charging" with no cable attached, so it is not trusted. The charging
+signal used here is the keyboard itself: with a USB-C **data** cable in, it enumerates as
+`3151:4015` ("EPOMAKER TH80 ISO") while the receiver reports the keyboard offline with its
+cached level, and that presence is shown as charging. A wall charger cannot be seen from
+the PC at all. Only the receiver id and collection are claimed, and the request is
+read-only. sharkfin is GPL-3.0 and is used as the protocol reference only; no code is
+taken from it. Reported on an Epomaker TH80 ISO in
+[#560](https://github.com/HeyOkay/HaloBattery/issues/560): test build 1 read 73 % against
+the vendor app's coarse 70 % band. The same receiver ships with other ROYUAN-built
+boards, so the icon names the receiver family.
 
 ### Inphic and Attack Shark mice (1D57 receivers)
 
