@@ -1093,9 +1093,17 @@ is read back (35 ms later, three tries, as for the ROG Strix Go 2.4). The batter
 frame starts `FF 12 05 FE 0C`; bytes 11-12 are the battery voltage, little-endian.
 The level is Solaar's Li-ion curve (the one the Logitech provider uses). A voltage
 outside 3000-4500 mV, another header, the `FF AA` error and an all-zero frame are no
-reading. Byte 9 was `0x03` on battery; `0x0A` is taken as charging from the Strix Go,
-and other values leave charging unknown. **Confirmed on hardware**: 3904 mV -> 67 %
-on battery, with Armoury Crate open at the same time.
+reading.
+
+Byte 9 is the charger. With all ASUS software stopped, every frame read `0x03` on
+battery (218 of 218) and `0x05` on the USB-C cable (217 of 217). While ASUS software
+(`asus_framework.exe`, Armoury Crate) polls the same dongle, its traffic shows
+through: on battery a short `0x0A` frame now and then, and on the cable `0x0A`,
+`0x03` and `0x05` frames of about 3 s each in turn. So `0x05` is charging at once;
+a `0x03` frame is read again 3 s later, and two `0x03` frames 3 s apart are on
+battery; `0x0A` says nothing. At most two re-reads (6 s) a poll, only while the
+answer is open. **Confirmed on hardware**: 3904 mV -> 67 % on battery, with Armoury
+Crate open at the same time; charging read on the cable.
 
 Source: two USBPcap captures of Armoury Crate 6.0.0 reading the headset's Power
 page: 3970 mV with Armoury Crate at 100 %, 3913-3919 mV at 75 %. Armoury Crate

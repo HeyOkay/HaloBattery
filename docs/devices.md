@@ -17,7 +17,7 @@
 | [ASUS ROG Harpe II Ace / Harpe II Extreme](protocols.md#asus-rog-harpe-ii-ace--harpe-ii-extreme) | 2.4 GHz receiver or USB cable | Harpe II Ace on its receiver |
 | [ASUS ROG Azoth 96 HE](hid-target-safety.md#asus-shared-speednova-receiver) | Shared SPEEDNOVA receiver, paired `1C12` | Level and charging confirmed in #238 test build; no new hardware retest |
 | [ASUS ROG Azoth X](protocols.md#asus-rog-omni-receiver-mice-and-keyboards) | OMNI receiver (0B05:1ACE) | yes (level confirmed by reporter) |
-| [ASUS TUF Gaming H3 Wireless](protocols.md#asus-tuf-gaming-h3-wireless) | 2.4 GHz dongle (0B05:1963) | yes (level; charging not seen yet) |
+| [ASUS TUF Gaming H3 Wireless](protocols.md#asus-tuf-gaming-h3-wireless) | 2.4 GHz dongle (0B05:1963) | yes (level and charging) |
 | [ASUS ROG Raikiri II](protocols.md#asus-rog-raikiri-ii) | 2.4 GHz receiver, vendor collection (0B05:1C92) | yes (level and charging confirmed by reporter) |
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
 | [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |

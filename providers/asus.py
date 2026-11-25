@@ -87,8 +87,16 @@ Bytes 16-17 (0x1068, 4200 mV) stayed the same in both captures; bytes 11-12 are 
 voltage, as on the Strix Go. The level is Solaar's Li-ion curve (the one logitech.py
 uses): 3970 -> 77 % and 3916 -> 69 %, which Armoury Crate rounds up to its 100 % and
 75 % quarter steps (the Strix Go's 3831 / 3743 mV -> 54 / 28 % round up to its
-reporter's 75 / 50 % as well). Byte 9 was 0x03 on battery in both captures; 0x0A is
-taken as charging from the Strix Go, and any other value leaves charging unknown.
+reporter's 75 / 50 % as well).
+
+Byte 9 is the charger: measured on the headset with this provider's own read and all
+ASUS software stopped, every frame is 0x03 (byte 10 0x05) on battery (218 of 218)
+and 0x05 (byte 10 0x03) on the USB-C cable (217 of 217). While ASUS software
+(asus_framework.exe, Armoury Crate) polls the same dongle, its traffic shows through:
+on battery a 0x0A frame now and then, and on the cable a rotation of 0x0A, 0x03 and
+0x05 frames of about 3 s each (a 0x03 frame ~2.5 s). So 0x05 is charging at once; a
+0x03 frame is read again 3 s later, and two 0x03 frames 3 s apart are on battery;
+0x0A says nothing. At most two re-reads (6 s), and only while the answer is open.
 """
 from __future__ import annotations
 
@@ -155,7 +163,11 @@ TUF_H3_NAME = "TUF Gaming H3 Wireless"
 TUF_H3_REQUEST = [0xFF, 0x07, 0x00, 0xFD, 0x04, 0x0C, 0xF1, 0x02, 0x01]
 TUF_H3_HEADER = 0x12                 # reply byte 1 of the battery frame
 TUF_H3_MV_RANGE = (3000, 4500)       # one Li-ion cell; anything else is not a reading
-TUF_H3_CHARGING = {0x03: False, 0x0A: True}   # byte 9; other values: unknown
+# byte 9 (docstring): 0x03 on battery, 0x05 on the cable; other values (0x0A while ASUS
+# software talks to the dongle too) say nothing about the charger
+TUF_H3_CHARGING = {0x03: False, 0x05: True}
+TUF_H3_RECHECK_S = 3.0               # a 0x03 frame lasts ~2.5 s on the cable (docstring)
+TUF_H3_RECHECKS = 2
 
 # pid -> (name, scale). Wired and wireless pids of one mouse share the name, so they
 # share one icon.
@@ -341,10 +353,11 @@ def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
     return HEADSET_LEVEL_LOW, charging
 
 
-# (name, pids, request, parse) of each headset read with a feature-report exchange
+# (name, pids, request, parse, recheck) of each headset read with a feature-report
+# exchange; recheck: the charging state is settled over a few frames (_settle_charging)
 HEADSETS = ((HEADSET_NAME, (HEADSET_PID, HEADSET_WIRED_PID), HEADSET_REQUEST,
-             parse_headset_reply),
-            (TUF_H3_NAME, (TUF_H3_PID,), TUF_H3_REQUEST, parse_tuf_h3_reply))
+             parse_headset_reply, False),
+            (TUF_H3_NAME, (TUF_H3_PID,), TUF_H3_REQUEST, parse_tuf_h3_reply, True))
 
 
 def parse_reply(r: List[int], scale: int) -> Optional[Reading]:
@@ -611,6 +624,26 @@ class AsusProvider(Provider):
             except Exception:
                 pass
 
+    def _settle_charging(self, path, request, parse, res):
+        """The TUF H3's charging state (docstring): a 0x05 frame is the cable at once;
+        otherwise the frame is read again TUF_H3_RECHECK_S later, up to TUF_H3_RECHECKS
+        times, until two "on battery" frames that far apart say battery. The level is
+        the last reading's; charging stays unknown if no frame said either way."""
+        if res is None:
+            return None                      # off or asleep: nothing to settle
+        seen = [res]
+        for _ in range(TUF_H3_RECHECKS):
+            states = [r[1] for r in seen]
+            if True in states or states.count(False) >= 2:
+                break
+            time.sleep(TUF_H3_RECHECK_S)
+            more = self._read_headset(path, request, parse)
+            if more is not None:
+                seen.append(more)
+        states = [r[1] for r in seen]
+        charging = True if True in states else (False if False in states else None)
+        return seen[-1][0], charging
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         if hid is None:
@@ -687,7 +720,7 @@ class AsusProvider(Provider):
                                     ui_message="state.approx" if text else "",
                                     ui_params={"level": level, "charging": charging} if text else {}))
         # the headsets (docstring): their own collection rule and an icon key of their own
-        for hname, pids, request, parse in HEADSETS:
+        for hname, pids, request, parse, recheck in HEADSETS:
             hinfos = [d for d in infos if d["product_id"] in pids]
             if not hinfos:
                 continue
@@ -709,6 +742,8 @@ class AsusProvider(Provider):
                               f"usage={chosen.get('usage_page', 0):04x}:"
                               f"{chosen.get('usage', 0):04x}")
             res = self._read_headset(chosen["path"], request, parse)
+            if recheck:
+                res = self._settle_charging(chosen["path"], request, parse, res)
             if res is None:
                 continue
             level, charging = res

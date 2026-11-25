@@ -41,14 +41,17 @@ LENGTHS = {b"mi03-000c": 4, b"mi03-ffc0": 64, b"mi03-ff00": 64}
 
 class TufH3Test(unittest.TestCase):
     def setUp(self):
-        self._saved = (A.hid, A.hidlist, A.feature_length, A.HEADSET_SLEEP)
-        A.HEADSET_SLEEP = 0
+        self._saved = (A.hid, A.hidlist, A.feature_length, A.HEADSET_SLEEP,
+                       A.TUF_H3_RECHECK_S)
+        A.HEADSET_SLEEP = A.TUF_H3_RECHECK_S = 0
 
     def tearDown(self):
-        A.hid, A.hidlist, A.feature_length, A.HEADSET_SLEEP = self._saved
+        (A.hid, A.hidlist, A.feature_length, A.HEADSET_SLEEP,
+         A.TUF_H3_RECHECK_S) = self._saved
 
     def poll(self, replies, open_error=False, read_error=False):
-        """replies: the feature reports the headset answers, one per read."""
+        """replies: the feature reports the headset answers, one per read; the last
+        one is repeated, as a headset keeps answering."""
         self.sent, self.opened = [], []
         replies = list(replies)
         test = self
@@ -66,7 +69,9 @@ class TufH3Test(unittest.TestCase):
             def get_feature_report(self, rid, n):
                 if read_error:
                     raise OSError("device gone")
-                return replies.pop(0) if replies else []
+                if len(replies) > 1:
+                    return replies.pop(0)
+                return list(replies[0]) if replies else []
 
             def close(self):
                 pass
@@ -81,8 +86,10 @@ class TufH3Test(unittest.TestCase):
         self.poll([frame()])
         self.assertEqual([0xFF, 0x07, 0x00, 0xFD, 0x04, 0x0C, 0xF1, 0x02, 0x01]
                          + [0x00] * 55, self.sent[0])
-        self.assertEqual(1, len(self.sent))           # no Armoury Crate write after it
-        self.assertEqual([b"mi03-ffc0"], self.opened)  # first 64-byte feature collection
+        # on battery: the same read, once more for the charging check; never
+        # Armoury Crate's write
+        self.assertEqual([self.sent[0]] * 2, self.sent)
+        self.assertEqual({b"mi03-ffc0"}, set(self.opened))  # first 64-byte feature collection
 
     def test_captured_frames_follow_the_li_ion_curve(self):
         for lsb, msb, level in ((0x82, 0x0F, 77),    # 3970 mV, Armoury Crate 100 %
@@ -109,13 +116,69 @@ class TufH3Test(unittest.TestCase):
                 self.assertEqual([], self.poll([frame(lsb, msb)]))
 
     def test_charging_state(self):
-        (d,) = self.poll([frame(state=0x0A)])
+        (d,) = self.poll([frame(state=0x05)])        # the cable: charging at once
         self.assertTrue(d.charging)
         self.assertTrue(d.charging_known)
-        (d,) = self.poll([frame(state=0x07)])        # not seen in a capture: unknown
+        self.assertEqual(1, len(self.sent))          # no re-read once charging is seen
+        for state in (0x0A, 0x07):                   # say nothing about the charger
+            with self.subTest(state=state):
+                (d,) = self.poll([frame(state=state)])
+                self.assertEqual(69, d.level)
+                self.assertFalse(d.charging)
+                self.assertFalse(d.charging_known)
+                self.assertEqual(1 + A.TUF_H3_RECHECKS, len(self.sent))
+
+    def test_battery_needs_two_frames_apart(self):
+        # alone on battery every frame is 03: two of them, then stop
+        (d,) = self.poll([frame(state=0x03)])
+        self.assertFalse(d.charging)
+        self.assertTrue(d.charging_known)
+        self.assertEqual(2, len(self.sent))
+        # with ASUS software on the dongle: a 0A blip between the 03 frames
+        (d,) = self.poll([frame(state=0x03), frame(state=0x0A), frame(state=0x03)])
+        self.assertFalse(d.charging)
+        self.assertTrue(d.charging_known)
+        self.assertEqual(3, len(self.sent))
+        (d,) = self.poll([frame(state=0x0A), frame(state=0x03), frame(state=0x0A)])
+        self.assertFalse(d.charging)                 # one 03, nothing against it
+        self.assertTrue(d.charging_known)
+
+    def test_cable_rotation_with_asus_software(self):
+        # the cable while ASUS software polls the dongle: 0A -> 03 -> 05 frames
+        (d,) = self.poll([frame(state=0x03), frame(state=0x05)])
+        self.assertTrue(d.charging)
+        self.assertEqual(2, len(self.sent))
+        (d,) = self.poll([frame(state=0x0A), frame(state=0x03), frame(state=0x05)])
+        self.assertTrue(d.charging)
+        self.assertEqual(3, len(self.sent))
+
+    def test_level_comes_from_the_last_frame(self):
+        (d,) = self.poll([frame(0x4C, 0x0F, 0x03), frame(0x82, 0x0F, 0x05)])
+        self.assertEqual(77, d.level)                # 3970 mV, the newer frame
+
+    def test_recheck_waits_between_frames(self):
+        waits = []
+        saved = A.time
+        A.TUF_H3_RECHECK_S = 3.0
+        A.time = types.SimpleNamespace(sleep=waits.append)
+        try:
+            self.poll([frame(state=0x03)])
+            self.assertEqual(1, waits.count(3.0))    # 03, wait, 03: battery
+            waits.clear()
+            self.poll([frame(state=0x05)])           # charging seen: no wait
+            self.assertNotIn(3.0, waits)
+            waits.clear()
+            self.assertEqual([], self.poll([]))      # off or asleep: no wait either
+            self.assertNotIn(3.0, waits)
+        finally:
+            A.time = saved
+
+    def test_re_read_failing_keeps_the_first_reading(self):
+        # the headset goes silent after the first frame: the first reading stands
+        (d,) = self.poll([frame(state=0x03), [], [], []])
         self.assertEqual(69, d.level)
         self.assertFalse(d.charging)
-        self.assertFalse(d.charging_known)
+        self.assertTrue(d.charging_known)
 
     def test_other_frames_are_not_a_level(self):
         strix = frame()
@@ -135,7 +198,7 @@ class TufH3Test(unittest.TestCase):
         self.assertEqual(69, d.level)
 
     def test_empty_read_is_retried(self):
-        (d,) = self.poll([[], frame()])
+        (d,) = self.poll([[], frame(state=0x05)])
         self.assertEqual(69, d.level)
         self.assertEqual(2, len(self.sent))
 
