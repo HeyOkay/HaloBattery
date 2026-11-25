@@ -34,6 +34,13 @@ class InnoSigningTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(prefix='halo inno signing ')
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
+        fixture_repo = self.root / 'isolated-repo'
+        (fixture_repo / 'scripts').mkdir(parents=True)
+        (fixture_repo / 'installer').mkdir()
+        self.helper = fixture_repo / 'scripts/inno_signing.ps1'
+        shutil.copyfile(HELPER, self.helper)
+        (fixture_repo / 'installer/HaloBattery.iss').write_text('; inert compiler fixture\n', encoding='utf-8')
+        (fixture_repo / 'halo.ico').write_bytes(b'inert icon binding fixture')
         self.payload = self.root / 'payload'
         self.payload.mkdir()
         (self.payload / 'HaloBattery.exe').write_bytes(b'inert payload')
@@ -43,7 +50,7 @@ class InnoSigningTests(unittest.TestCase):
         self.output = self.root / 'output'
 
     def run_stage(self, stage, *, bad=False, signed=None, stub_signed=False):
-        arguments = [PWSH, '-NoProfile', '-NonInteractive', '-File', str(HELPER),
+        arguments = [PWSH, '-NoProfile', '-NonInteractive', '-File', str(self.helper),
                      '-Stage', stage, '-CompilerPath', str(self.compiler),
                      '-SourceDirectory', str(self.payload), '-AppVersion', '1.18.0',
                      '-WorkDirectory', str(self.work), '-OutputDirectory', str(self.output),
@@ -73,7 +80,8 @@ class InnoSigningTests(unittest.TestCase):
         self.assertFalse((self.work / 'internal-manifest.json').exists())
 
     def test_complete_refuses_changed_payload_before_compiler_runs(self):
-        self.assertEqual(self.run_stage('Prepare').returncode, 0)
+        prepared = self.run_stage('Prepare')
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
         (self.payload / 'HaloBattery.exe').write_bytes(b'changed')
         result = self.run_stage('Complete', signed=self.work / 'unsigned-cache')
         self.assertNotEqual(result.returncode, 0)
@@ -81,20 +89,23 @@ class InnoSigningTests(unittest.TestCase):
         self.assertFalse((self.output / 'HaloBattery-test-setup.exe').exists())
 
     def test_complete_refuses_unsigned_cache(self):
-        self.assertEqual(self.run_stage('Prepare').returncode, 0)
+        prepared = self.run_stage('Prepare')
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
         result = self.run_stage('Complete', signed=self.work / 'unsigned-cache')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('missing an embedded signature', result.stderr)
         self.assertFalse((self.output / 'HaloBattery-test-setup.exe').exists())
 
     def test_complete_reuses_exact_cache_without_invoking_a_signing_tool(self):
-        self.assertEqual(self.run_stage('Prepare').returncode, 0)
+        prepared = self.run_stage('Prepare')
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
         result = self.run_stage('Complete', signed=self.work / 'unsigned-cache', stub_signed=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.output / 'HaloBattery-test-setup.exe').read_bytes(), b'inert setup fixture')
 
     def test_complete_rejects_extra_returned_cache_files(self):
-        self.assertEqual(self.run_stage('Prepare').returncode, 0)
+        prepared = self.run_stage('Prepare')
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
         (self.work / 'unsigned-cache' / 'unexpected.exe').write_bytes(b'extra')
         result = self.run_stage('Complete', signed=self.work / 'unsigned-cache', stub_signed=True)
         self.assertNotEqual(result.returncode, 0)
