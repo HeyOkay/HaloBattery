@@ -22,7 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark, blackshark2020, blackshark_mtk, blackshark_v3, hidlist
+# Hammerhead 수신기는 검증된 전용 HID 형식으로 배터리를 읽는다.
+from . import blackshark, blackshark2020, blackshark_mtk, blackshark_v3, hammerhead_v3x, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -412,6 +413,13 @@ class RazerProvider(Provider):
             kind = "keyboard" if pid in KEYBOARD_INTERFACE else ""
             diag_from = len(self._diag)
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
+            if pid == hammerhead_v3x.PID:
+                # Synapse는 연결된 이어폰의 잔량을 보여주며 별도 충전 상태를 읽지 않는다.
+                level = hammerhead_v3x.poll_level(ifaces, self._diag)
+                if level is not None:
+                    out.append(DeviceStatus(key, hammerhead_v3x.NAME, level, source=self.name,
+                                            kind="headset", charging_known=False))
+                continue
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
                 continue
