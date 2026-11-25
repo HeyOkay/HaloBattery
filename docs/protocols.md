@@ -1083,6 +1083,27 @@ Source: no public project documents this query. The controller's owner
 it with his own build against Armoury Crate (65% in both); the charging label of
 byte 10 comes from the ASUS GearLink SDK, as he reported there.
 
+### ASUS TUF Gaming H3 Wireless
+
+**Connection:** 2.4 GHz dongle (`0B05:1963`), the first collection on interface 3
+with a 64-byte feature report
+
+Feature report `0xFF`, 64 bytes: `FF 07 00 FD 04 0C F1 02 01`, then the feature report
+is read back (35 ms later, three tries, as for the ROG Strix Go 2.4). The battery
+frame starts `FF 12 05 FE 0C`; bytes 11-12 are the battery voltage, little-endian.
+The level is Solaar's Li-ion curve (the one the Logitech provider uses). A voltage
+outside 3000-4500 mV, another header, the `FF AA` error and an all-zero frame are no
+reading. Byte 9 was `0x03` on battery; `0x0A` is taken as charging from the Strix Go,
+and other values leave charging unknown. **Confirmed on hardware**: 3904 mV -> 67 %
+on battery, with Armoury Crate open at the same time.
+
+Source: two USBPcap captures of Armoury Crate 6.0.0 reading the headset's Power
+page: 3970 mV with Armoury Crate at 100 %, 3913-3919 mV at 75 %. Armoury Crate
+shows 25 % steps; the curve gives 77 % and 69 %, which it rounds up. It polls about
+every 9 s with this request and another one (`FF 0A 00 FD 04 00 00 05 81 AA C6 01`),
+and writes `FF 08 00 FF 04 0C F1 03 02 xx` after each read; the app sends neither.
+Bytes 16-17 (`68 10`, 4200 mV) did not change between the captures and are not read.
+
 ### Fractal Design Scape
 
 **Connection:** 2.4 GHz dongle (`36BC:0001`) or the headset on its USB-C cable (`36BC:2001`).
