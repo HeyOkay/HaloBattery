@@ -123,6 +123,8 @@ MESSAGES = {
     "provider.jabra": "Słuchawki Jabra (adapter Link 380 / 390)",
     "provider.mchose_kb": "Klawiatury MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.mchose_v9pro2": "MCHOSE V9 Pro 2",
+    "provider.vgn": "VGN OMNISOUND",
     "provider.monsgeek": "Klawiatury MonsGeek",
     "provider.rapoo": "Myszy i klawiatury Rapoo",
     "provider.shield": "Kontrolery NVIDIA SHIELD",

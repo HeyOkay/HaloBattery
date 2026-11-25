@@ -159,6 +159,8 @@ MESSAGES = {
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "MCHOSE keyboards",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.mchose_v9pro2": "MCHOSE V9 Pro 2",
+    "provider.vgn": "VGN OMNISOUND",
     "provider.monsgeek": "MonsGeek keyboards",
     "provider.redsquare": 'Red Square Alumix TKL keyboard',
     "provider.msi": "MSI wireless devices",
