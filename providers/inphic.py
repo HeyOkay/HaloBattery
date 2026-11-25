@@ -52,7 +52,8 @@ status shapes, so both live here behind the model bytes proven on the units:
   on the dongle: idle `03 10 40 01 0a` = 100 %) and caught on the R1's own
   receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %), and his
   run of the test build shows the same reading in the tray. The
-  level arrives in steps of ten and the R1 reports 0x03 while charging; the
+  level arrives in steps of ten and the R1 reports 0x03 while charging, as
+  captured and tested by RichBrokie in PR #567; the
   dongle's config ACK (`03 10 50 ...`) and DPI-button (`03 10 10 ...`)
   reports are excluded by the `0x40` command check.
 """

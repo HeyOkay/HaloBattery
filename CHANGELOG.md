@@ -400,7 +400,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Show the Attack Shark R1 charging animation over its 2.4 GHz receiver, including when powered by a wall charger.
+- Show the Attack Shark R1 charging animation over its 2.4 GHz receiver,
+  including when powered by a wall charger.
 - Extend the Settings Close button hit target to the top-right corner while
   preserving its visible size, position and hover/pressed feedback.
 

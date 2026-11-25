@@ -8,6 +8,8 @@ class R1ChargingTest(unittest.TestCase):
         for packet, result in [("0310400107", (70, False)),
                                ("0310400307", (70, True)),
                                ("0310400108", (80, False)),
+                               ("031040030a", (100, True)),
+                               ("0310400300", None),
                                ("03104003ff", None),
                                ("03104003", None)]:
             with self.subTest(packet=packet):
