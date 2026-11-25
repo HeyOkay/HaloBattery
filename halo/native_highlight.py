@@ -89,7 +89,6 @@ class _Backend:
         self.user.CreateWindowExW.restype = hwnd
         self.user.IsWindow.argtypes, self.user.IsWindow.restype = [hwnd], integer
         self.user.DestroyWindow.argtypes, self.user.DestroyWindow.restype = [hwnd], integer
-        self.user.ShowWindow.argtypes, self.user.ShowWindow.restype = [hwnd, integer], integer
         self.user.SetWindowPos.argtypes = [hwnd, hwnd, integer, integer, integer, integer, uint]
         self.user.SetWindowPos.restype = integer
         self.user.UpdateLayeredWindow.argtypes = [hwnd, hwnd, ctypes.POINTER(_POINT),
@@ -153,12 +152,17 @@ class _Backend:
 
     def reveal(self, window, bounds):
         left, top, right, bottom = bounds
-        if not self.user.SetWindowPos(window, ctypes.c_void_p(-1), left, top,
-                                      right - left, bottom - top, 0x0050):  # SHOWWINDOW | NOACTIVATE
+        # The host orders the panel stack. A hover redraw must neither raise
+        # this owned popup over a descendant nor pull its owner forward.
+        if not self.user.SetWindowPos(window, None, left, top,
+                                      right - left, bottom - top, 0x0254):
+            # SHOWWINDOW | NOACTIVATE | NOZORDER | NOOWNERZORDER
             raise ctypes.WinError()
 
     def hide(self, window):
-        self.user.ShowWindow(window, 0)
+        if not self.user.SetWindowPos(window, None, 0, 0, 0, 0, 0x0297):
+            # HIDEWINDOW | NOMOVE | NOSIZE | NOACTIVATE | NOZORDER | NOOWNERZORDER
+            raise ctypes.WinError()
 
     def destroy(self, window):
         self.user.DestroyWindow(window)
@@ -173,6 +177,7 @@ class NativeHighlight:
         if not self._window:
             raise OSError("Windows could not create the highlight")
         self._cache = None
+        self._presentation = None
 
     @property
     def hwnd(self):
@@ -191,16 +196,23 @@ class NativeHighlight:
             raise ValueError("highlight radius must be nonnegative")
         colour, alpha = _colour(colourRGB), _alpha(alpha_float)
         key = (width, height, radius, colour)
+        presentation = (bounds, radius, colour, alpha)
+        if self._presentation == presentation:
+            return
         try:
             if self._cache is None or self._cache[0] != key:
                 self._cache = (key, _pixels(width, height, radius, colour))
             self._backend.update(self._window, bounds, self._cache[1], alpha)
             self._backend.reveal(self._window, bounds)
+            self._presentation = presentation
         except Exception:
             self.destroy()
             raise
 
     def hide(self):
+        if self._presentation is None:
+            return
+        self._presentation = None
         if self._window:
             try:
                 self._backend.hide(self._window)
@@ -211,6 +223,7 @@ class NativeHighlight:
     def destroy(self):
         window, self._window = self._window, 0
         self._cache = None
+        self._presentation = None
         if window:
             try:
                 self._backend.destroy(window)

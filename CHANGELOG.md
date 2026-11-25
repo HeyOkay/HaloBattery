@@ -17,7 +17,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   overlapping submenus, close abandoned submenus after a short hover delay,
   and smooth highlight edges and the rename hint's appearance. Returning to a
   parent opener dismisses deeper menu levels; all alert menus share the same
-  threshold choices.
+  threshold choices. Keep highlight moves in their existing layer and apply
+  structural window ordering together to avoid flicker in overlapping submenus.
 - Label the MSI provider as wireless devices in Portuguese, including keyboards.
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.

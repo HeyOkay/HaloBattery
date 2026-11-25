@@ -146,9 +146,13 @@ class TaskbarAreaTests(unittest.TestCase):
             def activate(self, hwnd):
                 pass
 
+            def stack_windows(self, windows):
+                pass
+
         class FakePanel:
             def __init__(self, host, menu, style, parent, row):
                 self.rows, self.w, self.h, self.hwnd = [1], 250, 300, 1
+                self._hwnds = [1]
                 self.win = types.SimpleNamespace(focus_force=lambda: None)
 
             def open(self, x, y):
@@ -486,17 +490,47 @@ class HighlightTests(unittest.TestCase):
         p.update_highlight()
         self.assertEqual(p.overlay.calls[-1], ("-alpha", 0.1))
 
-    def test_native_per_pixel_highlight_is_drawn_and_restacked_without_tk_overlay(self):
+    def test_native_per_pixel_highlight_changes_without_reordering_the_panel_stack(self):
         from unittest import mock
         p = self.panel((4, 5, 200, 34))
         p.overlay = None
         p._native_highlight = mock.Mock(hwnd=0x1234)
         p.update_highlight()
         p._native_highlight.show.assert_called_once_with((104, 205, 300, 234), 4, "#ffffff", 0.1)
-        self.assertEqual(self.raised, [0x1234])
+        self.assertEqual(self.raised, [])
         p.highlight_box = lambda: None
         p.update_highlight()
         p._native_highlight.hide.assert_called_once_with()
+        self.assertEqual(self.raised, [])
+
+    def test_window_stack_is_submitted_as_one_batch(self):
+        from unittest import mock
+        win32 = object.__new__(flyout._Win32)
+        win32.user32 = mock.Mock()
+        win32.user32.BeginDeferWindowPos.return_value = 100
+        win32.user32.DeferWindowPos.side_effect = [101, 102, 103]
+        win32.stack_windows([11, 12, 13])
+        self.assertEqual(win32.user32.DeferWindowPos.call_args_list,
+                         [mock.call(100, 11, -1, 0, 0, 0, 0, 0x0213),
+                          mock.call(101, 12, -1, 0, 0, 0, 0, 0x0213),
+                          mock.call(102, 13, -1, 0, 0, 0, 0, 0x0213)])
+        win32.user32.EndDeferWindowPos.assert_called_once_with(103)
+        win32.user32.SetWindowPos.assert_not_called()
+
+    def test_failed_batch_places_ancestors_below_descendants_instead_of_raising_them(self):
+        from unittest import mock
+        for fail in ("begin", "defer", "end"):
+            with self.subTest(fail=fail):
+                win32 = object.__new__(flyout._Win32)
+                win32.user32 = mock.Mock()
+                win32.user32.BeginDeferWindowPos.return_value = 0 if fail == "begin" else 100
+                win32.user32.DeferWindowPos.return_value = 0 if fail == "defer" else 101
+                win32.user32.EndDeferWindowPos.return_value = 0
+                win32.stack_windows([11, 12, 13])
+                self.assertEqual(win32.user32.SetWindowPos.call_args_list,
+                                 [mock.call(13, -1, 0, 0, 0, 0, 0x0213),
+                                  mock.call(12, 13, 0, 0, 0, 0, 0x0213),
+                                  mock.call(11, 12, 0, 0, 0, 0, 0x0213)])
 
     def test_restack_does_not_change_owner_z_order_geometry_or_focus(self):
         from unittest import mock
@@ -630,6 +664,18 @@ class SubmenuStackingTests(unittest.TestCase):
         self.assertEqual(host.panels, panels[:2])
         self.assertEqual(panels[0].child_row, 0)
         self.assertIsNone(panels[1].child_row)
+
+    def test_motion_within_opening_row_does_not_repaint_or_raise_windows(self):
+        from unittest import mock
+        host, panels, _order, calls = self.panels()
+        self.timers(host)
+        root = panels[0]
+        root.update_highlight = mock.Mock()
+        host._track(115, 215)
+        calls.clear()  # the first crossing clears the child's previous hover
+        host._track(116, 216)
+        root.update_highlight.assert_not_called()
+        self.assertEqual(calls, [])
 
     def test_reenter_child_cancels_grandchild_close_and_outside_changes_close_target(self):
         host, panels, _order, _calls = self.panels()

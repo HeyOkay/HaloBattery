@@ -154,10 +154,37 @@ class NativeHighlightTests(unittest.TestCase):
         self.assertEqual(tuple(bytes(blend)), (0, 0, 128, 1))
         self.assertEqual(args[-1], 2)
         backend.reveal(window, (-200, -100, -180, -90))
-        self.assertEqual(user.SetWindowPos.call_args.args[-1], 0x0050)
+        self.assertEqual(user.SetWindowPos.call_args.args,
+                         (window, None, -200, -100, 20, 10, 0x0254))
+        backend.hide(window)
+        self.assertEqual(user.SetWindowPos.call_args.args, (window, None, 0, 0, 0, 0, 0x0297))
+        user.ShowWindow.assert_not_called()
         self.assertFalse(hasattr(user, "SetLayeredWindowAttributes"))
         gdi.DeleteDC.assert_called_once_with(0x123450000)
         gdi.DeleteObject.assert_called_once_with(0x123460000)
+
+    def test_unchanged_presentation_skips_native_updates_until_hidden(self):
+        backend = Backend()
+        window = highlight.NativeHighlight(1, _backend=backend)
+        args = ((-1900, 20, -1675, 60), 6.25, (100, 120, 150), 0.1)
+        window.show(*args)
+        first_pixels = window._cache[1]
+        for _ in range(10):
+            window.show(*args)
+        self.assertEqual(sum(e[0] == "update" for e in backend.events), 1)
+        self.assertEqual(sum(e[0] == "reveal" for e in backend.events), 1)
+        window.hide()
+        window.hide()
+        self.assertEqual(sum(e[0] == "hide" for e in backend.events), 1)
+        window.show(*args)
+        self.assertEqual(sum(e[0] == "update" for e in backend.events), 2)
+        self.assertEqual(sum(e[0] == "reveal" for e in backend.events), 2)
+        self.assertIs(window._cache[1], first_pixels)
+        window.show(args[0], args[1], args[2], 0.2)
+        self.assertEqual(sum(e[0] == "update" for e in backend.events), 3)
+        self.assertIs(window._cache[1], first_pixels)
+        window.destroy()
+        self.assertIsNone(window._presentation)
 
     def test_every_gdi_failure_releases_all_acquired_resources(self):
         for fail in ("dc", "bitmap", "bits", "select", "update", "restore"):

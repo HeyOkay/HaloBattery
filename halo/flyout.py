@@ -400,6 +400,13 @@ class _Win32:
         u.SetForegroundWindow.argtypes = [ctypes.c_void_p]
         u.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
                                    ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u.BeginDeferWindowPos.argtypes = [ctypes.c_int]
+        u.BeginDeferWindowPos.restype = ctypes.c_void_p
+        u.DeferWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                                    ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u.DeferWindowPos.restype = ctypes.c_void_p
+        u.EndDeferWindowPos.argtypes = [ctypes.c_void_p]
+        u.EndDeferWindowPos.restype = ctypes.c_int
         u.GetAsyncKeyState.restype = ctypes.c_short
         u.GetAsyncKeyState.argtypes = [ctypes.c_int]
         self.swca = getattr(u, "SetWindowCompositionAttribute", None)
@@ -507,6 +514,28 @@ class _Win32:
             self.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200)
         except Exception:
             pass
+
+    def stack_windows(self, windows) -> None:
+        """Order our windows bottom-to-top in one compositor update."""
+        if not windows:
+            return
+        flags = 0x0213  # no size/move/activation/owner reordering
+        try:
+            batch = self.user32.BeginDeferWindowPos(len(windows))
+            for hwnd in windows:
+                if not batch:
+                    break
+                batch = self.user32.DeferWindowPos(batch, hwnd, -1, 0, 0, 0, 0, flags)
+            if batch and self.user32.EndDeferWindowPos(batch):
+                return
+        except Exception:
+            log.debug("menu: batched stacking unavailable", exc_info=True)
+        # Keep ancestors below descendants even when batching fails. Raising
+        # every ancestor to TOPMOST separately exposes it over a nested menu.
+        above = -1
+        for hwnd in reversed(windows):
+            self.user32.SetWindowPos(hwnd, above, 0, 0, 0, 0, flags)
+            above = hwnd
 
     def dwm_int(self, hwnd: int, attr: int, value: int) -> None:
         if self.dwm is None:
@@ -932,6 +961,7 @@ class FlyoutHost:
             panel.win.focus_force()
         except Exception:
             pass
+        self._restack()
         self._poll_id = self._root.after(POLL_MS, self._poll)
 
     def close(self) -> None:
@@ -954,6 +984,7 @@ class FlyoutHost:
             self.panels.pop().destroy()
         panel.child_row = None
         panel.update_highlight()
+        self._restack()
 
     def _restack(self) -> None:
         """Keep each highlight above its panel, with every descendant above both.
@@ -965,17 +996,24 @@ class FlyoutHost:
         """
         if self._w is None:
             return
+        windows = []
         for panel in self.panels:
             for hwnd in panel._hwnds:
                 if hwnd:
-                    self._w.to_top(hwnd)
+                    windows.append(hwnd)
             highlight = getattr(panel, "_native_highlight", None)
             if highlight is not None and highlight.hwnd and highlight.hwnd not in panel._hwnds:
-                self._w.to_top(highlight.hwnd)
+                windows.append(highlight.hwnd)
         for panel in self.panels:
             hint = getattr(panel, "_hint", None)
             hwnd = getattr(hint, "hwnd", 0)
             if isinstance(hwnd, int) and hwnd:
+                windows.append(hwnd)
+        stack = getattr(self._w, "stack_windows", None)
+        if stack is not None:
+            stack(windows)
+        else:
+            for hwnd in windows:
                 self._w.to_top(hwnd)
 
     def _open_child(self, panel: "_Panel", index: int, select_first: bool = False) -> None:
@@ -1070,7 +1108,8 @@ class FlyoutHost:
                 self._schedule(hit, self._close_after, child)
             else:
                 self._cancel_timer()
-            hit.set_hover(index, part)
+            if (index, part) != (hit.hover, hit.part):
+                hit.set_hover(index, part)
             return
         if (index, part) == (hit.hover, hit.part):
             return
@@ -1729,13 +1768,11 @@ class _Panel:
                 box = self.highlight_box()
                 if box is None or self._fade_running():
                     native.hide()
-                    self.host._restack()
                 else:
                     x0, y0, x1, y1 = box
                     native.show((self.x + x0, self.y + y0, self.x + x1, self.y + y1),
                                 self.style.px(HOVER_RADIUS), self.style.colours["hover"],
                                 self.style.colours["hover_alpha"])
-                    self.host._restack()
                 return
             except Exception:
                 log.info("menu: native highlight paint failed, using Tk", exc_info=True)
