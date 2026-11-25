@@ -1,11 +1,15 @@
 #requires -Version 7.0
 [CmdletBinding(DefaultParameterSetName='Payload')]
 param(
-    [Parameter(Mandatory,ParameterSetName='Payload')][string]$SignedDirectory,
-    [Parameter(Mandatory,ParameterSetName='Payload')][string]$DestinationDirectory,
+    [Parameter(Mandatory,ParameterSetName='Payload')][Parameter(Mandatory,ParameterSetName='Internal')][string]$SignedDirectory,
+    [Parameter(Mandatory,ParameterSetName='Payload')][Parameter(Mandatory,ParameterSetName='Internal')][string]$DestinationDirectory,
     [Parameter(Mandatory,ParameterSetName='Payload')][string]$InventoryPath,
     [Parameter(Mandatory,ParameterSetName='Installer')][string]$InstallerPath,
-    [Parameter(Mandatory,ParameterSetName='Installer')][string]$UnsignedInstallerPath
+    [Parameter(Mandatory,ParameterSetName='Installer')][string]$UnsignedInstallerPath,
+    [Parameter(Mandatory,ParameterSetName='Signature')][string]$SignaturePath,
+    [ValidateSet('Test','Production')][string]$SigningMode = 'Test',
+    [string]$CertificateThumbprint,
+    [Parameter(Mandatory,ParameterSetName='Internal')][string]$InternalManifestPath
 )
 $ErrorActionPreference = 'Stop'
 
@@ -57,7 +61,7 @@ function Get-RegularTree([string]$Directory, [string[]]$ExactFiles) {
     return ,$files
 }
 
-function Get-TestSignatureTrustStatus([string]$Path) {
+function Get-TestSignatureTrustStatus([string]$Path, [bool]$Production = $false) {
     if (-not ('Halo.TestSignatureTrust' -as [type])) {
         # Read the native result: PowerShell maps CERT_E_UNTRUSTEDROOT to
         # UnknownError on some Windows versions. Never match localized messages.
@@ -92,14 +96,16 @@ namespace Halo {
         }
         [DllImport("wintrust.dll", ExactSpelling = true)]
         private static extern int WinVerifyTrust(IntPtr window, ref Guid action, ref TrustData data);
-        public static int Verify(string path) {
+        public static int Verify(string path) { return VerifyCore(path, 0x1000 | 0x10); }
+        public static int VerifyProduction(string path) { return VerifyCore(path, 0x80); }
+        private static int VerifyCore(string path, uint flags) {
             var file = new FileInfo { Size = (uint)Marshal.SizeOf<FileInfo>(), Path = path };
             IntPtr pointer = Marshal.AllocHGlobal(Marshal.SizeOf<FileInfo>());
             var data = new TrustData {
                 Size = (uint)Marshal.SizeOf<TrustData>(), UIChoice = 2, UnionChoice = 1,
                 FileInfo = pointer, StateAction = 1,
-                // TEST-only offline verification; do not fetch certificates or change trust.
-                ProviderFlags = 0x1000 | 0x10
+                // TEST is offline; production checks revocation for the chain except root.
+                ProviderFlags = flags
             };
             var action = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
             bool initialized = false;
@@ -121,21 +127,67 @@ namespace Halo {
 }
 '@
     }
+    if ($Production) { return [Halo.TestSignatureTrust]::VerifyProduction($Path) }
     return [Halo.TestSignatureTrust]::Verify($Path)
 }
 
+function Assert-ProductionTimestamp([string]$Path) {
+    # Windows verifies timestamp trust/binding through WinVerifyTrust below.
+    # Also enforce SHA-256 and an embedded RFC3161 token, not a legacy countersignature.
+    [byte[]]$bytes = [IO.File]::ReadAllBytes($Path)
+    $layout = Get-PeLayout $bytes
+    if ($layout.Certificate -le 0 -or $layout.CertificateSize -lt 9 -or
+        $layout.Certificate + $layout.CertificateSize -ne $bytes.Length) { throw 'Missing embedded signing data' }
+    $length = [BitConverter]::ToUInt32($bytes, $layout.Certificate)
+    if ($length -lt 9 -or $length -gt $layout.CertificateSize) { throw 'Invalid embedded signing data' }
+    $cms = [Security.Cryptography.Pkcs.SignedCms]::new()
+    $cms.Decode([byte[]]$bytes[($layout.Certificate + 8)..($layout.Certificate + $length - 1)])
+    $cms.CheckSignature($true)
+    if ($cms.SignerInfos.Count -ne 1 -or $cms.SignerInfos[0].Certificate.Thumbprint -ine $CertificateThumbprint -or
+        $cms.SignerInfos[0].DigestAlgorithm.Value -cne '2.16.840.1.101.3.4.2.1') { throw 'Production signature must use SHA-256 and the pinned signer' }
+    $indirect = [System.Formats.Asn1.AsnReader]::new([ReadOnlyMemory[byte]]::new($cms.ContentInfo.Content), [System.Formats.Asn1.AsnEncodingRules]::BER).ReadSequence()
+    $null = $indirect.ReadEncodedValue() # SpcAttributeTypeAndOptionalValue
+    $fileDigest = $indirect.ReadSequence().ReadSequence().ReadObjectIdentifier()
+    if ($cms.ContentInfo.ContentType.Value -cne '1.3.6.1.4.1.311.2.1.4' -or
+        $fileDigest -cne '2.16.840.1.101.3.4.2.1') { throw 'Production PE digest must use SHA-256' }
+    $tokens = @($cms.SignerInfos[0].UnsignedAttributes | Where-Object {
+        $_.Oid.Value -cin @('1.3.6.1.4.1.311.3.3.1', '1.2.840.113549.1.9.16.2.14')
+    })
+    if ($tokens.Count -ne 1 -or $tokens[0].Values.Count -ne 1) { throw 'Production requires one RFC3161 timestamp' }
+    $timestamp = [Security.Cryptography.Pkcs.SignedCms]::new()
+    $timestamp.Decode($tokens[0].Values[0].RawData)
+    $timestamp.CheckSignature($true)
+    $consumed = 0
+    $timestampInfo = $null
+    $decoded = [Security.Cryptography.Pkcs.Rfc3161TimestampTokenInfo]::TryDecode(
+        [ReadOnlyMemory[byte]]::new($timestamp.ContentInfo.Content), [ref]$timestampInfo, [ref]$consumed)
+    if (-not $decoded -or $timestamp.ContentInfo.ContentType.Value -cne '1.2.840.113549.1.9.16.1.4' -or
+        $consumed -ne $timestamp.ContentInfo.Content.Length -or
+        $timestampInfo.HashAlgorithmId.Value -cne '2.16.840.1.101.3.4.2.1' -or
+        $timestamp.SignerInfos.Count -ne 1 -or
+        $timestamp.SignerInfos[0].DigestAlgorithm.Value -cne '2.16.840.1.101.3.4.2.1') { throw 'Production timestamp must use RFC3161 and SHA-256' }
+}
+
 function Assert-TestSignature([string]$Path) {
-    if ($env:TEST_CERT_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+    $pin = if ($SigningMode -ceq 'Production') { $CertificateThumbprint } elseif ($CertificateThumbprint) { $CertificateThumbprint } else { $env:TEST_CERT_THUMBPRINT }
+    if ($pin -notmatch '^[0-9A-Fa-f]{40}$' -or
+        ($SigningMode -ceq 'Production' -and $pin -ieq '17F9F411C424674855A077F9A120A7A434990AF1')) {
         throw 'TEST certificate thumbprint is missing or invalid'
     }
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
     if ($null -eq $signature.SignerCertificate -or
-        $signature.SignerCertificate.Thumbprint -ine $env:TEST_CERT_THUMBPRINT -or
+        $signature.SignerCertificate.Thumbprint -ine $pin -or
         $signature.SignatureType.ToString() -cne 'Authenticode') {
         throw "Unexpected embedded TEST signer: $Path"
     }
     # The pinned TEST certificate may be self-signed. Do not install trust.
     $status = $signature.Status.ToString()
+    if ($SigningMode -ceq 'Production') {
+        if ($status -cne 'Valid' -or $null -eq $signature.TimeStamperCertificate -or
+            (Get-TestSignatureTrustStatus $Path $true) -ne 0) { throw 'Production requires a trusted, timestamped embedded signature' }
+        Assert-ProductionTimestamp $Path
+        return
+    }
     if ($status -cnotin @('Valid', 'NotTrusted', 'UnknownError')) {
         throw "Rejected TEST signature status: $($signature.Status)"
     }
@@ -218,16 +270,35 @@ function Read-CheckedSignedPe([string]$UnsignedPath, [string]$SignedPath) {
     return [pscustomobject]@{ Bytes=$signed; Hash=$hash }
 }
 
+if ($PSCmdlet.ParameterSetName -eq 'Signature') {
+    # Additional installed-file smoke checks only; packaging must still use
+    # Payload/Internal/Installer comparison against its unsigned originals.
+    $path = Assert-RegularPath $SignaturePath $false
+    Assert-TestSignature $path
+    return
+}
 if ($PSCmdlet.ParameterSetName -eq 'Installer') {
     $installer = Assert-RegularPath $InstallerPath $false
     $unsignedInstaller = Assert-RegularPath $UnsignedInstallerPath $false
-    if ([IO.Path]::GetFileName($installer) -cne 'HaloBattery-test-setup.exe' -or
-        [IO.Path]::GetFileName($unsignedInstaller) -cne 'HaloBattery-test-setup.exe') { throw 'Unexpected TEST installer filename' }
-    $null = Get-RegularTree ([IO.Path]::GetDirectoryName($installer)) @('HaloBattery-test-setup.exe')
+    $name = [IO.Path]::GetFileName($installer)
+    if (($SigningMode -ceq 'Test' -and $name -cne 'HaloBattery-test-setup.exe') -or
+        ($SigningMode -ceq 'Production' -and $name -cnotmatch '^HaloBattery-[0-9]+\.[0-9]+\.[0-9]+-setup\.exe$') -or
+        [IO.Path]::GetFileName($unsignedInstaller) -cne $name) { throw 'Unexpected installer filename' }
+    $null = Get-RegularTree ([IO.Path]::GetDirectoryName($installer)) @($name)
     $null = Read-CheckedSignedPe $unsignedInstaller $installer
     return
 }
 $own = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')
+if ($InternalManifestPath) {
+    $null = Assert-RegularPath $InternalManifestPath $false
+    $internal = Get-Content -LiteralPath $InternalManifestPath -Raw | ConvertFrom-Json -AsHashtable
+    if ($internal -isnot [Collections.IDictionary] -or $internal.Count -lt 1 -or $internal.Count -gt 4) { throw 'Invalid internal PE manifest' }
+    foreach ($name in $internal.Keys) {
+        if ($name -cnotmatch '^uninst-6\.7\.4-[a-f0-9]{10}\.e(32|64)$' -or $internal[$name] -isnot [string] -or
+            $internal[$name] -cnotmatch '^[0-9A-Fa-f]{64}$') { throw 'Invalid internal PE filename or hash' }
+    }
+    $own = @($internal.Keys)
+}
 $signedRoot = Assert-RegularPath $SignedDirectory $true
 $destinationRoot = Assert-RegularPath $DestinationDirectory $true
 $separator = [IO.Path]::DirectorySeparatorChar
@@ -235,9 +306,17 @@ if ($signedRoot.Equals($destinationRoot, [StringComparison]::OrdinalIgnoreCase) 
     ($signedRoot + $separator).StartsWith($destinationRoot + $separator, [StringComparison]::OrdinalIgnoreCase) -or
     ($destinationRoot + $separator).StartsWith($signedRoot + $separator, [StringComparison]::OrdinalIgnoreCase)) { throw 'Signed and destination trees must be disjoint' }
 $signedFiles = Get-RegularTree $signedRoot $own
-$null = Assert-RegularPath $InventoryPath $false
-$before = Get-Content -LiteralPath $InventoryPath -Raw | ConvertFrom-Json -AsHashtable
+$inventory = if ($InternalManifestPath) { $InternalManifestPath } else { $InventoryPath }
+$null = Assert-RegularPath $inventory $false
+$before = Get-Content -LiteralPath $inventory -Raw | ConvertFrom-Json -AsHashtable
 if ($before -isnot [Collections.IDictionary]) { throw 'Invalid unsigned inventory' }
+if ($InternalManifestPath -and ($before.Count -ne $internal.Count -or
+    @(Compare-Object @($before.Keys) @($internal.Keys) -CaseSensitive).Count)) { throw 'Internal manifest differs from inventory' }
+if ($InternalManifestPath) {
+    foreach ($name in $own) {
+        if ($before[$name] -cne $internal[$name]) { throw 'Internal manifest hash differs from inventory' }
+    }
+}
 $destinationFiles = Get-RegularTree $destinationRoot $null
 function Assert-Inventory($Files) {
     if ($Files.Count -ne $before.Count) { throw 'Unsigned package tree changed after inventory' }
