@@ -149,6 +149,19 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported BatteryHub families (third batch)
+
+Every row is unverified in Halo: the reader comes from BatteryHub's documented
+protocol, not a Halo capture. Check charging transitions before calling any of
+them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [Niceboy MW400](protocols.md#niceboy) | 2.4 GHz receiver (248a:fa02) | no |
+| [Press Play ICARUS V2](protocols.md#press-play) | 2.4 GHz receiver (7768:6434) | no |
+| [EVGA X20](protocols.md#evga) | 2.4 GHz receiver or USB cable (3842:2402/2420) | no |
+| [IPI PIAO](protocols.md#piao) | 2.4 GHz receiver or USB cable (372e:1014/1015/1028/1056) | no |
+
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),
