@@ -43,11 +43,24 @@ values from a still-connected device wait for confirmation without firing an ale
 
 ## Tray menu
 
-Right-click a device icon for **Settings**, **Refresh now**, **Diagnostics**
-and **Exit**, plus an update action when a release is available.
+Right-click a device icon for **This device**, **Settings**, **Refresh now**,
+**Diagnostics** and **Exit**, plus an update action when a release is available.
+**This device** contains Hide, the per-device low-battery alert threshold, and a
+shortcut to that device's Settings page. **Settings** opens the General page.
+In the fluent menu, hover the bold device name for a system rename hint above it
+and double-click it to edit the name directly in a rounded field. Enter saves;
+Escape or dismissing the menu cancels.
+Names can contain up to 60 characters. Status details use a smaller font below
+the name. Device-action and alert-threshold submenus fit their contents within
+the available display area; the main menu retains its compact width.
+Submenus close after a short delay when the pointer leaves both their contents
+and the opening row, allowing movement between the two. Returning to an ancestor's
+opening row keeps its direct submenu and closes any deeper levels after that delay.
+Hover highlights have
+smooth edges at fractional display scales; the rename hint fades in above the name.
 Double-click an icon to open settings for that exact device, even when several
-devices have the same name. Device customization and app preferences are in the
-settings window.
+devices have the same name. Other customization and app preferences remain in
+the settings window.
 
 The menu follows the Windows light or dark app theme and display scale. If it
 does not work on your PC, set `"fluent_menu": false` in
