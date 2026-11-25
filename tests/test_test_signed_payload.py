@@ -79,7 +79,9 @@ function global:Get-AuthenticodeSignature {
 try {
     $options = @{SigningMode=$env:SIGNING_MODE}
     if($env:PRODUCTION_PIN) {$options.CertificateThumbprint=$env:PRODUCTION_PIN}
-    if($env:CASE_MODE -eq 'installer') {
+    if($env:INNO_HELPER) {
+        & $env:VERIFIER -InnoHelperPath $env:INNO_HELPER -UnsignedInnoHelperPath $env:UNSIGNED_INNO_HELPER @options
+    } elseif($env:CASE_MODE -eq 'installer') {
         & $env:VERIFIER -InstallerPath $env:INSTALLER -UnsignedInstallerPath $env:UNSIGNED_INSTALLER @options
     } elseif($env:SIGNATURE_PATH) {
         & $env:VERIFIER -SignaturePath $env:SIGNATURE_PATH @options
@@ -144,7 +146,8 @@ class SignedPayloadTests(unittest.TestCase):
     def invoke(self, *, status="NotTrusted", signer=THUMBPRINT, thumbprint=THUMBPRINT,
                signature_type="Authenticode", null_certificate=False, installer=None,
                unsigned_installer=None, bad_second=False, native_status=None,
-               signing_mode='Test', production_pin='', internal_manifest='', signature_path='', timestamp=False):
+               signing_mode='Test', production_pin='', internal_manifest='', signature_path='', timestamp=False,
+               inno_helper='', unsigned_inno_helper=''):
         if native_status is None:
             native_status = {"Valid": 0, "NotTrusted": -2146762487}.get(status, -2146762485)
         environment = dict(os.environ, PSExecutionPolicyPreference="Bypass",
@@ -154,6 +157,7 @@ class SignedPayloadTests(unittest.TestCase):
             FAKE_TRUST_RESULT=str(native_status),
             SIGNING_MODE=signing_mode, PRODUCTION_PIN=production_pin, INTERNAL_MANIFEST=str(internal_manifest),
             SIGNATURE_PATH=str(signature_path),
+            INNO_HELPER=str(inno_helper), UNSIGNED_INNO_HELPER=str(unsigned_inno_helper),
             FAKE_TIMESTAMP=str(timestamp).lower(),
             VERIFIER=str(HELPER), SIGNED=str(self.signed), DESTINATION=str(self.destination),
             INVENTORY=str(self.inventory), CASE_MODE="installer" if installer else "payload",
@@ -319,6 +323,50 @@ class SignedPayloadTests(unittest.TestCase):
         unsigned = self.write(self.root / "installer-input", "HaloBattery-test-setup.exe", unsigned_pe(b"installer"))
         signed = self.write(self.root / "installer-output", "HaloBattery-test-setup.exe", signed_pe(unsigned.read_bytes()))
         return unsigned, signed
+
+    def inno_helper_fixture(self):
+        original = unsigned_pe(b'inno-helper')
+        unsigned = self.write(self.root / 'helper-input', 'inno-helper-amd64.exe', original)
+        signed = self.write(self.root / 'helper-output', 'inno-helper-amd64.exe', signed_pe(original))
+        return unsigned, signed
+
+    def test_inno_helper_accepts_exact_original_and_does_not_modify_files(self):
+        unsigned, signed = self.inno_helper_fixture()
+        before = (unsigned.read_bytes(), signed.read_bytes())
+        result = self.invoke(inno_helper=signed, unsigned_inno_helper=unsigned)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(before, (unsigned.read_bytes(), signed.read_bytes()))
+
+    def test_inno_helper_rejects_wrong_names_and_extra_files(self):
+        unsigned, signed = self.inno_helper_fixture()
+        for path in (unsigned, signed):
+            with self.subTest(path=path, defect='name'):
+                wrong = path.with_name('other.exe')
+                path.rename(wrong)
+                self.assert_rejected(inno_helper=wrong if path == signed else signed,
+                                     unsigned_inno_helper=wrong if path == unsigned else unsigned)
+                wrong.rename(path)
+            with self.subTest(path=path, defect='extra'):
+                extra = self.write(path.parent, '.unexpected', b'extra')
+                self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+                extra.unlink()
+
+    def test_inno_helper_rejects_body_changes_mismatched_source_and_bad_signatures(self):
+        unsigned, signed = self.inno_helper_fixture()
+        before = signed.read_bytes()
+        damaged = bytearray(before)
+        damaged[0x205] ^= 1
+        signed.write_bytes(damaged)
+        self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+        signed.write_bytes(before)
+        original = unsigned.read_bytes()
+        unsigned.write_bytes(unsigned_pe(b'foreign-helper'))
+        self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+        unsigned.write_bytes(original)
+        for options in (dict(signer='B'*40), dict(status='HashMismatch'),
+                        dict(signing_mode='Production', production_pin=THUMBPRINT)):
+            with self.subTest(options=options):
+                self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned, **options)
 
     def test_installer_exact_path_and_original_content_are_accepted(self):
         unsigned, signed = self.installer_fixture()

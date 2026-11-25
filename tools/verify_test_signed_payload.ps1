@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory,ParameterSetName='Installer')][string]$InstallerPath,
     [Parameter(Mandatory,ParameterSetName='Installer')][string]$UnsignedInstallerPath,
     [Parameter(Mandatory,ParameterSetName='Signature')][string]$SignaturePath,
+    [Parameter(Mandatory,ParameterSetName='InnoHelper')][string]$InnoHelperPath,
+    [Parameter(Mandatory,ParameterSetName='InnoHelper')][string]$UnsignedInnoHelperPath,
     [ValidateSet('Test','Production')][string]$SigningMode = 'Test',
     [string]$CertificateThumbprint,
     [Parameter(Mandatory,ParameterSetName='Internal')][string]$InternalManifestPath
@@ -283,6 +285,18 @@ function Read-CheckedSignedPe([string]$UnsignedPath, [string]$SignedPath) {
     return [pscustomobject]@{ Bytes=$signed; Hash=$hash }
 }
 
+if ($PSCmdlet.ParameterSetName -eq 'InnoHelper') {
+    $helper = Assert-RegularPath $InnoHelperPath $false
+    $unsignedHelper = Assert-RegularPath $UnsignedInnoHelperPath $false
+    $name = 'inno-helper-amd64.exe'
+    if ([IO.Path]::GetFileName($helper) -cne $name -or
+        [IO.Path]::GetFileName($unsignedHelper) -cne $name) { throw 'Unexpected Inno helper filename' }
+    foreach ($path in @($helper, $unsignedHelper)) {
+        $null = Get-RegularTree ([IO.Path]::GetDirectoryName($path)) @($name)
+    }
+    $null = Read-CheckedSignedPe $unsignedHelper $helper
+    return
+}
 if ($PSCmdlet.ParameterSetName -eq 'Signature') {
     # Additional installed-file smoke checks only; packaging must still use
     # Payload/Internal/Installer comparison against its unsigned originals.

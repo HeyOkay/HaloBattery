@@ -38,6 +38,34 @@ function Assert-CapturedEngines($Captures) {
     foreach ($capture in $Captures.Values) {
         if (-not $capture.verified) { throw 'A temporary executable did not match the verified signed Inno cache' }
     }
+    if (@($Captures.Values | Where-Object { $_.role -ceq 'engine' }).Count -eq 0) { throw 'No verified temporary Inno engine was captured' }
+}
+function Get-SmokeCaptureRole([string]$Path, [string]$Hash, [string]$TempDirectory, $EngineHashes, $HelperHashes) {
+    try { $full = Assert-UnderRoot $Path $TempDirectory } catch { return 'unknown' }
+    if ($EngineHashes.Contains($Hash)) { return 'engine' }
+    if ($null -ne $HelperHashes -and $HelperHashes.Contains($Hash)) {
+        $relative = [IO.Path]::GetRelativePath([IO.Path]::GetFullPath($TempDirectory), $full).Replace('\','/')
+        if ($relative -cmatch '(^|/)_isetup/_setup64\.tmp$') { return 'helper' }
+    }
+    return 'unknown'
+}
+function Get-VerifiedSmokeHelperHashes($EnginePaths, [string]$OutputDirectory, [string]$HelperTool, [string]$Verifier, [string]$Mode, [string]$Pin) {
+    $helperHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $index = 0
+    foreach ($engine in $EnginePaths) {
+        $helper = Join-Path $OutputDirectory ("inno-helper-amd64-$index.exe")
+        if (Test-Path -LiteralPath $helper) { throw 'Helper extraction target already exists' }
+        & python $HelperTool extract-engine --engine $engine --output $helper | Out-Host
+        if ($LASTEXITCODE) { throw 'Cannot extract the helper from the verified signed engine' }
+        $helper = Get-RegularSmokePath $helper $false
+        # Extraction authenticates origin; an independent embedded signature is
+        # also mandatory. An unsigned vendor resource is never accepted.
+        & $Verifier -SignaturePath $helper -SigningMode $Mode -CertificateThumbprint $Pin | Out-Host
+        $null = $helperHashes.Add((Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash)
+        $index++
+    }
+    if ($helperHashes.Count -ne 1) { throw 'Verified engines do not contain one identical signed helper' }
+    return ,$helperHashes
 }
 function Test-OwnedCleanupCandidate([string]$Path, [string]$Root, $AllowedHashes) {
     try {
@@ -77,18 +105,26 @@ function Test-SmokeProcessPending([bool]$ParentExited, [int]$OwnedCount, $QuietS
     return (-not $ParentExited -or $OwnedCount -gt 0 -or $null -eq $QuietSince -or
         ($Now - $QuietSince).TotalMilliseconds -lt 300)
 }
-function Stop-OwnedSmokeProcesses([string]$TempDirectory, $AllowedHashes) {
+function Test-OwnedHelperCleanupCandidate([string]$Path, [string]$Root, $EngineHashes, $HelperHashes) {
+    try {
+        $null = Get-RegularSmokePath $Path $false
+        return (Get-SmokeCaptureRole $Path (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash $Root $EngineHashes $HelperHashes) -ceq 'helper'
+    } catch { return $false }
+}
+function Stop-OwnedSmokeProcesses([string]$TempDirectory, $AllowedHashes, $HelperHashes=$null) {
     foreach ($owned in @(Get-OwnedSmokeProcesses $TempDirectory)) {
         try {
-            if (Test-OwnedCleanupCandidate $owned.path $TempDirectory $AllowedHashes) {
+            if ((Test-OwnedCleanupCandidate $owned.path $TempDirectory $AllowedHashes) -or
+                (Test-OwnedHelperCleanupCandidate $owned.path $TempDirectory $AllowedHashes $HelperHashes)) {
                 if (-not $owned.process.HasExited) { $owned.process.Kill(); $owned.process.WaitForExit(10000) | Out-Null }
             }
         } finally { $owned.process.Dispose() }
     }
 }
-function Save-SmokeCapture([string]$SourcePath, [byte[]]$Bytes, [string]$CaptureDirectory, $AllowedHashes, $Captures) {
+function Save-SmokeCapture([string]$SourcePath, [byte[]]$Bytes, [string]$CaptureDirectory, $AllowedHashes, $Captures, [string]$TempDirectory, $HelperHashes=$null) {
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes))
-    $verified = $AllowedHashes.Contains($hash)
+    $role = Get-SmokeCaptureRole $SourcePath $hash $TempDirectory $AllowedHashes $HelperHashes
+    $verified = $role -cne 'unknown'
     if (-not $Captures.ContainsKey($SourcePath)) {
         if ($Captures.Count -ge 32) { throw 'Unexpected number of temporary executables' }
         $Captures[$SourcePath] = @{ verified=$false; source_path=$SourcePath; snapshots=@{} }
@@ -117,12 +153,12 @@ function Save-SmokeCapture([string]$SourcePath, [byte[]]$Bytes, [string]$Capture
                 $signature.timestamp_subject = $auth.TimeStamperCertificate.Subject
             }
         } catch { $signature.error = $_.Exception.Message }
-        $capture.snapshots[$hash] = @{ verified=$verified; hash=$hash; length=$Bytes.Length;
+        $capture.snapshots[$hash] = @{ verified=$verified; role=$role; hash=$hash; length=$Bytes.Length;
             source_path=$SourcePath; retained_path=$retained; signature=$signature }
     }
     # Preserve a verified complete read if a later read sees transient bytes.
     if ($verified -or -not $capture.verified) {
-        $capture.verified=$verified; $capture.hash=$hash; $capture.length=$Bytes.Length
+        $capture.verified=$verified; $capture.role=$role; $capture.hash=$hash; $capture.length=$Bytes.Length
         $capture.retained_path=$capture.snapshots[$hash].retained_path
         $capture.signature=$capture.snapshots[$hash].signature
     }
@@ -134,7 +170,7 @@ function Write-SmokeStageReceipt([string]$CaptureDirectory, $Captures, $StageRec
         $StageRecord | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath $receipt -Encoding utf8
     } else { $Captures | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath $receipt -Encoding utf8 }
 }
-function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments, [string]$TempDirectory, [string]$CaptureDirectory, $AllowedHashes, $StageRecord=$null) {
+function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments, [string]$TempDirectory, [string]$CaptureDirectory, $AllowedHashes, $StageRecord=$null, $HelperHashes=$null) {
     $info = [Diagnostics.ProcessStartInfo]::new($Executable)
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
@@ -158,7 +194,7 @@ function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments, [stri
                         try { $stream.CopyTo($memory); $bytes = $memory.ToArray() } finally { $memory.Dispose() }
                     } finally { $stream.Dispose() }
                     if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { continue }
-                    Save-SmokeCapture $file.FullName $bytes $CaptureDirectory $AllowedHashes $captures
+                    Save-SmokeCapture $file.FullName $bytes $CaptureDirectory $AllowedHashes $captures $TempDirectory $HelperHashes
                 } catch [IO.IOException] { continue }
             }
             if ([DateTime]::UtcNow -gt $deadline) {
@@ -187,7 +223,7 @@ function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments, [stri
             # The explicit launcher was already verified before invocation. Never
             # terminate a whole descendant tree or kill processes by reused PID.
             if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit(10000) | Out-Null }
-            if (-not $completed) { Stop-OwnedSmokeProcesses $TempDirectory $AllowedHashes }
+            if (-not $completed) { Stop-OwnedSmokeProcesses $TempDirectory $AllowedHashes $HelperHashes }
             $process.Dispose()
         }
     }
@@ -220,12 +256,17 @@ $SignedCacheDirectory = Get-RegularSmokePath $SignedCacheDirectory $true
 $cache = @(Get-ChildItem -LiteralPath $SignedCacheDirectory -Force)
 if ($cache.Count -lt 1 -or $cache.Count -gt 2) { throw 'Unexpected signed Inno cache count' }
 $hashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$enginePaths = [Collections.Generic.List[string]]::new()
 foreach ($file in $cache) {
     if ($file.Name -cnotmatch '^uninst-6\.7\.4-[a-f0-9]{10}\.e(32|64)$') { throw 'Unexpected signed Inno cache filename' }
     $path = Get-RegularSmokePath $file.FullName $false
     & $verifier -SignaturePath $path -SigningMode $SigningMode -CertificateThumbprint $CertificateThumbprint
     $null = $hashes.Add((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash)
+    $enginePaths.Add($path)
 }
+$helperDirectory = Join-Path $evidenceRoot 'verified-helpers'
+New-Item -ItemType Directory -Path $helperDirectory | Out-Null
+$helperHashes = Get-VerifiedSmokeHelperHashes $enginePaths $helperDirectory (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools/inno_helper.py') $verifier $SigningMode $CertificateThumbprint
 & $verifier -SignaturePath $InstallerPath -SigningMode $SigningMode -CertificateThumbprint $CertificateThumbprint
 $install = Assert-UnderRoot (Join-Path $root 'installed') $root
 $uninstalled = $false
@@ -237,7 +278,7 @@ foreach ($stage in @('install', 'upgrade')) {
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/TASKS=', "/DIR=$install", "/LOG=$(Join-Path $root ($stage + '.log'))")
     $record = @{stage=$stage; temporary_executable_count=0; temporary_executables=@{}; status='starting'}
     $records.Add($record)
-    $observed = Invoke-CapturedProcess $InstallerPath $arguments $temp $capture $hashes $record
+    $observed = Invoke-CapturedProcess $InstallerPath $arguments $temp $capture $hashes $record $helperHashes
     $autostart = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name HaloBattery -ErrorAction SilentlyContinue
     if ($null -ne $autostart) { throw 'Silent smoke install enabled autostart' }
     $uninstaller = Join-Path $install 'unins000.exe'
@@ -251,7 +292,7 @@ $capture = Assert-UnderRoot (Join-Path $evidenceRoot 'uninstall') $evidenceRoot
 New-Item -ItemType Directory -Path $temp,$capture | Out-Null
 $record = @{stage='uninstall'; temporary_executable_count=0; temporary_executables=@{}; status='starting'}
 $records.Add($record)
-$observed = Invoke-CapturedProcess $uninstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$(Join-Path $root 'uninstall.log')") $temp $capture $hashes $record
+$observed = Invoke-CapturedProcess $uninstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$(Join-Path $root 'uninstall.log')") $temp $capture $hashes $record $helperHashes
 if ((Test-Path -LiteralPath (Join-Path $install 'HaloBattery.exe')) -or (Test-Path -LiteralPath $uninstaller)) { throw 'Uninstall left application executable files' }
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{1E3A3904-9F39-4150-82EA-25D23968E2D6}_is1'
 if (Test-Path -LiteralPath $key) { throw 'Uninstall left the registration entry' }
@@ -269,7 +310,7 @@ Write-Output "Signed installer install/upgrade/uninstall verified: $root"
             New-Item -ItemType Directory -Force -Path $cleanupTemp,$cleanupCapture | Out-Null
             $cleanupRecord = @{stage='cleanup'; temporary_executable_count=0; temporary_executables=@{}; status='starting'}
             $records.Add($cleanupRecord)
-            $null = Invoke-CapturedProcess $cleanup @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') $cleanupTemp $cleanupCapture $hashes $cleanupRecord
+            $null = Invoke-CapturedProcess $cleanup @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') $cleanupTemp $cleanupCapture $hashes $cleanupRecord $helperHashes
         } catch { Write-Warning 'Isolated smoke install could not be cleaned up; runner evidence retained' }
     }
 }

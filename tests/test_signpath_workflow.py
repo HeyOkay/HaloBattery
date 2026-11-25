@@ -56,10 +56,21 @@ class SignPathWorkflowTests(unittest.TestCase):
             for stage in ('payload', 'internal', 'installer'):
                 body = self.sections[f'{mode}_sign_{stage}']
                 self.assertIn(f'signing-policy-slug: {mode}-signing', body)
-                self.assertIn(f'artifact-configuration-slug: {stage}-{mode}', body)
+                config = f'payload-inno-{mode}' if stage == 'payload' else f'{stage}-{mode}'
+                self.assertIn(f'artifact-configuration-slug: {config}', body)
                 self.assertIn('organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713', body)
                 self.assertIn('project-slug: HaloBattery', body)
                 self.assertNotIn('signing-policy-slug: ${{', body)
+
+    def test_compiler_helper_is_signed_and_built_only_without_credentials(self):
+        for mode in ('test', 'release'):
+            body = self.sections[f'{mode}_sign_payload']
+            self.assertIn("'inno-helper-amd64.exe'", body)
+            self.assertIn('$actual.Count -ne 5', body)
+        pipeline = (ROOT / 'scripts/signing_pipeline.ps1').read_text(encoding='utf-8')
+        self.assertIn('-InnoHelperPath $SignedHelper -UnsignedInnoHelperPath $OriginalHelper', pipeline)
+        self.assertIn('-SignedHelperPath', pipeline)
+        self.assertNotIn('secrets.', pipeline)
 
     def test_inputs_come_from_the_matching_stage_of_this_run(self):
         for mode in ('test', 'release'):

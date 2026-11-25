@@ -338,11 +338,17 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
-      - name: Stage the complete unsigned inventory and two own executables
+      - name: Extract verified pinned Inno compiler
+        id: compiler
+        run: |
+          $compiler = ./scripts/get_inno.ps1
+          "path=$compiler" >> $env:GITHUB_OUTPUT
+      - name: Stage application executables and the pinned Inno helper
         env:
           SIGNING_MODE: ${{ steps.context.outputs.mode }}
           CERTIFICATE_THUMBPRINT: ${{ steps.context.outputs.certificate-thumbprint }}
-        run: ./scripts/signing_pipeline.ps1 -Stage StageBuild -OutputDirectory signpath-stage
+          COMPILER: ${{ steps.compiler.outputs.path }}
+        run: ./scripts/signing_pipeline.ps1 -Stage StageBuild -CompilerPath $env:COMPILER -OutputDirectory signpath-stage
       - name: Upload bundle
         id: bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -394,7 +400,7 @@ jobs:
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
           project-slug: HaloBattery
           signing-policy-slug: test-signing
-          artifact-configuration-slug: payload-test
+          artifact-configuration-slug: payload-inno-test
           github-artifact-id: ${{ needs.signing_build.outputs.payload-id }}
           wait-for-completion: true
           output-artifact-directory: signpath-output
@@ -404,9 +410,9 @@ jobs:
           $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
           if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
           $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
-          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')
+          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe', 'inno-helper-amd64.exe')
           $expected = $files + @('_internal', '_internal/settings-ui')
-          if ($actual.Count -ne 4 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
+          if ($actual.Count -ne 5 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
           foreach ($file in $files) {
             $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
             if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
@@ -456,7 +462,7 @@ jobs:
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
           project-slug: HaloBattery
           signing-policy-slug: release-signing
-          artifact-configuration-slug: payload-release
+          artifact-configuration-slug: payload-inno-release
           github-artifact-id: ${{ needs.signing_build.outputs.payload-id }}
           wait-for-completion: true
           output-artifact-directory: signpath-output
@@ -466,9 +472,9 @@ jobs:
           $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
           if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
           $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
-          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')
+          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe', 'inno-helper-amd64.exe')
           $expected = $files + @('_internal', '_internal/settings-ui')
-          if ($actual.Count -ne 4 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
+          if ($actual.Count -ne 5 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
           foreach ($file in $files) {
             $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
             if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
@@ -508,6 +514,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
       - name: Select exactly the successful payload signer
         id: choose_payload
         env:
@@ -712,6 +722,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
       - name: Select exactly the successful internal signer
         id: choose_internal
         env:
@@ -925,6 +939,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
       - name: Select exactly the successful payload signer
         id: choose_payload
         env:

@@ -14,6 +14,7 @@ Set-StrictMode -Version Latest
 $repo = Split-Path $PSScriptRoot -Parent
 $testPin = '17F9F411C424674855A077F9A120A7A434990AF1'
 $own = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe')
+$helperName = 'inno-helper-amd64.exe'
 $verifier = Join-Path $repo 'tools/verify_test_signed_payload.ps1'
 
 function Regular([string]$Path, [bool]$Directory) {
@@ -80,6 +81,22 @@ function Assert-Icon($Metadata, [string]$Path) {
     if ((Get-FileHash -LiteralPath (Regular (Join-Path $Path 'halo.ico') $false) -Algorithm SHA256).Hash -cne $Metadata.icon_sha256) { throw 'Installer icon changed' }
     Copy-Item -LiteralPath (Join-Path $Path 'halo.ico') -Destination (Join-Path $repo 'halo.ico')
 }
+function Get-PinnedCompilerHelper([string]$Compiler, [string]$Directory) {
+    $compilerFile = Regular $Compiler $false
+    $template = Regular (Join-Path (Split-Path $compilerFile -Parent) 'Setup.e32') $false
+    $directory = Fresh $Directory
+    $path = Join-Path $directory $helperName
+    $null = & python (Join-Path $repo 'tools/inno_helper.py') extract-template --template $template --output $path
+    if ($LASTEXITCODE) { throw 'Pinned Inno helper extraction failed' }
+    $null = Regular $path $false
+    return $path
+}
+function Assert-CompilerHelper([string]$Compiler, [string]$SignedHelper, [string]$OriginalHelper, [string]$Scratch) {
+    $freshOriginal = Get-PinnedCompilerHelper $Compiler $Scratch
+    if ((Get-FileHash -LiteralPath (Regular $OriginalHelper $false) -Algorithm SHA256).Hash -cne
+        (Get-FileHash -LiteralPath $freshOriginal -Algorithm SHA256).Hash) { throw 'Compiler helper original differs from the pinned template' }
+    & $verifier -InnoHelperPath $SignedHelper -UnsignedInnoHelperPath $OriginalHelper -SigningMode $context.mode -CertificateThumbprint $context.certificate_thumbprint
+}
 function Names($Metadata) {
     if ($Metadata.mode -ceq 'Test') {
         return @{ zip="HaloBattery-$($Metadata.version)-signpath-test.zip"; setup='HaloBattery-test-setup' }
@@ -130,6 +147,8 @@ if ($Stage -eq 'StageBuild') {
     $context.icon_sha256 = (Get-FileHash -LiteralPath (Join-Path $repo 'halo.ico') -Algorithm SHA256).Hash
     $context | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'bundle/signing.json') -Encoding utf8
     $inventory | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'bundle/unsigned-tree.json') -Encoding utf8
+    $helper = Get-PinnedCompilerHelper $CompilerPath (Join-Path $output 'bundle/original-helper')
+    Copy-Item -LiteralPath $helper -Destination (Join-Path $output "payload/$helperName")
     foreach ($relative in $own) {
         $file = Regular (Join-Path $source $relative) $false
         if ((Get-Item -LiteralPath $file).VersionInfo.ProductName -cne 'HaloBattery') { throw 'Unexpected own executable' }
@@ -142,13 +161,28 @@ if ($Stage -eq 'StageBuild') {
 if ($Stage -eq 'Prepare') {
     $metadata = Read-Bundle $BundleDirectory
     Assert-Icon $metadata $BundleDirectory
-    & $verifier -SignedDirectory $SignedDirectory -DestinationDirectory (Join-Path $BundleDirectory 'HaloBattery') -InventoryPath (Join-Path $BundleDirectory 'unsigned-tree.json') -SigningMode $context.mode -CertificateThumbprint $context.certificate_thumbprint
+    $batch = Inventory $SignedDirectory
+    $expected = $own + @($helperName)
+    if ($batch.Count -ne $expected.Count -or @(Compare-Object $expected @($batch.Keys) -CaseSensitive).Count) { throw 'Unexpected signed application/helper batch' }
+    $validation = Fresh (Join-Path (Split-Path $OutputDirectory -Parent) 'payload-validation')
+    $signedHelperDirectory = Fresh (Join-Path $validation 'signed-helper')
+    $signedHelper = Join-Path $signedHelperDirectory $helperName
+    Copy-Item -LiteralPath (Join-Path $SignedDirectory $helperName) -Destination $signedHelper
+    Assert-CompilerHelper $CompilerPath $signedHelper (Join-Path $BundleDirectory "original-helper/$helperName") (Join-Path $validation 'pinned-original')
+    $signedApp = Fresh (Join-Path $validation 'signed-app')
+    foreach ($relative in $own) {
+        $destination = Join-Path $signedApp $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+        Copy-Item -LiteralPath (Join-Path $SignedDirectory $relative) -Destination $destination
+    }
+    & $verifier -SignedDirectory $signedApp -DestinationDirectory (Join-Path $BundleDirectory 'HaloBattery') -InventoryPath (Join-Path $BundleDirectory 'unsigned-tree.json') -SigningMode $context.mode -CertificateThumbprint $context.certificate_thumbprint
     $output = Fresh $OutputDirectory
     Copy-Item -LiteralPath $BundleDirectory -Destination (Join-Path $output 'bundle') -Recurse
+    Copy-Item -LiteralPath $signedHelperDirectory -Destination (Join-Path $output 'bundle/signed-helper') -Recurse
     $app = Join-Path $output 'bundle/HaloBattery'
     (Inventory $app) | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'bundle/accepted-tree.json') -Encoding utf8
     $names = Names $metadata
-    & (Join-Path $repo 'scripts/inno_signing.ps1') -Stage Prepare -CompilerPath $CompilerPath -SourceDirectory $app -AppVersion $metadata.version -WorkDirectory (Join-Path $output 'inno') -OutputDirectory (Join-Path $output 'unused-output') -OutputBaseFilename $names.setup
+    & (Join-Path $repo 'scripts/inno_signing.ps1') -Stage Prepare -CompilerPath $CompilerPath -SignedHelperPath (Join-Path $output "bundle/signed-helper/$helperName") -SourceDirectory $app -AppVersion $metadata.version -WorkDirectory (Join-Path $output 'inno') -OutputDirectory (Join-Path $output 'unused-output') -OutputBaseFilename $names.setup
     return
 }
 if ($Stage -eq 'Package') {
@@ -158,12 +192,14 @@ if ($Stage -eq 'Package') {
     $app = Join-Path $bundle 'HaloBattery'
     Assert-Inventory $app (Join-Path $bundle 'accepted-tree.json')
     $inno = Join-Path $BundleDirectory 'inno'
+    $signedHelper = Join-Path $bundle "signed-helper/$helperName"
+    Assert-CompilerHelper $CompilerPath $signedHelper (Join-Path $bundle "original-helper/$helperName") (Join-Path $inno 'package-pinned-original')
     $verified = Fresh (Join-Path $inno 'verified-cache')
     Get-ChildItem -LiteralPath (Join-Path $inno 'unsigned-cache') -File -Force | Copy-Item -Destination $verified
     & $verifier -SignedDirectory $SignedDirectory -DestinationDirectory $verified -InternalManifestPath (Join-Path $inno 'internal-manifest.json') -SigningMode $context.mode -CertificateThumbprint $context.certificate_thumbprint
     $output = Fresh $OutputDirectory
     $names = Names $metadata
-    & (Join-Path $repo 'scripts/inno_signing.ps1') -Stage Complete -CompilerPath $CompilerPath -SourceDirectory $app -AppVersion $metadata.version -WorkDirectory $inno -OutputDirectory (Join-Path $output 'installer') -OutputBaseFilename $names.setup -SignedCacheDirectory $verified
+    & (Join-Path $repo 'scripts/inno_signing.ps1') -Stage Complete -CompilerPath $CompilerPath -SignedHelperPath $signedHelper -SourceDirectory $app -AppVersion $metadata.version -WorkDirectory $inno -OutputDirectory (Join-Path $output 'installer') -OutputBaseFilename $names.setup -SignedCacheDirectory $verified
     $package = Fresh (Join-Path $output 'packaged')
     [IO.Compression.ZipFile]::CreateFromDirectory((Regular $app $true), (Join-Path $package $names.zip), [IO.Compression.CompressionLevel]::Optimal, $true)
     foreach ($file in @('signing.json','accepted-tree.json')) { Copy-Item -LiteralPath (Join-Path $bundle $file) -Destination (Join-Path $package $file) }
@@ -206,7 +242,8 @@ if ($Stage -eq 'Finalize') {
     $report = @{ test_only=($context.mode -ceq 'Test'); mode=$context.mode; source_commit=$env:GITHUB_SHA;
         run_id=$env:GITHUB_RUN_ID; run_attempt=$env:GITHUB_RUN_ATTEMPT; certificate_thumbprint=$context.certificate_thumbprint;
         policy=$(if ($context.mode -ceq 'Test') {'test-signing'} else {'release-signing'});
-        internal_files=(Get-Content -LiteralPath (Join-Path $WorkDirectory 'internal-manifest.json') -Raw | ConvertFrom-Json -AsHashtable) }
+        internal_files=(Get-Content -LiteralPath (Join-Path $WorkDirectory 'internal-manifest.json') -Raw | ConvertFrom-Json -AsHashtable);
+        inno_binding=(Get-Content -LiteralPath (Join-Path $WorkDirectory 'binding.json') -Raw | ConvertFrom-Json -AsHashtable) }
     foreach ($kind in @('PAYLOAD','INTERNAL','INSTALLER')) {
         $id = [Environment]::GetEnvironmentVariable($kind + '_ARTIFACT')
         $digest = [Environment]::GetEnvironmentVariable($kind + '_DIGEST')

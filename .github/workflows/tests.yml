@@ -1,56 +1,161 @@
-name: Isolated signed Inno probe
+name: Tests
+
+# Required checks for pull requests into pre-release and main.
+# "tests" runs unit/smoke tests and builds the complete Windows release package.
+# "branch-policy" only allows pre-release or hotfix/* branches to target main.
+
 on:
+  pull_request:
+    branches: [main, pre-release]
+  push:
+    branches: [main, pre-release]
   workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  actions: read
+
 jobs:
-  probe:
-    if: github.repository == 'HeyOkay/HaloBattery' && github.event_name == 'workflow_dispatch'
+  tests:
+    needs: [compatibility, lint]
+    # A failed dependency must fail this required check, rather than skip it.
+    if: always()
     runs-on: windows-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: pwsh
     steps:
-      - name: Check out diagnostic harness
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require compatibility and lint checks
+        shell: pwsh
+        env:
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+        run: |
+          if ($env:COMPATIBILITY_RESULT -ne 'success' -or $env:LINT_RESULT -ne 'success') {
+            throw 'Compatibility and lint checks must both succeed.'
+          }
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Require the exact existing TEST source
-        env:
-          GH_TOKEN: ${{ github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12.10"
+
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke test
+        # imports every module and runs one full poll on the runner (no devices there)
+        run: python halo_battery.pyw --probe
+
+      - name: Build HaloBattery
+        shell: pwsh
         run: |
-          $run = gh api repos/HeyOkay/HaloBattery/actions/runs/45695498244 | ConvertFrom-Json
+          python tools/make_icon.py halo.ico
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          if ($run.head_sha -cne '24f9f26e3fa85c73d542279ba19780c563b1c0a7' -or $run.event -cne 'workflow_dispatch' -or $run.head_branch -cne 'pre-release' -or $run.run_attempt -ne 1) { throw 'Unexpected TEST artifact source' }
-      - name: Download the exact signed TEST installer
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          artifact-ids: 15060893812
-          run-id: 45695498244
-          github-token: ${{ github.token }}
-          path: probe-input/installer
-      - name: Download the exact signed Inno cache proof
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          artifact-ids: 15060524417
-          run-id: 45695498244
-          github-token: ${{ github.token }}
-          path: probe-input/inno
-      - name: Verify pinned file digests and exercise isolated installer
+          python tools/make_version.py version_info.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
+          python tools/build_exe.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Build the installer
+        id: setup
+        shell: pwsh
         run: |
-          $setup = 'probe-input/installer/HaloBattery-test-setup.exe'
-          $cache = 'probe-input/inno/verified-cache/uninst-6.7.4-e8768009ad.e32'
-          if ((Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash -cne '9491D9D6831869EB4561DD5714681A937B22FB490BB3F9BEDCB51F825F8F402D') { throw 'Unexpected TEST installer bytes' }
-          if ((Get-FileHash -LiteralPath $cache -Algorithm SHA256).Hash -cne '12776A4F2226783599387D583AC4A24E75A5101229CA540744543BED4B731CB2') { throw 'Unexpected signed cache bytes' }
-          ./scripts/test_signed_installer.ps1 -InstallerPath $setup -SignedCacheDirectory probe-input/inno/verified-cache -SigningMode Test -CertificateThumbprint 17F9F411C424674855A077F9A120A7A434990AF1 -ReportPath probe-evidence/installer-smoke.json
-      - name: Retain diagnostic evidence on success or failure
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+          $iscc = ./scripts/get_inno.ps1
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "setup=dist/HaloBattery-$ver-setup.exe" >> $env:GITHUB_OUTPUT
+
+      - name: Validate build artifacts
+        shell: pwsh
+        env:
+          SETUP_PATH: ${{ steps.setup.outputs.setup }}
+        run: |
+          foreach ($path in @('dist/HaloBattery/HaloBattery.exe',
+                             'dist/HaloBattery/_internal/settings-ui/HaloBattery.Settings.exe',
+                             $env:SETUP_PATH)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing build artifact: $path" }
+            if ((Get-Item -LiteralPath $path).Length -eq 0) { throw "Empty build artifact: $path" }
+          }
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: Inno-install-probe-${{ github.run_id }}-${{ github.run_attempt }}
-          path: probe-evidence/
-          include-hidden-files: true
+          name: HaloBattery-check-${{ github.sha }}
+          path: |
+            dist/HaloBattery
+            ${{ steps.setup.outputs.setup }}
           if-no-files-found: error
           retention-days: 7
+
+  compatibility:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13.17", "3.14.10"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+  lint:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12.10"
+      - name: Install linter
+        run: python -m pip install --require-hashes -r requirements-lint.txt
+      - name: Lint Python
+        run: python -m ruff check halo_battery.pyw halo providers tools tests
+
+  branch-policy:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only pre-release or hotfix/* may target main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            pre-release|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *)
+              echo "::error::PRs into main must come from pre-release (release PR) or hotfix/<name>. Branch '$HEAD_REF' must target pre-release instead."
+              exit 1
+              ;;
+          esac
