@@ -104,6 +104,7 @@ MESSAGES = {
     "state.no_link": "brak połączenia (wyłączone lub uśpione)",
     "state.level": "{level}%",
     "state.charging": "{state}, ładowanie",
+    "state.fully_charged": "{state}, w pełni naładowany",
     "state.asleep": "{state} (ostatnia znana wartość, urządzenie uśpione)",
     "provider.ajazz": "Myszy AJAZZ",
     "provider.alienware": "Klawiatura Alienware Pro Wireless",

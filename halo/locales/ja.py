@@ -132,6 +132,7 @@ MESSAGES = {
     "state.no_link": "未接続（電源オフまたはスリープ）",
     "state.level": "{level}%",
     "state.charging": "{state}、充電中",
+    "state.fully_charged": "{state}、充電完了",
     "state.asleep": "{state}（前回の残量、デバイスはスリープ中）",
     "provider.ajazz": "AJAZZ マウス",
 "provider.akko_s9": "Akko Verge S9 Ultra ヘッドセット",
