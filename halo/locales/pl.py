@@ -2,14 +2,16 @@
 
 MESSAGES = {
     "device.description": "{name}: {state}",
+    "menu.rename_hint": "Kliknij dwukrotnie, aby zmienić nazwę",
     "menu.rename": "Zmień nazwę…",
     "menu.reset_name": "Przywróć nazwę",
     "menu.icon": "Ikona",
+    "menu.this_device": "To urządzenie",
+    "menu.low_battery": "Alert niskiego poziomu baterii",
     "menu.device_low": "Alert niskiego poziomu baterii (to urządzenie)",
     "menu.default_low": "Domyślnie ({level}%)",
     "menu.default_off": "Domyślnie (wyłączony)",
     "menu.hide": "Ukryj urządzenie",
-    "menu.this_device": "To urządzenie",
     "menu.show": "Pokaż {name}",
     "menu.refresh": "Odśwież teraz",
     "menu.preferences": "Preferencje",

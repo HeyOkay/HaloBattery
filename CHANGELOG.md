@@ -8,6 +8,16 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Make tray device names bold with smaller status details and fit menu widths to
+  their content. Double-click the highlighted name to rename it in place; Enter
+  saves and Escape cancels. Add a This device submenu for hiding, low-battery
+  alerts and device settings. Use a system tooltip above the name, balanced
+  name-highlight padding and a rounded rename field. Fit device-action and
+  alert-threshold submenus to their contents. Keep nested selections behind
+  overlapping submenus, close abandoned submenus after a short hover delay,
+  and smooth highlight edges and the rename hint's appearance. Returning to a
+  parent opener dismisses deeper menu levels; all alert menus share the same
+  threshold choices.
 - Label the MSI provider as wireless devices in Portuguese, including keyboards.
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.
@@ -95,9 +105,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
-- Add a **This device** submenu to a device's tray menu with **Hide this device**
-  and its own **Low battery alert**, so these no longer need the Settings window.
-  Show the device's name in bold and its state in a smaller line below it.
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

@@ -43,16 +43,19 @@ log = logging.getLogger("halo_battery")
 
 # ------------------------------------------------------------------ design
 # sizes in pixels at 100 % (96 DPI); multiplied by the monitor's scale
-MIN_WIDTH = 230
+MIN_WIDTH = 180
+SUBMENU_MIN_WIDTH = 96             # children fit their own labels, checks and chevrons
 PAD_Y = 4                            # above the first and below the last item
 ITEM_MARGIN_X, ITEM_MARGIN_Y = 4, 1  # around an item (its highlight)
 ITEM_PAD_L, ITEM_PAD_T, ITEM_PAD_R, ITEM_PAD_B = 8, 6, 10, 6   # inside an item
 HOVER_RADIUS = 4
 CHECK_COLUMN = 24
+PLAIN_COLUMN = 6                    # compact inset when no row has a check mark
 CHEVRON_GAP = 16                     # between the text and the submenu chevron
 SEP_MARGIN_X, SEP_MARGIN_Y = 12, 4
 HEADER_PAD_T, HEADER_PAD_B = 8, 8     # inside the header (above its title, below its detail)
-HEADER_LINE_GAP = 2                  # between the title and the detail
+HEADER_LINE_GAP = 8                  # clear the padded name hover/editor above the detail
+NAME_PAD = 4                        # equal inset around the editable name, in DIP
 EDIT_GAP = 8                         # between the header's title and its pencil button
 BUTTON_W, BUTTON_H, BUTTON_RADIUS = 28, 26, 4
 VALUE_MIN_W = 34
@@ -81,7 +84,7 @@ def ui_fonts(english: Sequence[str], language: str = "en") -> Tuple[str, ...]:
 
 
 TEXT_PX = 13
-DETAIL_PX = 12                       # the header's detail line, below the bold name
+DETAIL_PX = 11
 ICON_FONTS = ("Segoe Fluent Icons", "Segoe MDL2 Assets")
 CHECK, CHEVRON, MINUS, PLUS, EDIT = "\uE73E", "\uE76C", "\uE738", "\uE710", "\uE70F"
 CHECK_PX, CHEVRON_PX, BUTTON_PX = 12, 10, 11
@@ -147,6 +150,7 @@ def colours(light: bool) -> dict:
         "separator": over(p["separator"], base),
         "border": over(p["border"], base),
         "hover": "#%02x%02x%02x" % (hr, hg, hb),
+        "surface": over(p["hover"], base),  # opaque controls use the composited hover tint
         "hover_alpha": ha / 255,
         "tint_abgr": abgr(p["tint"]),
     }
@@ -278,8 +282,10 @@ class CounterItem(Item):
 class HeaderItem(Item):
     """The heading at the top of a menu: a title (the device's name) and a detail
     (its level, charging, time left). The flyout shows the detail on the line below
-    the title and wraps both to the width the other items need, so a long heading
-    never makes the menu wider. It cannot be chosen.
+    the title. A heading can widen a short menu up to a bounded preferred width;
+    longer headings wrap. An optional begin_rename factory enables an inline
+    name editor: it returns (initial text, commit callback), or None if unavailable.
+    The commit callback returns True only when the edit was accepted.
 
     `edit` (called with the tray icon) adds a pencil button at the right of the title,
     dim until the mouse is over it; the classic menu cannot show it, so keep an
@@ -289,9 +295,11 @@ class HeaderItem(Item):
     disabled item "title: detail"."""
 
     def __init__(self, title: Callable[[], str], detail: Callable[[], str] = lambda: "",
-                 edit: Optional[Callable[[object], None]] = None, **kwargs):
+                 edit: Optional[Callable[[object], None]] = None,
+                 begin_rename=None, rename_hint: str = "", **kwargs):
         self._title, self._detail = title, detail
         self.edit = edit
+        self.begin_rename, self.rename_hint = begin_rename, rename_hint
 
         def text(_item):
             t, d = self.title(), self.detail()
@@ -494,8 +502,9 @@ class _Win32:
         """Put a topmost window in front of the other topmost windows, without moving,
         resizing or activating it."""
         try:
-            # HWND_TOPMOST, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
-            self.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+            # HWND_TOPMOST; keep geometry, focus AND the owner's position.
+            # An owned tooltip must not lift its panel over the highlight.
+            self.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200)
         except Exception:
             pass
 
@@ -536,18 +545,17 @@ class _Style:
             self.font.configure(size=-self.px(TEXT_PX))
         else:
             self.font = tk_font.Font(root, family=text, size=-self.px(TEXT_PX))
-        # the header: the device's name in bold, its state smaller below it
         self.title_font = self.font.copy()
         self.title_font.configure(weight="bold")
         self.detail_font = self.font.copy()
         self.detail_font.configure(size=-self.px(DETAIL_PX))
-        self.title_line = self.title_font.metrics("linespace")
-        self.detail_line = self.detail_font.metrics("linespace")
         glyph_family = self.icon_family or self.font.actual("family")
         self.check_font = tk_font.Font(root, family=glyph_family, size=-self.px(CHECK_PX))
         self.chevron_font = tk_font.Font(root, family=glyph_family, size=-self.px(CHEVRON_PX))
         self.button_font = tk_font.Font(root, family=glyph_family, size=-self.px(BUTTON_PX))
         self.line = self.font.metrics("linespace")
+        self.title_line = self.title_font.metrics("linespace")
+        self.detail_line = self.detail_font.metrics("linespace")
         self.colours = colours(light)
         self.light = light
 
@@ -564,6 +572,8 @@ class _Row:
         self.detail = ""
         self.lines: List[Tuple[str, bool]] = []   # ... wrapped: (text, is the detail)
         self.edit = None            # a header's pencil button: its action
+        self.begin_rename = None
+        self.rename_hint = ""
         self.checked: Optional[bool] = None
         self.enabled = True
         self.submenu = None
@@ -573,7 +583,7 @@ class _Row:
     @property
     def selectable(self) -> bool:
         if self.kind == "header":
-            return self.edit is not None          # only its pencil button
+            return self.edit is not None or self.begin_rename is not None
         return self.kind != "sep" and self.enabled
 
 
@@ -591,6 +601,7 @@ def build_rows(menu) -> List[_Row]:
             row = _Row("header", it)
             row.enabled = False
             row.edit = it.edit
+            row.begin_rename, row.rename_hint = it.begin_rename, it.rename_hint
             try:
                 row.title, row.detail = it.title(), it.detail()
             except Exception as e:
@@ -611,14 +622,17 @@ def build_rows(menu) -> List[_Row]:
     return rows
 
 
+def check_column(rows: List[_Row]) -> int:
+    """Reserve the check gutter only for menus that actually contain checks."""
+    return CHECK_COLUMN if any(row.checked is not None for row in rows) else PLAIN_COLUMN
+
+
 def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph,
-           measure_title=None, measure_detail=None) -> Tuple[int, int]:
-    """Set each row's y and height; -> (width, height) of the panel. A header does not
-    count for the width: its lines are wrapped to the width the other rows need, the
-    title with `measure_title` (bold) and the detail with `measure_detail` (smaller);
-    both default to `measure_text`."""
-    measure_title = measure_title or measure_text
-    measure_detail = measure_detail or measure_text
+           max_width: Optional[int] = None, min_width: int = MIN_WIDTH) -> Tuple[int, int]:
+    """Set each row's y and height; -> (width, height) of the panel.
+
+    Body labels set the width; headers contribute a bounded preferred width and
+    wrap using their own fonts. The work area caps the resulting panel width."""
     px = style.px
     item_h = px(ITEM_MARGIN_Y) * 2 + px(ITEM_PAD_T) + style.line + px(ITEM_PAD_B)
     counter_h = max(item_h, px(ITEM_MARGIN_Y) * 2 + px(BUTTON_H))
@@ -633,9 +647,19 @@ def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph,
         elif row.submenu is not None:
             w += px(CHEVRON_GAP) + measure_glyph(style.glyph(CHEVRON))
         content = max(content, w)
-    width = max(px(MIN_WIDTH), px(ITEM_MARGIN_X) + px(ITEM_PAD_L) + px(CHECK_COLUMN) + content
+    column = check_column(rows)
+    padding = px(ITEM_MARGIN_X) * 2 + px(ITEM_PAD_L) + px(column) + px(ITEM_PAD_R)
+    for row in rows:
+        if row.kind == "header":
+            preferred = max(style.title_font.measure(row.title), style.detail_font.measure(row.detail))
+            if row.edit is not None:
+                preferred += px(EDIT_GAP) + px(BUTTON_W)
+            content = max(content, min(preferred, px(320) - padding))
+    width = max(px(min_width), px(ITEM_MARGIN_X) + px(ITEM_PAD_L) + px(column) + content
                 + px(ITEM_PAD_R) + px(ITEM_MARGIN_X))
-    header_w = header_text_width(width, style)
+    if max_width is not None:
+        width = min(width, max_width)
+    header_w = header_text_width(width, style, column)
     y = px(PAD_Y)
     for row in rows:
         row.y = y
@@ -643,9 +667,9 @@ def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph,
             row.h = sep_h
         elif row.kind == "header":
             title_w = header_w - (px(EDIT_GAP) + px(BUTTON_W) if row.edit is not None else 0)
-            row.lines = [(t, False) for t in wrap(row.title, title_w, measure_title)]
+            row.lines = [(t, False) for t in wrap(row.title, title_w, style.title_font.measure)]
             if row.detail:
-                row.lines += [(t, True) for t in wrap(row.detail, header_w, measure_detail)]
+                row.lines += [(t, True) for t in wrap(row.detail, header_w, style.detail_font.measure)]
             row.h = header_height(row, style)
         else:
             row.h = counter_h if row.kind == "counter" else item_h
@@ -653,24 +677,18 @@ def layout(rows: List[_Row], style: _Style, measure_text, measure_glyph,
     return width, y + px(PAD_Y)
 
 
-def header_text_width(width: int, style: _Style) -> int:
+def header_text_width(width: int, style: _Style, column: int = PLAIN_COLUMN) -> int:
     """Room for a header's text in a panel `width` wide: from the items' text column
     to the right padding."""
     px = style.px
-    return width - px(ITEM_MARGIN_X) * 2 - px(ITEM_PAD_L) - px(CHECK_COLUMN) - px(ITEM_PAD_R)
-
-
-def header_line_height(style: _Style, is_detail: bool) -> int:
-    """The height of a header line: the bold title's or the smaller detail's. A style
-    without those fonts uses its ordinary line for both."""
-    return getattr(style, "detail_line" if is_detail else "title_line", style.line)
+    return width - px(ITEM_MARGIN_X) * 2 - px(ITEM_PAD_L) - px(column) - px(ITEM_PAD_R)
 
 
 def header_height(row: _Row, style: _Style) -> int:
     """Padding, the lines (a small gap before the detail) and a separator below."""
     px = style.px
     gap = px(HEADER_LINE_GAP) if any(d for _t, d in row.lines) and len(row.lines) > 1 else 0
-    lines = sum(header_line_height(style, d) for _t, d in row.lines)
+    lines = sum(style.detail_line if detail else style.title_line for _text, detail in row.lines)
     return (px(HEADER_PAD_T) + lines + gap + px(HEADER_PAD_B)
             + px(SEP_MARGIN_Y) * 2 + px(1))
 
@@ -685,7 +703,7 @@ def header_line_tops(row: _Row, style: _Style) -> List[int]:
             if tops:
                 y += px(HEADER_LINE_GAP)
         tops.append(y)
-        y += header_line_height(style, is_detail)
+        y += style.detail_line if is_detail else style.title_line
     return tops
 
 
@@ -695,7 +713,7 @@ def edit_box(row: _Row, width: int, style: _Style) -> Tuple[int, int, int, int]:
     px = style.px
     right = width - px(ITEM_MARGIN_X) - px(ITEM_PAD_R) + px(BUTTON_W) // 4
     bw, bh = px(BUTTON_W), px(BUTTON_H)
-    mid = header_line_tops(row, style)[0] + header_line_height(style, False) // 2
+    mid = header_line_tops(row, style)[0] + style.title_line // 2
     top = mid - bh // 2
     return right - bw, top, right, top + bh
 
@@ -730,6 +748,8 @@ class FlyoutHost:
         self._icon = None
         self._timer = None
         self._timer_panel: Optional["_Panel"] = None
+        self._timer_action = None
+        self._timer_args = ()
         self._last_pt: Optional[Tuple[int, int]] = None
         self._poll_id = None
         self._was_down = False
@@ -766,6 +786,7 @@ class FlyoutHost:
             self._tk, self._font, self._root = tk, tk_font, root
             self._families = set(tk_font.families(root))
             root.bind_all("<Motion>", lambda e: self._track(e.x_root, e.y_root), add="+")
+            root.bind_all("<Double-ButtonRelease-1>", self._double_click, add="+")
             for b in ("<ButtonRelease-1>", "<ButtonRelease-3>"):
                 root.bind_all(b, lambda e: self._click(e.x_root, e.y_root), add="+")
             root.bind_all("<MouseWheel>", self._wheel, add="+")
@@ -894,6 +915,7 @@ class FlyoutHost:
         work = usable_area(work, taskbar)            # submenus use it too (panel.work)
         style = self.style(scale, apps_use_light_theme())
         panel = _Panel(self, menu, style, None, None)
+        panel.fit(work)
         if not panel.rows:
             return
         # the size is known before the window exists: layout() measured every row
@@ -933,6 +955,29 @@ class FlyoutHost:
         panel.child_row = None
         panel.update_highlight()
 
+    def _restack(self) -> None:
+        """Keep each highlight above its panel, with every descendant above both.
+
+        A submenu can open back over an ancestor. Raising only that ancestor's
+        highlight would put its retained selection on top of the submenu.
+        These are only our own HWNDs, ordered catcher/panel/overlay per depth;
+        to_top never moves, resizes or activates a window.
+        """
+        if self._w is None:
+            return
+        for panel in self.panels:
+            for hwnd in panel._hwnds:
+                if hwnd:
+                    self._w.to_top(hwnd)
+            highlight = getattr(panel, "_native_highlight", None)
+            if highlight is not None and highlight.hwnd and highlight.hwnd not in panel._hwnds:
+                self._w.to_top(highlight.hwnd)
+        for panel in self.panels:
+            hint = getattr(panel, "_hint", None)
+            hwnd = getattr(hint, "hwnd", 0)
+            if isinstance(hwnd, int) and hwnd:
+                self._w.to_top(hwnd)
+
     def _open_child(self, panel: "_Panel", index: int, select_first: bool = False) -> None:
         self._cancel_timer()
         if panel not in self.panels:
@@ -944,6 +989,7 @@ class FlyoutHost:
         if row.submenu is None or not row.enabled:
             return
         child = _Panel(self, row.submenu, panel.style, panel, index)
+        child.fit(panel.work)
         if not child.rows:
             return
         item_top = panel.y + row.y + panel.style.px(ITEM_MARGIN_Y)
@@ -953,17 +999,25 @@ class FlyoutHost:
         panel.child_row = index
         child.open(x, y)
         self.panels.append(child)
+        self._restack()
         if select_first:
             child.move_hover(+1)
         panel.update_highlight()
 
     def _schedule(self, panel: "_Panel", fn, *args) -> None:
+        if (self._timer_panel is panel and self._timer_action == fn
+                and self._timer_args == args and fn == self._close_after):
+            return                     # movement outside must not keep postponing closure
         self._cancel_timer()
         self._timer_panel = panel
+        self._timer_action = fn
+        self._timer_args = args
         self._timer = self._root.after(SUBMENU_DELAY_MS, self._fire, fn, args)
 
     def _fire(self, fn, args) -> None:
         self._timer = self._timer_panel = None
+        self._timer_action = None
+        self._timer_args = ()
         fn(*args)
 
     def _cancel_timer(self) -> None:
@@ -974,6 +1028,8 @@ class FlyoutHost:
                 pass
             self._timer = None
         self._timer_panel = None
+        self._timer_action = None
+        self._timer_args = ()
 
     # ---------------- input
     def _panel_at(self, x: int, y: int) -> Optional["_Panel"]:
@@ -985,6 +1041,8 @@ class FlyoutHost:
     def _track(self, x: int, y: int) -> None:
         """The mouse moved: highlight what is under it and open / switch submenus
         after a short pause, like the Windows menu does."""
+        if any(getattr(p, "editor", None) is not None for p in self.panels):
+            return                     # switching rows requires a click while editing
         if not self.panels or (x, y) == self._last_pt:
             return                     # not moved: keep what the keyboard selected
         self._last_pt = (x, y)
@@ -993,19 +1051,34 @@ class FlyoutHost:
             if p is not hit and (p.hover is not None or p.part is not None):
                 p.set_hover(None, None)
         if hit is None:
+            if len(self.panels) > 1:
+                self._schedule(self.panels[0], self._close_after, self.panels[0])
+            else:
+                self._cancel_timer()
             return
         if self._timer_panel is not None and self._timer_panel is not hit:
             self._cancel_timer()       # e.g. moved on into the submenu: keep it open
         index, part = hit.hit(x, y)
+        if index is None and hit.child_row is not None:
+            self._schedule(hit, self._close_after, hit)
+        if index is not None and hit.child_row == index:
+            # Returning to the opener keeps its direct child, but abandons any
+            # deeper submenu. Keep the grace period for diagonal crossings.
+            depth = self.panels.index(hit)
+            child = self.panels[depth + 1] if depth + 1 < len(self.panels) else None
+            if child is not None and depth + 2 < len(self.panels):
+                self._schedule(hit, self._close_after, child)
+            else:
+                self._cancel_timer()
+            hit.set_hover(index, part)
+            return
         if (index, part) == (hit.hover, hit.part):
             return
         hit.set_hover(index, part)
         if index is None:
             return
         row = hit.rows[index]
-        if hit.child_row == index:
-            self._cancel_timer()       # back on the item of the open submenu
-        elif row.submenu is not None and row.enabled:
+        if row.submenu is not None and row.enabled:
             self._schedule(hit, self._open_child, hit, index)
         elif hit.child_row is not None:
             self._schedule(hit, self._close_after, hit)
@@ -1014,16 +1087,37 @@ class FlyoutHost:
         panel = self._panel_at(x, y)
         if panel is None:
             return
+        for opened in self.panels:
+            entry = getattr(opened, "editor", None)
+            if entry is not None:
+                field = opened._edit_frame or entry
+                if (field.winfo_rootx() <= x < field.winfo_rootx() + field.winfo_width()
+                        and field.winfo_rooty() <= y < field.winfo_rooty() + field.winfo_height()):
+                    entry.focus_set()
+                    return
+                opened.cancel_edit()
         index, part = panel.hit(x, y)
         if index is None:
             return
         self._activate(panel, index, part)
+
+    def _double_click(self, event):
+        panel = self._panel_at(event.x_root, event.y_root)
+        if panel is not None and getattr(panel, "editor", None) is None:
+            index, part = panel.hit(event.x_root, event.y_root)
+            if index is not None and part == "name":
+                panel.begin_edit(index)
+                return "break"
 
     def _activate(self, panel: "_Panel", index: int, part: Optional[str]) -> None:
         row = panel.rows[index]
         if not row.selectable:
             return
         if row.kind == "header":
+            if row.begin_rename is not None:
+                if part == "keyboard":
+                    panel.begin_edit(index)
+                return
             edit, icon = row.edit, self._icon
             self.close()
             threading.Thread(target=self._run_edit, args=(edit, icon), daemon=True).start()
@@ -1075,8 +1169,12 @@ class FlyoutHost:
         """Keyboard: arrows, Enter / Space, Esc; Left / Right also step a counter."""
         if not self.panels:
             return
+        if any(getattr(p, "editor", None) is not None for p in self.panels):
+            return                     # Entry owns editing, arrows and spaces
         panel = self.panels[-1]
         k = event.keysym
+        if k in ("Escape", "Down", "Up", "Right", "Left", "Return", "KP_Enter", "space"):
+            self._cancel_timer()       # keyboard intent supersedes a pending pointer action
         row = panel.rows[panel.hover] if panel.hover is not None else None
         if k == "Escape":
             if panel.parent is not None:
@@ -1091,6 +1189,8 @@ class FlyoutHost:
             self._open_child(panel, panel.hover, select_first=True)
         elif k == "Left" and panel.parent is not None:
             self._back(panel)
+        elif k == "F2" and row is not None and row.kind == "header":
+            panel.begin_edit(panel.hover)
         elif k in ("Return", "KP_Enter", "space") and panel.hover is not None:
             self._activate(panel, panel.hover, "keyboard")
 
@@ -1135,7 +1235,7 @@ class _Panel:
         self.rows = build_rows(menu)
         self.w, self.h = layout(self.rows, style, style.font.measure,
                                 lambda g: self._glyph_font(g).measure(g),
-                                style.title_font.measure, style.detail_font.measure)
+                                min_width=SUBMENU_MIN_WIDTH if parent is not None else MIN_WIDTH)
         self.x = self.y = 0
         self.work: Rect = (0, 0, 0, 0)
         self.hover: Optional[int] = None
@@ -1147,6 +1247,181 @@ class _Panel:
         self._hwnds: List[int] = []
         self._overlay_geo = None
         self._fade_start = 0.0
+        self.editor = None
+        self._edit_frame = None
+        self._edit_commit = None
+        self._edit_row = None
+        self._hint_timer = None
+        self._hint = None
+        self._hint_fade_timer = None
+        self._hint_fade_start = 0.0
+        self._native_highlight = None
+
+    def fit(self, work: Rect) -> None:
+        self.w, self.h = layout(self.rows, self.style, self.style.font.measure,
+                                lambda g: self._glyph_font(g).measure(g),
+                                max_width=max(1, work[2] - work[0]),
+                                min_width=SUBMENU_MIN_WIDTH if self.parent is not None else MIN_WIDTH)
+
+    def name_box(self, row: _Row) -> Tuple[int, int, int, int]:
+        px = self.style.px
+        left = px(ITEM_MARGIN_X) + px(ITEM_PAD_L) + px(check_column(self.rows))
+        titles = [(text, top) for (text, detail), top in
+                  zip(row.lines, header_line_tops(row, self.style)) if not detail]
+        right = min(self.w - px(ITEM_MARGIN_X) - px(ITEM_PAD_R),
+                    left + max((self.style.title_font.measure(t) for t, _ in titles), default=0))
+        top = titles[0][1] if titles else row.y + px(HEADER_PAD_T)
+        bottom = titles[-1][1] + self.style.title_line if titles else top + self.style.title_line
+        pad = px(NAME_PAD)
+        return left - pad, top - pad, right + pad, bottom + pad
+
+    def _hide_hint(self) -> None:
+        if getattr(self, "_hint_fade_timer", None) is not None:
+            try:
+                self.host._root.after_cancel(self._hint_fade_timer)
+            except Exception:
+                pass
+            self._hint_fade_timer = None
+        if self._hint_timer is not None:
+            try:
+                self.host._root.after_cancel(self._hint_timer)
+            except Exception:
+                pass
+            self._hint_timer = None
+        if self._hint is not None:
+            self._hint.destroy()
+            self._hint = None
+            self.host._restack()       # hiding an owned popup can raise its owner
+
+    def _fade_hint(self) -> None:
+        self._hint_fade_timer = None
+        if self._hint is None or self.win is None:
+            return
+        progress = min(1.0, (time.perf_counter() - self._hint_fade_start) / .12)
+        try:
+            self._hint.set_opacity(progress * progress * (3 - 2 * progress))
+            self.host._restack()
+            if progress < 1:
+                self._hint_fade_timer = self.host._root.after(15, self._fade_hint)
+        except Exception:
+            log.info("menu: native tooltip fade unavailable", exc_info=True)
+            self._hide_hint()
+
+    def _show_hint(self, index: int) -> None:
+        self._hint_timer = None
+        if self.win is None or self.editor is not None or self.hover != index or self.part != "name":
+            return
+        row, tk, c = self.rows[index], self.host._tk, self.style.colours
+        if not row.rename_hint:
+            return
+        x0, y0, x1, y1 = self.name_box(row)
+        anchor = (self.x + x0, self.y + y0, self.x + x1, self.y + y1)
+        if sys.platform == "win32":
+            try:
+                from halo.native_tooltip import NativeTooltip
+                tip = self._hint = NativeTooltip(self.hwnd, row.rename_hint, self.style.light)
+                tip.show_above(anchor, self.work, self.style.px(6), opacity=0.0)
+                self._hint_fade_start = time.perf_counter()
+                self.host._restack()
+                self._hint_fade_timer = self.host._root.after(15, self._fade_hint)
+            except Exception:
+                log.info("menu: native rename tooltip unavailable", exc_info=True)
+                self._hide_hint()
+            return
+        tip = self._hint = self._toplevel(c["surface"])
+        tip.configure(takefocus=False)
+        _attr(tip, "-disabled", True)    # Windows tooltip must never activate
+        label = tk.Label(tip, text=row.rename_hint, font=self.style.detail_font,
+                         bg=c["surface"], fg=c["text"], padx=self.style.px(8), pady=self.style.px(5))
+        label.pack()
+        tip.update_idletasks()
+        width, height = tip.winfo_reqwidth(), tip.winfo_reqheight()
+        x = max(self.work[0], min(anchor[0], self.work[2] - width))
+        y = max(self.work[1], min(anchor[1] - self.style.px(6) - height, self.work[3] - height))
+        tip.geometry(f"+{x}+{y}")
+        tip.deiconify()               # no focus call: this is only a hover hint
+
+    def begin_edit(self, index: int) -> None:
+        if self.editor is not None:
+            return
+        row = self.rows[index]
+        if row.begin_rename is None:
+            return
+        try:
+            session = row.begin_rename()
+        except Exception:
+            log.exception("menu: cannot begin rename")
+            return
+        if session is None:
+            return
+        text, commit = session
+        self.host._close_after(self)
+        self.host._cancel_timer()
+        self._hide_hint()
+        c, px = self.style.colours, self.style.px
+        x0, y0, _x1, _y1 = self.name_box(row)
+        width = max(px(20), self.w - x0 - px(ITEM_PAD_R + ITEM_MARGIN_X - NAME_PAD))
+        height = self.style.title_line + px(NAME_PAD) * 2
+        field = self._edit_frame = self.host._tk.Canvas(self.win, bg=c["key"],
+                    highlightthickness=0, bd=0)
+        field.place(x=x0, y=y0, width=width, height=height)
+        rounded_rect(field, 0, 0, width, height, px(6), c["border"])
+        border = px(1)
+        rounded_rect(field, border, border, width - border, height - border,
+                     px(5), c["surface"])
+        entry = self.editor = self.host._tk.Entry(field, font=self.style.title_font,
+                    bg=c["surface"], fg=c["text"], insertbackground=c["text"],
+                    relief="flat", bd=0, highlightthickness=0)
+        self._edit_commit, self._edit_row = commit, index
+        entry.place(x=px(NAME_PAD), y=px(NAME_PAD), width=width - px(NAME_PAD) * 2,
+                    height=self.style.title_line)
+        entry.insert(0, text)
+        entry.selection_range(0, "end")
+        entry.bind("<Return>", self.commit_edit)
+        entry.bind("<KP_Enter>", self.commit_edit)
+        entry.bind("<Escape>", self.cancel_edit)
+        self.update_highlight()
+        self.draw()                    # the Entry replaces every wrapped title line
+        field.tk.call("raise", field._w)  # Canvas.lift raises canvas tags, not its widget
+        entry.lift()
+        entry.focus_set()
+
+    def cancel_edit(self, event=None):
+        if self.editor is not None:
+            self.editor.destroy()
+            self.editor = None
+            if self._edit_frame is not None:
+                self._edit_frame.destroy()
+                self._edit_frame = None
+            self._edit_commit = self._edit_row = None
+            if self.win is not None:
+                self.win.focus_set()
+            self.draw()
+            self.update_highlight()
+        return "break"
+
+    def commit_edit(self, event=None):
+        if self.editor is None:
+            return "break"
+        try:
+            accepted = self._edit_commit(self.editor.get())
+        except Exception:
+            log.exception("menu: cannot rename device")
+            accepted = False
+        if not accepted:
+            self.editor.focus_set()
+            return "break"
+        self.cancel_edit()
+        self.rows = build_rows(self.menu)
+        self.fit(self.work)
+        self.x = max(self.work[0], min(self.x, self.work[2] - self.w))
+        self.y = max(self.work[1], min(self.y, self.work[3] - self.h))
+        for window in (self.win, self.catcher):
+            if window is not None:
+                window.geometry(f"{self.w}x{self.h}+{self.x}+{self.y}")
+        self.draw()
+        self.update_highlight()
+        return "break"
 
     def _glyph_font(self, g: str):
         return self.style.chevron_font if g in (CHEVRON, FALLBACK_GLYPHS[CHEVRON]) else self.style.check_font
@@ -1220,6 +1495,32 @@ class _Panel:
         for name in ("catcher", "overlay"):
             if frames.get(name):
                 w.dwm_int(frames[name], 33, 1)                                # DWMWCP_DONOTROUND: no frame on them
+        if sys.platform == "win32":
+            try:
+                from halo.native_highlight import NativeHighlight
+                highlight = NativeHighlight(self.hwnd)
+                self._native_highlight = highlight
+                self._hwnds = [h for h in self._hwnds if h != self._overlay_hwnd]
+                self._overlay_hwnd = highlight.hwnd
+                self._hwnds.append(highlight.hwnd)
+                self.overlay.destroy()
+                self.overlay = self.ocanvas = None
+            except Exception:
+                log.info("menu: native highlight unavailable, using Tk", exc_info=True)
+
+    def _restore_tk_overlay(self) -> None:
+        """Recover the existing portable renderer if a native paint fails."""
+        self.overlay = self._toplevel(OVERLAY_KEY)
+        _attr(self.overlay, "-transparentcolor", OVERLAY_KEY)
+        self.overlay.attributes("-alpha", 0.0)
+        self.overlay.geometry(f"1x1+{self.x}+{self.y}")
+        self.ocanvas = self.host._tk.Canvas(self.overlay, bg=OVERLAY_KEY, highlightthickness=0, bd=0)
+        self.ocanvas.pack(fill="both", expand=True)
+        self.overlay.deiconify()
+        self.overlay.update_idletasks()
+        self._overlay_geo = None
+        self._overlay_hwnd = int(self.overlay.wm_frame(), 16)
+        self._hwnds.append(self._overlay_hwnd)
 
     def _fade(self) -> None:
         if self.win is None:
@@ -1235,9 +1536,20 @@ class _Panel:
             self.update_highlight()
 
     def hwnds(self) -> List[int]:
-        return self._hwnds
+        handles = list(self._hwnds)
+        if self._hint is not None:
+            try:
+                handles.append(int(self._hint.wm_frame(), 16))
+            except Exception:
+                pass
+        return handles
 
     def destroy(self) -> None:
+        self._hide_hint()
+        self.cancel_edit()
+        if self._native_highlight is not None:
+            self._native_highlight.destroy()
+            self._native_highlight = None
         for t in (self.overlay, self.win, self.catcher):
             if t is not None:
                 try:
@@ -1245,6 +1557,7 @@ class _Panel:
                 except Exception:
                     pass
         self.overlay = self.win = self.catcher = None
+        self._hwnds = []
 
     # ---------------- drawing
     def draw(self) -> None:
@@ -1255,7 +1568,7 @@ class _Panel:
         if not is_windows_11():                    # Windows 10: no rounded frame from DWM
             cv.create_rectangle(0, 0, self.w - 1, self.h - 1, outline=c["border"])
         x_check = px(ITEM_MARGIN_X) + px(ITEM_PAD_L)
-        x_text = x_check + px(CHECK_COLUMN)
+        x_text = x_check + px(check_column(self.rows))
         x_right = self.w - px(ITEM_MARGIN_X) - px(ITEM_PAD_R)
         for row in self.rows:
             mid = row.y + row.h // 2
@@ -1266,6 +1579,9 @@ class _Panel:
                 continue
             if row.kind == "header":
                 for (text, is_detail), top in zip(row.lines, header_line_tops(row, st)):
+                    if (not is_detail and self.editor is not None and self._edit_row is not None
+                            and row is self.rows[self._edit_row]):
+                        continue
                     cv.create_text(x_text, top, text=text,
                                    font=st.detail_font if is_detail else st.title_font,
                                    fill=c["muted"] if is_detail else c["text"], anchor="nw")
@@ -1332,6 +1648,11 @@ class _Panel:
                 if not row.selectable:
                     return None, None
                 if row.kind == "header":
+                    if row.begin_rename is not None:
+                        x0, y0, x1, y1 = self.name_box(row)
+                        if x0 <= lx < x1 and y0 <= ly < y1:
+                            return i, "name"
+                        return None, None
                     x0, y0, x1, y1 = edit_box(row, self.w, self.style)
                     if x0 <= lx < x1 and y0 <= ly < y1:
                         return i, "edit"
@@ -1346,8 +1667,13 @@ class _Panel:
         return None, None
 
     def set_hover(self, index: Optional[int], part: Optional[str]) -> None:
+        changed = (index, part) != (self.hover, self.part)
+        if changed:
+            self._hide_hint()
         was = self._pencil_lit()
         self.hover, self.part = index, part
+        if changed and index is not None and part == "name" and self.editor is None:
+            self._hint_timer = self.host._root.after(650, self._show_hint, index)
         if self._pencil_lit() != was:
             self.draw()                    # the pencil is brighter under the mouse
         self.update_highlight()
@@ -1370,6 +1696,8 @@ class _Panel:
 
     def highlight_box(self) -> Optional[Tuple[int, int, int, int]]:
         """What the highlight covers now, in panel coordinates, or None."""
+        if self.editor is not None:
+            return None
         index = self.hover if self.hover is not None else self.child_row
         if index is None:
             return None
@@ -1378,6 +1706,8 @@ class _Panel:
             return None
         px = self.style.px
         if row.kind == "header":
+            if row.begin_rename is not None:
+                return self.name_box(row)
             return edit_box(row, self.w, self.style)
         if row.kind == "counter" and self.part != "keyboard":
             if self.part not in ("minus", "plus"):
@@ -1393,6 +1723,27 @@ class _Panel:
                 self.w - px(ITEM_MARGIN_X), row.y + row.h - px(ITEM_MARGIN_Y))
 
     def update_highlight(self) -> None:
+        native = getattr(self, "_native_highlight", None)
+        if native is not None:
+            try:
+                box = self.highlight_box()
+                if box is None or self._fade_running():
+                    native.hide()
+                    self.host._restack()
+                else:
+                    x0, y0, x1, y1 = box
+                    native.show((self.x + x0, self.y + y0, self.x + x1, self.y + y1),
+                                self.style.px(HOVER_RADIUS), self.style.colours["hover"],
+                                self.style.colours["hover_alpha"])
+                    self.host._restack()
+                return
+            except Exception:
+                log.info("menu: native highlight paint failed, using Tk", exc_info=True)
+                old_hwnd = native.hwnd
+                native.destroy()
+                self._native_highlight = None
+                self._hwnds = [h for h in self._hwnds if h != old_hwnd]
+                self._restore_tk_overlay()
         ov = self.overlay
         if ov is None:
             return
@@ -1420,14 +1771,8 @@ class _Panel:
             pass
 
     def _raise_overlay(self) -> None:
-        """The highlight in front of the panel. Opening the menu gives the panel the focus,
-        which brings it to the front, and its acrylic then hides a highlight behind it.
-        Tk's lift() is not used: on these borderless windows it also moved the highlight
-        back to the corner of the panel."""
-        w = self.host._w
-        hwnd = self._overlay_hwnd
-        if w is not None and hwnd:
-            w.to_top(hwnd)
+        """Restore depth order instead of raising an ancestor over its descendants."""
+        self.host._restack()
 
     def _fade_running(self) -> bool:
         return (time.perf_counter() - self._fade_start) * 1000 < FADE_MS
