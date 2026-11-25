@@ -14,6 +14,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Prepare a separate production signing chain for application executables,
+  Inno uninstallers and temporary setup copies, and the outer installer. Require
+  trusted timestamped signatures and installer checks before stable publication.
 - Recognize the pinned self-signed TEST certificate's untrusted-root result on
   Windows without trusting the certificate or accepting other signature errors.
 - Make tray device names bold with smaller status details and fit menu widths to
