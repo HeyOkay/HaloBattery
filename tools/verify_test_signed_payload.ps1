@@ -132,8 +132,8 @@ namespace Halo {
 }
 
 function Assert-ProductionTimestamp([string]$Path) {
-    # Windows verifies timestamp trust/binding through WinVerifyTrust below.
-    # Also enforce SHA-256 and an embedded RFC3161 token, not a legacy countersignature.
+    # Verify the RFC3161 token's binding explicitly; Windows also validates
+    # the timestamp chain through WinVerifyTrust. Legacy countersignatures are rejected.
     [byte[]]$bytes = [IO.File]::ReadAllBytes($Path)
     $layout = Get-PeLayout $bytes
     if ($layout.Certificate -le 0 -or $layout.CertificateSize -lt 9 -or
@@ -153,7 +153,20 @@ function Assert-ProductionTimestamp([string]$Path) {
     $tokens = @($cms.SignerInfos[0].UnsignedAttributes | Where-Object {
         $_.Oid.Value -cin @('1.3.6.1.4.1.311.3.3.1', '1.2.840.113549.1.9.16.2.14')
     })
+    if (@($cms.SignerInfos[0].UnsignedAttributes | Where-Object { $_.Oid.Value -ceq '1.2.840.113549.1.9.6' }).Count) {
+        throw 'Legacy timestamp countersignatures are not accepted'
+    }
     if ($tokens.Count -ne 1 -or $tokens[0].Values.Count -ne 1) { throw 'Production requires one RFC3161 timestamp' }
+    $token = $null
+    $tokenBytes = $tokens[0].Values[0].RawData
+    $tokenConsumed = 0
+    $tokenDecoded = [Security.Cryptography.Pkcs.Rfc3161TimestampToken]::TryDecode(
+        [ReadOnlyMemory[byte]]::new($tokenBytes), [ref]$token, [ref]$tokenConsumed)
+    $tsa = $null
+    if (-not $tokenDecoded -or $tokenConsumed -ne $tokenBytes.Length -or
+        -not $token.VerifySignatureForSignerInfo($cms.SignerInfos[0], [ref]$tsa, $null)) {
+        throw 'RFC3161 timestamp does not bind to the embedded signer signature'
+    }
     $timestamp = [Security.Cryptography.Pkcs.SignedCms]::new()
     $timestamp.Decode($tokens[0].Values[0].RawData)
     $timestamp.CheckSignature($true)
