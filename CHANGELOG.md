@@ -420,6 +420,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Refuse normal startup when the shared instance guard cannot be created,
+  and retain its handle so app startup respects diagnostic exclusivity.
 - Show the Attack Shark R1 charging animation over its 2.4 GHz receiver,
   including when powered by a wall charger.
 - Extend the Settings Close button hit target to the top-right corner while
