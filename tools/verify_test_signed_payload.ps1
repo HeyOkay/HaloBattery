@@ -57,6 +57,73 @@ function Get-RegularTree([string]$Directory, [string[]]$ExactFiles) {
     return ,$files
 }
 
+function Get-TestSignatureTrustStatus([string]$Path) {
+    if (-not ('Halo.TestSignatureTrust' -as [type])) {
+        # Read the native result: PowerShell maps CERT_E_UNTRUSTEDROOT to
+        # UnknownError on some Windows versions. Never match localized messages.
+        # https://learn.microsoft.com/windows/win32/api/wintrust/nf-wintrust-winverifytrust
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace Halo {
+    public static class TestSignatureTrust {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct FileInfo {
+            public uint Size;
+            [MarshalAs(UnmanagedType.LPWStr)] public string Path;
+            public IntPtr File;
+            public IntPtr KnownSubject;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TrustData {
+            public uint Size;
+            public IntPtr PolicyCallbackData;
+            public IntPtr SIPClientData;
+            public uint UIChoice;
+            public uint RevocationChecks;
+            public uint UnionChoice;
+            public IntPtr FileInfo;
+            public uint StateAction;
+            public IntPtr StateData;
+            public IntPtr URLReference;
+            public uint ProviderFlags;
+            public uint UIContext;
+            public IntPtr SignatureSettings;
+        }
+        [DllImport("wintrust.dll", ExactSpelling = true)]
+        private static extern int WinVerifyTrust(IntPtr window, ref Guid action, ref TrustData data);
+        public static int Verify(string path) {
+            var file = new FileInfo { Size = (uint)Marshal.SizeOf<FileInfo>(), Path = path };
+            IntPtr pointer = Marshal.AllocHGlobal(Marshal.SizeOf<FileInfo>());
+            var data = new TrustData {
+                Size = (uint)Marshal.SizeOf<TrustData>(), UIChoice = 2, UnionChoice = 1,
+                FileInfo = pointer, StateAction = 1,
+                // TEST-only offline verification; do not fetch certificates or change trust.
+                ProviderFlags = 0x1000 | 0x10
+            };
+            var action = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
+            bool initialized = false;
+            try {
+                Marshal.StructureToPtr(file, pointer, false);
+                initialized = true;
+                return WinVerifyTrust(new IntPtr(-1), ref action, ref data);
+            } finally {
+                try {
+                    data.StateAction = 2;
+                    WinVerifyTrust(new IntPtr(-1), ref action, ref data);
+                } finally {
+                    if (initialized) Marshal.DestroyStructure<FileInfo>(pointer);
+                    Marshal.FreeHGlobal(pointer);
+                }
+            }
+        }
+    }
+}
+'@
+    }
+    return [Halo.TestSignatureTrust]::Verify($Path)
+}
+
 function Assert-TestSignature([string]$Path) {
     if ($env:TEST_CERT_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
         throw 'TEST certificate thumbprint is missing or invalid'
@@ -68,9 +135,16 @@ function Assert-TestSignature([string]$Path) {
         throw "Unexpected embedded TEST signer: $Path"
     }
     # The pinned TEST certificate may be self-signed. Do not install trust.
-    if ($signature.Status.ToString() -cnotin @('Valid', 'NotTrusted')) {
+    $status = $signature.Status.ToString()
+    if ($status -cnotin @('Valid', 'NotTrusted', 'UnknownError')) {
         throw "Rejected TEST signature status: $($signature.Status)"
     }
+    $nativeStatus = Get-TestSignatureTrustStatus $Path
+    if ($status -ceq 'Valid' -and $nativeStatus -eq 0) { return }
+    # CERT_E_UNTRUSTEDROOT only, after pinning the embedded TEST signer.
+    # This is not Windows trust success; every other native failure is fatal.
+    if ($status -cin @('NotTrusted', 'UnknownError') -and $nativeStatus -eq -2146762487) { return }
+    throw ('Rejected TEST signature native status: 0x{0:X8}' -f $nativeStatus)
 }
 
 function Get-PeLayout([byte[]]$Bytes) {

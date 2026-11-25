@@ -54,6 +54,15 @@ def signed_pe(original, *, pe32=False):
 
 STUB = r"""
 $ErrorActionPreference='Stop'
+Add-Type -TypeDefinition @'
+namespace Halo {
+    public static class TestSignatureTrust {
+        public static int Verify(string path) {
+            return int.Parse(System.Environment.GetEnvironmentVariable("FAKE_TRUST_RESULT"));
+        }
+    }
+}
+'@
 function global:Get-AuthenticodeSignature {
     param([string]$LiteralPath)
     $signer=$env:FAKE_SIGNER
@@ -126,11 +135,14 @@ class SignedPayloadTests(unittest.TestCase):
 
     def invoke(self, *, status="NotTrusted", signer=THUMBPRINT, thumbprint=THUMBPRINT,
                signature_type="Authenticode", null_certificate=False, installer=None,
-               unsigned_installer=None, bad_second=False):
+               unsigned_installer=None, bad_second=False, native_status=None):
+        if native_status is None:
+            native_status = {"Valid": 0, "NotTrusted": -2146762487}.get(status, -2146762485)
         environment = dict(os.environ, PSExecutionPolicyPreference="Bypass",
             TEST_CERT_THUMBPRINT=thumbprint, FAKE_SIGNER=signer, FAKE_STATUS=status,
             FAKE_TYPE=signature_type, FAKE_NULL_CERT=str(null_certificate).lower(),
             FAKE_BAD_SECOND=str(bad_second).lower(),
+            FAKE_TRUST_RESULT=str(native_status),
             VERIFIER=str(HELPER), SIGNED=str(self.signed), DESTINATION=str(self.destination),
             INVENTORY=str(self.inventory), CASE_MODE="installer" if installer else "payload",
             INSTALLER=str(installer or ""), UNSIGNED_INSTALLER=str(unsigned_installer or ""))
@@ -193,6 +205,37 @@ class SignedPayloadTests(unittest.TestCase):
 
     def test_catalog_signature_cannot_substitute_for_embedded_signature(self):
         self.assert_rejected(signature_type="Catalog")
+
+    def test_unknown_error_accepts_only_pinned_test_untrusted_root(self):
+        result = self.invoke(status="UnknownError", native_status=-2146762487)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_untrusted_root_cannot_replace_the_embedded_signer_pin(self):
+        for options in (dict(signer="B" * 40), dict(null_certificate=True),
+                        dict(signature_type="Catalog"), dict(bad_second=True)):
+            with self.subTest(options=options):
+                self.assert_rejected(status="UnknownError", native_status=-2146762487, **options)
+
+    def test_other_native_errors_and_inconsistent_success_are_rejected(self):
+        for status in (0, 0x80096010, 0x800B0111, 0x800B0101, 0x80096004):
+            signed_status = status if status < 0x80000000 else status - 0x100000000
+            with self.subTest(native_status=hex(status)):
+                self.assert_rejected(status="UnknownError", native_status=signed_status)
+
+    def test_not_trusted_or_valid_cannot_hide_other_native_failures(self):
+        for status in ("Valid", "NotTrusted"):
+            for native in (0x80096010, 0x800B0111, 0x800B0101, 0x80096004):
+                with self.subTest(status=status, native_status=hex(native)):
+                    self.assert_rejected(status=status, native_status=native - 0x100000000)
+
+    def test_primary_digest_failure_cannot_use_the_untrusted_root_exception(self):
+        self.assert_rejected(status="HashMismatch", native_status=-2146762487)
+
+    def test_installer_accepts_pinned_test_untrusted_root(self):
+        unsigned, signed = self.installer_fixture()
+        result = self.invoke(status="UnknownError", native_status=-2146762487,
+                             installer=signed, unsigned_installer=unsigned)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_tampered_or_missing_dependency_is_rejected_before_owned_files_change(self):
         dependency = self.destination / "_internal/vendor.dll"
