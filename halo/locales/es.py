@@ -23,9 +23,12 @@ MESSAGES = {
     "icon_style.filled": "Relleno",
     "device.description": "{name}: {state}",
     # Menus, preferences and icon choices adapted from #249.
+    "menu.rename_hint": "Haz doble clic para cambiar el nombre",
     "menu.rename": "Cambiar nombre…",
     "menu.reset_name": "Restablecer nombre",
     "menu.icon": "Icono",
+    "menu.this_device": "Este dispositivo",
+    "menu.low_battery": "Alerta de batería baja",
     "menu.device_low": 'Aviso de batería baja a (este dispositivo)',
     "menu.default_low": "Predeterminado ({level}%)",
     "menu.default_off": "Predeterminado (desactivado)",
