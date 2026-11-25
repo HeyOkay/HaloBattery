@@ -511,8 +511,9 @@ class PulsarProvider(Provider):
             name, level, charging, seen, kind = self._last[key]
             if key in found:
                 continue
-            if key in self._via_cable:       # off the cable: not charging any more
-                charging = False
+            if key in self._via_cable:       # off the cable: the receiver's, not charging
+                vid, pid = int(key[7:11], 16), int(key[11:15], 16)
+                name, charging = PIDS.get(vid, {}).get(pid, name), False
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
                                   f"{' (charging)' if charging else ''} greyed "

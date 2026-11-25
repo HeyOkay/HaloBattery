@@ -397,6 +397,8 @@ class PulsarTest(unittest.TestCase):
                 [d] = provider.poll()          # the cable's level, greyed, not charging
                 self.assertEqual(("pulsar:3554f58a", 40, False, False),
                                  (d.key, d.level, d.charging, d.online))
+                self.assertEqual(P.PIDS[0x3554][0xF58A], d.name)   # not "(wired)"
+
                 self.assertEqual({}, provider.legacy_key_aliases())
 
         # back on the receiver: its live reading
