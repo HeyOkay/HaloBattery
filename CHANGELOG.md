@@ -100,8 +100,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
   device type - from the exchange documented and hardware-measured in
   `dniminenn/sharkfin` (GPL-3.0, protocol reference only). Charging is shown from the
   keyboard's own `3151:4015` enumeration while a USB-C data cable is in; the 2.4 GHz
-  status has no usable charging field, so a wall charger stays unknown. Test build 1 read
-  73 % against the vendor's coarse 70 % band
+  status has no usable charging field, so a wall charger stays unknown. Test build 2
+  confirmed wired charging on hardware; the wireless replies with and without a wall
+  charger differ only in the level byte
   ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its

@@ -492,7 +492,10 @@ this dongle reporting "charging" with no cable attached, so it is not trusted. T
 signal used here is the keyboard itself: with a USB-C **data** cable in, it enumerates as
 `3151:4015` ("EPOMAKER TH80 ISO") while the receiver reports the keyboard offline with its
 cached level, and that presence is shown as charging. A wall charger cannot be seen from
-the PC at all. Only the receiver id and collection are claimed, and the request is
+the PC at all. Confirmed on hardware with test build 2: wired mode showed 74 % and
+charging, while the wireless replies with and without a wall charger were identical
+except for the level byte itself (`4c` -> `59`), so the status carries no charger state
+there. Only the receiver id and collection are claimed, and the request is
 read-only. sharkfin is GPL-3.0 and is used as the protocol reference only; no code is
 taken from it. Reported on an Epomaker TH80 ISO in
 [#560](https://github.com/HeyOkay/HaloBattery/issues/560): test build 1 read 73 % against
