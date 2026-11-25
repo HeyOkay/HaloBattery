@@ -97,7 +97,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Show Razer Hammerhead V3 X HyperSpeed earbud battery through its 2.4 GHz
   charging-case receiver (`1532:0A64`). When both earbuds are connected, show
-  the lower of their reported levels.
+  the lower of their reported levels. Use Synapse's on-battery status for
+  connected earbuds so low-battery alerts apply.
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

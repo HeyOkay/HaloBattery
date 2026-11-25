@@ -414,11 +414,11 @@ class RazerProvider(Provider):
             diag_from = len(self._diag)
             self._diag.append(f"[Razer] {name} pid={pid:04x}, interfaces: {len(ifaces)}")
             if pid == hammerhead_v3x.PID:
-                # Synapse는 연결된 이어폰의 잔량을 보여주며 별도 충전 상태를 읽지 않는다.
+                # Synapse의 formatEarbudsBatteryData처럼 연결된 이어폰을 배터리 사용 중으로 처리한다.
                 level = hammerhead_v3x.poll_level(ifaces, self._diag)
                 if level is not None:
                     out.append(DeviceStatus(key, hammerhead_v3x.NAME, level, source=self.name,
-                                            kind="headset", charging_known=False))
+                                            kind="headset"))
                 continue
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")

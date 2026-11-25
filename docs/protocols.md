@@ -1330,7 +1330,9 @@ bytes 9 and 10. Byte 62 is the XOR of bytes 3 through 61. The reader checks
 the reply status, transaction, argument count, and checksum before using it.
 
 The tray shows the lowest valid level among the connected earbuds. `0xFF`
-means a level is unavailable. Charging status and case battery are unknown.
+means a level is unavailable. Like Synapse, the app treats connected earbuds
+as running on battery, so low-battery alerts apply. The charging-case battery
+is unavailable.
 Confirmed on Windows with the `1532:0A64` receiver and both earbuds connected.
 
 ### Razer Barracuda X (2022) (2.4 GHz)

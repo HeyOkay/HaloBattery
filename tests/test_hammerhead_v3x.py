@@ -1,10 +1,10 @@
 """Synapse에서 캡처한 HID 보고서로 Hammerhead 수신기 경로를 검증한다."""
 
-import unittest
 from functools import reduce
 from operator import xor
 from unittest import mock
 
+import test_hide_rename as tray_test
 from providers import hammerhead_v3x as H, razer as R
 
 
@@ -28,8 +28,9 @@ def changed_reply(reply, offset, *values):
     return bytes(result)
 
 
-class HammerheadV3XTests(unittest.TestCase):
+class HammerheadV3XTests(tray_test.HideRenameTestCase):
     def setUp(self):
+        super().setUp()
         # 실제 RazerProvider 진입점을 사용하되 HID 열기와 시간 지연을 대체한다.
         self.device = mock.Mock()
         self.device.send_feature_report.return_value = 64
@@ -42,18 +43,25 @@ class HammerheadV3XTests(unittest.TestCase):
             command,
         ]))
         self.open_device = self.enterContext(mock.patch.object(H.hid, "device", return_value=self.device))
-        self.enterContext(mock.patch.object(H.time, "sleep"))
 
     def test_reports_captured_battery_from_the_exact_collection(self):
         [status] = R.RazerProvider().poll()
         self.assertEqual((status.name, status.level, status.kind), (H.NAME, 94, "headset"))
         self.assertEqual((status.key, status.source), ("razer:0a64:test", "razer"))
-        self.assertFalse(status.charging_known)
+        self.assertEqual((status.charging, status.charging_known), (False, True))
         self.device.open_path.assert_called_once_with(b"command")
         self.device.close.assert_called_once_with()
         self.assertEqual(self.device.send_feature_report.call_args_list,
                          [mock.call(LINK_QUERY), mock.call(LEVEL_QUERY)])
         self.assertEqual(self.device.get_feature_report.call_args_list, [mock.call(2, 65)] * 2)
+
+    def test_connected_earbuds_show_a_normal_tooltip_and_low_battery_alert(self):
+        # 수신기의 잔량을 실제 트레이와 알림 처리 흐름에 넣는다.
+        self.device.get_feature_report.side_effect = (LINK_REPLY, changed_reply(LEVEL_REPLY, 9, 19, 84))
+        app = tray_test.make_app({"language": "en", "low": 20})
+        app.apply(R.RazerProvider().poll())
+        self.assertEqual(app.icons["razer:0a64:test"].titles[-1], f"{H.NAME}: 19%")
+        self.assertEqual(app.notes, [f"{H.NAME}: 19% left. Time to charge."])
 
     def test_does_not_open_other_collections(self):
         self.enumerate.return_value.pop()
