@@ -925,17 +925,6 @@ class SabreV3Test(unittest.TestCase):
         self.assertEqual(bytes([0x00, 0x00, 0x01, 0x01, 0x02, 0x0F]), frame[:6])
         self.assertEqual((0x01, 513), C.SABRE_V3_ROUTES[0x2B42])
 
-    def test_the_mode_frames(self):
-        soft = C.sabre_v3_mode_frame()
-        hard = C.sabre_v3_mode_frame(mode=C.SABRE_V3_MODE_HARDWARE)
-        self.assertEqual(bytes.fromhex("0001010101030002"), soft[:8])
-        self.assertEqual(bytes.fromhex("0001010101030001"), hard[:8])
-
-    def test_the_login_frame_carries_a_four_byte_token(self):
-        frame = C.sabre_v3_login_frame(bytes.fromhex("a1b2c3d4"))
-        self.assertEqual(bytes.fromhex("000101011b01a1b2c3d4"), frame[:10])
-        self.assertEqual(bytes(4), C.sabre_v3_login_frame(b"")[6:10])
-
     def test_the_receiver_answer_from_the_test_build_is_94_percent(self):
         r = bytes.fromhex("0100010200ac03") + bytes(505)
         status, data = C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_GET)
@@ -950,7 +939,6 @@ class SabreV3Test(unittest.TestCase):
     def test_another_command_is_not_this_answer(self):
         r = bytes.fromhex("0100011b00839e64")
         self.assertIsNone(C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_GET))
-        self.assertEqual(0, C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_LOGIN)[0])
 
     def test_a_kept_report_id_shifts_the_answer(self):
         r = bytes.fromhex("0001000102008403")
@@ -974,8 +962,8 @@ class SabreV3Test(unittest.TestCase):
             self.assertEqual(want, C.parse_sabre_v3_charge(data))
 
     def test_a_refusal_carries_its_status(self):
-        r = bytes.fromhex("0100011b06000000")
-        self.assertEqual(6, C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_LOGIN)[0])
+        r = bytes.fromhex("0100010206000000")
+        self.assertEqual(6, C.sabre_v3_reply(r, 0x01, C.SABRE_V3_CMD_GET)[0])
 
     def test_every_tenth_is_a_level(self):
         def level(raw):
@@ -996,22 +984,17 @@ class SabreV3Test(unittest.TestCase):
 
 
 class SabreV3Mouse:
-    """A fake Slipstream V2 collection that answers like the reporter's mouse.
+    """A fake plain-property reader; any login or set command fails the test."""
 
-    `needs` is what unlocks the property reads: None (they always answer),
-    "login" or "software"; until then a read is refused with status 05.
-    """
-
-    def __init__(self, level_raw=900, charge=1, needs=None, silent=False, noise=()):
+    def __init__(self, level_raw=900, charge=1, battery_status=0, silent=False, noise=()):
         self.level_raw = level_raw
         self.charge = charge
-        self.needs = needs
+        self.battery_status = battery_status
         self.silent = silent
         self.noise = [bytes(n) for n in noise]
         self.writes = []
         self.queue = []
-        self.logged_in = False
-        self.mode = C.SABRE_V3_MODE_HARDWARE
+        self.closed = False
 
     def _reply(self, request, status, payload=b""):
         r = bytearray(16)
@@ -1028,28 +1011,18 @@ class SabreV3Mouse:
         if self.silent:
             return len(data)
         cmd = data[4]
-        if cmd == C.SABRE_V3_CMD_LOGIN:
-            self.logged_in = True
-            self._reply(data, 0, bytes.fromhex("839e64"))
-        elif cmd == C.SABRE_V3_CMD_SET:
-            self.mode = data[7]
-            self._reply(data, 0)
-        elif cmd == C.SABRE_V3_CMD_GET:
-            unlocked = (self.needs is None
-                        or (self.needs == "login" and self.logged_in)
-                        or (self.needs == "software"
-                            and self.mode == C.SABRE_V3_MODE_SOFTWARE))
-            if not unlocked:
+        if cmd != C.SABRE_V3_CMD_GET:
+            raise AssertionError("SABRE battery polling must only send get-property commands")
+        if data[5] == C.SABRE_V3_PROP_BATTERY:
+            self._reply(data, self.battery_status,
+                        self.level_raw.to_bytes(2, "little") if self.battery_status == 0 else b"")
+        elif data[5] == C.SABRE_V3_PROP_CHARGE:
+            self.queue.extend(list(n) for n in self.noise)
+            self.noise = []
+            if self.charge is None:
                 self._reply(data, 0x05)
-            elif data[5] == C.SABRE_V3_PROP_BATTERY:
-                self._reply(data, 0, self.level_raw.to_bytes(2, "little"))
-            elif data[5] == C.SABRE_V3_PROP_CHARGE:
-                self.queue.extend(list(n) for n in self.noise)
-                self.noise = []
-                if self.charge is None:
-                    self._reply(data, 0x05)
-                else:
-                    self._reply(data, 0, bytes([self.charge]))
+            else:
+                self._reply(data, 0, bytes([self.charge]))
         return len(data)
 
     def read(self, size, timeout_ms=0):
@@ -1058,9 +1031,6 @@ class SabreV3Mouse:
     def commands(self):
         """(command, first data byte) per write, for asserting the sequence."""
         return [(w[4], w[5]) for w in self.writes]
-
-    def modes_set(self):
-        return [w[7] for w in self.writes if w[4] == C.SABRE_V3_CMD_SET]
 
 
 class SabreV3PollTest(unittest.TestCase):
@@ -1088,7 +1058,7 @@ class SabreV3PollTest(unittest.TestCase):
             return self.dev.read(size, timeout_ms)
 
         def close(self):
-            pass
+            self.dev.closed = True
 
     def setUp(self):
         self._saved = (C.hid, C.hidlist)
@@ -1117,38 +1087,71 @@ class SabreV3PollTest(unittest.TestCase):
         self.assertEqual([C.SABRE_V3_WRITE_SIZE] * 2, [len(w) for w in mouse.writes])
         self.assertEqual({0x01}, {w[1] for w in mouse.writes})
 
-    def test_login_is_tried_before_software_mode(self):
-        mouse = SabreV3Mouse(needs="login")
-        out, _ = self.poll(receiver=mouse)
-        self.assertEqual(90, out[0].level)
-        self.assertEqual([(0x02, 0x0F), (0x1B, 0x01), (0x02, 0x0F), (0x02, 0x10)],
-                         mouse.commands())
-        self.assertEqual([], mouse.modes_set())
+    def test_refusal_never_triggers_login_or_mode_writes(self):
+        for path in ("receiver", "cable"):
+            with self.subTest(path=path):
+                mouse = SabreV3Mouse(battery_status=0x05)
+                out, _ = self.poll(**{path: mouse})
+                self.assertEqual(out, [])
+                self.assertEqual(mouse.commands(), [(0x02, 0x0F)])
+                self.assertTrue(mouse.closed)
 
-    def test_software_mode_is_always_switched_back(self):
-        mouse = SabreV3Mouse(needs="software")
-        out, _ = self.poll(receiver=mouse)
-        self.assertEqual((90, True), (out[0].level, out[0].charging))
-        self.assertEqual([C.SABRE_V3_MODE_SOFTWARE, C.SABRE_V3_MODE_HARDWARE],
-                         mouse.modes_set())
-        self.assertEqual(C.SABRE_V3_CMD_SET, mouse.writes[-1][4])
-        self.assertEqual(C.SABRE_V3_MODE_HARDWARE, mouse.mode)
+    def test_silence_never_triggers_login_or_mode_writes(self):
+        for path in ("receiver", "cable"):
+            with self.subTest(path=path):
+                mouse = SabreV3Mouse(silent=True)
+                out, _ = self.poll(**{path: mouse})
+                self.assertEqual(out, [])
+                self.assertEqual(mouse.commands(), [(0x02, 0x0F)])
+                self.assertTrue(mouse.closed)
 
-    def test_software_mode_is_switched_back_when_nothing_answers_after_it(self):
-        mouse = SabreV3Mouse(needs="never")
-        out, _ = self.poll(receiver=mouse)
-        self.assertEqual([], out)
-        self.assertEqual([C.SABRE_V3_MODE_SOFTWARE, C.SABRE_V3_MODE_HARDWARE],
-                         mouse.modes_set())
-        self.assertEqual(C.SABRE_V3_MODE_HARDWARE, mouse.mode)
+    def test_short_and_garbage_replies_never_trigger_other_commands(self):
+        class BrokenReply(SabreV3Mouse):
+            def _reply(self, request, status, payload=b""):
+                answer = bytes([request[1], 0, 1, 2, 0, 0xAC, 3])
+                self.queue.append(answer[:self.length] if self.length is not None else b"garbage")
 
-    def test_a_silent_mouse_is_never_switched(self):
-        mouse = SabreV3Mouse(silent=True)
-        out, provider = self.poll(receiver=mouse)
-        self.assertEqual([], out)
-        self.assertEqual([(0x02, 0x0F), (0x1B, 0x01)], mouse.commands())
-        self.assertTrue(any("mouse off, asleep or away" in line
-                            for line in provider._diag))
+        for path in ("receiver", "cable"):
+            for length in (0, 1, 4, 5, 6, None):
+                with self.subTest(path=path, length=length):
+                    mouse = BrokenReply()
+                    mouse.length = length
+                    out, _ = self.poll(**{path: mouse})
+                    self.assertEqual(out, [])
+                    self.assertEqual(mouse.commands(), [(0x02, 0x0F)])
+                    self.assertTrue(mouse.closed)
+
+    def test_failed_or_short_write_and_read_error_close_without_other_commands(self):
+        class FailingMouse(SabreV3Mouse):
+            def write(self, data):
+                self.writes.append(bytes(data))
+                if self.failure == "write":
+                    raise OSError("device disappeared during write")
+                return 0 if self.failure == "short write" else len(data)
+
+            def read(self, size, timeout_ms=0):
+                if self.writes and self.failure == "read":
+                    raise OSError("device disappeared during read")
+                return []
+
+        for path in ("receiver", "cable"):
+            for failure in ("write", "short write", "read"):
+                with self.subTest(path=path, failure=failure):
+                    mouse = FailingMouse()
+                    mouse.failure = failure
+                    out, _ = self.poll(**{path: mouse})
+                    self.assertEqual(out, [])
+                    self.assertEqual(mouse.commands(), [(0x02, 0x0F)])
+                    self.assertTrue(mouse.closed)
+
+    def test_invalid_levels_do_not_escalate_or_request_charge(self):
+        for raw in (0, 1001):
+            with self.subTest(raw=raw):
+                mouse = SabreV3Mouse(level_raw=raw)
+                out, _ = self.poll(receiver=mouse)
+                self.assertEqual(out, [])
+                self.assertEqual(mouse.commands(), [(0x02, 0x0F)])
+                self.assertTrue(mouse.closed)
 
     def test_the_receivers_own_frame_does_not_hide_the_charge(self):
         mouse = SabreV3Mouse(charge=2, noise=[bytes.fromhex("0000040d00000000")])
@@ -1166,7 +1169,7 @@ class SabreV3PollTest(unittest.TestCase):
                          (st.level, st.charging, st.charging_known, st.via))
         self.assertEqual([C.SABRE_V3_CABLE_WRITE_SIZE] * 2, [len(w) for w in cable.writes])
         self.assertEqual({0x00}, {w[1] for w in cable.writes})
-        self.assertEqual([], receiver.modes_set())
+        self.assertEqual([(0x02, 0x0F)], receiver.commands())
 
     def test_a_present_cable_means_charging_when_the_mouse_gives_no_state(self):
         receiver = SabreV3Mouse(charge=None)

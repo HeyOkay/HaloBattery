@@ -126,10 +126,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Corsair SABRE v3 PRO Ultralight (`1B1C:2B42` receiver, `1B1C:2B43` on its
   cable): read the level and charge state through the Slipstream V2 exchange of
   OpenLinkHub's SABRE v3 packages - 512-byte reports to the paired mouse through
-  the receiver, 64-byte reports on the cable. The mouse is asked directly; the
-  login and software-mode handshakes are added only when it refuses, and
-  software mode is always switched back to hardware mode. A cable connecting
-  the mouse to the PC counts as charging when the mouse gives no charge state.
+  the receiver, 64-byte reports on the cable. Only plain property reads are
+  used; silence or refusals never trigger login or mode-changing writes. A cable
+  connecting the mouse to the PC counts as charging when the mouse gives no charge state.
   Confirmed in [#543](https://github.com/HeyOkay/HaloBattery/issues/543) with
   test build 3: 94 % on the receiver and 97 % with the charging animation on
   the PC cable, on the reporter's unit.

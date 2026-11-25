@@ -1024,13 +1024,10 @@ The battery property is `0x0F`, in tenths of a percent, little-endian. Property
 gives no charge state, its cable identity `2B43` being present means it is
 charging from the PC.
 
-OpenLinkHub logs in (`1b 01` and a four-byte token) and switches the mouse to
-software mode (set property `0x03` to 2) before reading, and back to hardware
-mode (1) when it stops; in software mode the vendor app drives the mouse, which
-can change how its buttons behave. Halo asks the property directly first and
-adds the login, then software mode, only when the mouse refuses; after software
-mode it always switches the mouse back to hardware mode before closing the
-receiver.
+Halo sends only the plain battery and charge property reads. Refusals, silence,
+short replies and I/O errors do not trigger login or software/hardware-mode
+writes. OpenLinkHub's full-control session also uses those handshakes, but they
+were not exercised by the reporter's successful reads and are not used here.
 
 **Confirmed on the reporter's hardware** (@ahyuk44-gif, #543, test build 3): 94 %
 through the receiver (`01 00 01 02 00 ac 03` - 940 tenths - charge `0x02`), then
