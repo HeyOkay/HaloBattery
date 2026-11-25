@@ -7,6 +7,7 @@ Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
   * 3554:f58f  ATK VXE R1 SE+ (wired)                373b:1085  ATK VXE R1 SE+ (2.4 GHz)
   * 373b:11b6  ATK A9 Ultimate (wired)               373b:11d9  ATK A9 Ultimate (2.4 GHz dongle)
   * 3554:f58a  VXE R1 Pro Max (1 kHz dongle, #87)    3554:f58c  the same mouse on its cable
+                                                     373b:1273  the same, on some units
   * 3710:5406  Pulsar X2 CrazyLight Mini (2.4 GHz)   3710:3414  the same mouse on the cable
   * 3710:3510  Pulsar X2N CrazyLight on its cable (see the ReadCIDMID note below)
   * the Kysona M600 and the VXE Dragonfly R1 Pro use the same protocol (their ids are
@@ -23,6 +24,12 @@ wired mouse lists the same eight collections as the receiver, and the panel belo
 with the same command 0x04 frame. Both transports are confirmed on that reporter's
 hardware - the receiver read the mouse's level, and on the cable the level agreed with
 ATK's own panel (hub.atk.pro) and the charging flag followed the cable.
+
+Some R1 Pro Max units enumerate on their cable under ATK's vendor id instead, as
+373b:1273 ('compx' / 'VXE R1 PRO MAX'), while their receiver is still 3554:f58a. It
+lists the same eight collections (ff02:0002 on interface 1) and, read on hardware,
+answered the same command 0x04 frame with a valid checksum: 08 04 00 00 00 02 28 01
+0e c7 .. 49 (40 %, on the cable, 3783 mV), with the receiver quiet meanwhile.
 
 The ATK and Compx builds are also handled by the OpenMouse project's ATK/VXE panel
 (@openmouse/protocol, drivers/atk): it lists 3554:f58a for the R1 Pro Max receiver
@@ -189,6 +196,9 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
         0x101A: "ATK X1 Pro (2.4 GHz)",
         0x101B: "ATK Fire X 8K (2.4 GHz dongle)",
+        # the R1 Pro Max on its cable as some units enumerate it ('VXE R1 PRO MAX'):
+        # the same collections as 3554:f58c, read on hardware (docstring)
+        0x1273: "VXE R1 Pro Max (wired)",
     },
     0x3770: {
         0x0300: "Hitscan Hyperlight (8K receiver)",

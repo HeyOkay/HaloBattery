@@ -336,6 +336,15 @@ class PulsarTest(unittest.TestCase):
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
+    def test_the_r1_pro_max_on_its_atk_cable_id_is_read(self):
+        # some units enumerate on the cable as 373b:1273 with the same collections;
+        # the hardware read: 08 04 00 00 00 02 28 01 0e c7 .. (40 %, cable, 3783 mV)
+        bus = self.one_receiver(vid=0x373B, pid=0x1273, replies=[reply(40, 1, 3783)])
+        [d] = P.PulsarProvider().poll()
+        self.assertEqual(("pulsar:373b1273", "VXE R1 Pro Max (wired)", 40, True, "mouse"),
+                         (d.key, d.name, d.level, d.charging, d.kind))
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
     def test_zaopin_z2_4k_is_read_over_both_transports(self):
         cases = (
             (0xF526, "Zaopin Z2 4K (wired)", 45, True, 3817),
