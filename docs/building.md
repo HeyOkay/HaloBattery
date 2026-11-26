@@ -120,6 +120,10 @@ workflow. Publication follows verification of those attestations; afterward,
 immutable release and its assets. These attestations do not code-sign the EXE
 or replace Authenticode signatures. Stable publication additionally requires the
 complete production signing chain described in [Signing](signing.md).
+The single owner-authorized exception is `v1.18.0`, published unsigned by
+`unsigned-release-1.18.0.yml` while the production certificate is pending. Its
+checksums, provenance, main ancestry, reviewed source and immutable publication
+still apply.
 
 Only the publisher receives `contents: write`, `id-token: write` and
 `attestations: write`. Build/test jobs keep read-only repository permissions,
