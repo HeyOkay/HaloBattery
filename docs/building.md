@@ -119,7 +119,7 @@ workflow. Publication follows verification of those attestations; afterward,
 `gh release verify <tag>` and `gh release verify-asset <tag> <file>` check the
 immutable release and its assets. These attestations do not code-sign the EXE
 or replace Authenticode signatures. Stable publication additionally requires the
-complete production SignPath chain described in [Signing](signing.md).
+complete production signing chain described in [Signing](signing.md).
 
 Only the publisher receives `contents: write`, `id-token: write` and
 `attestations: write`. Build/test jobs keep read-only repository permissions,
@@ -170,5 +170,5 @@ to use only the latest stable release.
 
 ## Test code signing
 
-See [Test signing with SignPath](signing.md) for the explicit manual TEST mode,
+See [Test code signing](signing.md) for the explicit manual TEST mode,
 protected environment setup and remaining production-signing requirements.

@@ -46,11 +46,11 @@ A shared job explicitly requires its selected signer to succeed and the other
 mode's signer to be skipped. It rejects missing or mixed outputs instead of
 falling back to whichever artifact ID happens to exist.
 
-## SignPath project and configurations
+## Signing project and configurations
 
 Organization: `HaloBattery [OSS]`,
 `c54d1cb1-9c0a-478b-8eb8-036eb7084713`.
-Project slug: `HaloBattery`. The official SignPath GitHub App is installed for
+Project slug: `HaloBattery`. The service's official GitHub App is installed for
 the selected `HeyOkay/HaloBattery` repository.
 
 | Configuration | Selected own files |
@@ -64,8 +64,8 @@ The reviewed XML lives in `.github/signpath/`. No dependency DLL is selected.
 TEST jobs use `test-signing`; production jobs use `release-signing`. Neither
 policy/configuration is selected by a caller-supplied input.
 
-SignPath manages file-signing timestamps. Production acceptance requires a
-trusted pinned embedded Authenticode signature, SHA256 file/CMS digests, a
+The signing service manages file-signing timestamps. Production acceptance
+requires a trusted pinned embedded Authenticode signature, SHA256 file/CMS digests, a
 SHA256 RFC3161 timestamp, and native Windows trust/revocation success.
 
 The TEST pin is `17F9F411C424674855A077F9A120A7A434990AF1`.
@@ -123,8 +123,8 @@ non-executable `.bin` snapshots even when a stage fails.
   stronger Foundation requirements.
 - Environment-only secret `SIGNPATH_RELEASE_API_TOKEN`, belonging to a separate
   CI identity with Submitter access to `release-signing` only.
-- Set SignPath origin verification, allowed source branches and review policies
-  so an unreviewed tag cannot authorize signing. Confirm how SignPath resolves
+- Set origin verification, allowed source branches and review policies
+  so an unreviewed tag cannot authorize signing. Confirm how the service resolves
   tag ancestry to `main`; do not broaden accepted branches to work around a rejection.
 
 Neither token may also exist as a repository/organization secret. Enter token
@@ -174,6 +174,6 @@ third-party DLLs retain their original bytes and publisher signatures.
 References:
 [Inno external signed-uninstaller handoff](https://jrsoftware.org/inno-setup/documentation/topic_setup_signeduninstaller.htm),
 [Inno temporary Setup copies](https://jrsoftware.org/inno-setup/documentation/topic_setup_signtool.htm),
-[SignPath configuration](https://docs.signpath.io/artifact-configuration/),
-[SignPath timestamps](https://docs.signpath.io/crypto-providers/),
+[Signing configuration](https://docs.signpath.io/artifact-configuration/),
+[Signing timestamps](https://docs.signpath.io/crypto-providers/),
 [GitHub environment boundaries](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).

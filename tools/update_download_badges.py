@@ -1,26 +1,67 @@
-"""Render README download totals using the SignPath badge geometry."""
+"""Render README download totals and verified signing-service attribution."""
 
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape
+
+
+def github_json(repository, path, token):
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "HaloBattery-README"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(f"https://api.github.com/repos/{repository}/{path}", headers=headers)
+    with urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
+def verified_production_run(repository, token):
+    """Only production signing and its final verification activate attribution."""
+    page = 1
+    while True:
+        result = github_json(
+            repository,
+            f"actions/workflows/release.yml/runs?status=success&per_page=100&page={page}",
+            token,
+        )
+        runs = result["workflow_runs"]
+        for run in runs:
+            trusted_source = run["head_branch"] == "main" or re.fullmatch(
+                r"v[0-9]+\.[0-9]+\.[0-9]+", run["head_branch"] or ""
+            )
+            if not trusted_source or run["head_repository"]["full_name"] != repository:
+                continue
+            if run["status"] != "completed" or run["conclusion"] != "success":
+                continue
+            # This workflow has fewer than 100 jobs. Check the latest attempt,
+            # so a successful earlier attempt cannot mask a failed verification.
+            jobs = github_json(repository, f'actions/runs/{run["id"]}/jobs?per_page=100', token)
+            conclusions = {job["name"]: job["conclusion"] for job in jobs["jobs"]}
+            required = ("release_sign_payload", "release_sign_internal", "release_sign_installer", "signing_verify")
+            if all(conclusions.get(name) == "success" for name in required):
+                return {"run_id": run["id"], "source_sha": run["head_sha"], "url": run["html_url"]}
+        if len(runs) < 100:
+            return None
+        page += 1
+
+
+def render_signing_badges(output_dir, evidence):
+    assets = Path(__file__).resolve().parents[1] / "docs/readme"
+    for source in assets.glob("signpath*.svg"):
+        badge = source.read_text(encoding="utf-8") if evidence else (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+        )
+        (output_dir / source.name).write_text(badge, encoding="utf-8")
 
 
 def download_total(repository, token):
     total = 0
     page = 1
     while True:
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": "HaloBattery-README"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        request = Request(
-            f"https://api.github.com/repos/{repository}/releases?per_page=100&page={page}",
-            headers=headers,
-        )
-        with urlopen(request, timeout=30) as response:
-            releases = json.load(response)
+        releases = github_json(repository, f"releases?per_page=100&page={page}", token)
         for release in releases:
             for asset in release["assets"]:
                 total += asset["download_count"]
@@ -64,6 +105,12 @@ def main():
         "compact": ("", "Total release asset downloads"),
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    evidence_path = args.output_dir / "signing-active.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8")) if evidence_path.exists() else None
+    if not evidence:
+        evidence = verified_production_run(args.repository, os.environ.get("GH_TOKEN"))
+    render_signing_badges(args.output_dir, evidence)
+    evidence_path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     for locale, (label, title) in labels.items():
         for theme in ("light", "dark"):
             badge = render_badge(label, title, total, theme == "dark")
