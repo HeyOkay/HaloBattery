@@ -1,0 +1,51 @@
+name: README download totals
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
+  push:
+    branches: [docs/readme-refresh]
+    paths:
+      - tools/update_download_badges.py
+      - .github/workflows/download-badges.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-download-totals
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - name: Render badges from all release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/update_download_badges.py --output-dir "$RUNNER_TEMP/download-badges" --repository "$GITHUB_REPOSITORY"
+      - name: Publish badge assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/download-badges"
+          git init -b docs/readme-download-stats
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'
+          if git ls-remote --exit-code --heads origin docs/readme-download-stats; then
+            git fetch origin docs/readme-download-stats
+            git reset --soft FETCH_HEAD
+          fi
+          git add -- '*.svg'
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Update README download totals'
+          git push origin HEAD:refs/heads/docs/readme-download-stats
