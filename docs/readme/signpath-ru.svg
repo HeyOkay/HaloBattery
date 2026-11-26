@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="142" height="24" viewBox="0 0 171 28.8" preserveAspectRatio="xMidYMin meet" role="img" aria-labelledby="title">
+  <title id="title">Политика подписи кода SignPath</title>
+  <rect x=".5" y=".5" width="170" height="23" rx="7" fill="#E4EDF8" stroke="#A3B6CD"/>
+  <g transform="translate(-2 -1)" fill="none" stroke="#365372" stroke-width="1.5" stroke-linejoin="round">
+    <path d="M9 9l5-2 5 2v4c0 3-2.5 5-5 6-2.5-1-5-3-5-6z"/>
+  </g>
+  <path d="M109 5v14" stroke="#A3B6CD"/>
+  <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="#243B54" font-size="12">
+    <text x="22" y="16">Подпись кода</text>
+    <text x="115" y="16" font-weight="700">SignPath</text>
+  </g>
+</svg>

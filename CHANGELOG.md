@@ -31,6 +31,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refresh the project README with theme-aware previews and a Russian translation.
 - Prepare a separate production signing chain for application executables,
   Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer. Require
   trusted timestamped signatures and installer checks before stable publication.
@@ -114,10 +115,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - URX Core75 now checks the product string as well as `36B0:3002`, so an
   EVO75 on the same receiver id is no longer labelled as a URX board (#448).
-- Keep the SignPath TEST credential in the protected signing jobs only; build
+- Keep the TEST signing credential in the protected signing jobs only; build
   and packaging jobs do not receive or forward it.
 
-- Add isolated, opt-in SignPath test signing for application and installer builds.
+- Add isolated, opt-in test signing for application and installer builds.
 - MCHOSE V9 no longer retries a refused output report as a feature report;
   Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
   can show no reading until that connection's protocol is verified. Malformed

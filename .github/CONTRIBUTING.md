@@ -7,6 +7,7 @@ Thank you for helping. This page tells you how to:
 3. [Open a pull request](#3-pull-requests)
 4. [Understand the branches and releases](#4-branches-and-releases)
 5. [See who the maintainers are](#5-maintainers)
+6. [Support development with a donation](#6-donations)
 
 ## 1. Report a device
 
@@ -14,11 +15,11 @@ Before you report, do these steps:
 
 1. Close the maker's software (Synapse, G HUB, the web driver and similar). It can hold the receiver.
 2. Wake the device: move the mouse, press a key, or turn the headset on.
-3. Right-click a Halo Battery icon and select **Diagnostics…**. The "No devices found" icon has this item too. If you run the app from source, `scripts\probe.bat` shows the same information in a console window; copy all of it into the issue.
+3. Right-click a Halo Battery icon and select **Diagnostics**. The "No devices found" icon has this item too. If you run the app from source, `scripts\probe.bat` shows the same information in a console window; copy all of it into the issue.
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="../docs/contributing/diagnostics-menu-dark.png">
-     <img src="../docs/contributing/diagnostics-menu-light.png" alt="The tray menu of a device, with the Diagnostics item marked" width="381">
+     <img src="../docs/contributing/diagnostics-menu-light.png" alt="The tray menu of a device, with the Diagnostics item marked" width="216">
    </picture>
 
 4. The report opens in your text editor (usually Notepad). It is a text file, `diagnostics.txt`, in `%APPDATA%\HaloBattery`. It starts like this:
@@ -185,3 +186,7 @@ before promoting a candidate.
 - Even leads use pull requests: no direct pushes to `main` or `pre-release`. Only the owner may bypass this in an emergency.
 
 Lead reviewers listed in CODEOWNERS: `HeyOkay`, `ahmedkhursheed23` and `casparas123`. Collaborators must accept their invitations and have write access for their code-owner approvals to count. A lead's pull request into `main` needs approval from another lead.
+
+## 6. Donations
+
+You can support Halo Battery development through [Ko-fi](https://ko-fi.com/halobattery) or [PayPal](https://paypal.me/hellobattery).
