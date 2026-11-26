@@ -71,7 +71,7 @@ elif args[:2] == ["release", "upload"]:
     save()
 elif args[:2] == ["attestation", "verify"]:
     if not state.get("attested"): stop("no attestation exists")
-    if option("--repo") != repo or option("--signer-workflow") != repo + "/.github/workflows/release.yml": stop("wrong signer identity policy")
+    if option("--repo") != repo or option("--signer-workflow") != repo + "/" + os.environ["EXPECTED_SIGNER_WORKFLOW"]: stop("wrong signer identity policy")
     if option("--source-ref") != "refs/tags/" + tag or option("--source-digest") != source: stop("wrong source policy")
     bundle = json.loads(Path(option("--bundle")).read_text(encoding="utf-8"))
     if bundle.get(args[2]) != hashlib.sha256(Path(args[2]).read_bytes()).hexdigest(): stop("subject digest mismatch")
@@ -216,14 +216,16 @@ class StablePublisherPolicyTests(unittest.TestCase):
 
 @unittest.skipUnless(bash_path(), "Bash required for offline publisher execution")
 class StablePublisherExecutionTests(unittest.TestCase):
-    def run_publisher(self, *, phase="absent", mode="", mutation=None, enabled="true", rerun=False):
+    def run_publisher(self, *, phase="absent", mode="", mutation=None, enabled="true", rerun=False,
+                      workflow_text=TEXT, version="1.17.0", signer_workflow=".github/workflows/release.yml",
+                      release_tag=None):
         with tempfile.TemporaryDirectory(prefix="halo stable publisher ") as temp:
             root = Path(temp)
             fake_gh = root / "fake_gh.py"
             fake_gh.write_text(FAKE_GH_SOURCE, encoding="utf-8")
             assets = root / "release-assets"
             assets.mkdir()
-            payloads = {"HaloBattery-1.17.0.zip": b"fixture ZIP bytes", "HaloBattery-1.17.0-setup.exe": b"fixture installer bytes"}
+            payloads = {f"HaloBattery-{version}.zip": b"fixture ZIP bytes", f"HaloBattery-{version}-setup.exe": b"fixture installer bytes"}
             for name, data in payloads.items(): (assets / name).write_bytes(data)
             (assets / "release_notes.md").write_text("$(touch EXECUTED)\n", encoding="utf-8")
             (assets / "SHA256SUMS.txt").write_bytes("".join(hashlib.sha256(data).hexdigest() + " *" + name + "\r\n" for name, data in payloads.items()).encode())
@@ -234,7 +236,8 @@ class StablePublisherExecutionTests(unittest.TestCase):
             state.write_text(json.dumps(initial), encoding="utf-8")
             log = root / "gh.jsonl"
             env = dict(os.environ, FAKE_STATE=str(state), FAKE_LOG=str(log), FAKE_MODE=mode,
-                       RELEASE_TAG="v1.17.0", GITHUB_SHA="1" * 40, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
+                       RELEASE_TAG=release_tag or "v" + version, GITHUB_SHA="1" * 40, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
+                       EXPECTED_SIGNER_WORKFLOW=signer_workflow,
                        RUNNER_TEMP=str(root), GITHUB_OUTPUT=str(root / "outputs"), IMMUTABILITY_ENABLED=enabled,
                        GH_TOKEN="offline-test-only", GITHUB_TOKEN="offline-test-only",
                        TEST_PYTHON=Path(sys.executable).as_posix(), FAKE_GH=fake_gh.as_posix(),
@@ -256,11 +259,11 @@ done < "$GITHUB_OUTPUT"
 '''
             # A subshell also isolates the validator's cd and EXIT trap, as
             # Actions does when starting a separate run step.
-            script = wrapper + "(\n" + step("Validate release assets") + ")\n" + load + step("Attach to release") + load
+            script = wrapper + "(\n" + step("Validate release assets", workflow_text) + ")\n" + load + step("Attach to release", workflow_text) + load
             if rerun:
-                script += step("Attach to release")
+                script += step("Attach to release", workflow_text)
             else:
-                script += 'gh fake-attest "$ZIP" "$SETUP"\n' + step("Publish attested draft")
+                script += 'gh fake-attest "$ZIP" "$SETUP"\n' + step("Publish attested draft", workflow_text)
             result = subprocess.run([bash_path(), "--login", "-e", "-o", "pipefail", "-c", script],
                                     cwd=root, env=env, capture_output=True, text=True, timeout=30)
             final = json.loads(state.read_text(encoding="utf-8"))

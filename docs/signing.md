@@ -8,9 +8,23 @@ The release workflow has three entry points:
 - Stable tags use production signing. `signpath_release=true` can exercise the
   production chain from `main` without publishing a release.
 
-Only a successful production verification on a stable tag can reach the
+Except for the explicit unsigned `v1.18.0` release below, only a successful production verification on a stable tag can reach the
 immutable release publisher. Missing configuration, certificates, credentials or
 signatures fail the run; there is no unsigned publication fallback.
+
+## One-version unsigned release exception
+
+The owner authorized publishing **1.18.0 without SignPath** while the production
+certificate is pending. `unsigned-release-1.18.0.yml` accepts only a push of
+`refs/tags/v1.18.0` in `HeyOkay/HaloBattery`, verifies `VERSION = 1.18.0` and main
+ancestry, builds the ordinary unsigned app/installer, then publishes through a
+separate data-only publisher with checksums, provenance and immutable-release
+verification. The exception is recorded here without changing signing policies.
+
+The normal release workflow excludes exactly this tag. No generic unsigned
+switch, signing-error fallback, TEST certificate, signing secret or bypass of
+main's review/check requirements is introduced. All other stable tags retain the
+production signing chain. This exception does not promise Store/SAC acceptance.
 
 ## Job and credential boundaries
 

@@ -2,9 +2,10 @@ name: Build and release
 
 # Ordinary manual builds are unsigned artifact-only previews. Stable tags can
 # publish only outputs from the complete production signing/verification chain.
+# The owner-authorized v1.18.0 exception is isolated in unsigned-release-1.18.0.yml.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v1.18.0"]
   workflow_dispatch:
     inputs:
       signpath_test:

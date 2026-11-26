@@ -6,6 +6,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-27
+
 ### Added
 
 - Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
@@ -33,8 +35,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Refresh the project README with theme-aware previews and a Russian translation.
 - Prepare a separate production signing chain for application executables,
-  Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer. Require
-  trusted timestamped signatures and installer checks before stable publication.
+  Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer.
+  Production signing activation follows certificate issuance and verification
+  of trusted timestamped signatures and installer checks.
 - Recognize the pinned self-signed TEST certificate's untrusted-root result on
   Windows without trusting the certificate or accepting other signature errors.
 - Make tray device names bold with smaller status details and fit menu widths to
@@ -1889,7 +1892,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.17.0...HEAD
+[Unreleased]: ../../compare/v1.18.0...HEAD
+[1.18.0]: ../../compare/v1.17.0...v1.18.0
 [1.17.0]: ../../compare/v1.15.0...v1.17.0
 [1.15.0]: ../../compare/v1.14.0...v1.15.0
 [1.14.0]: ../../compare/v1.13.0...v1.14.0
