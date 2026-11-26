@@ -44,12 +44,19 @@ mouse sits on its dongle, and that level is the one their tool shows. On its cab
 read answers ``aa 30 a5 3c 0a 01 01 01 2e 01 00 00`` (byte 9 = 1 while charging) with the
 PID unchanged, so a G7 keeps a single icon the way the M7 Ultra does.
 
-The 0x3837 family is the same protocol on MCHOSE's newer vendor id: the reference driver
-"treats both identically" and matches on the vendor id plus the vendor collection rather
-than by model list, which is what this provider does as well. The diagnostics in issue #4
-(a MCHOSE A7 V2 Ultra, 3837:100b, RealTek strings, collections 0xFF0B:0x104 and
-0xFF01:0x01 on interface 2) have exactly that shape, and the reference documents the status
-read on the *short* 0x11 report, so both report ids are tried before a poll gives up.
+The generic 0x3837 mouse query is limited to the A7 V2 Ultra identity from issue #4
+and PR #20: 3837:100b, configuration collection 0xFF01:0x01 on interface 2.
+The A7 V2 Pro (3837:100a) exposes the same collection and answers the same 0x06
+status read (measured on one unit: 85 %, not charging, on report 0x11). On its
+cable it enumerates as 3837:4018 and the same read reports charging while the
+receiver goes quiet, so one icon follows it between the two.
+https://github.com/HeyOkay/HaloBattery/issues/4
+https://github.com/HeyOkay/HaloBattery/pull/20
+The reference documents the same short 0x11 status read, but the vendor id alone
+does not identify its protocol: issue #189's 3837:3033 keyboard and 3837:1016
+mouse use output report 0x55 instead. Unknown 0x3837 products and unrelated
+collections are therefore left unopened by this legacy mouse query; the
+separately sourced 6008/600A headset routes below remain enabled.
 
 The first-generation A5 Pro Max (0x2023 - the 1K receiver F013, the 4K receiver F015 and the
 wired mouse F019; issue #149) speaks a third exchange, taken from the community web driver
@@ -58,9 +65,10 @@ table agrees with for the same ids): 64-byte *feature* reports on the vendor col
 page 0xFFFF preferred, report id 0. The request carries route 2 (mouse) at byte 2, its own
 length 2 at byte 3, page 0 at byte 4 and command 0x83 at byte 5; the reply is the report read
 back, starting with the 0xA1 marker and echoing page and command at its bytes 4 and 5, with
-charging in byte 6 (non-zero) and the level in byte 7 - clamped to 100, exactly as the
-reference clamps it. The reference writes once, waits its 34 ms, then reads back up to eight
-times with one re-send in the middle; silent means the mouse is asleep. **Confirmed on the
+charging in byte 6 (non-zero) and the percentage in byte 7. Values above 100 are
+refused rather than shown as a full battery. The reference writes once, waits its 34 ms,
+then reads back up to eight times with one re-send in the middle; silent means the mouse
+is asleep. **Confirmed on the
 reporter's hardware** (@Pekish992, #149): his run showed 22 % and then 25 % while charging,
 matching the MCHOSE software and its charging animation. His diagnostics pinned the receiver
 (2023:f013, product string 'MCHOSE A5 2.4G', vendor collections ffa0:0001 and ffff:0001 on
@@ -77,7 +85,34 @@ and one read, so both are tried here, the AA frame first as in M HUB. The headse
 two devices over one product - the headset itself (3837:600A, C-Media strings) and its dongle
 (3837:6008, WCH strings) - so both sides of that pair share one icon.
 
-Not verified: the 0x3837 family (the device in issue #4 is not here), other models, and the
+The K7 V2 Ultra+ receiver (3837:1018, interface 2 FF01:0001) uses M HUB's
+64-byte output report 4D / command 0900 instead of the legacy feature frame.
+Source: MCHOSE M HUB assets/main-DQZs6ZzX.js (SHA256 pinned beside MC_TARGETS),
+getCommandBuffer, readDeviceInfo and deviceInfoToObj; PR #403 at c4eb9eeb
+records the 85% input reply and confirms chargeStatus 0/1. Only this captured
+USB target is enabled. Other newer PIDs receive neither this request nor a
+guessed legacy fallback.
+
+The X9 headset (3837:6045, C-Media strings) is listed in the same M HUB web bundle
+(www.mchose.com.cn, ``assets/main-DQZs6ZzX.js``, fetched 2026-11-17) as
+``createAudioHidProduct({modelKey:"MCHOSE X9", vendorId:14391, productId:24645,
+connectionType:WIRELESS, protocolProfile:AUDIO_PROTOCOL_PROFILE.BLK})``. The BLK profile's
+``audio.blk.readBattery`` is the ``65 01`` frame above: output report 0x55
+(``BLK_BATTERY_REPORT_ID=85``), 63 data bytes, ``[0]=101`` (``BLK_BATTERY_COMMAND_ID``) and
+``[1]=1``. Its ``parseBatteryResponse`` reads the level from data byte 1 and the state from
+byte 2 (3 charging, 4 full, 2 discharge, 26 asleep), the decode ``parse_status_55`` already
+does. The AA frame (cmd 0x0B) is M HUB's MC profile (``audio.mc.readBattery``), which the
+X9 is not on, so the X9 is only sent ``65 01``.
+Measured on an X9 on its dongle: report 0x55 lives on its ff90:0001 collection, the only one
+written to, and the read answers ``55 65 28 02`` (40 %, discharging) within 30 ms. On its
+cable the headset drops its radio link - the dongle stops answering - and shows up as a
+second USB device, 3837:6044 'MCHOSE X9 HEADSET', which M HUB does not list: nothing is
+written to it, so a charging X9 keeps its last level greyed out (ASLEEP_KEEP) and no
+charging state is invented. State 3 is decoded as charging the way M HUB decodes it, but it
+has never been seen: M HUB loses the cabled headset the same way. The level is confirmed on
+Windows too, by @Kolomhon with test builds carrying this code (#458).
+
+Not verified: the legacy 0x3837 family (the device in issue #4 is not here), other models, and the
 meaning of the second level/charging pair in the 0x5253 reply (it has matched the first pair
 in every reading so far). The V9 Turbo+ is confirmed on @IsonanDough's hardware (#193): the
 level showed 100 %, matching M HUB. Its charging state cannot be read on any of its
@@ -96,10 +131,11 @@ import hid
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
-# 0x5253 is the family measured here and keeps the plain icon key; 0x3837 is the newer
-# MCHOSE vendor id the reference driver treats identically (issue #4's A7 V2 Ultra).
+# 0x5253 is the family measured here and keeps the plain icon key. Only the
+# individually sourced newer-vendor targets below are allowed active requests.
 MEASURED_VID = 0x5253
-MCHOSE_VIDS = (MEASURED_VID, 0x3837)
+NEW_VID = 0x3837
+MCHOSE_VIDS = (MEASURED_VID, NEW_VID)
 
 # model ids seen in the 0x06 reply (the receiver's own PID does not identify the mouse:
 # 0x1020 is used by the M7 Ultra and by the L7 Pro)
@@ -140,8 +176,12 @@ A5_READ_GAP = 0.03
 # The V9 Turbo+ headset (issue #193): one product over two USB devices.
 HEADSET_DONGLE_PID = 0x6008
 HEADSET_BODY_PID = 0x600A
-HEADSET_PIDS = (HEADSET_DONGLE_PID, HEADSET_BODY_PID)
-HEADSET_PAIR = {0x6008: 0x6008, 0x600A: 0x6008}   # a dongle and a headset, one icon
+# The X9 headset: M HUB's BLK audio profile on one USB device (see the module docstring).
+X9_PID = 0x6045
+X9_CABLE_PID = 0x6044         # the X9 on its cable: not in M HUB, never written to
+HEADSET_PIDS = (HEADSET_DONGLE_PID, HEADSET_BODY_PID, X9_PID)
+HEADSET_PAIR = {0x6008: 0x6008, 0x600A: 0x6008,   # a dongle and a headset, one icon
+                X9_PID: X9_PID}
 AUDIO_REPORT = 0x55
 AUDIO_LEN = 63                # payload bytes; the report id rides in front of them
 AUDIO_CMD_BATTERY = 0x0B
@@ -158,6 +198,27 @@ HEADSET_ATTEMPTS = 2
 HEADSET_READ_MS = 400         # a tucked-in device answers in milliseconds
 
 CONFIG_PAGE = 0xFF01          # the only collection that answers
+# #4's diagnostics and #20 name this exact A7 V2 Ultra collection. Neither
+# another PID nor a vendor page is permission to send the same mouse frame.
+# The A7 V2 Pro (3837:100A) is measured on one unit: the same interface 2
+# FF01:0001 collection answers the 0x06 status read on report 0x11 with
+# 11 f9 c8 c7 e7 bf fa d5 fd fb f6 aa ff a8 ff ff -> 85 %, not charging.
+# On its cable the mouse is 3837:4018 (the model id it reports) and the same
+# read answers 11 f9 c8 c7 e7 bf fa d5 fd fb ff aa fe aa ff ff -> 85 %,
+# charging; the receiver goes quiet then, as the M7 Ultra's does. Both share
+# the family key, so one icon follows the mouse between the two.
+NEW_MOUSE_TARGETS = {0x100B: (2, CONFIG_PAGE, 0x0001),
+                     0x100A: (2, CONFIG_PAGE, 0x0001),
+                     0x4018: (2, CONFIG_PAGE, 0x0001)}
+# K7 V2 Ultra+ / MagDock, captured in PR #403 (head c4eb9eeba7ea9663).
+# M HUB's getCommandBuffer / readDeviceInfo / deviceInfoToObj in
+# https://www.mchose.com.cn/assets/main-DQZs6ZzX.js, SHA256
+# 52b25bf9cdb449b84c69f50970c1612a2e33b3c98b7caffd03c1c8e9dca1ce1a.
+# Only the captured 3837:1018 interface 2 FF01:0001 gets output report 4D.
+# Neither other newMouseWirelessPids nor the legacy 06 frame is inferred here.
+MC_TARGETS = {0x1018: (2, CONFIG_PAGE, 0x0001)}
+MC_LEN, MC_HEADER = 64, 8
+MC_ATTEMPTS, MC_READS, MC_READ_MS = 3, 5, 200
 SHORT_REPORT = 0x11
 LONG_REPORT = 0x12
 SHORT_LEN = 20                # payload bytes on 0x11, 64 on 0x12 (the frame adds the id)
@@ -215,6 +276,44 @@ def parse_status(resp) -> Optional[Tuple[int, int, int, int]]:
     return level, charge, model, flags
 
 
+def _mc_xor(data) -> int:
+    value = 0
+    for byte in data:
+        value ^= byte
+    return value
+
+
+def make_mc_request() -> bytes:
+    """M HUB's no-data 0900 request, report ID included, with XOR enabled."""
+    return bytes.fromhex("4d 01 01 00 00 09 00 00 08") + bytes(55)
+
+
+def mc_payload(resp) -> Optional[bytes]:
+    """Accept only a bounded, checksum-enabled 0900 response."""
+    if (not resp or not 10 <= len(resp) <= MC_LEN
+            or any(type(byte) is not int or not 0 <= byte <= 255 for byte in resp)):
+        return None
+    data = bytes(resp)
+    if data[:3] != b"\x4d\x01\x01" or data[4:6] != b"\x00\x09":
+        return None
+    end = MC_HEADER + data[3]
+    if data[3] == 0 or end >= len(data):
+        return None
+    if data[end] != _mc_xor(data[2:end]) or any(data[end + 1:]):
+        return None
+    return data[MC_HEADER:end]
+
+
+def parse_mc_info(resp) -> Optional[Tuple[int, bool]]:
+    """Captured device-info payload: 0 is unlinked, 1/0 are known charge states."""
+    payload = mc_payload(resp)
+    if (payload is None or len(payload) < 13 or payload[0] == 0xFF
+            or payload[:2] != b"\x37\x38"
+            or payload[11] not in (0, 1) or not 0 < payload[12] <= 100):
+        return None
+    return payload[12], payload[11] == 1
+
+
 def parse_g7(resp) -> Optional[Tuple[int, bool]]:
     """(level, charging) from a G7 reply, or None if it is not one.
 
@@ -252,8 +351,8 @@ def parse_a5(resp) -> Optional[Tuple[int, bool]]:
     """(level, charging) from the A5's reply, or None.
 
     The reply starts with the 0xA1 marker (hidapi may keep the report id in front of it)
-    and echoes page and command; charging is byte 6, the level byte 7, clamped to 100 the
-    way the reference clamps it.
+    and echoes page and command; charging is byte 6, the percentage byte 7.
+    A percentage above 100 is not a usable reading.
     """
     if not resp or len(resp) < 9:
         return None
@@ -263,7 +362,10 @@ def parse_a5(resp) -> Optional[Tuple[int, bool]]:
         return None
     if r[at + 4] != A5_PAGE or r[at + 5] != A5_CMD_BATTERY:
         return None
-    return min(100, r[at + 7]), r[at + 6] > 0
+    level = r[at + 7]
+    if level > 100:
+        return None
+    return level, r[at + 6] > 0
 
 
 def audio_checksum_ok(frame: bytes) -> bool:
@@ -347,9 +449,10 @@ def device_key(vid: int, pid: int) -> str:
     @ahmedkhursheed23). The first-generation A5 Pro Max (0x2023) and its three
     identities share their vendor id, so they stay on one key too.
 
-    The V9 Turbo+ is the one pair that needs a key of its own: the headset (0x600A) and
-    its dongle (0x6008) are one product, and both sides deliberately map to the same
-    per-product key so they share an icon.
+    The headsets need keys of their own: the V9 Turbo+ headset (0x600A) and its dongle
+    (0x6008) are one product, and both sides deliberately map to the same per-product key
+    so they share an icon; the X9 (0x6045) is one device and keeps its own key, apart
+    from the 0x3837 mice.
     """
     if vid == MEASURED_VID:
         return "mchose"
@@ -424,6 +527,20 @@ class MchoseProvider(Provider):
                 # Even a fast contradictory refresh cancels confirmation.
                 self._g7_low = None
         return round(median(self._g7_samples)) if self._g7_samples else None
+
+    def _read_guarded(self, reader, *args):
+        """A device that vanishes mid-read must not fail the whole provider.
+
+        Unplugging a mouse leaves its path in the enumerated list for one cycle, and
+        a native read can then raise beyond OSError (ERROR_DEVICE_NOT_CONNECTED /
+        WinError 2). Without this guard one gone device greys out every MCHOSE icon
+        until the next successful poll.
+        """
+        try:
+            return reader(*args)
+        except Exception as e:      # a dead device is a reading gap, not a provider fault
+            self._diag.append(f"    {type(e).__name__}: {e}")
+            return None
 
     def _read_collection(self, path: bytes) -> Optional[Tuple[int, int, int, int]]:
         dev = hid.device()
@@ -547,14 +664,49 @@ class MchoseProvider(Provider):
                 pass
 
 
-    def _read_headset(self, path: bytes) -> Optional[Tuple[Optional[int], bool]]:
+    def _read_mc(self, path: bytes) -> Optional[Tuple[int, bool]]:
+        """Bounded M HUB read; only a busy or zero-level echo requests a retry."""
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+            for _ in range(MC_ATTEMPTS):
+                if dev.write(make_mc_request()) != MC_LEN:
+                    self._diag.append("    0x0900 request was not written in full")
+                    return None
+                retry = False
+                for _ in range(MC_READS):
+                    resp = dev.read(MC_LEN, MC_READ_MS)
+                    got = parse_mc_info(resp)
+                    if got is not None:
+                        self._diag.append(f"    0x0900: {hexdump(resp, 25)}")
+                        return got
+                    payload = mc_payload(resp)
+                    if payload is not None:
+                        retry = (payload[0] == 0xFF
+                                 or (len(payload) >= 13 and payload[:2] == b"\x37\x38"
+                                     and payload[11] in (0, 1) and payload[12] == 0))
+                        break
+                if not retry:
+                    break
+            self._diag.append("    no usable 0x0900 status")
+        except (OSError, ValueError) as error:
+            self._diag.append(f"    0x0900: {error}")
+        finally:
+            try:
+                dev.close()
+            except (OSError, ValueError):
+                pass
+        return None
+
+    def _read_headset(self, path: bytes, pid: int) -> Optional[Tuple[Optional[int], bool]]:
         """Ask the headset for its status the way M HUB does, on output report 0x55.
 
         The AA frame (cmd 0x0B) is the audio path in M HUB's own driver; the
         '65 01' frame is what the sister-model community driver uses and what the
         non-audio family answers to. Both are status reads - nothing else is ever
         sent - and a collection that cannot take report 0x55 refuses the write at
-        once, which just moves on to the next candidate.
+        once, which just moves on to the next candidate. The X9 gets the '65 01'
+        frame only: that is its BLK profile's battery read, and BLK has no AA frame.
         """
         dev = hid.device()
         try:
@@ -563,9 +715,11 @@ class MchoseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            for label, request, parser in (
-                    ("AA frame", AUDIO_REQUEST, parse_audio),
-                    ("65 01 frame", STATUS_REQUEST, parse_status_55)):
+            frames = (("AA frame", AUDIO_REQUEST, parse_audio),
+                      ("65 01 frame", STATUS_REQUEST, parse_status_55))
+            if pid == X9_PID:
+                frames = frames[1:]       # BLK has no AA frame: the X9 never gets it
+            for label, request, parser in frames:
                 for attempt in range(HEADSET_ATTEMPTS):
                     try:
                         wrote = dev.write(bytes([AUDIO_REPORT]) + request)
@@ -575,7 +729,12 @@ class MchoseProvider(Provider):
                     if wrote is None or wrote < 0:
                         self._diag.append(f"    {label} write refused ({wrote})")
                         break
-                    resp = dev.read(64, HEADSET_READ_MS)
+                    try:
+                        resp = dev.read(64, HEADSET_READ_MS)
+                    except (OSError, ValueError) as e:
+                        # unplugged mid-poll: the other MCHOSE devices must still be read
+                        self._diag.append(f"    {label} read: {e}")
+                        return None
                     if resp:
                         got = parser(resp)
                         if got is not None:
@@ -612,9 +771,19 @@ class MchoseProvider(Provider):
 
         found: Dict[str, List[Tuple[int, bool, int, int]]] = {}   # key -> readings
         for (vid, pid), ifaces in groups.items():
+            if (vid, pid) == (0x3837, X9_CABLE_PID):
+                # before the naming below: it must not lend its name to the 0x3837 mice
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x}: the X9 on its "
+                                  "cable, which M HUB does not read; leaving it alone")
+                continue
             key = device_key(vid, pid)
             self._kinds[key] = "headset" if pid in HEADSET_PIDS else "mouse"
             product = (ifaces[0].get("product_string") or "").strip()
+            if (vid == NEW_VID and pid not in NEW_MOUSE_TARGETS
+                    and pid not in MC_TARGETS and pid not in HEADSET_PIDS):
+                self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
+                                  "legacy mouse query held; no sourced target for this product")
+                continue
             if product and (key not in self._names or "+" in product):
                 # over one product the more informative string wins: the dongle
                 # says "V9 Turbo", the headset itself says "MCHOSE V9 Turbo+"
@@ -643,16 +812,26 @@ class MchoseProvider(Provider):
                 # never where the answer comes from, so it is not written to at all
                 # (the G7's rule; review by @ahmedkhursheed23).
                 cols = [d for d in cols if (d.get("usage_page") or 0) == A5_USAGE_PAGE]
+            elif pid == X9_PID:
+                # the X9 declares report 0x55 on ff90:0001 only (measured), so nothing off
+                # that path is written to (the G7's rule)
+                cols = [d for d in cols
+                        if (d.get("usage_page"), d.get("usage")) == (0xFF90, 0x0001)]
             elif pid in HEADSET_PIDS:
                 # the dongle's 0xFF00 page first; on the headset none of its pages is
                 # known to carry the report yet, so the dump order is kept otherwise
                 cols.sort(key=lambda d: (d.get("usage_page") or 0) != 0xFF00)
+            elif vid == NEW_VID:
+                expected = MC_TARGETS[pid] if pid in MC_TARGETS else NEW_MOUSE_TARGETS[pid]
+                cols = [d for d in cols if (d.get("interface_number"), d.get("usage_page"),
+                                           d.get("usage")) == expected]
             else:
                 # the configuration collection first; 0xFF0B is dead on the M7 Ultra
                 cols.sort(key=lambda d: (d.get("usage_page") != CONFIG_PAGE, d.get("usage") != 1))
             if not cols:
                 self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}': "
-                                  "no vendor collection")
+                                  + ("legacy mouse query held; no sourced control collection"
+                                     if vid == NEW_VID else "no vendor collection"))
                 continue
             for d in cols:
                 self._diag.append(f"[MCHOSE] vid={vid:04x} pid={pid:04x} product='{product}' "
@@ -660,15 +839,19 @@ class MchoseProvider(Provider):
                                   f"usage={(d.get('usage_page') or 0):04x}:"
                                   f"{(d.get('usage') or 0):04x}")
                 if vid == G7_VID:
-                    got_g7 = self._read_g7(d["path"])
+                    got_g7 = self._read_guarded(self._read_g7, d["path"])
                     if got_g7:
                         found.setdefault(key, []).append((got_g7[0], got_g7[1], pid, 0))
                 elif vid == A5_VID:
-                    got_a5 = self._read_a5(d["path"])
+                    got_a5 = self._read_guarded(self._read_a5, d["path"])
                     if got_a5:
                         found.setdefault(key, []).append((got_a5[0], got_a5[1], pid, 0))
+                elif vid == NEW_VID and pid in MC_TARGETS:
+                    got_mc = self._read_guarded(self._read_mc, d["path"])
+                    if got_mc is not None:
+                        found.setdefault(key, []).append((got_mc[0], got_mc[1], pid, 0))
                 elif pid in HEADSET_PIDS:
-                    got = self._read_headset(d["path"])
+                    got = self._read_guarded(self._read_headset, d["path"], pid)
                     if got is not None:
                         if got[0] is None:
                             self._diag.append("    heard: asleep")
@@ -676,7 +859,7 @@ class MchoseProvider(Provider):
                             found.setdefault(key, []).append((got[0], bool(got[1]), pid, 0))
                         break     # one answer per product; the pair shares an icon
                 else:
-                    got = self._read_collection(d["path"])
+                    got = self._read_guarded(self._read_collection, d["path"])
                     if got:
                         self._models[key] = got[2]
                         found.setdefault(key, []).append((got[0], bool(got[1]), pid, got[2]))

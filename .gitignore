@@ -10,6 +10,11 @@ build/
 dist/
 *.spec
 
+# Native WinUI settings companion
+.build/
+ui/**/bin/
+ui/**/obj/
+
 # Diagnostics and logs (written to %APPDATA%\HaloBattery, but just in case)
 *.log
 diagnostics.txt

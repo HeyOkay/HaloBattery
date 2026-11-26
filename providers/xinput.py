@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Dict, List, Optional
 
-from . import beitong, flydigi, hidlist, wgi
+from . import beitong, eightbitdo_ultimate2, flydigi, gamesir, hidlist, raikiri, wgi
 from .base import DeviceStatus, Provider, log
 
 ERROR_SUCCESS = 0
@@ -55,6 +55,14 @@ NAMED = [
     (0x3537, "", "GameSir controller"),
     (0x045E, "controller", "Xbox controller"),
 ]
+# Named from the identity in the pad's Windows.Gaming.Input report, and only while one
+# controller is involved (one XInput slot, one report): that order is not the XInput slot
+# order, so with several controllers the generic name stays (#523 review). It is
+# deliberately not in NAMED: NAMED_VIDS also decides whose Windows.Gaming.Input reports
+# are trusted, and trusting this pad's placeholder (remain=full=1000) would publish a
+# false 100% (#110, #191, #461). Presence of the receiver alone never names a slot -
+# an idle Ultimate 2 next to another pad must not rename that pad (#523 review).
+NAMED_PAD_IDS = {(0x2DC8, 0x310B): "8BitDo Ultimate 2"}
 
 
 # the vendors whose controllers this provider reads; Windows.Gaming.Input also reports
@@ -212,11 +220,30 @@ class XInputProvider(Provider):
         self._wgi_slots: Optional[frozenset] = None
         self._wgi_diag: List[str] = []
         self._wgi_logged = ""
+        self._connected: frozenset = frozenset()  # observed slot connection lifetime
 
     def _ensure_dll(self):
         if not self._loaded:
             self._dll, self._loaded = load_xinput(), True
         return self._dll
+
+    def _record_connections(self, slots: frozenset) -> None:
+        """A slot is a current assignment, not a persistent controller identity.
+
+        XInput exposes no physical device identifier here. Any observed removal
+        invalidates that slot's remembered level and the WGI association cache,
+        including removals seen between full battery polls by connected_slots().
+        """
+        disconnected = (self._connected | self._last.keys() | self._waiting.keys()) - slots
+        for slot in disconnected:
+            self._last.pop(slot, None)
+            self._waiting.pop(slot, None)
+        if disconnected or slots != self._connected:
+            self._wgi_res = None
+            self._wgi_at = 0.0
+            self._wgi_slots = None
+            self._wgi_diag = []
+        self._connected = slots
 
     def connected_slots(self) -> Optional[frozenset]:
         """Which XInput slots have a controller right now. Microseconds per call,
@@ -226,7 +253,9 @@ class XInputProvider(Provider):
         if dll is None:
             return None
         state = XINPUT_STATE()
-        return frozenset(i for i in range(4) if dll.XInputGetState(i, ctypes.byref(state)) == ERROR_SUCCESS)
+        slots = frozenset(i for i in range(4) if dll.XInputGetState(i, ctypes.byref(state)) == ERROR_SUCCESS)
+        self._record_connections(slots)
+        return slots
 
     def _wgi(self, now: float, slots: frozenset):
         """Windows.Gaming.Input battery reports, cached for a few seconds."""
@@ -267,6 +296,7 @@ class XInputProvider(Provider):
             state = XINPUT_STATE()
             if self._dll.XInputGetState(slot, ctypes.byref(state)) != ERROR_SUCCESS:
                 self._waiting.pop(slot, None)
+                self._last.pop(slot, None)
                 continue
             info = XINPUT_BATTERY_INFORMATION()
             rc = self._dll.XInputGetBatteryInformation(slot, BATTERY_DEVTYPE_GAMEPAD, ctypes.byref(info))
@@ -275,42 +305,69 @@ class XInputProvider(Provider):
                               f"level={blevel}")
             res = interpret(btype, blevel, self._last.get(slot)) if rc == ERROR_SUCCESS else None
             slots.append((slot, res))
+        self._record_connections(frozenset(slot for slot, _ in slots))
         if not slots:
             self._diag.append("[XInput] no controllers connected")
             return []
 
-        # Windows.Gaming.Input gives a real percentage and works for controllers
-        # that never report through XInput; match its controllers to the XInput
-        # slots in order (with one controller, which is the usual case, it is exact)
-        # one-to-one with the slot list: dropping the reports without a level first
-        # shifted every later controller onto the wrong slot, and with it that
-        # controller's level and name
-        # RawGameControllers is not the XInput slot list: it also holds controllers XInput
-        # cannot see, and the order is not the slot order, so indexing it blindly handed a
-        # pad a DualSense's name and level. Only the vendors this provider reads are kept,
-        # and the list is paired with the slots only when the two counts agree - a mismatch
-        # means the pairing cannot be trusted and the coarse XInput level is used instead.
+        # WGI has controller objects, not XInput user indices. Matching list
+        # lengths does not establish identity or ordering. Only a single eligible
+        # WGI report can be associated with a single XInput slot; multiple pads
+        # keep their own per-slot XInput readings rather than swapping WGI levels.
         all_reports = self._wgi(now, frozenset(s for s, _ in slots))
         # XInput's "wired" type does not always mean a cable: the 2.4 GHz dongle of an
         # 8BitDo Ultimate dock (2dc8:3106) says "wired" for a pad that is off the dock
         # and off the cable, while Windows.Gaming.Input says Discharging for it (#110).
         # Its report is not in the vendor list below, so only its status is kept here,
-        # paired by the same count rule; its level (a constant remain=full=1000) is not.
-        statuses = [r.status for r in all_reports] if len(all_reports) == len(slots) else []
+        # only for a single slot/report; its level (a constant remain=full=1000) is not.
+        statuses = [all_reports[0].status] if len(all_reports) == len(slots) == 1 else []
         # WGI order is not XInput slot order; require a single pair for Beitong.
         single_beitong = (
             len(slots) == 1 and len(all_reports) == 1
             and (all_reports[0].vid, all_reports[0].pid) == BEITONG_IDS
         )
+        # The GameSir G7 Pro 8K, likewise: its Windows level is the 1000/1000 placeholder
+        # and its XInput type "wired" on the dongle; the pad's own report has the level.
+        single_gamesir = (
+            len(slots) == 1 and len(all_reports) == 1
+            and all_reports[0].vid == gamesir.VENDOR_VID
+            and (gamesir.is_supported(all_reports[0].pid)
+                 or (all_reports[0].pid == gamesir.XINPUT_WIRED_PID
+                     and gamesir.has_supported_collection()))
+        )
         # Vendor reports also identify pads whose own HID status is read below;
         # their Windows level is a placeholder, not a battery measurement.
+        # The Raikiri II's own query is paired to its one XInput slot; its WGI
+        # report is not in NAMED_VIDS, so the generic Xbox entry is not shown.
+        single_raikiri = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid) == (raikiri.VID, raikiri.PID)
+        )
+        # The 8BitDo Ultimate 2's dongle is asked for the pad's level the same way:
+        # only when the one slot's one Windows.Gaming.Input report is the Ultimate 2's
+        # (#520). An idle dongle next to another pad never qualifies (#523 review).
+        single_ultimate2 = (
+            len(slots) == 1 and len(all_reports) == 1
+            and (all_reports[0].vid, all_reports[0].pid)
+            == (eightbitdo_ultimate2.VID, eightbitdo_ultimate2.PID)
+        )
         reports = [r for r in all_reports if r.vid in NAMED_VIDS or r.vid == FLYDIGI_VID
                    or (single_beitong and (r.vid, r.pid) == BEITONG_IDS)]
-        if len(reports) != len(slots):
+        # Naming only: the Ultimate 2's Windows report is a placeholder, so it never
+        # reaches `reports` (its level must not be trusted); its identity still names the
+        # pad. Equal counts do not pair reports with slots - with the Ultimate 2 listed
+        # first and an Xbox pad in slot 0 the Xbox pad was renamed (#523 review) - so,
+        # like Beitong above, only one slot with one report is an unambiguous pair.
+        single_pad_name = (NAMED_PAD_IDS.get((all_reports[0].vid, all_reports[0].pid))
+                           if len(slots) == 1 and len(all_reports) == 1 else None)
+        if len(slots) != 1 or len(reports) != 1:
             if reports:
                 self._diag.append(f"[XInput] {len(reports)} Windows.Gaming.Input report(s) for "
-                                  f"{len(slots)} slot(s): not paired, the XInput levels are used")
+                                  f"{len(slots)} slot(s): identity not established; the XInput levels are used")
             reports = []
+        if len(slots) > 1:
+            # The HID vendor name is also global, not an identity for every slot.
+            base_name, base_vid = "Gamepad", None
 
         # FlyDigi pads answer neither API well: over its 2.4 GHz dongle the Vader 5 Pro's
         # XInput battery type is "wired" (the dongle looks like a cable) and its
@@ -324,11 +381,16 @@ class XInputProvider(Provider):
         # would then get the Vader's name and level (#216 review, @ahmedkhursheed23).
         # The slot's vendor comes from its Windows.Gaming.Input report, which a FlyDigi
         # pad sends under its own vendor id (the placeholder), so the paired report
-        # identifies it. base_vid can only be 0x3537/0x045E, so it never allows the call.
+        # identifies it. base_vid is 0x3537/0x045E/0x2DC8, so it never allows the call.
         vendor_reading = None
         if len(slots) == 1:
             only_vid = reports[0].vid if len(reports) == 1 else base_vid
-            if only_vid == FLYDIGI_VID:
+            if single_raikiri:
+                try:
+                    vendor_reading = raikiri.read_connected(self._diag)
+                except Exception as e:     # a broken vendor path must not blind XInput
+                    self._diag.append(f"[Raikiri] {e}")
+            elif only_vid == FLYDIGI_VID:
                 try:
                     vendor_reading = flydigi.read_connected(self._diag)
                 except Exception as e:     # a broken pad path must not blind XInput
@@ -338,6 +400,16 @@ class XInputProvider(Provider):
                     vendor_reading = beitong.read_connected(self._diag)
                 except Exception as e:
                     self._diag.append(f"[Beitong] {e}")
+            elif single_gamesir:
+                try:
+                    vendor_reading = gamesir.read_connected(self._diag)
+                except Exception as e:
+                    self._diag.append(f"[GameSir] {e}")
+            elif single_ultimate2:
+                try:
+                    vendor_reading = eightbitdo_ultimate2.read_connected(self._diag)
+                except Exception as e:     # a broken pad path must not blind XInput
+                    self._diag.append(f"[8BitDo Ultimate 2] {e}")
 
         # separately: one of them failing must not blind the other
         try:
@@ -368,10 +440,11 @@ class XInputProvider(Provider):
         connected = []
         vias = {}
         presentation = {}  # slot -> translation key and parameters
+        charging_unknown = set()
         vader4 = flydigi_hid_present(hid_devices)
         for n, (slot, res) in enumerate(slots):
             rep = reports[n] if n < len(reports) and reports[n].level is not None else None
-            if single_beitong:
+            if single_beitong or single_gamesir:
                 if rep is not None and rep.placeholder:
                     rep = None
                 if res is not None and res[1]:
@@ -393,11 +466,36 @@ class XInputProvider(Provider):
                 vias[slot] = "bluetooth"
                 self._diag.append(f"[XInput] slot {slot}: connected over Bluetooth "
                                   "(from the device paths)")
-            name = (rep.name if rep and rep.name else None) or base_name
+            name = single_pad_name or (rep.name if rep and rep.name else None) or base_name
+            if len(slots) > 1 and res is not None and res[1]:
+                # A receiver may report XInput's wired/no-battery type for a
+                # wireless pad. Without a proven WGI-to-slot identity, neither
+                # 100% nor a charging state can be assigned to that slot.
+                connected.append((slot, name, None, False, "connected, battery level not reported"))
+                presentation[slot] = ("state.unreported", {})
+                charging_unknown.add(slot)
+                continue
+            if single_ultimate2 and vendor_reading is None:
+                # #520: in XInput mode the Ultimate 2 publishes its level only through
+                # its dongle's vendor query. With no answer - on its cable, or switched
+                # off - Windows has nothing but its 1000/1000 placeholder and XInput's
+                # "wired" type, which this family's dongles also report for a pad that
+                # is off and not on any cable (#110). Neither a level nor a charging
+                # state can be shown, so the placeholder is never published.
+                self._diag.append(f"[XInput] slot {slot}: the Ultimate 2 did not answer its "
+                                  "dongle (on its cable, or switched off): no level")
+                connected.append((slot, name, None, False,
+                                  "connected, battery level not reported"))
+                presentation[slot] = ("state.unreported", {})
+                charging_unknown.add(slot)
+                continue
             if vendor_reading is not None:
                 # the pad's own report: level, charging state and its name
                 name = vendor_reading.name
                 self._waiting.pop(slot, None)
+                if not getattr(vendor_reading, "charging_known", True):
+                    # a level without a charging flag: "not charging" would be a guess
+                    charging_unknown.add(slot)
                 if not vendor_reading.charging:
                     self._last[slot] = vendor_reading.level
                 connected.append((slot, name, vendor_reading.level, vendor_reading.charging,
@@ -431,6 +529,8 @@ class XInputProvider(Provider):
                 presentation[slot] = ("state.bluetooth_hint", {})
                 continue
             if rep is not None:
+                if rep.status not in ("charging", "discharging", "idle"):
+                    charging_unknown.add(slot)
                 self._waiting.pop(slot, None)
                 if not rep.charging:
                     self._last[slot] = rep.level
@@ -474,6 +574,7 @@ class XInputProvider(Provider):
             ui_message, ui_params = presentation.get(slot, ("", {}))
             out.append(DeviceStatus(f"xinput:{slot}", name, level, charging, True, "xinput", approx,
                                     kind="gamepad", via=vias.get(slot, ""),
+                                    charging_known=slot not in charging_unknown,
                                     ui_message=ui_message, ui_params=ui_params))
         return out
 

@@ -7,10 +7,12 @@ from providers import ajazz, endgame_4k, turtlebeach, sony_inzone, lamzu_sw, log
 
 
 class StableDevicePolicyTests(unittest.TestCase):
-    def test_aj159_and_kysona_are_not_opened_even_with_valid_vendor_collections(self):
-        entries = [{"product_id": pid, "usage_page": 0xFFFF, "usage": 2,
-                    "path": b"held", "interface_number": 2}
-                   for _, pid, _ in ajazz.ALT_TARGETS]
+    def test_aj159_is_enabled_after_its_level_was_confirmed(self):
+        self.assertIn((0x3151, 0x402D), ajazz.ENABLED_ALT_TARGETS)
+
+    def test_kysona_is_not_opened_even_with_valid_vendor_collections(self):
+        entries = [{"product_id": 0x5031, "usage_page": 0xFFFF, "usage": 2,
+                    "path": b"held", "interface_number": 2}]
         with mock.patch.object(ajazz.hidlist, "enumerate",
                                side_effect=lambda vid=0: entries if vid == 0x3151 else []), \
              mock.patch.object(ajazz.hid, "device") as device:
@@ -45,7 +47,8 @@ class StableDevicePolicyTests(unittest.TestCase):
         ports = types.SimpleNamespace(comports=mock.Mock(return_value=[port]))
         serial = types.SimpleNamespace(Serial=mock.Mock())
         with mock.patch.object(sony_inzone, "list_ports", ports), \
-             mock.patch.object(sony_inzone, "serial", serial):
+             mock.patch.object(sony_inzone, "serial", serial), \
+             mock.patch.object(sony_inzone.hidlist, "enumerate", return_value=[]):
             provider = sony_inzone.SonyInzoneProvider()
             self.assertEqual(provider.poll(), [])
             serial.Serial.assert_not_called()

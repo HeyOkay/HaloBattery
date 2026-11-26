@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 import hid
 
-from . import blackshark, blackshark2020, blackshark_v3, hidlist
+from . import blackshark, blackshark2020, blackshark_mtk, blackshark_v3, hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 RAZER_VID = 0x1532
@@ -37,11 +37,11 @@ RAZER_VID = 0x1532
 # copy of that OpenRazer list and checks this table against it.
 KNOWN = {
     0x0528: ("Razer BlackShark V2 Pro (2020)", 0x3F),
-    0x0536: ("Razer Barracuda X (2022)", 0x1F),
     0x0555: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0556: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x0557: ("Razer BlackShark V2 Pro (2023)", 0x3F),
     0x057A: ("Razer BlackShark V3", 0x3F),         # its transaction id is not used
+    0x0577: ("Razer BlackShark V3 Pro", 0x3F),     # ff14 exchange, see blackshark_v3
     0x00A4: ("Razer Mouse Dock Pro", 0x1F),
     # ---- keyboards with a battery, from OpenRazer's keyboard driver (razerkbd_driver.c:
     # razer_attr_read_charge_level). The wireless id is the HyperSpeed receiver, the
@@ -110,6 +110,10 @@ KNOWN = {
     0x00DF: ("Razer Viper V3 Pro SE", 0x1F),
     0x00E5: ("Razer Viper V4 Pro", 0x1F),
     0x00E6: ("Razer Viper V4 Pro", 0x1F),
+    # #514: 00E3 is the 2.4 GHz receiver; 00E2 is the mouse on its USB cable
+    # (OpenRazer PR #2975). Both answer with transaction id 0x1F.
+    0x00E2: ("Razer Basilisk V4 Pro", 0x1F),
+    0x00E3: ("Razer Basilisk V4 Pro", 0x1F),
     0x00C2: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C3: ("Razer DeathAdder V3 Pro", 0x1F),
     0x00C4: ("Razer DeathAdder V3 HyperSpeed", 0x1F),
@@ -162,7 +166,31 @@ WIRELESS_WORDS = ("hyperspeed", "wireless", "receiver", "dongle", "dock",
                   "blackshark", "barracuda", "nari")
 
 
+# The BlackShark V3 X receiver (057d) and its USB cable identity (057c, product
+# "BlackShark V3 X USB") speak their own 0x07/08 protocol in blackshark_v3x.py;
+# the standard Razer frames get "read error" on every channel, and on the cable
+# every PA write was refused on all four collections, every poll (#280).
+BLACKSHARK_V3X_PIDS = {0x057D, 0x057C}
+
+
+# 1532:0536 is the Barracuda X (2022) on its USB cable, not a receiver. Its ff00:0001
+# interface has no output endpoint, so Windows refuses every write with error 0x57
+# (the reporter's log in #256). Nothing is sent to it; the 2.4 GHz dongle 1532:0552 is
+# read by providers/barracuda_x.py.
+BARRACUDA_X_CABLE_PID = 0x0536
+
+
+# 0550's owner-confirmed whole-build level does not identify which exchange
+# succeeded. Neither generic nor PA automatic writes are authorized without a
+# capture or primary source for this exact identity.
+# https://github.com/HeyOkay/HaloBattery/issues/332#issuecomment-6638842380
+UNSOURCED_BARRACUDA_PID = 0x0550
+PA_FALLBACK_PIDS = frozenset({0x0557})
+
+
 def maybe_wireless(pid: int, name: str) -> bool:
+    if pid in BLACKSHARK_V3X_PIDS:
+        return False
     n = name.lower()
     return pid in KNOWN or pid in blackshark.PA_PIDS or any(w in n for w in WIRELESS_WORDS)
 
@@ -387,6 +415,19 @@ class RazerProvider(Provider):
             if pid == blackshark2020.CABLE_PID:
                 self._diag.append("  skipped: 2020 charging cable; battery is read from receiver 0528")
                 continue
+            if pid in blackshark_mtk.PIDS:
+                # The MediaTek receiver (0565) and cable headset (056E) answer report 2
+                # on 0xFF14, not PA; providers/blackshark_mtk.py reads them (#85, #86).
+                self._diag.append("  skipped: read by the blackshark_mtk provider (MediaTek report 2)")
+                continue
+            if pid == BARRACUDA_X_CABLE_PID:
+                self._diag.append("  skipped: Barracuda X (2022) on its cable; "
+                                  "battery is read from receiver 0552")
+                continue
+            if pid == UNSOURCED_BARRACUDA_PID:
+                self._diag.append("  held: 0550 has no sourced automatic battery exchange")
+                self._cache.pop(("pa", pid, serial), None)
+                continue
             if not maybe_wireless(pid, name):
                 self._diag.append("  skipped: not a known wireless device")
                 continue
@@ -402,16 +443,14 @@ class RazerProvider(Provider):
                 # providers/barracuda.py reads.
                 self._diag.append("  skipped: read by the barracuda provider (own PA protocol)")
                 continue
-            # A Barracuda receiver that is not in PA_PIDS (the Barracuda X 2.4, 1532:0550) shows
-            # the same collections and the same failed mouse request as the receivers that
-            # speak PA (#332, #264), so it gets the PA fallback a BlackShark gets.
+            # Headset names affect presentation, not permission to send PA writes.
             is_headset = (pid in blackshark.PA_PIDS or "blackshark" in name.lower()
                           or "barracuda" in name.lower())
             if pid == blackshark2020.PID:
                 # Deliberately no generic/PA fallback: the 0528 hardware rejects
                 # their reads/writes. A missing fresh feature reply means no reading.
                 st = self._poll_2020(ifaces)
-            elif pid == blackshark_v3.PID:
+            elif pid in blackshark_v3.PIDS:
                 # Deliberately no generic/PA fallback either: the V3 answers neither, and
                 # sustained traffic on this dongle resets the headset's radio link.
                 st = self._poll_v3(ifaces)
@@ -422,7 +461,7 @@ class RazerProvider(Provider):
                     st = self._poll_group((pid, serial), ifaces, pref_tid)
             else:
                 st = self._poll_group((pid, serial), ifaces, pref_tid)
-                if is_headset and (st is None or st[0] != STATUS_OK):
+                if pid in PA_FALLBACK_PIDS and (st is None or st[0] != STATUS_OK):
                     pa = self._poll_pa((pid, serial), ifaces)
                     if pa is not None and (st is None or pa[0] == STATUS_OK):
                         st = pa
@@ -589,9 +628,13 @@ class RazerProvider(Provider):
 
     def _poll_pa(self, gkey, ifaces):
         """BlackShark V2 Pro 2023: the "PA" protocol over output/input reports."""
+        pid = gkey[0] if gkey else None
+        if pid not in blackshark.PA_PIDS and pid not in PA_FALLBACK_PIDS:
+            return None
         cache_key = ("pa",) + tuple(gkey)
         cached = self._cache.get(cache_key)
-        cands = [d for d in ifaces if blackshark.is_candidate(d)] or list(ifaces)
+        cands = [d for d in ifaces if blackshark.is_candidate(d)
+                 and d.get("vendor_id") == RAZER_VID and d.get("product_id") == pid]
         if cached:
             cands.sort(key=lambda d: 0 if d["path"] == cached.path else 1)
         offline = None

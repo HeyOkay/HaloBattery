@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: Solaar e7304c4 lib/logitech_receiver/hidpp20_constants.py L37-55,90; hidpp10_constants.py L130-138.
+# Keep protocol selectors independent of the provider constants under test.
 import os
 import sys
 import types
@@ -91,7 +94,7 @@ class FakeBus:
             self._reply(path, idx, 0, prev, [9])     # "feature index 9": wrong for this request
         dev = self.slots[path].get(idx)
         if dev is None:
-            return self._error(path, idx, feat, fn, L.ERR_EMPTY_SLOT)
+            return self._error(path, idx, feat, fn, 0x08)
         if dev.silent:
             return
         if dev.error is not None:
@@ -105,7 +108,7 @@ class FakeBus:
         for fid, (index, fns) in dev.features.items():
             if index != feat:
                 continue
-            if fid == L.F_NAME and func in (0, 1) and dev.name is not None:
+            if fid == 0x0005 and func in (0, 1) and dev.name is not None:
                 raw = dev.name.encode()
                 return self._reply(path, idx, feat, fn,
                                    [len(raw)] if func == 0 else list(raw[params[0]:params[0] + 16]))
@@ -125,13 +128,13 @@ def receiver(pid=0xC539, product="USB Receiver"):
     return [entry(pid, 0xFF00, 1, b"short", product), entry(pid, 0xFF00, 2, b"long", product)]
 
 
-VOLTAGE_76 = {L.F_VOLTAGE: (6, {0: [0x0F, 0x7B, 0x00]})}           # 3963 mV -> 76 %
-CHARGING_100 = {L.F_VOLTAGE: (6, {0: [0x10, 0x6C, 0x80]})}         # G502 on its cable
+VOLTAGE_76 = {0x1001: (6, {0: [0x0F, 0x7B, 0x00]})}           # 3963 mV -> 76 %
+CHARGING_100 = {0x1001: (6, {0: [0x10, 0x6C, 0x80]})}         # G502 on its cable
 
 
 def g502(battery=VOLTAGE_76, unit=(0xC1, 0x5E, 0x09, 0xCD)):
-    return FakeHidpp({**battery, L.F_NAME: (3, {2: [3]}),
-                      L.F_INFO: (2, {0: [3, *unit]})}, name="G502 LIGHTSPEED")
+    return FakeHidpp({**battery, 0x0005: (3, {2: [3]}),
+                      0x0003: (2, {0: [3, *unit]})}, name="G502 LIGHTSPEED")
 
 
 def slots(keys):
@@ -140,7 +143,7 @@ def slots(keys):
 
 
 def adc(params, index=8):
-    return {L.F_ADC: (index, {0: params})}
+    return {0x1F20: (index, {0: params})}
 
 
 class LogitechTestCase(unittest.TestCase):

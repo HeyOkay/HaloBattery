@@ -217,6 +217,52 @@ class SwapTests(TempDirTestCase):
             updates.swap_files(self.new, self.app, sleep=lambda s: None)
         self.assertEqual(self.read("app/HaloBattery.exe"), b"new exe")
 
+    def test_failed_new_app_launch_restores_and_restarts_the_old_app(self):
+        self.write("new/new-file.dll", b"new only")
+        launches = []
+
+        def start(cmd):
+            launches.append(self.read("app/HaloBattery.exe"))
+            if len(launches) == 1:
+                raise OSError("new executable is blocked")
+
+        ok = updates.finish_update(self.app, 0, self.new, start=start,
+                                   sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(launches, [b"new exe", b"old exe"])
+        self.assertEqual(self.read("app/_internal/gone.pyd"), b"old only")
+        self.assertFalse(os.path.exists(os.path.join(self.app, "new-file.dll")))
+        self.assertFalse(any(n.endswith(".old") for n in os.listdir(self.app)))
+        self.assertEqual(self.read("app/config.json"), b"{\"low\": 15}")
+
+    def test_failed_restart_is_not_reported_as_a_successful_install(self):
+        with mock.patch.object(updates, "log") as log:
+            ok = updates.finish_update(self.app, 0, self.new,
+                                       start=mock.Mock(side_effect=OSError("blocked")),
+                                       sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(self.read("app/HaloBattery.exe"), b"old exe")
+        self.assertTrue(any("could not start" in call.args[0] for call in log.error.call_args_list))
+
+    def test_temporarily_held_backup_is_retried_during_rollback(self):
+        real_replace = os.replace
+        restored = []
+
+        def replace(src, dst):
+            if src.endswith(".old"):
+                restored.append(src)
+                if len(restored) == 1:
+                    raise PermissionError("scanner is holding the backup")
+            return real_replace(src, dst)
+
+        with mock.patch.object(updates.os, "replace", side_effect=replace), \
+                mock.patch.object(updates.shutil, "copytree", side_effect=ValueError("copy failed")):
+            ok = updates.finish_update(self.app, 0, self.new, start=lambda cmd: None,
+                                       sleep=lambda s: None, wait=lambda pid: None)
+        self.assertFalse(ok)
+        self.assertEqual(self.read("app/_internal/gone.pyd"), b"old only")
+        self.assertGreaterEqual(len(restored), 3)
+
 
 class CommandLineTests(TempDirTestCase):
     def test_finish_args(self):
@@ -255,6 +301,161 @@ class CommandLineTests(TempDirTestCase):
         argv = ["x.exe", "--finish-update", "--app-dir", self.tmp, "--pid", "1"]
         self.assertEqual(hb._data_base_dir(argv), self.tmp)
         self.assertEqual(hb._data_base_dir(["x.exe"]), hb.BASE_DIR)
+
+
+class WhatsNewWindowReuseTests(unittest.TestCase):
+    def fake_window(self, host, *args, **kwargs):
+        window = mock.Mock()
+        window.host = host
+        window.win.winfo_exists.return_value = True
+        window._closed_events = [args[6]]
+        return window
+
+    def test_queued_requests_reuse_one_window_and_complete_together(self):
+        queued = []
+        host = types.SimpleNamespace(call=lambda fn: queued.append(fn) or True)
+        with mock.patch.object(whatsnew, "WhatsNewWindow", side_effect=self.fake_window) as factory:
+            events = [whatsnew.show(host, "1.2", "Rich release notes", "url", "1.1", "2026-11-15")]
+            events += [whatsnew.show(host, "1.2", "Offline fallback notes", "url") for _ in range(4)]
+            for callback in queued:
+                callback()
+            factory.assert_called_once()
+            window = host._whatsnew_window
+            self.assertEqual(window.present.call_count, 4)
+            self.assertTrue(all(not event.is_set() for event in events))
+            window.catcher = None
+        whatsnew.WhatsNewWindow.destroy(window)
+        self.assertTrue(all(event.is_set() for event in events))
+        self.assertIsNone(host._whatsnew_window)
+
+    def test_new_release_replaces_content_without_losing_close_waiters(self):
+        host = types.SimpleNamespace(call=lambda fn: fn() or True)
+        with mock.patch.object(whatsnew, "WhatsNewWindow", side_effect=self.fake_window) as factory:
+            first = whatsnew.show(host, "1.2", "Old notes", "old-url")
+            old = host._whatsnew_window
+            second = whatsnew.show(host, "1.3", "New notes", "new-url")
+            old.destroy.assert_called_once_with(notify=False)
+            self.assertEqual(factory.call_count, 2)
+            self.assertEqual(host._whatsnew_window._request, ("1.3", "en"))
+            self.assertEqual(host._whatsnew_window._closed_events, [second, first])
+            self.assertFalse(first.is_set())
+            self.assertFalse(second.is_set())
+            third = whatsnew.show(host, "1.3", "Localized notes", "new-url", language="fr")
+            self.assertEqual(factory.call_count, 3)
+            self.assertEqual(host._whatsnew_window._request, ("1.3", "fr"))
+            self.assertEqual(host._whatsnew_window._closed_events, [third, second, first])
+
+    def test_request_during_close_revives_existing_window(self):
+        window = types.SimpleNamespace(
+            _close_job="close-job", _closing=True, win=mock.Mock(), catcher=mock.Mock(),
+            _bring_to_front=mock.Mock(), _resume_updates=mock.Mock(), w32=mock.Mock(), hwnd=123)
+        whatsnew.WhatsNewWindow.present(window)
+        window.win.after_cancel.assert_called_once_with("close-job")
+        self.assertIsNone(window._close_job)
+        self.assertFalse(window._closing)
+        window.win.deiconify.assert_called_once()
+        window.win.lift.assert_called_once()
+        window.win.focus_force.assert_called_once()
+        window.w32.activate.assert_called_once_with(123)
+        # An initial fade callback queued before present must not lower alpha again.
+        window.win.attributes.reset_mock()
+        whatsnew.WhatsNewWindow._fade_in(window)
+        window.win.attributes.assert_not_called()
+        self.assertTrue(window._presented)
+
+    def scheduled_window(self):
+        # Exercise real lifecycle/update methods with a deterministic after queue,
+        # without constructing Tk widgets or opening a native window.
+        window = whatsnew.WhatsNewWindow.__new__(whatsnew.WhatsNewWindow)
+        jobs, serial = {}, [0]
+        win = mock.Mock()
+
+        def after(delay, callback):
+            serial[0] += 1
+            token = "job-" + str(serial[0])
+            jobs[token] = (delay, callback)
+            return token
+
+        win.after.side_effect = after
+        win.after_cancel.side_effect = lambda token: jobs.pop(token, None)
+        window.__dict__.update(
+            win=win, catcher=mock.Mock(), cv=mock.Mock(), body=mock.Mock(),
+            _closing=False, _close_job=None, _presented=False,
+            _accent_job=None, _theme_job=None, _theme_move=None,
+            _bar_job=None, _bar_anim=None, _bar_k=0.0,
+            w32=None, hwnd=0, light=False, accent=None, c=whatsnew.colours(False),
+            pressed=None, hover=None,
+            _bring_to_front=mock.Mock(), _paint_roles=mock.Mock(),
+            _make_logo=mock.Mock(), _make_buttons=mock.Mock(),
+            _draw_chrome=mock.Mock(), _draw_thumb=mock.Mock(), _fine_timer=mock.Mock(),
+            _closed_events=[hb.threading.Event()])
+        window.host = types.SimpleNamespace(_whatsnew_window=window)
+
+        def run(token):
+            _delay, callback = jobs.pop(token)
+            callback()
+
+        return window, jobs, run
+
+    def test_reopening_close_restarts_one_accent_watcher(self):
+        window, jobs, run = self.scheduled_window()
+        window._resume_updates()
+        old_watch = window._accent_job
+        window.close()
+        self.assertNotIn(old_watch, jobs)
+        self.assertIsNone(window._accent_job)
+        window.present()
+        resumed = window._accent_job
+        window.present()
+        self.assertEqual(window._accent_job, resumed)
+        self.assertEqual(list(jobs), [resumed])
+        with mock.patch.object(whatsnew.flyout, "apps_use_light_theme", return_value=False), \
+                mock.patch.object(whatsnew, "windows_accent_palette", return_value=None) as read_accent:
+            run(resumed)
+        read_accent.assert_called_once()
+        self.assertNotEqual(window._accent_job, resumed)
+        self.assertEqual(list(jobs), [window._accent_job])
+        window.destroy()
+        self.assertFalse(jobs)
+
+    def test_reopening_finishes_interrupted_theme_and_thumb_animation(self):
+        window, jobs, run = self.scheduled_window()
+        with mock.patch.object(whatsnew.time, "perf_counter", return_value=100.0):
+            window._resume_updates()
+            window.theme_transition(True)
+            window._bar_anim = (0.0, 1.0, 100.0)
+            window._resume_updates()
+            paused = (window._accent_job, window._theme_job, window._bar_job)
+            window.close()
+        self.assertTrue(all(token not in jobs for token in paused))
+        self.assertIsNotNone(window._theme_move)
+        self.assertIsNotNone(window._bar_anim)
+        window.present()
+        resumed = (window._accent_job, window._theme_job, window._bar_job)
+        window.present()
+        self.assertEqual((window._accent_job, window._theme_job, window._bar_job), resumed)
+        self.assertEqual(set(jobs), set(resumed))
+        with mock.patch.object(whatsnew.time, "perf_counter", return_value=101.0):
+            run(window._theme_job)
+            run(window._bar_job)
+        self.assertIsNone(window._theme_move)
+        self.assertTrue(window.light)
+        self.assertEqual(window.c, whatsnew.colours(True))
+        self.assertIsNone(window._bar_anim)
+        self.assertEqual(window._bar_k, 1.0)
+        with mock.patch.object(whatsnew.flyout, "apps_use_light_theme", return_value=True), \
+                mock.patch.object(whatsnew, "windows_accent_palette", return_value=None) as read_accent:
+            run(window._accent_job)
+        read_accent.assert_called_once()
+        self.assertEqual(list(jobs), [window._accent_job])
+        closed = window._closed_events[0]
+        window.destroy()
+        self.assertTrue(closed.is_set())
+        self.assertFalse(jobs)
+
+    def test_unavailable_host_completes_request_immediately(self):
+        host = types.SimpleNamespace(call=lambda fn: False)
+        self.assertTrue(whatsnew.show(host, "1.2", "Notes", "url").is_set())
 
 
 class NotesTests(unittest.TestCase):
@@ -465,6 +666,58 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(hb.update_item_text("1.15.0", False), "Download v1.15.0…")
         self.assertEqual(hb.update_item_text("1.15.0", True, 42), "Downloading v1.15.0… 42%")
 
+    def test_whats_new_serializes_config_without_locking_network_or_ui(self):
+        for cached in ({"version": hb.VERSION, "notes": "cached notes"},
+                       {"version": "0.0.1", "notes": "old notes"}, None, "invalid"):
+            with self.subTest(cached=cached):
+                app = self.app()
+                app.lock = hb.threading.Lock()
+                app.ui_host = object()
+                lock = app.lock
+                test = self
+
+                class LockedConfig(dict):
+                    def pop(self, key, default=None):
+                        test.assertTrue(lock.locked())
+                        return super().pop(key, default)
+
+                    def get(self, key, default=None):
+                        test.assertTrue(lock.locked())
+                        return super().get(key, default)
+
+                app.cfg = LockedConfig(language="fr", whats_new_notes=cached)
+
+                def save(cfg):
+                    self.assertTrue(lock.locked())
+                    self.assertIs(cfg, app.cfg)
+                    self.assertNotIn("whats_new_notes", cfg)
+
+                def fetch(*args):
+                    self.assertFalse(lock.locked())
+                    # A settings command may change the language while notes load.
+                    with lock:
+                        app.cfg["language"] = "ja"
+                    return updates.Release(hb.VERSION, "url", notes="fetched notes")
+
+                def show(*args, **kwargs):
+                    self.assertFalse(lock.locked())
+                    self.assertIs(args[0], app.ui_host)
+                    self.assertEqual(kwargs["language"], "fr")
+                    self.assertEqual(kwargs["from_version"], "1.0.0")
+
+                with mock.patch.object(hb, "save_config", side_effect=save) as saved, \
+                        mock.patch.object(hb.updates, "fetch_release", side_effect=fetch) as fetched, \
+                        mock.patch.object(hb.whatsnew, "show", side_effect=show) as shown:
+                    app.show_whats_new("1.0.0")
+                saved.assert_called_once_with(app.cfg)
+                shown.assert_called_once()
+                if isinstance(cached, dict) and cached["version"] == hb.VERSION:
+                    fetched.assert_not_called()
+                    self.assertEqual(shown.call_args.args[2], "cached notes")
+                else:
+                    fetched.assert_called_once_with(hb.VERSION, hb.VERSION)
+                    self.assertEqual(shown.call_args.args[2], "fetched notes")
+
     def test_manual_check_says_up_to_date(self):
         app = self.app()
         rel = updates.Release(hb.VERSION, "u")
@@ -510,12 +763,15 @@ class AppUpdateTests(unittest.TestCase):
                 mock.patch.object(hb.updates, "download",
                                   lambda r, d, cur, progress: (progress(50), "C:/t/new")[1]), \
                 mock.patch.object(hb.updates, "prepare_runner", lambda app_dir, st: "C:/t/runner"), \
+                mock.patch.object(hb.updates, "current_process_creation_time", return_value=0x123456789ABCDEF0) as capture, \
                 mock.patch.object(hb.updates, "start_detached", lambda cmd, cwd=None: started.append(cmd)):
             app.install_update()
         self.assertEqual(started[0][0], os.path.join("C:/t/runner", "HaloBattery.exe"))
         self.assertEqual(started[0][1:3], ["--finish-update", "--app-dir"])
         self.assertIn("C:/t/new", started[0])
         self.assertEqual(started[0][-1], str(os.getpid()))
+        self.assertEqual(updates.parse_finish_creation_time(started[0]), 0x123456789ABCDEF0)
+        capture.assert_called_once_with()
         self.assertEqual(app.cfg["update_from"], hb.VERSION)
         self.assertEqual(app.cfg["whats_new_notes"]["version"], "99.0.0")
         self.assertEqual(quit_, [True])

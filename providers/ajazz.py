@@ -1,4 +1,11 @@
-"""AJAZZ AJ179 V2 MAX over its 2.4 GHz receiver (249a:5c2f), without AJAZZ's software.
+"""Diagnostic-only AJ159 reader: Aiacos/ajazz-control-center
+03a29f7a90dd32057ca7cd0d6e6fa8f13d5400f3,
+src/devices/mouse/src/aj_series.cpp L225-264,290-312; owner #289 test4
+95ac6df038f1ec3d27653c89be0d2fdfc43d5253 / issuecomment-6899703056:
+3151:402D interface2 FFFF:0002, SET_FEATURE 00 F7 then GET05, zero unknown.
+Diagnostic helper alone uses opened native feature caps; normal AJ159 untouched.
+
+AJAZZ AJ179 V2 MAX over its 2.4 GHz receiver (249a:5c2f), without AJAZZ's software.
 
 The receiver carries the level two ways, both recorded from the vendor's own
 app (AJAZZ Driver 1.0.7.3) in the reporter's USBPcap captures in #74:
@@ -95,21 +102,20 @@ WIRED_PID = 0x5D2E
 NAME = "AJAZZ AJ179 V2 MAX"
 KEY = f"ajazz:{PID:04x}"
 
-# The AJ159 PRO's 8K receiver (#289): a different vendor id and product string
-# ("AJAZZ 2.4G 8K"), with the vendor channel on usage page FFFF instead of the
-# AJ179's unlabelled mi_02. The AJ179 reverse-engineering notes say the AJ159
-# family speaks the same CompX protocol, so the same frames are tried.
-# The 3151 receivers: the AJ159 PRO's 8K dongle and the Kysona Uranus (#251). Both
-# publish ffff:0001 / ffff:0002 (no ff02:0002), and the AJ179 notes say the AJ159
-# family speaks the same CompX protocol, so the same frames are tried on both.
+# The AJ159 PRO's 8K receiver (#289) and the Kysona Uranus (#251) are 3151
+# devices with a different transport from the AJ179: every collection is
+# input-only, and ffff:0002 takes the AJ-series feature poll (F7) followed by
+# GET_FEATURE 0x05. The AJ179's 0x10 interrupt read must never be sent to these
+# ids; test build 3 showed it reaches the feature channel but cannot be read.
 ALT_TARGETS = (
     (0x3151, 0x402D, "AJAZZ AJ159 PRO"),
     (0x3151, 0x5031, "Kysona Uranus"),
 )
 
-# Stable release hold: #289/#251 have no confirmed exchange on these receivers.
-# Keep the protocol fixtures, but never open an alternate target until reviewed.
-ENABLED_ALT_TARGETS = frozenset()
+# #289 is confirmed on hardware for the level, so the AJ159 PRO is enabled.
+# #251's Kysona Uranus shares the transport but has no confirmation, so it
+# stays held before opening.
+ENABLED_ALT_TARGETS = frozenset({(0x3151, 0x402D)})
 
 REPORT_SIZE = 32                 # both directions; hidapi adds the report id on Windows
 OUTPUT_LEN = REPORT_SIZE + 1     # what OutputReportByteLength reports for the vendor
@@ -133,6 +139,18 @@ CHECKSUM_FROM = 4
 ANNOUNCE_ID = 0xC0               # the receiver's own battery announcement
 ANNOUNCE_LIVE = 0x01             # byte 1: non-zero on a live link
 ANNOUNCE_LEVEL_INDEX = 2
+
+# The 3151 8K receivers use the AJ-series status exchange, not the AJ179's
+# 0x10 info read: a zero-payload F7 feature poll on ffff:0002 brings the 2.4G
+# telemetry up, then GET_FEATURE 0x05 carries the level. The reference project
+# (Aiacos/ajazz-control-center) documents 65/67-byte polls; the AJ159 PRO's
+# collection accepts a 33-byte feature frame, so all three lengths are tried.
+SERIES_POLL_OPCODE = 0xF7
+SERIES_POLL_LENGTHS = (33, 65, 67)
+SERIES_SETTLE_S = 0.05
+SERIES_REPORT_ID = 0x05          # the status report; the only one with a documented layout
+SERIES_LEVEL_INDEX = 3           # `05 00 00 <level>`: hidapi on Windows returns the id first
+SERIES_CONTROL_USAGE = (0xFFFF, 0x02)
 
 MOUSE_USAGE = (0x0001, 0x0002)   # never opened: the OS owns the pointer stream
 VENDOR_PAGE = 0xFF00
@@ -178,6 +196,29 @@ def parse_reply(frame) -> Optional[Tuple[int, str, Optional[bool]]]:
     return None
 
 
+def parse_series_reply(frame, report_id: int = SERIES_REPORT_ID) -> Optional[int]:
+    """Level from the 3151 8K receiver's AJ-series status report, or None.
+
+    Only the documented layout is accepted (#427 review): GET_FEATURE report
+    0x05, which hidapi on Windows returns with the report id first -
+    `05 00 00 64 01 01 01 02`, level at byte 3 (Aiacos/ajazz-control-center,
+    aj_series_battery.md), captured on the AJ159 PRO as `05 00 00 46 ...` =
+    70 % (#289). Any other report id or first byte is refused, and so is a
+    non-zero byte between the report id and the level - the junk a wireless
+    reconnect can return. The reference's unnumbered frame is a Linux hidraw
+    read, which this Windows path never receives. Zero means the 2.4G link is
+    not up yet, so it is never shown as an empty battery.
+    """
+    if report_id != SERIES_REPORT_ID or not frame:
+        return None
+    f = list(frame)
+    if (len(f) <= SERIES_LEVEL_INDEX or f[0] != SERIES_REPORT_ID
+            or any(f[1:SERIES_LEVEL_INDEX])):
+        return None
+    level = f[SERIES_LEVEL_INDEX]
+    return level if 1 <= level <= 100 else None
+
+
 def candidates(ifaces: List[dict]) -> List[dict]:
     """The collections to try, best first.
 
@@ -212,6 +253,18 @@ def candidates(ifaces: List[dict]) -> List[dict]:
     return sorted(out, key=rank)
 
 
+def parse_aj159_diagnostic(frame) -> Optional[int]:
+    """The confirmed numbered Windows report: 05 00 00 <level> ... ."""
+    if not isinstance(frame, (bytes, bytearray, memoryview, list, tuple)) or len(frame) < 4:
+        return None
+    if any(type(value) is not int or not 0 <= value <= 255 for value in frame):
+        return None
+    if tuple(frame[:3]) != (0x05, 0x00, 0x00):
+        return None
+    level = frame[3]
+    return level if 1 <= level <= 100 else None
+
+
 class AjazzProvider(Provider):
     name = "ajazz"
 
@@ -223,6 +276,48 @@ class AjazzProvider(Provider):
         self._wired_chosen: Optional[bytes] = None
         # the AJ159 PRO target keeps its own state (#289)
         self._alt: Dict[int, dict] = {}   # pid -> chosen path / last / charging
+
+    def _diagnose_aj159(self, d: dict) -> Tuple[Optional[int], bool]:
+        """One sourced F7/05 exchange on AJ159's confirmed control collection."""
+        if (d.get("vendor_id", 0x3151) != 0x3151 or d.get("product_id") != 0x402D
+                or d.get("interface_number") != 2
+                or (d.get("usage_page"), d.get("usage")) != (0xFFFF, 0x0002)):
+            return None, False
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+            metadata = getattr(dev, "get_report_lengths", None)
+            length = None
+            if callable(metadata):
+                caps = metadata()
+                length = caps.get("feature") if isinstance(caps, dict) else None
+            if type(length) is not int or not 4 <= length <= 32768:
+                self._diag.append("    AJ159: no usable feature report size")
+                return None, False
+            poll = bytes((0x00, 0xF7)) + bytes(length - 2)
+            wrote = dev.send_feature_report(poll)
+            if type(wrote) is not int or wrote != length:
+                self._diag.append(f"    AJ159: incomplete feature poll ({wrote!r}/{length})")
+                return None, False
+            time.sleep(0.03)
+            reply = dev.get_feature_report(0x05, length)
+            level = parse_aj159_diagnostic(reply)
+            try:
+                preview = hexdump(reply, 12)
+            except (TypeError, ValueError):
+                preview = "invalid feature reply"
+            self._diag.append(f"    AJ159 report 05 len={length}: {preview}"
+                              + (f" -> {level}%" if level is not None else " (no current level)"))
+            return level, True
+        except (OSError, ValueError) as error:
+            self._diag.append(f"    AJ159 feature exchange: {error}")
+            return None, False
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
 
     def _ask(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
         """Send the vendor app's read and listen briefly.
@@ -274,6 +369,68 @@ class AjazzProvider(Provider):
         except (OSError, IOError, ValueError) as e:
             self._diag.append(f"    read error: {e}")
             return None, False
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def _ask_series(self, d: dict) -> Tuple[Optional[Tuple[int, str, Optional[bool]]], bool]:
+        """Read the 3151 8K receiver through its AJ-series status exchange.
+
+        #289: every collection of this receiver refused an interrupt-OUT
+        write. The vendor's own AJ-series backend uses no output report at all:
+        a zero-payload F7 feature poll wakes the 2.4G telemetry link, then
+        GET_FEATURE 0x05 carries the charge. Test build 3 got as far as a
+        successful 33-byte feature write and then failed in dev.read(), which
+        is expected on a feature-only collection; this path never calls
+        dev.read().
+        """
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+        except (OSError, IOError) as e:
+            self._diag.append(f"    open: {e}")
+            return None, False
+        accepted = False
+        try:
+            for length in SERIES_POLL_LENGTHS:
+                poll = bytearray(length)
+                poll[0] = 0x00          # report id
+                poll[1] = SERIES_POLL_OPCODE
+                try:
+                    wrote = dev.send_feature_report(bytes(poll))
+                except (OSError, ValueError, AttributeError) as e:
+                    self._diag.append(f"    feature poll len={length}: {e}")
+                    continue
+                if wrote is None or wrote < 0:
+                    self._diag.append(f"    feature poll len={length} refused ({wrote})")
+                    continue
+                accepted = True
+                self._diag.append(f"    feature poll len={length} -> {wrote}")
+                time.sleep(SERIES_SETTLE_S)
+                # only status report 0x05 has a documented layout (#427 review)
+                for read_length in (length, 65, 33):
+                    try:
+                        reply = dev.get_feature_report(SERIES_REPORT_ID, read_length)
+                    except (OSError, ValueError, AttributeError) as e:
+                        self._diag.append(f"    get_feature {SERIES_REPORT_ID:02x} "
+                                          f"len={read_length}: {e}")
+                        continue
+                    if not reply:
+                        continue
+                    level = parse_series_reply(reply, SERIES_REPORT_ID)
+                    self._diag.append(f"    report {SERIES_REPORT_ID:02x}: {hexdump(reply, 12)}"
+                                      + (f"  -> {level} %" if level is not None
+                                         else "  (no level in it)"))
+                    if level is not None:
+                        return (level, "status", None), True
+            if not accepted:
+                self._diag.append("    no feature report accepted on this collection")
+            else:
+                self._diag.append("    no charge in report 05 (mouse off or asleep, "
+                                  "or the 2.4G link is not up)")
+            return None, accepted
         finally:
             try:
                 dev.close()
@@ -343,18 +500,23 @@ class AjazzProvider(Provider):
             if mine:
                 self._diag.append(f"[AJAZZ] pid={pid:04x} '{name}' "
                                   f"product='{(mine[0].get('product_string') or '').strip()}'")
-                order = candidates(mine)
-                if state["chosen"] is not None:
-                    order = sorted(order, key=lambda d: d["path"] != state["chosen"])
-                for d in order[:MAX_CANDIDATES]:
+                # #289: the 3151 8K receivers answer the AJ-series F7/0x05
+                # exchange, not the AJ179's 0x10 info frame. Only the documented
+                # control collection is opened; the other four are input-only.
+                control = [d for d in mine
+                           if (d.get("usage_page"), d.get("usage")) == SERIES_CONTROL_USAGE]
+                if not control:
+                    self._diag.append("  no ffff:0002 control collection: nothing sent")
+                else:
+                    order = control
+                    if state["chosen"] is not None:
+                        order = sorted(order, key=lambda d: d["path"] != state["chosen"])
+                    d = order[0]
                     self._diag.append(f"  asking iface={d.get('interface_number')} "
                                       f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-                    got, accepted = self._ask(d)
+                    got, accepted = self._ask_series(d)
                     if accepted:
                         state["chosen"] = d["path"]
-                        break
-                    if got is not None:
-                        break
             if got is not None:
                 level, _kind, charging = got
                 if charging is None:
@@ -362,14 +524,16 @@ class AjazzProvider(Provider):
                 else:
                     state["charging"] = charging
                 state["last"] = (level, time.time())
-                out.append(DeviceStatus(key, name, level, charging, True, "ajazz", kind="mouse"))
+                out.append(DeviceStatus(key, name, level, charging, True, "ajazz",
+                                        kind="mouse", charging_known=False))
             elif mine:
                 last = state["last"]
                 if last and time.time() - last[1] < ASLEEP_KEEP:
                     out.append(DeviceStatus(key, name, last[0], state["charging"], False,
-                                            "ajazz", kind="mouse"))
+                                            "ajazz", kind="mouse", charging_known=False))
                 else:
-                    out.append(DeviceStatus(key, name, None, False, False, "ajazz", kind="mouse"))
+                    out.append(DeviceStatus(key, name, None, False, False, "ajazz",
+                                            kind="mouse", charging_known=False))
         return out
 
     def _poll_primary(self) -> List[DeviceStatus]:

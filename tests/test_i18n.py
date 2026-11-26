@@ -120,6 +120,33 @@ class CatalogTests(unittest.TestCase):
         for hours in (0.5, 1, 1.5, 5.4, 47.9, 48, 72, 200):
             self.assertEqual(i18n.format_left(hours * 3600), hb.history.format_left(hours * 3600))
 
+    def test_polish_plural_rules_and_genitive_months(self):
+        expected = {0: "many", 1: "one", 2: "few", 4: "few", 5: "many",
+                    12: "many", 14: "many", 22: "few", 25: "many"}
+        for count, form in expected.items():
+            with self.subTest(count=count):
+                self.assertEqual(i18n.LANGUAGES["pl"].plural_rule(count), form)
+                self.assertIn(str(count), i18n.translate("duration.hours", language="pl", count=count))
+        self.assertEqual(i18n.translate("date.month.11", language="pl"), "listopada")
+        self.assertEqual(hb.whatsnew.nice_date("2026-11-16", language="pl"), "16 listopada 2026")
+
+    def test_polish_plural_rule_handles_signed_and_non_integer_counts(self):
+        rule = i18n.LANGUAGES["pl"].plural_rule
+        for count, expected in ((-1, "one"), (-2, "few"), (-12, "many"), (21, "many"),
+                                (101, "many"), (102, "few"), (112, "many")):
+            with self.subTest(count=count):
+                self.assertEqual(rule(count), expected)
+        for count in (True, False, None, "2", 1.0, 1.5):
+            with self.subTest(count=count):
+                self.assertEqual(rule(count), "other")
+
+    def test_polish_user_visible_text_uses_ascii_hyphens(self):
+        for key, value in i18n.LANGUAGES["pl"].catalog.items():
+            for text in value.values() if isinstance(value, Mapping) else (value,):
+                with self.subTest(key=key):
+                    self.assertNotIn("\u2013", text)
+                    self.assertNotIn("\u2014", text)
+
     def test_nonpositive_estimates_and_positive_boundary(self):
         expected = {"en": "no use left", "fr": "aucune autonomie restante",
                     "zh-TW": "無剩餘使用時間", "zh-CN": "无剩余使用时间",
@@ -290,14 +317,14 @@ class LanguageConfigTests(unittest.TestCase):
         with mock.patch.dict(i18n.LANGUAGES, {"test": extra_language()}):
             app = make_app()
             prefs = find(app.build_menu(None), "Preferences").submenu
-            menu = find(prefs, "Language / Langue").submenu
+            menu = find(prefs, "Language").submenu
             find(menu, "Test language")(None)
             self.assertEqual(app.cfg["language"], "test")
             with mock.patch.object(i18n, "detect_language") as detect:
                 self.assertEqual(hb.load_config(initialize_language=True)["language"], "test")
             detect.assert_not_called()
             prefs = find(app.build_menu(None), "Test preferences").submenu
-            menu = find(prefs, "Language / Langue").submenu
+            menu = find(prefs, "Language").submenu
             self.assertTrue(find(menu, "Test language").checked)
 
     def test_localized_low_sound_option_persists_without_changing_language(self):
@@ -353,22 +380,24 @@ class PresentationTests(unittest.TestCase):
         self.assertIn("débranchez", hb.device_state(st, language="fr"))
 
     def test_every_provider_and_pictogram_is_translated(self):
+        # Held-only families keep all catalog keys but expose no ineffective switch.
+        visible = set(hb.PROVIDER_LABELS) - {"endgame_4k", "lamzu_sw"}
         for code in i18n.LANGUAGES:
             with self.subTest(language=code):
                 app = make_app({"language": code})
                 prefs = find(app.build_menu(None), app.tr("menu.preferences")).submenu
                 labels = [item.text for item in find(prefs, app.tr("preferences.providers")).submenu]
                 self.assertEqual(set(labels), {i18n.translate("provider." + key, language=code)
-                                               for key in hb.PROVIDER_LABELS})
+                                               for key in visible})
                 # New providers must also have reference keys, not just translations.
                 self.assertTrue(all("provider." + key in en.MESSAGES for key in hb.PROVIDER_LABELS))
                 if code == "en":
-                    self.assertEqual(set(labels), set(hb.PROVIDER_LABELS.values()))
+                    self.assertEqual(set(labels), {hb.PROVIDER_LABELS[key] for key in visible})
         owner = types.SimpleNamespace(status=dev())
         labels = [item.text for item in find(self.app.build_menu(owner), "Icône").submenu]
         self.assertEqual(labels, ["Automatique", "Souris", "Clavier", "Microphone", "Enceinte", "Webcam",
                                   "Appareil de santé", "Maison connectée", "Montre connectée",
-                                  "Écran / TV", "Balise / Localisateur", "Casque",
+                                  "Écran / TV", "Balise / Localisateur", "Téléphone", "Casque",
                                   "Manette", "Bluetooth"])
 
     def test_immediate_switch_all_icons_placeholder_and_both_directions(self):
@@ -388,11 +417,13 @@ class PresentationTests(unittest.TestCase):
             save.assert_called_once_with(app.cfg)
             app.set_language("en")
         self.assertIn("h of use left", app.icons["1"].icon.title)
-        self.assertEqual(find(app.icons["0"].icon.menu, "Preferences").text, "Preferences")
+        self.assertNotIn("Device settings...", [item.text for item in app.icons["0"].icon.menu.items])
+        self.assertEqual(find(app.icons["0"].icon.menu, "Settings").text, "Settings")
+        self.assertEqual(find(app.placeholder.menu, "Settings").text, "Settings")
 
     def test_language_menu_selects_and_marks_saved_language(self):
         prefs = find(self.app.build_menu(None), "Préférences").submenu
-        languages = find(prefs, "Language / Langue").submenu
+        languages = find(prefs, "Langue").submenu
         self.assertEqual([item.text for item in languages],
                          [language.name for language in i18n.LANGUAGES.values()])
         self.assertTrue(find(languages, "Français").checked)

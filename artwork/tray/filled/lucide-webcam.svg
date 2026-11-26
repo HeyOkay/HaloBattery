@@ -1,0 +1,7 @@
+<!-- Fill-only variation of the pinned Lucide source. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-webcam" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <defs><mask id="fill-webcam" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24" style="mask-type:luminance"><rect width="24" height="24" fill="black" stroke="none" /><circle cx="12" cy="10" r="8" data-source-index="0" stroke="white" fill="white" />
+  <path d="M7 22h10" data-source-index="2" stroke="white" />
+  <path d="M12 22v-4" data-source-index="3" stroke="white" />
+<circle cx="12" cy="10" r="3" data-source-index="1" stroke="black" />
+  </mask></defs><rect width="24" height="24" fill="currentColor" stroke="none" mask="url(#fill-webcam)" /></svg>

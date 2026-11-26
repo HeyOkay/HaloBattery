@@ -15,8 +15,9 @@ confirmed on hardware); this provider does not claim them, so nothing is duplica
 fights over the same ids.
 
 Source: github.com/JoaoKSS/MCHOSE_v9_PRO_Controller, ``mchose_qt.py``, class
-``HIDService``, method ``query_status`` (lines 146-179 of the revision this was written
-from). The project opens the headset with ``hid_open(0x291D, 0x385D)`` and does:
+``HIDService``, method ``query_status`` at commit
+79724bf9c9f4405bbf08d5522f6006f5a044b257, lines 146-179.
+The project opens the headset with ``hid_open(0x291D, 0x385D)`` and does:
 
   1. build a 64-byte buffer, the first three bytes ``55 65 01`` and the rest zero;
   2. ``hid_write(handle, buf, 64)`` - an output report;
@@ -25,6 +26,9 @@ from). The project opens the headset with ``hid_open(0x291D, 0x385D)`` and does:
      percent and ``rbuf[3]`` a status code (the reference names it ``status_code``);
   5. then a second request ``55 11`` reads the EQ mode from byte 2. Halo does not send
      it: only the level and the status are needed, and the EQ mode is not a battery.
+
+Only the sourced output-report transport is used. A refused write stops this read;
+the reference and PR #248 provide no same-target source for a feature-report retry.
 
 Connection and id:
 
@@ -91,24 +95,8 @@ READ_PAUSE = 0.05
 
 VENDOR_PAGE_MIN = 0xFF00         # collections below this are audio/HID and are left alone
 
-# Windows gives this text when an output report has to go as a feature report instead
-# (the same fallback hyperx_cloud3.py makes).
-_FEATURE_ONLY = ("incorrect function", "0x00000001")
-
-
 def make_request() -> bytes:
     """The battery request, 64 bytes starting ``55 65 01``."""
-    return REQUEST
-
-
-def make_feature_request() -> bytes:
-    """The same frame for the feature-report fallback: no extra report-id prefix.
-
-    ``hyperx_cloud3.py`` (``_write``, lines 117-142) re-sends the exact same packet
-    through ``send_feature_report`` that it sent through ``write``: 0x55 is the report
-    id in both paths, and hidapi takes it from the frame's first byte either way.
-    Prepending a 0x00 report id here would send 65 bytes and a different report.
-    """
     return REQUEST
 
 
@@ -146,9 +134,9 @@ class MchoseV9Provider(Provider):
             return ""
 
     def _write(self, dev) -> bool:
-        """write() first, then the feature-report fallback some dongles need on Windows.
+        """Send only the reference's output report, without a transport fallback.
 
-        cython-hidapi returns -1 from write()/send_feature_report() on failure rather
+        cython-hidapi returns -1 from write() on failure rather
         than raising, so a negative result counts as a failure, with dev.error() as its
         text; some builds raise instead and both paths end up in the same check.
         """
@@ -159,20 +147,8 @@ class MchoseV9Provider(Provider):
             err = f"-> {n} {self._error(dev)}".rstrip()
         except (OSError, IOError, ValueError) as e:
             err = str(e)
-        if not any(s in err.lower() for s in _FEATURE_ONLY):
-            self._diag.append(f"    write: {err}")
-            return False
-        self._diag.append(f"    write: {err} -> retrying as a feature report")
-        try:
-            n = dev.send_feature_report(make_feature_request())
-            if n is not None and n < 0:
-                self._diag.append(f"    feature report -> {n} {self._error(dev)}".rstrip())
-                return False
-            self._diag.append("    feature report accepted")
-            return True
-        except (OSError, IOError, ValueError) as e2:
-            self._diag.append(f"    feature report: {e2}")
-            return False
+        self._diag.append(f"    write: {err}")
+        return False
 
     def _read_collection(self, path) -> Optional[Tuple[int, int]]:
         """Ask one collection for the battery; blocking read with a timeout, as jbl.py does."""

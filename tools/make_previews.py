@@ -1,9 +1,9 @@
-"""Generate the README previews: docs/icons.png and docs/charging.gif.
+"""Render a contact sheet and charging animation for tray icon development.
 
 Both are drawn with icons.render(), the same code as the tray icons, so run
 this again whenever a pictogram or the ring changes.
 
-Usage: python tools/make_previews.py [output folder, default docs]
+Usage: python tools/make_previews.py [output folder, default .build/tray-previews]
 """
 import os
 import sys
@@ -132,7 +132,7 @@ def charging_gif(path: str) -> None:
 
 
 def main() -> None:
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(HERE), "docs")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(HERE), ".build", "tray-previews")
     os.makedirs(out, exist_ok=True)
     icon_sheet().save(os.path.join(out, "icons.png"), optimize=True)
     charging_gif(os.path.join(out, "charging.gif"))

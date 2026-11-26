@@ -100,6 +100,9 @@ def make_app(cfg=None):
     app.notes = []
     app.key_provider = {}
     app.held = {}
+    app.bt_native_failed = False            # #513: no in-process watcher yet
+    app._bt_generation = 0                  # #513: watcher snapshot ownership
+    app._bt_orphans = []
     app.history = hb.history.History()      # in memory: no path, never written
     return app
 
@@ -419,13 +422,13 @@ class MenuLayoutTests(HideRenameTestCase):
         menu = app.build_menu(None)
         prefs = next(i for i in menu.items if i.text == "Preferences").submenu
         texts = [i.text for i in prefs.items if i is not hb.Menu.SEPARATOR]
-        self.assertEqual(texts, ["Language / Langue", "Poll interval", "Low battery alert", "Alert when fully charged",
+        self.assertEqual(texts, ["Language", "Poll interval", "Low battery alert", "Alert when fully charged",
                                  "Estimated time left", "Quiet while gaming",
                                  "Sound with the low battery alert",
                                  "Keep disconnected devices until restart",
                                  "Windows Bluetooth devices", "PlayStation full mode (Bluetooth)",
                                  "Device types",
-                                 "Device pictogram", "Percentage in the icon", "Charging animation",
+                                 "Device pictogram", "Percentage in the icon", "Icon style", "Charging animation",
                                  "Icon colour", "Status file for other apps",
                                  "Start with Windows", "Check for updates",
                                  "Check for updates now"])

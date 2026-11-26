@@ -9,6 +9,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: HeadsetControl hyperx_cloud_alpha_wireless.hpp lines 53-121 at d4fb352.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -28,7 +31,7 @@ CONSUMER = {"product_id": 0x098D, "path": PATH_CONSUMER, "interface_number": 3,
 
 
 def frame(selector, value):
-    return [H.REPORT_ID, H.MARKER, selector, value] + [0] * 27
+    return [0x21, 0xBB, selector, value] + [0] * 27
 
 
 class FakeDongle:
@@ -65,11 +68,11 @@ class FakeDongle:
         if sel in self.silent:
             return len(packet)
         self.pending.extend(self.noise)
-        if sel == H.SEL_CONNECTION:
+        if sel == 0x03:
             self.pending.append(frame(sel, 0 if self.connected else 1))
-        elif sel == H.SEL_CHARGING:
+        elif sel == 0x0C:
             self.pending.append(frame(sel, self.charging))
-        elif sel == H.SEL_LEVEL:
+        elif sel == 0x0B:
             self.pending.append(frame(sel, self.level))
         return len(packet)
 
@@ -179,7 +182,7 @@ class TestPoll(Base):
         self.assertEqual((out[0].level, out[0].charging, out[0].online), (40, True, True))
 
     def test_charging_without_a_level_reply_keeps_the_icon_online(self):
-        out, _ = self.poll(FakeDongle(charging=1, silent={H.SEL_LEVEL}))
+        out, _ = self.poll(FakeDongle(charging=1, silent={0x0B}))
         self.assertEqual((out[0].level, out[0].charging, out[0].online), (None, True, True))
 
     def test_headset_off_gives_a_grey_icon(self):
@@ -187,15 +190,15 @@ class TestPoll(Base):
         out, _ = self.poll(d)
         self.assertEqual(len(out), 1)
         self.assertEqual((out[0].level, out[0].charging, out[0].online), (None, False, False))
-        self.assertEqual([w[2] for w in d.writes], [H.SEL_CONNECTION])   # nothing else asked
+        self.assertEqual([w[2] for w in d.writes], [0x03])   # nothing else asked
 
     def test_no_reply_to_the_connection_query_gives_a_grey_icon(self):
-        out, diag = self.poll(FakeDongle(silent={H.SEL_CONNECTION}))
+        out, diag = self.poll(FakeDongle(silent={0x03}))
         self.assertEqual([(s.online, s.level) for s in out], [(False, None)])
         self.assertTrue(any("no reply" in line for line in diag))
 
     def test_connected_but_no_level_and_not_charging_is_grey(self):
-        out, _ = self.poll(FakeDongle(silent={H.SEL_LEVEL}))
+        out, _ = self.poll(FakeDongle(silent={0x0B}))
         self.assertEqual([(s.online, s.level) for s in out], [(False, None)])
 
     def test_level_above_100_is_not_shown(self):

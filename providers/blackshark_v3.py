@@ -1,4 +1,9 @@
-"""Razer BlackShark V3, 2.4 GHz dongle 1532:057A (#292).
+"""Razer BlackShark V3, 2.4 GHz dongle 1532:057A (#292), and the V3 Pro (#519).
+
+The V3 Pro (1532:0577, product "BlackShark V3 Pro HID") publishes the same four
+collections on interface 5, including ff14:0001, so it is read with the same frames.
+The reporter @robertagorecki-bit confirmed that the tray icon and charging
+animation appear on their headset with the test build (#519).
 
 Not the 2023 model's "PA" protocol: the dongle takes those frames on ff14:0001 and never
 answers them, and it refuses the 90-byte feature reports of the other Razer devices.
@@ -52,6 +57,8 @@ import hid
 from .base import hexdump
 
 PID = 0x057A
+V3_PRO_PID = 0x0577      # #519: same collections on interface 5
+PIDS = (PID, V3_PRO_PID)
 USAGE_PAGE = 0xFF14
 USAGE = 0x0001
 

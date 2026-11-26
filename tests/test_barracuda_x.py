@@ -11,10 +11,14 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: mehdibouchami/razer-barracuda-x-battery src/Protocol.cs, Macronix report 01.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -27,7 +31,7 @@ def race_reply(group, seq, payload):
     return frame + list(payload)
 
 
-def report(frames, report_id=B.REPORT_ID):
+def report(frames, report_id=0x01):
     body = []
     for f in frames:
         body.extend(f)
@@ -40,7 +44,7 @@ def battery_reply(mv, seq, group=0x06):
 
 class FrameTest(unittest.TestCase):
     def test_the_request_frame_is_the_bridge_header_then_race(self):
-        req = B.wrap(B.REPORT_ID, B.race_request(0x06, 5, (0x01, 0x00, 0x31)))
+        req = B.wrap(0x01, B.race_request(0x06, 5, (0x01, 0x00, 0x31)))
         self.assertEqual([0x01, 0x80, 7, 0x50, 0x41, 0x06, 0x05, 0x01, 0x00, 0x31], req)
 
     def test_the_answer_is_found_behind_an_unsolicited_event(self):
@@ -139,6 +143,9 @@ class PollTest(unittest.TestCase):
         self.assertEqual(bytes([0x01, 0x40]), dev.written[0])
         self.assertEqual(0x50, dev.written[1][3])          # the RACE request follows
         self.assertEqual(0x0E, dev.written[1][5])          # remote mode first
+        self.assertEqual(len(dev.written), 10)  # handshake, remote, seven samples, local
+        self.assertEqual(dev.written[-1], bytes([
+            1, 0x80, 7, 0x50, 0x41, 0x0e, 9, 2, 0xe1, 0]))
 
     def test_charging_is_reported_from_the_samples(self):
         frames = self.script()
@@ -156,6 +163,94 @@ class PollTest(unittest.TestCase):
     def test_no_dongle_reports_nothing(self):
         out, _dev = self.poll([], infos=[])
         self.assertEqual([], out)
+
+
+class ModeRestorationTest(unittest.TestCase):
+    """Remote mode may take effect even when its acknowledgment is lost."""
+    def run_ask(self, remote, *, battery=None, local=None, handshake=True):
+        provider = B.BarracudaXProvider()
+        device = mock.Mock()
+        calls = []
+        def race(dev, group, body):
+            self.assertIs(dev, device)
+            command = (group, body)
+            calls.append(command)
+            value = remote if command == (0x0E, (0x02, 0xE1, 0x01)) else (
+                local if command == (0x0E, (0x02, 0xE1, 0x00)) else battery)
+            if isinstance(value, Exception):
+                raise value
+            return value
+        with mock.patch.object(B.hid, "device", return_value=device), \
+                mock.patch.object(provider, "_enter_app_mode", return_value=handshake), \
+                mock.patch.object(provider, "_race", side_effect=race), \
+                mock.patch.object(B.time, "sleep", return_value=None):
+            result = provider._ask({"path": b"source-confirmed-macronix"})
+        device.close.assert_called_once()
+        return result, calls, provider.diagnostics()
+
+    def test_missing_short_or_refused_remote_ack_still_restores_local_mode(self):
+        for ack in (None, [], [0x0e], [0x0e, 0x81], [0x0e, 0x81, 2]):
+            with self.subTest(ack=ack):
+                result, calls, lines = self.run_ask(ack, local=[0x0e, 0x82, 0])
+                self.assertIsNone(result)
+                self.assertEqual(calls, [(0x0E, (0x02, 0xE1, 0x01)), (0x0E, (0x02, 0xE1, 0x00))])
+                self.assertTrue(any("remote mode refused" in line for line in lines))
+
+    def test_remote_exchange_exception_does_not_skip_restore(self):
+        result, calls, lines = self.run_ask(OSError("remote ACK read failed"),
+                                             local=[0x0e, 0x82, 0])
+        self.assertIsNone(result)
+        self.assertEqual(calls, [(0x0E, (0x02, 0xE1, 0x01)), (0x0E, (0x02, 0xE1, 0x00))])
+        self.assertTrue(any("remote ACK read failed" in line for line in lines))
+
+    def test_sampling_failure_restores_and_preserves_original_error(self):
+        result, calls, lines = self.run_ask([0x0e, 0x81, 0],
+            battery=OSError("battery disconnected"), local=OSError("local disconnected"))
+        self.assertIsNone(result)
+        self.assertEqual(calls, [(0x0E, (0x02, 0xE1, 0x01)), (0x06, (0x01, 0x00, 0x31)), (0x0E, (0x02, 0xE1, 0x00))])
+        self.assertTrue(any("battery disconnected" in line for line in lines))
+        self.assertTrue(any("local mode restoration failed" in line for line in lines))
+
+    def test_unconfirmed_restore_is_visible_in_diagnostics(self):
+        for ack in (None, [], [0x0e, 0x82], [0x0e, 0x82, 2]):
+            with self.subTest(ack=ack):
+                result, calls, lines = self.run_ask(None, local=ack)
+                self.assertIsNone(result)
+                self.assertEqual(calls, [(0x0E, (0x02, 0xE1, 0x01)), (0x0E, (0x02, 0xE1, 0x00))])
+                self.assertTrue(any("local mode restoration unconfirmed" in line for line in lines))
+
+    def test_failed_app_handshake_does_not_issue_remote_or_local_commands(self):
+        result, calls, _lines = self.run_ask(None, handshake=False)
+        self.assertIsNone(result)
+        self.assertEqual(calls, [])
+
+    def test_lost_ack_uses_only_existing_exact_macronix_frames(self):
+        provider = B.BarracudaXProvider()
+        class LostAckDevice(FakeDevice):
+            def __init__(self):
+                super().__init__([[1, 0x40, 1, 1]])
+                self.closed = False
+            def write(self, data):
+                value = super().write(data)
+                if list(data)[-3:] == [2, 0xe1, 0]:
+                    self.frames.append(report([race_reply(0x0e, 2, [0x0e, 0x82, 0])]))
+                return value
+            def close(self):
+                self.closed = True
+        device = LostAckDevice()
+        now = [0.0]
+        def tick():
+            now[0] += .1
+            return now[0]
+        with mock.patch.object(B.hid, "device", return_value=device), \
+                mock.patch.object(B, "_sequence", 0), \
+                mock.patch.object(B, "time", types.SimpleNamespace(time=tick, sleep=lambda s: None)):
+            self.assertIsNone(provider._ask({"path": b"macronix"}))
+        self.assertEqual(device.written, [
+            bytes([1, 0x40]),
+            bytes([1, 0x80, 7, 0x50, 0x41, 0x0e, 1, 2, 0xe1, 1]),
+            bytes([1, 0x80, 7, 0x50, 0x41, 0x0e, 2, 2, 0xe1, 0])])
+        self.assertTrue(device.closed)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -5,13 +5,11 @@ icon lab or handoff directory. The newer device glyphs are generated from pinned
 Lucide SVGs, rather than extracted from the historical handoff. `masks.png` is a lossless L-mode alpha atlas:
 sixteen glyph rows (112 masks), seven physical sizes per row (16, 20, 24, 32, 40, 48, 64).
 `manifest.json` records every crop, semantic name, upstream source and license.
-The three RGBA color masters are 256 x 256. Xbox has two accepted optical
-placements: `xbox-color.png` uses canonical centered placement for light taskbars;
-`xbox-color-dark.png` retains the historical (-6,+2)-pixel correction for dark
-taskbars. The dark PNG is byte-identical to `6795db2:artwork/tray/xbox-color.png`.
-The existing renderer foreground (black/light taskbar or white/dark taskbar)
-selects the prealigned master. No runtime translation or DPI correction is added.
-PlayStation remains centered. The masters contain no ring or battery state.
+The two RGBA color masters are 256 x 256. `xbox-color.png` uses the same centered
+placement for both taskbar themes; its outer circle is centered on (128,128).
+The former dark-only master shifted that circle left and down and is no longer
+used. No runtime translation or DPI correction is added. PlayStation remains
+centered. The masters contain no ring or battery state.
 
 Runtime neutral ink uses approximately 90% opacity to match the system tray's
 softer foreground; dim states keep their relative contrast. This does not alter
@@ -51,7 +49,7 @@ The source has viewBox 0 0 24 24 and stroke width 2: uniform scale 0.5 gives vis
 ink 8 by 11 logical pixels centered on (8,8), with a 1-pixel logical stroke.
 No optical offset or aspect-ratio change is applied. LANCZOS alpha masks are clipped
 at radius 6.6 logical pixels only to remove resampling halos near the ring.
-All non-microphone masks and all three color masters are preserved. The SVG hash, source URL,
+All non-microphone masks and both color masters are preserved. The SVG hash, source URL,
 geometry and generation method are recorded in the manifest. Neither Chromium nor
 an SVG library is required by the application. Keep browser/Pillow versions stable
 for byte-identical regeneration and verify the seven sizes on both backgrounds.
@@ -115,8 +113,40 @@ byte-exact with stroke 2. Each wrapper requests measured visible-ink centering;
 the resulting bounds and one-time geometric translation are in `svg_generation`.
 No runtime translation, theme-specific offset or aspect-ratio change is added.
 The radius 6.6 limit removes resampling fringe, rather than fitting the source by
-cutting opaque ink. Webcam, Smartwatch and Tag/Tracker retain scale 0.5. The 66
-pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged (80 payloads).
+cutting opaque ink. Webcam, Smartwatch and Tag/Tracker retain scale 0.5. The 65
+retained pre-existing assets and Smartwatch/Tracker's 14 masks remain unchanged (79 payloads).
+
+## Filled device pictograms
+
+`filled/` contains twelve editable, locally stored Lucide 1.17.0 fill variations.
+Its manifest pins each SVG hash and upstream provenance, the seven native sizes,
+and the reviewed scale, translation and stroke width. The existing outline atlas
+and controller-logo masters are independent of these sources.
+
+```
+python tools/make_filled_artwork.py
+python tools/make_filled_artwork.py --check
+```
+
+The generator accepts `--browser PATH` for a local Chrome/Edge installation. It
+uses an isolated, offline headless profile under the ignored `build/` directory
+and renders each physical size directly, without downsampling a large master.
+`--check` compares decoded alpha pixels, supported kinds and optical metadata
+without rewriting source files. Browser and Pillow are development tools; the
+application uses only the embedded `halo/icon_artwork_filled.py` masks.
+
+`tools/filled_optics.py` keeps large filled bodies at the original stroke's
+centreline while retaining open strokes at their source width. Small cutouts
+receive size-aware compensation; circular cutouts preserve their positive centre.
+Headphone cups retain their reviewed filled contour and the band keeps its
+original thickness. The house has a pointed roof and an inward-clipped floor
+under its doorway. Existing placement and the battery ring are preserved.
+
+Keep the SVGs and manifest together when editing artwork, update the affected
+hash deliberately, regenerate, and inspect both 20px and enlarged comparisons.
+Run the filled optics, rendering and style-setting tests as well as the full
+suite. The application defaults to Outline; Preferences → Icon style selects
+Filled for all devices and persists the choice.
 
 ## Reviewed optical placement
 
@@ -129,3 +159,14 @@ the 1024px master, before downsampling to the seven physical sizes. It records
 visible-ink bounds in `manifest.json`. Every theme, battery state and animation
 frame uses that same prepositioned mask. The runtime renderer adds no translation
 or DPI-specific offset. Speaker, Watch and Tracker have no optical nudge.
+
+## Phone Link (Lucide smartphone)
+
+`tools/make_phone_artwork.py` uses the unchanged pinned `lucide-static@1.17.0`
+smartphone source (ISC; see `docs/licenses/lucide-1.17.0-LICENSE.txt`). It appends
+one seven-size phone row with the existing centered, half-scale outline pipeline.
+`filled/lucide-smartphone.svg` derives a solid body with a transparent home dot
+from the same source; the existing filled optical compensation keeps its body
+at the source centerline. Regenerate with the phone generator, then
+`tools/make_icon_artwork.py` and `tools/make_filled_artwork.py`. Existing glyph
+placements and the charge ring are unchanged.

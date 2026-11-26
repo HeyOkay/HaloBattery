@@ -32,7 +32,10 @@ class HarpeIITest(ProviderTest):
                          [("ROG Harpe II Ace", 53, False)])
         self.assertEqual(len(mouse.writes[0]), 64)
         self.assertEqual(mouse.writes[0][:3], [3, 0x12, 7])
-        self.assertTrue(all(d.opened == 0 for d in bus.values() if d is not mouse))
+        # Pair-list detection also reads the sourced control collection to avoid
+        # treating a positively identified Azoth keyboard as a Harpe receiver.
+        self.assertTrue(all(not d.writes or d.writes[0][:4] == [1, 0xA0, 0, 0]
+                            for d in bus.values() if d is not mouse))
 
     def test_extreme_name(self):
         out, _ = self.run_receiver(self.receiver(40, 1), "ROG HARPE II EXTREME")
@@ -54,8 +57,9 @@ class HarpeIITest(ProviderTest):
         for reverse in (False, True):
             cable_device = FakeMouse(level=54, charging=1)
             infos = entries + [cable]
-            out = self.poll(list(reversed(infos)) if reverse else infos,
-                            {path: self.receiver(), b"cable": cable_device})
+            bus = {d["path"]: FakeCollection([]) for d in entries}
+            bus.update({path: self.receiver(), b"cable": cable_device})
+            out = self.poll(list(reversed(infos)) if reverse else infos, bus)
             self.assertEqual([(s.level, s.charging) for s in out], [(54, True)])
             self.assertEqual(len(cable_device.writes[0]), 64)
 
@@ -75,6 +79,7 @@ class HarpeIITest(ProviderTest):
         bus = omni_bus(keyboard, pairs=pairs, keyboard=omni_keyboard_reply(53, 1))
         mouse = self.entries()
         path = next(d["path"] for d in mouse if d["usage_page"] == A.OMNI_MOUSE)
+        bus.update({d["path"]: FakeCollection([]) for d in mouse})
         bus[path] = self.receiver()
         out = self.poll(mouse + keyboard, bus)
         self.assertEqual(sorted((s.kind, s.level, s.charging) for s in out),

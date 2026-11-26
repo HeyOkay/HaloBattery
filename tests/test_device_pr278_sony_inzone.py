@@ -1,4 +1,7 @@
 """Tests for the Sony INZONE H9 serial battery provider; no hardware is needed."""
+
+# Independent receive signature/query: janit88/InZoneH9Tray 4780303 inzone_tray.py.
+# These literal serial frames must not follow the provider constants.
 import os
 import sys
 import types
@@ -11,7 +14,7 @@ from providers import sony_inzone as S  # noqa: E402
 
 
 def frame(level=73, charging=1):
-    return S.SIGNATURE + bytes([0, 0, 0, charging, level, 0])
+    return bytes.fromhex("04 FF 0B 00 96 C3 14 04") + bytes([0, 0, 0, charging, level, 0])
 
 
 class FakeClock:
@@ -53,7 +56,7 @@ class FakePort:
 
     def write(self, command):
         self.writes.append(command)
-        if command == S.QUERY and self.answer is not None:
+        if command == bytes.fromhex("01 00 FC 08 96 C3 41 04 01 01 00 A0") and self.answer is not None:
             self.response += self.answer
         return len(command)
 
@@ -74,9 +77,9 @@ class ParseTest(unittest.TestCase):
     def test_rejects_bad_signature_and_invalid_values(self):
         expected = frame()
         self.assertIsNone(S.find_frame(b"noise" + b"\x00" + expected[1:]))
-        self.assertIsNone(S.find_frame(S.SIGNATURE + bytes([0, 0, 0, 2, 73, 0])))
-        self.assertIsNone(S.find_frame(S.SIGNATURE + bytes([0, 0, 0, 1, 101, 0])))
-        self.assertIsNone(S.find_frame(S.SIGNATURE + bytes([0, 0, 0, 1])))
+        self.assertIsNone(S.find_frame(bytes.fromhex("04 FF 0B 00 96 C3 14 04") + bytes([0, 0, 0, 2, 73, 0])))
+        self.assertIsNone(S.find_frame(bytes.fromhex("04 FF 0B 00 96 C3 14 04") + bytes([0, 0, 0, 1, 101, 0])))
+        self.assertIsNone(S.find_frame(bytes.fromhex("04 FF 0B 00 96 C3 14 04") + bytes([0, 0, 0, 1])))
 
 
 class PollTest(unittest.TestCase):
@@ -93,6 +96,10 @@ class PollTest(unittest.TestCase):
             types.SimpleNamespace(vid=0x1234, pid=S.PID, device="COM8"),
         ])
         S.time = types.SimpleNamespace(monotonic=self.clock.monotonic, sleep=self.clock.sleep)
+        # the provider also polls HID (INZONE H5); keep these serial tests off real devices
+        patcher = mock.patch.object(S.hidlist, "enumerate", return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         S.serial, S.list_ports, S.time = self.saved
@@ -101,7 +108,7 @@ class PollTest(unittest.TestCase):
         result = S.SonyInzoneProvider().poll()
         self.assertEqual([(r.name, r.level, r.charging, r.kind) for r in result],
                          [("Sony INZONE H9", 88, False, "headset")])
-        self.assertEqual(self.port.writes, [S.INIT_1, S.INIT_2, S.QUERY])
+        self.assertEqual(self.port.writes, [bytes.fromhex("01 00 FC 08 96 C3 21 01 01 01 00 7D"), bytes.fromhex("01 00 FC 08 96 C3 41 02 01 01 00 9E"), bytes.fromhex("01 00 FC 08 96 C3 41 04 01 01 00 A0")])
         self.assertLess(self.clock.now, 1.5)
 
     # Retain the serial decoder test separately from the stable target policy.
@@ -134,7 +141,7 @@ class PollTest(unittest.TestCase):
         self.port.answer = None
         result = S.SonyInzoneProvider().poll()
         self.assertEqual(result, [])
-        self.assertEqual(self.port.writes, [S.INIT_1, S.INIT_2, S.QUERY])
+        self.assertEqual(self.port.writes, [bytes.fromhex("01 00 FC 08 96 C3 21 01 01 01 00 7D"), bytes.fromhex("01 00 FC 08 96 C3 41 02 01 01 00 9E"), bytes.fromhex("01 00 FC 08 96 C3 41 04 01 01 00 A0")])
         self.assertLess(self.clock.now, 2.5)
 
 

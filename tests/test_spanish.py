@@ -44,7 +44,7 @@ class SpanishTests(unittest.TestCase):
                             self.assertEqual(cfg[key], value)
                     app = make_app(cfg)
                     prefs = find(app.build_menu(None), "Preferencias").submenu
-                    languages = find(prefs, "Language / Idioma").submenu
+                    languages = find(prefs, "Idioma").submenu
                     self.assertTrue(find(languages, "Español").checked)
                     find(languages, "English")(None)
                     detect.reset_mock()
@@ -83,15 +83,17 @@ class SpanishTests(unittest.TestCase):
         app.placeholder = types.SimpleNamespace(update_menu=lambda: refreshed.append("idle"))
         with mock.patch.object(hb, "save_config"):
             prefs = find(app.build_menu(None), "Preferences").submenu
-            languages = find(prefs, "Language / Langue").submenu
+            languages = find(prefs, "Language").submenu
             find(languages, "Español")(None)
             self.assertEqual(app.icons["0"].icon.title, "Ratón 🎧 0: 85%, unas 2 h de uso restantes")
             self.assertEqual(app.icons["1"].icon.title, "Ratón 🎧 1: 85%, unas 2 h de uso restantes")
             self.assertEqual(app.placeholder.title, "Halo Battery: no se encontraron dispositivos")
             self.assertEqual(refreshed, ["device", "device", "idle"])
             self.assertFalse(app.wake.is_set())
-            prefs = find(app.icons["0"].icon.menu, "Preferencias").submenu
-            find(find(prefs, "Language / Idioma").submenu, "English")(None)
+            self.assertNotIn("Configuración del dispositivo...", [item.text for item in app.icons["0"].icon.menu.items])
+            self.assertEqual(find(app.icons["1"].icon.menu, "Configuración").text, "Configuración")
+            self.assertEqual(find(app.placeholder.menu, "Configuración").text, "Configuración")
+            app.set_language("en")
         self.assertEqual(app.icons["1"].icon.title, "Ratón 🎧 1: 85%, about 2 h of use left")
 
     def test_deferred_notifications_use_spanish_at_delivery(self):

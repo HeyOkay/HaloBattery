@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import datetime
 import logging
+import math
 import re
 import sys
 import threading
 import time
 from typing import Callable, List, Optional, Tuple
 
-from . import flyout
+from . import branding, flyout
 from halo import i18n
 
 log = logging.getLogger("halo_battery")
@@ -34,7 +35,9 @@ log = logging.getLogger("halo_battery")
 WIDTH = 460
 PAD = 28                      # around the content
 LOGO = 44                     # the app logo, left of the title
-LOGO_GAP = 16
+LOGO_GAP = LOGO * branding.WORDMARK_GAP_PER_ICON  # visible ink gap, scaled from Settings
+BRAND_PX, VERSION_GAP = LOGO * branding.WORDMARK_EM_PER_ICON, 8
+EYEBROW_LIFT = 4               # breathing room above the wordmark
 CLOSE_BOX = 32                # the close button (top right)
 BODY_MAX_H = 330              # the notes scroll beyond this
 SECTION_GAP = 16              # above a section heading
@@ -184,6 +187,8 @@ def colours(light: bool, accent: Optional[List[Tuple[int, int, int]]] = None) ->
     out["key"] = "#%02x%02x%02x" % (r, g, b + 1 if b < 255 else b - 1)
     out["tint_abgr"] = flyout.abgr(p["tint"])
     out["base_rgb"] = base
+    out["brand_text"] = "#1b1b1b" if light else "#ffffff"
+    out["brand_accent"] = _hex(branding.accent_colour(button_rgb, light))
     return out
 
 
@@ -325,20 +330,11 @@ def flatten(img, background: Tuple[int, int, int], key: Tuple[int, int, int], cu
     return flat
 
 
-def app_logo(size: int, background: Tuple[int, int, int], key: Tuple[int, int, int]):
-    """The app's logo (the exe icon: a green ring on a dark disc) as an RGB picture whose
-    corners are the colour key."""
-    from PIL import Image, ImageDraw
-    from . import icons
-    ss = 4
-    big = size * ss
-    disc = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(disc).ellipse((0, 0, big - 1, big - 1), fill=(32, 32, 32, 255))
-    ring = icons.render(75, True, True, 20, light_taskbar=False, badge="")
-    ring = ring.resize((int(big * 0.84),) * 2, Image.LANCZOS)
-    off = (big - ring.width) // 2
-    disc.alpha_composite(ring, (off, off))
-    return flatten(disc.resize((size, size), Image.LANCZOS), background, key)
+def app_logo(size: int, background: Tuple[int, int, int], key: Tuple[int, int, int], *, light=None):
+    """The approved app artwork flattened for the acrylic window's colour key."""
+    from . import app_icon
+    artwork = app_icon.render(size) if light is None else app_icon.render_header(size, light)
+    return flatten(artwork, background, key)
 
 
 def button_image(w: int, h: int, radius: int, fill: Tuple[int, int, int], state: str,
@@ -487,11 +483,34 @@ def show(host: "flyout.FlyoutHost", version: str, notes_md: str, url: str,
 
 
 def _create(host, version, notes_md, url, from_version, date, open_url, closed, language="en") -> None:
+    # host.call serializes this lookup and construction on the tkinter thread.
+    request = (version, language)
+    waiters = [closed]
     try:
-        WhatsNewWindow(host, version, notes_md, url, from_version, date, open_url, closed, language=language)
+        current = getattr(host, "_whatsnew_window", None)
+        if current is not None:
+            if current.win is not None and current.win.winfo_exists():
+                if current._request == request:
+                    # Manual reopening may have less metadata than the automatic
+                    # post-update request; keep the already displayed release notes.
+                    current._closed_events.append(closed)
+                    current.open_url = open_url
+                    current.present()
+                    return
+                # A new release or language replaces the window, keeping its waiters.
+                waiters += current._closed_events
+                current.destroy(notify=False)
+            else:
+                current.destroy()
+        window = WhatsNewWindow(host, version, notes_md, url, from_version, date,
+                                open_url, closed, language=language)
+        window._request = request
+        window._closed_events = waiters
+        host._whatsnew_window = window
     except Exception as e:
         log.exception("what's new: %s", e)
-        closed.set()
+        for event in waiters:
+            event.set()
 
 
 class WhatsNewWindow:
@@ -502,6 +521,10 @@ class WhatsNewWindow:
                  date: str, open_url, closed: threading.Event, *, language: str = "en"):
         self.language = language
         self.host, self.url, self.open_url, self.closed = host, url, open_url, closed
+        self._closed_events = [closed]
+        self._close_job = None
+        self._presented = False
+        self._accent_job = self._theme_job = None
         tk, root, w32 = host._tk, host._root, host._w
         self.tk, self.root, self.w32 = tk, root, w32
         self.light = flyout.apps_use_light_theme()
@@ -594,26 +617,59 @@ class WhatsNewWindow:
 
         # header
         top = px(PAD)
-        x_text = px(PAD) + px(LOGO) + px(LOGO_GAP)
         cv = self.cv
         self._logo = None
+        logo_right = px(LOGO)
         try:
-            from PIL import ImageTk
-            self._logo = ImageTk.PhotoImage(app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"])),
-                                            master=self.win)
+            from PIL import Image, ImageChops, ImageTk
+            picture = app_logo(px(LOGO), c["base_rgb"], _rgb(c["key"]), light=self.light)
+            painted = ImageChops.difference(picture, Image.new("RGB", picture.size, c["key"])).getbbox()
+            if painted is not None:
+                logo_right = painted[2]
+            self._logo = ImageTk.PhotoImage(picture, master=self.win)
         except Exception as e:
             log.info("what's new: no logo (%s)", e)
         label_h = self.f_label.metrics("linespace")
         eyebrow_h = self.f_eyebrow.metrics("linespace")
-        title_h = self.f_title.metrics("linespace")
+        self._wordmark = None
+        self._brand_item = None
+        brand_left = 0
+        try:
+            artwork, brand_ascent = branding.wordmark(px(BRAND_PX), c["brand_text"], c["brand_accent"])
+            brand_width, brand_height = artwork.size
+            ink = artwork.getchannel("A").point(lambda value: 255 if value >= 4 else 0).getbbox()
+            if ink is not None:
+                brand_left = ink[0]
+            brand_icon_center = branding.icon_center(px(BRAND_PX))
+            self._wordmark = ImageTk.PhotoImage(
+                flatten(artwork, c["base_rgb"], _rgb(c["key"]), cutoff=4), master=self.win)
+        except Exception as error:
+            log.info("what's new: wordmark font unavailable (%s)", error)
+            brand_width = self.f_title.measure("HaloBattery")
+            brand_height = self.f_title.metrics("linespace")
+            brand_ascent = self.f_title.metrics("ascent")
+            brand_icon_center = brand_height / 2
+        # The gap is between painted edges; neither icon nor font side bearings
+        # should add another invisible margin beside the approved SVG spacing.
+        x_text = round(px(PAD) + logo_right + LOGO_GAP * self.scale - brand_left)
+        title_ascent = max(math.ceil(brand_ascent), self.f_title.metrics("ascent"))
+        title_h = title_ascent + max(math.ceil(brand_height - brand_ascent), self.f_title.metrics("descent"))
         sub = subtitle(self.from_version, self.date, language=self.language)
         header_h = eyebrow_h + title_h + (label_h if sub else 0)
         y = top
-        cv.create_text(x_text, y, text=self.tr("whatsnew.title"), font=self.f_eyebrow, fill=c["link"], anchor="nw",
+        cv.create_text(x_text, y - px(EYEBROW_LIFT), text=self.tr("whatsnew.title"), font=self.f_eyebrow, fill=c["link"], anchor="nw",
                        tags="accent")
         y += eyebrow_h
-        cv.create_text(x_text, y - px(2), text=f"Halo Battery {self.version}", font=self.f_title,
-                       fill=c["text"], anchor="nw", tags="text")
+        title_baseline = y - px(2) + title_ascent
+        if self._wordmark is not None:
+            self._brand_item = cv.create_image(x_text, title_baseline - brand_ascent,
+                                               image=self._wordmark, anchor="nw")
+        else:
+            cv.create_text(x_text, title_baseline - brand_ascent, text="HaloBattery", font=self.f_title,
+                           fill=c["brand_text"], anchor="nw", tags="brand_text")
+        cv.create_text(x_text + brand_width + px(VERSION_GAP),
+                       title_baseline - self.f_title.metrics("ascent"), text=self.version,
+                       font=self.f_title, fill=c["text"], anchor="nw", tags="text")
         y += title_h
         if sub:
             cv.create_text(x_text, y - px(2), text=sub, font=self.f_label, fill=c["muted"], anchor="nw",
@@ -621,7 +677,7 @@ class WhatsNewWindow:
             y += label_h
         self._logo_item = None
         if self._logo is not None:
-            self._logo_item = cv.create_image(px(PAD), top + (header_h - px(LOGO)) // 2,
+            self._logo_item = cv.create_image(px(PAD), round(title_baseline - brand_ascent + brand_icon_center - px(LOGO) / 2),
                                               image=self._logo, anchor="nw")
         # the close button, top right
         cb = px(CLOSE_BOX)
@@ -676,7 +732,7 @@ class WhatsNewWindow:
             pass
         self._fade_start = time.perf_counter()
         self._fade_in()
-        self.win.after(ACCENT_CHECK_MS, self._watch_accent)
+        self._resume_updates()
 
     def _draw_body(self, width: int) -> int:
         """Draw the notes on the body canvas -> their height."""
@@ -888,19 +944,41 @@ class WhatsNewWindow:
         except Exception as e:
             log.info("what's new: plain button (%s)", e)
 
+    def _resume_updates(self) -> None:
+        """Resume one watcher and any animation paused by the closing fade."""
+        if self._closing or self.win is None:
+            return
+        if self._accent_job is None:
+            self._accent_job = self.win.after(ACCENT_CHECK_MS, self._watch_accent)
+        if self._theme_move is not None and self._theme_job is None:
+            self._theme_job = self.win.after(0, self._theme_frame)
+        if self._bar_anim is not None and self._bar_job is None:
+            self._bar_job = self.win.after(0, self._bar_frame)
+
+    def _pause_updates(self) -> None:
+        for name in ("_accent_job", "_theme_job", "_bar_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                try:
+                    self.win.after_cancel(job)
+                except Exception:
+                    pass
+                setattr(self, name, None)
+
     def _watch_accent(self) -> None:
         """While open: follow a new accent colour at once (a new wallpaper with the
         automatic accent, or one picked in Settings)."""
+        self._accent_job = None
         if self._closing:
             return
         try:
             if self._theme_move is not None:     # a theme change is still flowing
-                self.win.after(ACCENT_CHECK_MS, self._watch_accent)
+                self._resume_updates()
                 return
             light = flyout.apps_use_light_theme()
             if light != self.light:
                 self.theme_transition(light)
-                self.win.after(ACCENT_CHECK_MS, self._watch_accent)
+                self._resume_updates()
                 return
             accent = windows_accent_palette()
             if accent != self.accent:
@@ -908,16 +986,20 @@ class WhatsNewWindow:
                 self.recolour()
         except Exception as e:
             log.info("what's new: accent colour: %s", e)
-        self.win.after(ACCENT_CHECK_MS, self._watch_accent)
+        self._resume_updates()
 
     def theme_transition(self, light: bool) -> None:
         """Windows switched light <-> dark: the same window changes, every colour
         flowing from the old theme to the new one - the blurred background's tint, the
         text, the line, the button, the logo's edge."""
         self._theme_move = (self.c, colours(light, self.accent), light, time.perf_counter(), False)
+        if self._theme_job is not None:
+            self.win.after_cancel(self._theme_job)
+            self._theme_job = None
         self._theme_frame()
 
     def _theme_frame(self) -> None:
+        self._theme_job = None
         if self._closing or self._theme_move is None:
             return
         start, end, light, t0, switched = self._theme_move
@@ -957,26 +1039,45 @@ class WhatsNewWindow:
         if done:
             self._theme_move = None
         else:
-            self.win.after(15, self._theme_frame)
+            self._theme_job = self.win.after(15, self._theme_frame)
 
     def _paint_roles(self) -> None:
         """Every drawn item in the colour of its role (its tag) in self.c."""
         for canvas in (self.cv, self.body):
             for role, key in (("text", "text"), ("muted", "muted"), ("accent", "link"),
-                              ("line", "line")):
+                              ("line", "line"), ("brand_text", "brand_text")):
                 canvas.itemconfigure(role, fill=self.c[key])
         self.cv.itemconfigure("border", outline=self.c["border"])
 
     def _make_logo(self) -> None:
+        self._make_wordmark()
         if self._logo_item is None:
             return
         from PIL import ImageTk
-        self._logo = ImageTk.PhotoImage(
-            app_logo(self.px(LOGO), self.c["base_rgb"], _rgb(self.c["key"])), master=self.win)
+        if self._theme_move is not None:
+            from PIL import Image
+            from . import app_icon
+            dark_amount = max(0.0, min(1.0, (_rgb(self.c["brand_text"])[0] - 27) / 228))
+            artwork = Image.blend(app_icon.render_header(self.px(LOGO), True),
+                                  app_icon.render_header(self.px(LOGO), False), dark_amount)
+            picture = flatten(artwork, self.c["base_rgb"], _rgb(self.c["key"]))
+        else:
+            picture = app_logo(self.px(LOGO), self.c["base_rgb"], _rgb(self.c["key"]), light=self.light)
+        self._logo = ImageTk.PhotoImage(picture, master=self.win)
         self.cv.itemconfigure(self._logo_item, image=self._logo)
+
+    def _make_wordmark(self) -> None:
+        if getattr(self, "_brand_item", None) is None:
+            return
+        from PIL import ImageTk
+        artwork, _ = branding.wordmark(self.px(BRAND_PX), self.c["brand_text"], self.c["brand_accent"])
+        self._wordmark = ImageTk.PhotoImage(
+            flatten(artwork, self.c["base_rgb"], _rgb(self.c["key"]), cutoff=4), master=self.win)
+        self.cv.itemconfigure(self._brand_item, image=self._wordmark)
 
     def recolour(self) -> None:
         self.c = colours(self.light, self.accent)
+        self._make_wordmark()
         self._make_buttons()
         self._pills = {}
         self._chips = {}
@@ -1261,7 +1362,27 @@ class WhatsNewWindow:
             threading.Thread(target=self.open_url, args=(self.url,), daemon=True).start()
 
     # ---------------- showing and closing
+    def present(self) -> None:
+        """Raise the existing window, including a window in its closing fade."""
+        if self._close_job is not None:
+            self.win.after_cancel(self._close_job)
+            self._close_job = None
+        self._closing = False
+        self._presented = True
+        for window in (self.catcher, self.win):
+            if window is not None:
+                window.deiconify()
+        self.win.attributes("-alpha", 1.0)
+        self._bring_to_front()
+        self.win.lift()
+        self.win.focus_force()
+        if self.w32 is not None and self.hwnd:
+            self.w32.activate(self.hwnd)
+        self._resume_updates()
+
     def _fade_in(self) -> None:
+        if self._closing or self._presented:
+            return
         k = min(1.0, (time.perf_counter() - self._fade_start) * 1000 / FADE_MS)
         try:
             self.win.attributes("-alpha", k)
@@ -1274,22 +1395,28 @@ class WhatsNewWindow:
         if self._closing:
             return
         self._closing = True
+        self._pause_updates()
         start = time.perf_counter()
 
         def step():
+            self._close_job = None
+            if not self._closing:
+                return
             k = 1.0 - min(1.0, (time.perf_counter() - start) * 1000 / (FADE_MS * 0.7))
             try:
                 self.win.attributes("-alpha", max(0.0, k))
             except Exception:
                 k = 0.0
             if k > 0:
-                self.win.after(15, step)
+                self._close_job = self.win.after(15, step)
             else:
                 self.destroy()
 
         step()
 
     def destroy(self, notify: bool = True) -> None:
+        self._closing = True
+        self._pause_updates()
         self._fine_timer(False)
         for t in (self.win, self.catcher):
             if t is not None:
@@ -1297,7 +1424,11 @@ class WhatsNewWindow:
                     t.destroy()
                 except Exception:
                     pass
+        self.win = self.catcher = None
+        if getattr(self.host, "_whatsnew_window", None) is self:
+            self.host._whatsnew_window = None
         if self in _open:
             _open.remove(self)
         if notify:                               # not when a new window takes its place
-            self.closed.set()
+            for event in self._closed_events:
+                event.set()

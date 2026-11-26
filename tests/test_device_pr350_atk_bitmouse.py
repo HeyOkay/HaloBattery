@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: OpenMouse src/bitmouse/index.ts lines 1-91 at 5a4f643; atk-tool PR #15 capture.; OpenMouse src/pulsar/index.ts lines 1-34 (5a4f643); jonkristian/pulsar-x3-python battery feature exchange (HaloBattery PR #213).
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -24,18 +27,18 @@ SHAPE = [(0, 0x0001, 0x0002), (1, 0xFFB3, 0x0001), (2, 0x0001, 0x0006),
 
 def reply(command, *payload, status=0x00, sn=0x05, tail=()):
     """A frame of 64 bytes; tail is what the device left behind the payload."""
-    frame = [A.REPORT_ID, A.MARKER, status, sn, 0x00, command, len(payload)]
+    frame = [0x08, 0x72, status, sn, 0x00, command, len(payload)]
     frame += list(payload) + list(tail)
     return frame + [0] * (64 - len(frame))
 
 
 # atk-tool's capture of this id: 90 %, with its "voltage" bytes behind the payload
-CAPTURED = reply(A.CMD_BATTERY, 0x5A, tail=(0xBC, 0x10))
+CAPTURED = reply(0x07, 0x5A, tail=(0xBC, 0x10))
 
 
 class FakeReceiver:
-    def __init__(self, battery=(CAPTURED,), charging=(reply(A.CMD_CHARGING, 0),)):
-        self.answers = {A.CMD_BATTERY: list(battery), A.CMD_CHARGING: list(charging)}
+    def __init__(self, battery=(CAPTURED,), charging=(reply(0x0F, 0),)):
+        self.answers = {0x07: list(battery), 0x0F: list(charging)}
         self.written = []       # (usage page, usage, frame)
         self.opened = []
         self.pending = []
@@ -74,30 +77,30 @@ class FakeReceiver:
 
 class FrameTest(unittest.TestCase):
     def test_the_battery_request_is_the_vendors(self):
-        frame = A.make_request(A.CMD_BATTERY)
+        frame = A.make_request(0x07)
         self.assertEqual(len(frame), 64)
         self.assertEqual(frame[:9], [0x08, 0x7D, 0x72, 0x02, 0x00, 0x01, 0x07, 0x01, 0x00])
         self.assertEqual(set(frame[9:]), {0})
 
     def test_the_checksum_is_the_sum_of_the_rest(self):
-        frame = A.make_request(A.CMD_CHARGING)
+        frame = A.make_request(0x0F)
         self.assertEqual(frame[1], sum(frame[2:]) & 0xFF)
 
     def test_the_captured_reply_parses(self):
-        self.assertEqual(A.parse_reply(CAPTURED, A.CMD_BATTERY), 90)
+        self.assertEqual(A.parse_reply(CAPTURED, 0x07), 90)
 
     def test_a_reply_to_another_command_or_an_error_is_refused(self):
-        self.assertIsNone(A.parse_reply(CAPTURED, A.CMD_CHARGING))
-        self.assertIsNone(A.parse_reply(reply(A.CMD_BATTERY, 90, status=0xFF), A.CMD_BATTERY))
+        self.assertIsNone(A.parse_reply(CAPTURED, 0x0F))
+        self.assertIsNone(A.parse_reply(reply(0x07, 90, status=0xFF), 0x07))
 
     def test_a_reply_without_a_payload_does_not_read_the_old_tail(self):
-        self.assertIsNone(A.parse_reply(reply(A.CMD_BATTERY, tail=(90,)), A.CMD_BATTERY))
+        self.assertIsNone(A.parse_reply(reply(0x07, tail=(90,)), 0x07))
 
     def test_other_frames_are_refused(self):
-        self.assertIsNone(A.parse_reply(None, A.CMD_BATTERY))
-        self.assertIsNone(A.parse_reply([0x08, 0x72], A.CMD_BATTERY))
-        self.assertIsNone(A.parse_reply([0x09] + CAPTURED[1:], A.CMD_BATTERY))
-        self.assertIsNone(A.parse_reply([0x08, 0x04] + CAPTURED[2:], A.CMD_BATTERY))
+        self.assertIsNone(A.parse_reply(None, 0x07))
+        self.assertIsNone(A.parse_reply([0x08, 0x72], 0x07))
+        self.assertIsNone(A.parse_reply([0x09] + CAPTURED[1:], 0x07))
+        self.assertIsNone(A.parse_reply([0x08, 0x04] + CAPTURED[2:], 0x07))
 
 
 class PollTest(unittest.TestCase):
@@ -119,9 +122,9 @@ class PollTest(unittest.TestCase):
                          [("pulsar:373b1216", 90, False, True, "mouse")])
 
     def test_charging_comes_from_its_own_command_and_not_from_the_sequence_byte(self):
-        res = self.receiver(charging=[reply(A.CMD_CHARGING, 1)]).poll()
+        res = self.receiver(charging=[reply(0x0F, 1)]).poll()
         self.assertTrue(res[0].charging)
-        res = self.receiver(battery=[reply(A.CMD_BATTERY, 90, sn=0x3B)]).poll()
+        res = self.receiver(battery=[reply(0x07, 90, sn=0x3B)]).poll()
         self.assertFalse(res[0].charging)
 
     def test_no_charging_answer_keeps_the_level(self):
@@ -134,7 +137,7 @@ class PollTest(unittest.TestCase):
 
     def test_the_old_frame_never_reaches_this_receiver(self):
         self.receiver().poll()
-        self.assertFalse([w for w in self.rx.written if w[2][1] == P.CMD_POWER])
+        self.assertFalse([w for w in self.rx.written if w[2][1] == 0x04])
 
     def test_without_the_channel_nothing_is_opened(self):
         p = self.receiver()
@@ -152,8 +155,8 @@ class PollTest(unittest.TestCase):
                          [(90, False, True)])
 
     def test_an_error_status_or_a_zero_is_not_a_level(self):
-        for battery in ([reply(A.CMD_BATTERY, 90, status=0xFF)], [reply(A.CMD_BATTERY, 0)],
-                        [reply(A.CMD_BATTERY, 101)]):
+        for battery in ([reply(0x07, 90, status=0xFF)], [reply(0x07, 0)],
+                        [reply(0x07, 101)]):
             self.assertEqual(self.receiver(battery=battery).poll(), [])
 
     def test_the_pulsar_receivers_are_not_affected(self):

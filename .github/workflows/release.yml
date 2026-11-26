@@ -1,47 +1,61 @@
 name: Build and release
 
-# Push a tag like v1.8.0 and GitHub builds Halo Battery on a Windows runner and
-# attaches HaloBattery-<version>.zip (a HaloBattery folder with HaloBattery.exe
-# and its libraries, also what the in-app updater downloads) and
-# HaloBattery-<version>-setup.exe (installer/HaloBattery.iss) to the release for
-# that tag (the release is created if it does not exist yet). The release text
-# is the matching section of CHANGELOG.md.
-# "Run workflow" on the Actions tab builds it without releasing; download it
-# from the run's artifacts.
-#
-# The app is built as a folder, not a single self-extracting .exe: a one-file
-# PyInstaller .exe unpacks Python into a temp folder at every start, which
-# antivirus machine-learning heuristics often flag as a trojan.
-
+# Ordinary manual builds are unsigned artifact-only previews. Stable tags can
+# publish only outputs from the complete production signing/verification chain.
+# The owner-authorized v1.18.0 exception is isolated in unsigned-release-1.18.0.yml.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v1.18.0"]
   workflow_dispatch:
+    inputs:
+      signpath_test:
+        description: Exercise the complete signing chain with the TEST certificate
+        type: boolean
+        required: true
+        default: false
+      signpath_release:
+        description: Production signing dry run from main, without publication
+        type: boolean
+        required: true
+        default: false
+
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.signpath_test && 'signpath-test' || (github.ref_type == 'tag' || inputs.signpath_release) && 'signpath-release' || format('release-build-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' && !inputs.signpath_test && !inputs.signpath_release
     runs-on: windows-latest
     permissions:
-      contents: write # create the release and upload assets
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
 
       - name: Check that the tag matches VERSION
         if: github.ref_type == 'tag'
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $tag = $env:RELEASE_TAG.TrimStart("v")
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           if ($ver -ne $tag) {
@@ -71,7 +85,17 @@ jobs:
         run: |
           python tools/make_icon.py halo.ico
           python tools/make_version.py version_info.txt
-          python -m PyInstaller --noconfirm --onedir --windowed --noupx --name HaloBattery --icon halo.ico --version-file version_info.txt --hidden-import hid --hidden-import pystray._win32 --hidden-import serial --hidden-import serial.tools.list_ports --add-data "docs/licenses:licenses" --add-data "docs/credits.md:licenses" --hidden-import usb.backend.libusb1 --collect-data libusb_package halo_battery.pyw
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
+          python tools/build_exe.py
+
+      - name: Archive native settings symbols
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-Settings-symbols-${{ github.sha }}
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Zip the HaloBattery folder
         id: zip
@@ -89,8 +113,7 @@ jobs:
         id: setup
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $iscc = ./scripts/get_inno.ps1
           $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
           $ver = $m.Matches[0].Groups[1].Value
           & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
@@ -105,30 +128,950 @@ jobs:
             dist/HaloBattery
             ${{ steps.zip.outputs.zip }}
             ${{ steps.setup.outputs.setup }}
+  publish:
+    # A fresh runner receives files only. No project checkout, install or build
+    # step can access the release-write token. Manual runs only create artifacts.
+    needs: signing_verify
+    if: always() && !cancelled() && github.event_name == 'push' && github.ref_type == 'tag' && needs.signing_verify.result == 'success' && needs.signing_verify.outputs.mode == 'Production'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stable-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download publish assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.signing_verify.outputs.release-artifact }}
+          path: release-assets
 
-      - name: Release notes from CHANGELOG.md
-        if: github.ref_type == 'tag'
-        # fails if CHANGELOG.md has no section for this version
-        run: python tools/release_notes.py ${{ github.ref_name }} --out release_notes.md
-
-      - name: Checksums
-        id: sums
-        shell: pwsh
-        # SHA256SUMS.txt lists the ZIP and the installer. The updater only
-        # downloads HaloBattery-<version>.zip, so this extra asset is ignored by it.
+      - name: Validate release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $files = @("${{ steps.zip.outputs.zip }}", "${{ steps.setup.outputs.setup }}")
-          $lines = foreach ($f in $files) { "{0} *{1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf) }
-          $lines | Out-File -Encoding ascii SHA256SUMS.txt
-          Get-Content SHA256SUMS.txt
+          version="${RELEASE_TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          zip="HaloBattery-$version.zip"
+          setup="HaloBattery-$version-setup.exe"
+          cd release-assets
+          # Build output is data only. Reject unexpected files and symlinks.
+          [[ "$(find . -mindepth 1 -maxdepth 1 | wc -l)" -eq 4 ]]
+          for file in "$zip" "$setup" SHA256SUMS.txt release_notes.md; do
+            [[ -f "$file" && ! -L "$file" ]]
+          done
+          # Compute hashes only for the two expected names, never paths from a manifest.
+          expected="$(mktemp "$RUNNER_TEMP/halobattery-expected.XXXXXX")"
+          actual="$(mktemp "$RUNNER_TEMP/halobattery-actual.XXXXXX")"
+          trap 'rm -f "$expected" "$actual"' EXIT
+          printf '%s *%s\n' "$(sha256sum "$zip" | cut -d ' ' -f 1)" "$zip" \
+            "$(sha256sum "$setup" | cut -d ' ' -f 1)" "$setup" > "$expected"
+          sed 's/\r$//' SHA256SUMS.txt > "$actual"
+          cmp --silent "$expected" "$actual"
+          echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
+          echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=$(sha256sum "$zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "setup-sha256=$(sha256sum "$setup" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sums-sha256=$(sha256sum SHA256SUMS.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       - name: Attach to release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IMMUTABILITY_ENABLED: ${{ vars.STABLE_RELEASE_IMMUTABILITY_ENABLED }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+        run: |
+          # The owner sets this acknowledgement only after enabling repository
+          # release immutability. Reading that setting requires an admin token,
+          # which this deliberately limited publisher must never receive.
+          if [[ "$IMMUTABILITY_ENABLED" != true ]]; then
+            echo "Enable repository release immutability and set STABLE_RELEASE_IMMUTABILITY_ENABLED=true before publishing." >&2
+            exit 1
+          fi
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          version="${RELEASE_TAG#v}"
+          [[ "$ZIP" == "release-assets/HaloBattery-$version.zip" ]]
+          [[ "$SETUP" == "release-assets/HaloBattery-$version-setup.exe" ]]
+          # Include every page and drafts. Reruns never overwrite old assets;
+          # partial drafts require explicit owner inspection and recovery.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")"
+          if [[ -n "$existing" ]]; then
+            echo "Refusing to modify an existing release or draft for $RELEASE_TAG." >&2
+            exit 1
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.ref')" == "refs/tags/$RELEASE_TAG" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f "tag_name=$RELEASE_TAG" -f "target_commitish=$GITHUB_SHA" -f "name=$RELEASE_TAG" \
+            -F draft=true -F body=@release-assets/release_notes.md --jq '.id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\t'"$RELEASE_TAG" ]]
+          initial_assets="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --jq '.[].id')"
+          [[ -z "$initial_assets" ]]
+          # Deliberately no replacement/delete option, including for drafts.
+          gh release upload "$RELEASE_TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attest validated release assets
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          files: |
-            ${{ steps.zip.outputs.zip }}
-            ${{ steps.setup.outputs.setup }}
-            SHA256SUMS.txt
-          fail_on_unmatched_files: true
-          body_path: release_notes.md
+          subject-path: |
+            ${{ steps.assets.outputs.zip }}
+            ${{ steps.assets.outputs.setup }}
+          create-storage-record: false
+
+      - name: Publish attested draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$(sha256sum "$ZIP" | cut -d ' ' -f 1)" == "$ZIP_SHA256" ]]
+          [[ "$(sha256sum "$SETUP" | cut -d ' ' -f 1)" == "$SETUP_SHA256" ]]
+          [[ "$(sha256sum release-assets/SHA256SUMS.txt | cut -d ' ' -f 1)" == "$SUMS_SHA256" ]]
+          for subject in "$ZIP" "$SETUP"; do
+            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "refs/tags/$RELEASE_TAG" --source-digest "$GITHUB_SHA" \
+              --bundle "$ATTESTATION_BUNDLE"
+          done
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$RELEASE_ID"$'\ttrue\t'"$RELEASE_TAG" ]]
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          [[ "$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false --jq '.draft')" == false ]]
+          # These commands prove that the external immutable-release policy
+          # actually protected this publication and its three release assets.
+          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
+            gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done
+  signing_build:
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && (inputs.signpath_test || inputs.signpath_release))
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      mode: ${{ steps.context.outputs.mode }}
+      certificate-thumbprint: ${{ steps.context.outputs.certificate-thumbprint }}
+      version: ${{ steps.context.outputs.version }}
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      payload-id: ${{ steps.payload.outputs.artifact-id }}
+      payload-digest: ${{ steps.payload.outputs.artifact-digest }}
+    steps:
+      - name: Check out source and main ancestry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require reviewed source and signing activation
+        id: context
+        env:
+          CONFIRMED_TEST: ${{ inputs.signpath_test }}
+          CONFIRMED_RELEASE: ${{ inputs.signpath_release }}
+          TEST_ENABLED: ${{ vars.SIGNPATH_TEST_ENABLED }}
+          RELEASE_ENABLED: ${{ vars.SIGNPATH_RELEASE_ENABLED }}
+        run: ./scripts/signing_pipeline.ps1 -Stage Initialize
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73
+        with:
+          dotnet-version: '10.0.404'
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+      - name: Build unsigned application
+        run: |
+          python tools/make_icon.py halo.ico
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/make_version.py version_info.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP 'halo-settings-aot-toolchain')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/build_exe.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Archive native settings symbols
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-Settings-symbols-${{ github.sha }}
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Extract verified pinned Inno compiler
+        id: compiler
+        run: |
+          $compiler = ./scripts/get_inno.ps1
+          "path=$compiler" >> $env:GITHUB_OUTPUT
+      - name: Stage application executables and the pinned Inno helper
+        env:
+          SIGNING_MODE: ${{ steps.context.outputs.mode }}
+          CERTIFICATE_THUMBPRINT: ${{ steps.context.outputs.certificate-thumbprint }}
+          COMPILER: ${{ steps.compiler.outputs.path }}
+        run: ./scripts/signing_pipeline.ps1 -Stage StageBuild -CompilerPath $env:COMPILER -OutputDirectory signpath-stage
+      - name: Upload bundle
+        id: bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-unsigned-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/bundle/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload payload
+        id: payload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-unsigned-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/payload/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  test_sign_payload:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_build.outputs.mode == 'Test'
+    needs: [signing_build]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-test
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact payload artifact to test-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: payload-inno-test
+          github-artifact-id: ${{ needs.signing_build.outputs.payload-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe', 'inno-helper-amd64.exe')
+          $expected = $files + @('_internal', '_internal/settings-ui')
+          if ($actual.Count -ne 5 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-test-signed-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  release_sign_payload:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_build.outputs.mode == 'Production'
+    needs: [signing_build]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-release
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact payload artifact to release-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: payload-inno-release
+          github-artifact-id: ${{ needs.signing_build.outputs.payload-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          $files = @('HaloBattery.exe', '_internal/settings-ui/HaloBattery.Settings.exe', 'inno-helper-amd64.exe')
+          $expected = $files + @('_internal', '_internal/settings-ui')
+          if ($actual.Count -ne 5 -or @(Compare-Object $expected $actual -CaseSensitive).Count) { throw 'Unexpected payload paths' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-release-signed-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  signing_prepare:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && ((needs.signing_build.outputs.mode == 'Test' && needs.test_sign_payload.result == 'success' && needs.release_sign_payload.result == 'skipped') || (needs.signing_build.outputs.mode == 'Production' && needs.release_sign_payload.result == 'success' && needs.test_sign_payload.result == 'skipped'))
+    needs: [signing_build, test_sign_payload, release_sign_payload]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 30
+    env:
+      SIGNING_MODE: ${{ needs.signing_build.outputs.mode }}
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      prepared-id: ${{ steps.prepared.outputs.artifact-id }}
+      internal-id: ${{ steps.internal.outputs.artifact-id }}
+      internal-digest: ${{ steps.internal.outputs.artifact-digest }}
+    steps:
+      - name: Check out the exact workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
+      - name: Select exactly the successful payload signer
+        id: choose_payload
+        env:
+          TEST_ID: ${{ needs.test_sign_payload.outputs.artifact-id }}
+          TEST_REQUEST: ${{ needs.test_sign_payload.outputs.request-id }}
+          RELEASE_ID: ${{ needs.release_sign_payload.outputs.artifact-id }}
+          RELEASE_REQUEST: ${{ needs.release_sign_payload.outputs.request-id }}
+        run: |
+          if ($env:SIGNING_MODE -ceq 'Test') {
+            $id, $request = $env:TEST_ID, $env:TEST_REQUEST
+            $other = @($env:RELEASE_ID, $env:RELEASE_REQUEST)
+          } elseif ($env:SIGNING_MODE -ceq 'Production') {
+            $id, $request = $env:RELEASE_ID, $env:RELEASE_REQUEST
+            $other = @($env:TEST_ID, $env:TEST_REQUEST)
+          } else { throw 'Invalid signing mode' }
+          if ($id -cnotmatch '^[0-9]+$' -or $request -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' -or
+              @($other | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count) {
+            throw 'Missing or mixed signing outputs'
+          }
+          "artifact-id=$id" >> $env:GITHUB_OUTPUT
+          "request-id=$request" >> $env:GITHUB_OUTPUT
+      - name: Download original bundle from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.signing_build.outputs.bundle-id }}
+          path: signpath-input/bundle
+      - name: Download staged payload from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ steps.choose_payload.outputs.artifact-id }}
+          path: signpath-input/signed-payload
+      - name: Extract verified pinned Inno compiler
+        id: compiler
+        run: |
+          $compiler = ./scripts/get_inno.ps1
+          "path=$compiler" >> $env:GITHUB_OUTPUT
+      - name: Verify application signatures and prepare unsigned Inno engine
+        env:
+          COMPILER: ${{ steps.compiler.outputs.path }}
+        run: ./scripts/signing_pipeline.ps1 -Stage Prepare -BundleDirectory signpath-input/bundle -SignedDirectory signpath-input/signed-payload -CompilerPath $env:COMPILER -OutputDirectory signpath-stage/prepared
+      - name: Upload prepared
+        id: prepared
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/prepared/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload internal
+        id: internal
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-unsigned-internal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/prepared/inno/unsigned-cache/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  test_sign_internal:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_prepare.result == 'success' && needs.signing_build.outputs.mode == 'Test'
+    needs: [signing_build, signing_prepare]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-test
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact internal artifact to test-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: internal-test
+          github-artifact-id: ${{ needs.signing_prepare.outputs.internal-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          if ($actual.Count -ne 1 -or $actual[0] -cnotmatch '^uninst-6\.7\.4-[a-f0-9]{10}\.e32$') { throw 'Unexpected Inno engine paths' }
+          $files = $actual
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-test-signed-internal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  release_sign_internal:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_prepare.result == 'success' && needs.signing_build.outputs.mode == 'Production'
+    needs: [signing_build, signing_prepare]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-release
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact internal artifact to release-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: internal-release
+          github-artifact-id: ${{ needs.signing_prepare.outputs.internal-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          if ($actual.Count -ne 1 -or $actual[0] -cnotmatch '^uninst-6\.7\.4-[a-f0-9]{10}\.e32$') { throw 'Unexpected Inno engine paths' }
+          $files = $actual
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-release-signed-internal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  signing_package:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_prepare.result == 'success' && ((needs.signing_build.outputs.mode == 'Test' && needs.test_sign_internal.result == 'success' && needs.release_sign_internal.result == 'skipped') || (needs.signing_build.outputs.mode == 'Production' && needs.release_sign_internal.result == 'success' && needs.test_sign_internal.result == 'skipped'))
+    needs: [signing_build, signing_prepare, test_sign_internal, release_sign_internal]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 30
+    env:
+      SIGNING_MODE: ${{ needs.signing_build.outputs.mode }}
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      installer-id: ${{ steps.installer.outputs.artifact-id }}
+      installer-digest: ${{ steps.installer.outputs.artifact-digest }}
+      package-id: ${{ steps.package.outputs.artifact-id }}
+      proof-id: ${{ steps.proof.outputs.artifact-id }}
+    steps:
+      - name: Check out the exact workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
+      - name: Select exactly the successful internal signer
+        id: choose_internal
+        env:
+          TEST_ID: ${{ needs.test_sign_internal.outputs.artifact-id }}
+          TEST_REQUEST: ${{ needs.test_sign_internal.outputs.request-id }}
+          RELEASE_ID: ${{ needs.release_sign_internal.outputs.artifact-id }}
+          RELEASE_REQUEST: ${{ needs.release_sign_internal.outputs.request-id }}
+        run: |
+          if ($env:SIGNING_MODE -ceq 'Test') {
+            $id, $request = $env:TEST_ID, $env:TEST_REQUEST
+            $other = @($env:RELEASE_ID, $env:RELEASE_REQUEST)
+          } elseif ($env:SIGNING_MODE -ceq 'Production') {
+            $id, $request = $env:RELEASE_ID, $env:RELEASE_REQUEST
+            $other = @($env:TEST_ID, $env:TEST_REQUEST)
+          } else { throw 'Invalid signing mode' }
+          if ($id -cnotmatch '^[0-9]+$' -or $request -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' -or
+              @($other | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count) {
+            throw 'Missing or mixed signing outputs'
+          }
+          "artifact-id=$id" >> $env:GITHUB_OUTPUT
+          "request-id=$request" >> $env:GITHUB_OUTPUT
+      - name: Download prepared application and original engine from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.signing_prepare.outputs.prepared-id }}
+          path: signpath-input/prepared
+      - name: Download staged signed Inno engine from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ steps.choose_internal.outputs.artifact-id }}
+          path: signpath-input/signed-internal
+      - name: Extract verified pinned Inno compiler
+        id: compiler
+        run: |
+          $compiler = ./scripts/get_inno.ps1
+          "path=$compiler" >> $env:GITHUB_OUTPUT
+      - name: Verify signed engine and embed it into the installer
+        env:
+          COMPILER: ${{ steps.compiler.outputs.path }}
+        run: ./scripts/signing_pipeline.ps1 -Stage Package -BundleDirectory signpath-input/prepared -SignedDirectory signpath-input/signed-internal -CompilerPath $env:COMPILER -OutputDirectory signpath-stage/package
+      - name: Upload installer
+        id: installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-unsigned-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/package/installer/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload package
+        id: package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-packaged-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-stage/package/packaged/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload proof
+        id: proof
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-inno-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-input/prepared/inno/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  test_sign_installer:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_package.result == 'success' && needs.signing_build.outputs.mode == 'Test'
+    needs: [signing_build, signing_package]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-test
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact installer artifact to test-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: installer-test
+          github-artifact-id: ${{ needs.signing_package.outputs.installer-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          if ($env:APP_VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid installer version' }
+          $files = @('HaloBattery-test-setup.exe')
+          if ($actual.Count -ne 1 -or $actual[0] -cne $files[0]) { throw 'Unexpected installer path' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-test-signed-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  release_sign_installer:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_package.result == 'success' && needs.signing_build.outputs.mode == 'Production'
+    needs: [signing_build, signing_package]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    environment: signpath-release
+    timeout-minutes: 30
+    env:
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+      APP_VERSION: ${{ needs.signing_build.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.output.outputs.artifact-id }}
+      request-id: ${{ steps.sign.outputs.signing-request-id }}
+    steps:
+      - name: Require the protected signing credential
+        env:
+          SIGNING_TOKEN: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_TOKEN)) { throw 'Missing protected signing credential' }
+          if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
+      - name: Submit the exact installer artifact to release-signing
+        id: sign
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
+          organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
+          project-slug: HaloBattery
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: installer-release
+          github-artifact-id: ${{ needs.signing_package.outputs.installer-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+      - name: Stage only the expected embedded signer and paths
+        run: |
+          $root = (Resolve-Path -LiteralPath signpath-output).Path
+          $entries = @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -Force)
+          if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Linked signing output' }
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+          if ($env:APP_VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid installer version' }
+          $files = @("HaloBattery-$env:APP_VERSION-setup.exe")
+          if ($actual.Count -ne 1 -or $actual[0] -cne $files[0]) { throw 'Unexpected installer path' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root $file)
+            if ($null -eq $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ine $env:CERTIFICATE_THUMBPRINT -or
+                $signature.SignatureType.ToString() -cne 'Authenticode') { throw 'Unexpected embedded signer' }
+          }
+          # Staged only: token-free jobs perform complete cryptographic and
+          # unchanged-content acceptance before these outputs can be packaged.
+      - name: Upload output
+        id: output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-release-signed-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  signing_verify:
+    if: always() && !cancelled() && needs.signing_build.result == 'success' && needs.signing_prepare.result == 'success' && needs.signing_package.result == 'success' && ((needs.signing_build.outputs.mode == 'Test' && needs.test_sign_payload.result == 'success' && needs.release_sign_payload.result == 'skipped' && needs.test_sign_internal.result == 'success' && needs.release_sign_internal.result == 'skipped' && needs.test_sign_installer.result == 'success' && needs.release_sign_installer.result == 'skipped') || (needs.signing_build.outputs.mode == 'Production' && needs.release_sign_payload.result == 'success' && needs.test_sign_payload.result == 'skipped' && needs.release_sign_internal.result == 'success' && needs.test_sign_internal.result == 'skipped' && needs.release_sign_installer.result == 'success' && needs.test_sign_installer.result == 'skipped'))
+    needs: [signing_build, signing_prepare, signing_package, test_sign_payload, release_sign_payload, test_sign_internal, release_sign_internal, test_sign_installer, release_sign_installer]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 30
+    env:
+      SIGNING_MODE: ${{ needs.signing_build.outputs.mode }}
+      CERTIFICATE_THUMBPRINT: ${{ needs.signing_build.outputs.certificate-thumbprint }}
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      mode: ${{ needs.signing_build.outputs.mode }}
+      release-artifact: ${{ steps.release_assets.outputs.artifact-id }}
+    steps:
+      - name: Check out the exact workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Python for Inno resource verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12.10'
+      - name: Select exactly the successful payload signer
+        id: choose_payload
+        env:
+          TEST_ID: ${{ needs.test_sign_payload.outputs.artifact-id }}
+          TEST_REQUEST: ${{ needs.test_sign_payload.outputs.request-id }}
+          RELEASE_ID: ${{ needs.release_sign_payload.outputs.artifact-id }}
+          RELEASE_REQUEST: ${{ needs.release_sign_payload.outputs.request-id }}
+        run: |
+          if ($env:SIGNING_MODE -ceq 'Test') {
+            $id, $request = $env:TEST_ID, $env:TEST_REQUEST
+            $other = @($env:RELEASE_ID, $env:RELEASE_REQUEST)
+          } elseif ($env:SIGNING_MODE -ceq 'Production') {
+            $id, $request = $env:RELEASE_ID, $env:RELEASE_REQUEST
+            $other = @($env:TEST_ID, $env:TEST_REQUEST)
+          } else { throw 'Invalid signing mode' }
+          if ($id -cnotmatch '^[0-9]+$' -or $request -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' -or
+              @($other | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count) {
+            throw 'Missing or mixed signing outputs'
+          }
+          "artifact-id=$id" >> $env:GITHUB_OUTPUT
+          "request-id=$request" >> $env:GITHUB_OUTPUT
+      - name: Select exactly the successful internal signer
+        id: choose_internal
+        env:
+          TEST_ID: ${{ needs.test_sign_internal.outputs.artifact-id }}
+          TEST_REQUEST: ${{ needs.test_sign_internal.outputs.request-id }}
+          RELEASE_ID: ${{ needs.release_sign_internal.outputs.artifact-id }}
+          RELEASE_REQUEST: ${{ needs.release_sign_internal.outputs.request-id }}
+        run: |
+          if ($env:SIGNING_MODE -ceq 'Test') {
+            $id, $request = $env:TEST_ID, $env:TEST_REQUEST
+            $other = @($env:RELEASE_ID, $env:RELEASE_REQUEST)
+          } elseif ($env:SIGNING_MODE -ceq 'Production') {
+            $id, $request = $env:RELEASE_ID, $env:RELEASE_REQUEST
+            $other = @($env:TEST_ID, $env:TEST_REQUEST)
+          } else { throw 'Invalid signing mode' }
+          if ($id -cnotmatch '^[0-9]+$' -or $request -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' -or
+              @($other | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count) {
+            throw 'Missing or mixed signing outputs'
+          }
+          "artifact-id=$id" >> $env:GITHUB_OUTPUT
+          "request-id=$request" >> $env:GITHUB_OUTPUT
+      - name: Select exactly the successful installer signer
+        id: choose_installer
+        env:
+          TEST_ID: ${{ needs.test_sign_installer.outputs.artifact-id }}
+          TEST_REQUEST: ${{ needs.test_sign_installer.outputs.request-id }}
+          RELEASE_ID: ${{ needs.release_sign_installer.outputs.artifact-id }}
+          RELEASE_REQUEST: ${{ needs.release_sign_installer.outputs.request-id }}
+        run: |
+          if ($env:SIGNING_MODE -ceq 'Test') {
+            $id, $request = $env:TEST_ID, $env:TEST_REQUEST
+            $other = @($env:RELEASE_ID, $env:RELEASE_REQUEST)
+          } elseif ($env:SIGNING_MODE -ceq 'Production') {
+            $id, $request = $env:RELEASE_ID, $env:RELEASE_REQUEST
+            $other = @($env:TEST_ID, $env:TEST_REQUEST)
+          } else { throw 'Invalid signing mode' }
+          if ($id -cnotmatch '^[0-9]+$' -or $request -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' -or
+              @($other | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count) {
+            throw 'Missing or mixed signing outputs'
+          }
+          "artifact-id=$id" >> $env:GITHUB_OUTPUT
+          "request-id=$request" >> $env:GITHUB_OUTPUT
+      - name: Download unsigned installer from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.signing_package.outputs.installer-id }}
+          path: signpath-input/unsigned-installer
+      - name: Download staged signed installer from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ steps.choose_installer.outputs.artifact-id }}
+          path: signpath-input/signed-installer
+      - name: Download packaged application from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.signing_package.outputs.package-id }}
+          path: signpath-input/packaged
+      - name: Download verified Inno engine proof from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.signing_package.outputs.proof-id }}
+          path: signpath-input/inno
+      - name: Verify every signature, original contents and final checksums
+        env:
+          PAYLOAD_ARTIFACT: ${{ needs.signing_build.outputs.payload-id }}
+          PAYLOAD_DIGEST: ${{ needs.signing_build.outputs.payload-digest }}
+          PAYLOAD_REQUEST: ${{ steps.choose_payload.outputs.request-id }}
+          INTERNAL_ARTIFACT: ${{ needs.signing_prepare.outputs.internal-id }}
+          INTERNAL_DIGEST: ${{ needs.signing_prepare.outputs.internal-digest }}
+          INTERNAL_REQUEST: ${{ steps.choose_internal.outputs.request-id }}
+          INSTALLER_ARTIFACT: ${{ needs.signing_package.outputs.installer-id }}
+          INSTALLER_DIGEST: ${{ needs.signing_package.outputs.installer-digest }}
+          INSTALLER_REQUEST: ${{ steps.choose_installer.outputs.request-id }}
+        run: ./scripts/signing_pipeline.ps1 -Stage Finalize -BundleDirectory signpath-input/packaged -SignedDirectory signpath-input/signed-installer -UnsignedDirectory signpath-input/unsigned-installer -WorkDirectory signpath-input/inno -OutputDirectory release-assets
+      - name: Exercise signed temporary engines, install, upgrade and uninstall
+        env:
+          APP_VERSION: ${{ needs.signing_build.outputs.version }}
+        run: |
+          $name = if ($env:SIGNING_MODE -ceq 'Test') { 'HaloBattery-test-setup.exe' } else { "HaloBattery-$env:APP_VERSION-setup.exe" }
+          ./scripts/test_signed_installer.ps1 -InstallerPath (Join-Path release-assets $name) -SignedCacheDirectory signpath-input/inno/final-verified-cache -SigningMode $env:SIGNING_MODE -CertificateThumbprint $env:CERTIFICATE_THUMBPRINT -ReportPath signpath-input/inno/audit/installer-smoke.json
+      - name: Upload audit
+        id: audit
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-signing-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: signpath-input/inno/audit/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Upload test_assets
+        id: test_assets
+        if: needs.signing_build.outputs.mode == 'Test'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-SELF-SIGNED-TEST-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload release_assets
+        id: release_assets
+        if: needs.signing_build.outputs.mode == 'Production'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: HaloBattery-production-release-assets-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

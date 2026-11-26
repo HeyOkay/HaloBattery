@@ -39,9 +39,10 @@ The pair list names the devices; a pid that is not known is skipped, as G-Helper
 The collections of one receiver are matched by the device instance in their path, so two
 OMNI receivers do not mix. Confirmed on a Harpe Ace Mini and a Falchion RX Low Profile.
 
-The Harpe II Ace / Extreme use the same mouse battery command on the SPEEDNOVA
-receiver's mi_02&col03 with report id 3, or report id 0 on their cable, in 64 bytes.
-See the source comment at HARPE_II_RECEIVER below (upstream #364).
+The Harpe II receiver keeps the captured mi_02&col03 FF01:0001 mouse query
+(upstream #364); its cable uses report 0 in 64 bytes. The shared receiver's pair
+list can positively identify Azoth 96 HE (1C12, #238), in which case no Harpe
+query is sent. There is no sourced paired Harpe PID; do not infer one from USB.
 
 Not included (they use a different collection, report id or byte position in
 G-Helper, and none was on hand to test): Keris II Ace / Origin and
@@ -71,6 +72,33 @@ on the reporter's own measurements (3743 mV on battery with Armoury Crate at 50 
 plug or unplug until the level settles (100 % kept after unplugging at 4077 mV,
 50 % kept while charging at 3897 mV); this provider shows the live frame instead.
 Only frames from a live headset (header 0x1B) are read at all.
+
+The TUF Gaming H3 Wireless (0B05:1963) speaks the same family on its dongle's
+interface 3. Source: USB captures of Armoury Crate 6.0.0 reading the headset's Power
+page (HaloBattery maintainer captures, Armoury Crate at 100 % and at 75 %). Armoury
+Crate polls with this request about every 9 s; only that read is sent here, never
+the `FF 08 00 FF 04 0C F1 03 02 xx` write it sends after each read:
+
+    request   feature report 0xFF, 64 bytes: FF 07 00 FD 04 0C F1 02 01 00 ...
+    reply     FF 12 05 FE 0C 04 1F 0B 01 03 05 <mV lsb> <mV msb> 00 00 03 68 10
+    captured  3970 mV with Armoury Crate at 100 %, 3913-3919 mV at 75 %
+
+Bytes 16-17 (0x1068, 4200 mV) stayed the same in both captures; bytes 11-12 are the
+voltage, as on the Strix Go. The level is Solaar's Li-ion curve (the one logitech.py
+uses) rounded UP to Armoury Crate's quarter step: 3970 -> 77 -> 100 % and 3916 -> 69
+-> 75 %, the two captured readings (the Strix Go's 3831 / 3743 mV -> 54 / 28 % round
+up to its reporter's 75 / 50 % the same way).
+
+Byte 9 is the charger: measured on the headset with this provider's own read and all
+ASUS software stopped, every frame is 0x03 (byte 10 0x05) on battery (218 of 218)
+and 0x05 (byte 10 0x03) on the USB-C cable (217 of 217). While ASUS software
+(asus_framework.exe, Armoury Crate) polls the same dongle, its traffic shows through:
+on battery a 0x0A frame now and then, and on the cable a rotation of 0x0A, 0x03 and
+0x05 frames of about 3 s each (a 0x03 frame ~2.5 s). So 0x05 is charging at once; a
+0x03 frame is read again 3 s later, and two 0x03 frames 3 s apart are on battery;
+0x0A says nothing. At most two re-reads (6 s), and only while the answer is open;
+once two 0x03 frames have said battery, a later poll's 0x03 frame is battery at once
+(no wait) until a frame says anything else.
 """
 from __future__ import annotations
 
@@ -85,6 +113,7 @@ except ImportError:              # pragma: no cover
 from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 from .gwolves import feature_length
+from .logitech import voltage_to_percent
 
 ASUS_VID = 0x0B05
 INTERFACE = 0
@@ -129,6 +158,19 @@ HEADSET_HEADER = 0x1B          # reply byte 1 of a live frame; anything else = g
 HEADSET_SLEEP = 0.035                # G-Helper waits 35 ms between send and read
 HEADSET_ATTEMPTS = 3                 # its retry count on a read timeout
 HEADSET_ERROR = (0xFF, 0xAA)         # reply bytes 1-2: packet not known to firmware
+
+# the TUF Gaming H3 Wireless (docstring): Armoury Crate captures, read request only
+TUF_H3_PID = 0x1963
+TUF_H3_NAME = "TUF Gaming H3 Wireless"
+TUF_H3_REQUEST = [0xFF, 0x07, 0x00, 0xFD, 0x04, 0x0C, 0xF1, 0x02, 0x01]
+TUF_H3_HEADER = 0x12                 # reply byte 1 of the battery frame
+TUF_H3_MV_RANGE = (3000, 4500)       # one Li-ion cell; anything else is not a reading
+# byte 9 (docstring): 0x03 on battery, 0x05 on the cable; other values (0x0A while ASUS
+# software talks to the dongle too) say nothing about the charger
+TUF_H3_STEP = 25                      # Armoury Crate's quarter steps (docstring)
+TUF_H3_CHARGING = {0x03: False, 0x05: True}
+TUF_H3_RECHECK_S = 3.0               # a 0x03 frame lasts ~2.5 s on the cable (docstring)
+TUF_H3_RECHECKS = 2
 
 # pid -> (name, scale). Wired and wireless pids of one mouse share the name, so they
 # share one icon.
@@ -202,6 +244,7 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
     0x1A85: ("ROG Azoth", 6),
     0x1B42: ("ROG Azoth Extreme", 6),
     0x1CF1: ("ROG Azoth Extreme SE", 6),
+    0x1C25: ("ROG Azoth X", 6),        # #269: reporter's OMNI pair list, byte 6
     0x1AB0: ("ROG Strix Scope II 96 Wireless", 6),
     0x1B7A: ("ROG Strix Scope II 96 RX Wireless", 6),
     0x1B06: ("ROG Falchion RX Low Profile", 11),
@@ -215,6 +258,15 @@ OMNI_KEYBOARDS: Dict[int, Tuple[str, int]] = {
 # AsusMouse.cs: report 3 on mi_02&col03 of the 1ad0 SPEEDNOVA receiver,
 # report 0 on interface 0 over the 1c69 cable, both 64 bytes (upstream #364).
 HARPE_II_RECEIVER, HARPE_II_CABLE = 0x1AD0, 0x1C69
+
+# #238's Gear Link capture and reporter-confirmed azoth96he-test2 implementation:
+# https://github.com/HeyOkay/HaloBattery/issues/238#issuecomment-6876578460
+# https://github.com/casparas123/HaloBattery/blob/azoth96he-test2/providers/asus.py#L470-L499
+# Interface 2, FF02:0001 accepts the 64-byte 01 A0 00 00 pair-list request;
+# paired PID 1C12 accepts 02 12 01 on FF00:0001, level byte 6, charging byte 9.
+SPEEDNOVA_PID = HARPE_II_RECEIVER
+SPEEDNOVA_KEYBOARD_PID = 0x1C12
+SPEEDNOVA_KEYBOARD_NAME = "ROG Azoth 96 HE"
 
 Reading = Tuple[int, bool, str]     # level %, charging, approximate text ("" = exact)
 
@@ -237,18 +289,11 @@ def is_error(r: List[int]) -> bool:
     return _offset(r, ERROR) is not None
 
 
-def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
-    """(level, charging) from a Strix Go 2.4 reply, or None when this is not one.
-
-    Byte 13 is NOT the level - it is a constant 0x40 (64), which is what the first
-    port read while Armoury Crate showed a different number (#190). The level is
-    the Armoury Crate quarter step of the battery voltage at reply bytes 11-12,
-    16-bit little-endian (LSB first, byte 12's high part as the reference's guard);
-    byte 9 is 0x0A while charging and 0x03 on battery; while charging, the charger's
-    ~160 mV lift is removed before the table (see HEADSET_CHARGING_LIFT_MV), so
-    plugging the cable no longer jumps the level up a step. hidapi keeps the report id
-    of a numbered feature report in front as well; a reply without it is accepted
-    too, with the same positions applied to the bytes after it."""
+def _headset_frame(r, header: int) -> Optional[Tuple[int, Optional[int]]]:
+    """(voltage mV at bytes 11-12, byte 9) from a headset feature-report reply whose
+    byte 1 is `header`; None for the error marker, all-zero bytes 1-3, another header
+    or a reply too short to hold the voltage. Positions count the report id 0xFF;
+    a reply without it is read one byte earlier."""
     if not r or len(r) < 4:
         return None
     skip = 0 if r[0] == HEADSET_REPORT_ID else 1
@@ -261,13 +306,48 @@ def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
         return None
     if at(1) == 0 and at(2) == 0 and at(3) == 0:
         return None
-    if at(1) != HEADSET_HEADER:
+    if at(1) != header:
         return None                  # the header dropped: not a live frame
     lsb, msb = at(HEADSET_VOLTAGE_LSB), at(HEADSET_VOLTAGE_MSB)
     if lsb is None or msb is None:
         return None
-    mv = (msb << 8) | lsb
-    charging = at(HEADSET_CHARGING_BYTE) == HEADSET_CHARGING_VALUE
+    return (msb << 8) | lsb, at(HEADSET_CHARGING_BYTE)
+
+
+def parse_tuf_h3_reply(r) -> Optional[Tuple[int, Optional[bool]]]:
+    """(level, charging or None = unknown) from a TUF Gaming H3 Wireless reply
+    (docstring), or None when this is not a battery frame or the voltage is not one
+    Li-ion cell's."""
+    frame = _headset_frame(r, TUF_H3_HEADER)
+    if frame is None:
+        return None
+    mv, state = frame
+    if not TUF_H3_MV_RANGE[0] <= mv <= TUF_H3_MV_RANGE[1]:
+        return None
+    # shortcut: no charger-lift correction (the Strix Go's 160 mV is that model's),
+    # so the level may read high while charging; calibrate from a capture on the cable
+    level = -(-voltage_to_percent(mv) // TUF_H3_STEP) * TUF_H3_STEP   # round up
+    return level, TUF_H3_CHARGING.get(state)
+
+
+def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
+    """(level, charging) from a Strix Go 2.4 reply, or None when this is not one.
+
+    Byte 13 is NOT the level - it is a constant 0x40 (64), which is what the first
+    port read while Armoury Crate showed a different number (#190). The level is
+    the Armoury Crate quarter step of the battery voltage at reply bytes 11-12,
+    16-bit little-endian (LSB first, byte 12's high part as the reference's guard);
+    byte 9 is 0x0A while charging and 0x03 on battery; while charging, the charger's
+    ~160 mV lift is removed before the table (see HEADSET_CHARGING_LIFT_MV), so
+    plugging the cable no longer jumps the level up a step. hidapi keeps the report id
+    of a numbered feature report in front as well; a reply without it is accepted
+    too, with the same positions applied to the bytes after it."""
+    frame = _headset_frame(r, HEADSET_HEADER)
+    if frame is None:
+        return None
+    mv, state = frame
+    msb = mv >> 8
+    charging = state == HEADSET_CHARGING_VALUE
     if charging and mv < HEADSET_CHARGING_FULL_MV:
         mv = max(0, mv - HEADSET_CHARGING_LIFT_MV)
         msb = mv >> 8
@@ -275,6 +355,13 @@ def parse_headset_reply(r) -> Optional[Tuple[int, bool]]:
         if (nibble is not None and msb >= nibble) or mv >= ceil_mv:
             return level, charging
     return HEADSET_LEVEL_LOW, charging
+
+
+# (name, pids, request, parse, recheck) of each headset read with a feature-report
+# exchange; recheck: the charging state is settled over a few frames (_settle_charging)
+HEADSETS = ((HEADSET_NAME, (HEADSET_PID, HEADSET_WIRED_PID), HEADSET_REQUEST,
+             parse_headset_reply, False),
+            (TUF_H3_NAME, (TUF_H3_PID,), TUF_H3_REQUEST, parse_tuf_h3_reply, True))
 
 
 def parse_reply(r: List[int], scale: int) -> Optional[Reading]:
@@ -355,6 +442,7 @@ class AsusProvider(Provider):
     def __init__(self):
         self._diag: List[str] = []
         self._failing: Dict[str, bool] = {}
+        self._settled: Dict[object, bool] = {}   # path -> last settled TUF H3 charging
 
     def _ask(self, path, request: List[int], wanted, length: int) -> Optional[List[int]]:
         """Send `request` and return the first reply that `wanted` accepts. None for an
@@ -461,12 +549,48 @@ class AsusProvider(Provider):
                     out.append((name, "keyboard", res))
         return out
 
-    def _read_headset(self, path) -> Optional[Tuple[int, bool]]:
-        """One feature-report exchange with the ROG Strix Go 2.4 (a mirror of
-        G-Helper's WriteForResponse): send the packet, wait 35 ms, read the feature
-        report back; a read that comes back empty re-sends, up to its retry count.
-        None for the error marker, for a reply whose header is not a live
-        headset's, and for an all-zero reply (off or asleep)."""
+    def _poll_speednova_keyboard(self, infos: List[dict]):
+        """Ask only the captured Azoth 96 HE identity on its own receiver channels."""
+        receivers: Dict[str, Dict[int, bytes]] = {}
+        for d in infos:
+            if (d.get("product_id") != SPEEDNOVA_PID
+                    or d.get("interface_number") != OMNI_INTERFACE
+                    or d.get("usage") != 0x0001
+                    or d.get("usage_page") not in (OMNI_CONTROL, OMNI_KEYBOARD)):
+                continue
+            receivers.setdefault(_instance(d["path"]), {})[d["usage_page"]] = d["path"]
+
+        out: List[Tuple[str, str, Reading]] = []
+        keyboard_receivers = set()
+        for instance, cols in receivers.items():
+            if OMNI_CONTROL not in cols:
+                continue
+            self._diag.append(f"[ASUS] ROG SpeedNova receiver pid={SPEEDNOVA_PID:04x}")
+            r = self._ask(cols[OMNI_CONTROL], OMNI_PAIRS, lambda r: bool(parse_pairs(r)),
+                          OMNI_PACKET_LENGTH)
+            # A partial pair record must not authorize a model-specific query.
+            pids = parse_pairs(r) if r is not None and len(r) == OMNI_PACKET_LENGTH else []
+            self._diag.append("  paired: " + (" ".join(f"{p:04x}" for p in pids) or "none"))
+            if SPEEDNOVA_KEYBOARD_PID not in pids:
+                continue
+            keyboard_receivers.add(instance)
+            if OMNI_KEYBOARD not in cols:
+                continue
+            self._diag.append(f"  keyboard {SPEEDNOVA_KEYBOARD_NAME} pid={SPEEDNOVA_KEYBOARD_PID:04x}")
+            r = self._ask(cols[OMNI_KEYBOARD], OMNI_KEYBOARD_REQUEST, is_omni_keyboard_reply,
+                          OMNI_PACKET_LENGTH)
+            res = self._parsed(r, lambda r: parse_omni_keyboard(r, 6))
+            if res is not None:
+                out.append((SPEEDNOVA_KEYBOARD_NAME, "keyboard", res))
+        return out, keyboard_receivers
+
+    def _read_headset(self, path, request=HEADSET_REQUEST,
+                      parse=parse_headset_reply) -> Optional[Tuple[int, Optional[bool]]]:
+        """One feature-report exchange with a headset (a mirror of G-Helper's
+        WriteForResponse for the ROG Strix Go 2.4): send the packet, wait 35 ms, read
+        the feature report back; a read that comes back empty re-sends, up to its
+        retry count. None for the error marker, for a reply whose header is not a
+        live headset's, and for an all-zero reply (off or asleep)."""
         dev = hid.device()
         try:
             dev.open_path(path)
@@ -474,8 +598,7 @@ class AsusProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None
         try:
-            request = HEADSET_REQUEST + [0x00] * (HEADSET_PACKET_LENGTH
-                                                - len(HEADSET_REQUEST))
+            request = request + [0x00] * (HEADSET_PACKET_LENGTH - len(request))
             for attempt in range(HEADSET_ATTEMPTS):
                 try:
                     dev.send_feature_report(request)
@@ -493,7 +616,7 @@ class AsusProvider(Provider):
                     self._diag.append(f"    read (attempt {attempt + 1}): empty")
                     continue
                 self._diag.append(f"    reply: {hexdump(r, 16)}")
-                res = parse_headset_reply(r)
+                res = parse(r)
                 if res is None:
                     self._diag.append("    not a battery reply (error, off/asleep or "
                                       "not a live headset frame)")
@@ -505,6 +628,31 @@ class AsusProvider(Provider):
                 dev.close()
             except Exception:
                 pass
+
+    def _settle_charging(self, path, request, parse, res):
+        """The TUF H3's charging state (docstring): a 0x05 frame is the cable at once;
+        otherwise the frame is read again TUF_H3_RECHECK_S later, up to TUF_H3_RECHECKS
+        times, until two "on battery" frames that far apart say battery. The level is
+        the last reading's; charging stays unknown if no frame said either way."""
+        if res is None:
+            return None                      # off or asleep: nothing to settle
+        if res[1] is False and self._settled.get(path) is False:
+            return res                       # still on battery: no re-read
+        seen = [res]
+        for _ in range(TUF_H3_RECHECKS):
+            states = [r[1] for r in seen]
+            if True in states or states.count(False) >= 2:
+                break
+            time.sleep(TUF_H3_RECHECK_S)
+            more = self._read_headset(path, request, parse)
+            if more is not None:
+                seen.append(more)
+        states = [r[1] for r in seen]
+        charging = True if True in states else (False if states.count(False) >= 2
+                                                 else None)
+        if charging is not None:
+            self._settled[path] = charging
+        return seen[-1][0], charging
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
@@ -540,12 +688,16 @@ class AsusProvider(Provider):
             self._diag.append(f"  -> {res[2] or str(res[0]) + '%'}{' charging' if res[1] else ''}")
             keep(name, "mouse", res)
 
+        speednova, keyboard_receivers = self._poll_speednova_keyboard(infos)
         for d in infos:
             pid = d.get("product_id")
             if pid == HARPE_II_RECEIVER:
                 path = d.get("path", b"")
-                path = path.decode("utf-8", "replace") if isinstance(path, bytes) else str(path)
-                if "mi_02&col03" not in path.lower():
+                shown = path.decode("utf-8", "replace") if isinstance(path, bytes) else str(path)
+                if (_instance(path) in keyboard_receivers
+                        or d.get("interface_number") != OMNI_INTERFACE
+                        or (d.get("usage_page"), d.get("usage")) != (OMNI_MOUSE, 1)
+                        or "mi_02&col03" not in shown.lower()):
                     continue
                 request, wanted, parse = OMNI_MOUSE_REQUEST, is_omni_mouse_reply, parse_omni_mouse
             elif pid == HARPE_II_CABLE:
@@ -561,6 +713,12 @@ class AsusProvider(Provider):
             if res is not None:
                 keep(name, "mouse", res)
 
+        # A positive paired Azoth identity takes precedence over the legacy
+        # Harpe receiver route. Do not invent a paired Harpe PID.
+        for name, kind, res in speednova:
+            self._diag.append(f"  -> {name}: {res[0]}%{' charging' if res[1] else ''}")
+            keep(name, kind, res)
+
         for name, kind, res in self._poll_omni(infos):
             self._diag.append(f"  -> {name}: {res[0]}%{' charging' if res[1] else ''}")
             keep(name, kind, res)
@@ -571,36 +729,41 @@ class AsusProvider(Provider):
             out.append(DeviceStatus(key, name, level, charging, True, "asus", text, kind=kinds[name],
                                     ui_message="state.approx" if text else "",
                                     ui_params={"level": level, "charging": charging} if text else {}))
-        # the ROG Strix Go 2.4 headset (#190, docstring): its own collection rule and
-        # an icon key of its own
-        hinfos = [d for d in infos if d["product_id"] in (HEADSET_PID, HEADSET_WIRED_PID)]
-        if hinfos:
+        # the headsets (docstring): their own collection rule and an icon key of their own
+        for hname, pids, request, parse, recheck in HEADSETS:
+            hinfos = [d for d in infos if d["product_id"] in pids]
+            if not hinfos:
+                continue
             chosen = None
             for d in hinfos:
                 n = feature_length(d["path"])
                 if n is None or n >= HEADSET_PACKET_LENGTH:
                     chosen = d
                     break
-                self._diag.append(f"  {HEADSET_NAME} "
+                self._diag.append(f"  {hname} "
                                   f"{d.get('usage_page', 0):04x}:"
                                   f"{d.get('usage', 0):04x} feature={n}: too short; "
                                   "skipped")
             if chosen is None:
-                self._diag.append(f"[ASUS] {HEADSET_NAME}: no collection with a "
+                self._diag.append(f"[ASUS] {hname}: no collection with a "
                                   "64-byte feature report")
-            else:
-                self._diag.append(f"[ASUS] {HEADSET_NAME} pid={chosen['product_id']:04x} "
-                                  f"usage={chosen.get('usage_page', 0):04x}:"
-                                  f"{chosen.get('usage', 0):04x}")
-                res = self._read_headset(chosen["path"])
-                if res is not None:
-                    level, charging = res
-                    if chosen["product_id"] == HEADSET_WIRED_PID:
-                        charging = True        # cable mode draws power by definition
-                    self._diag.append(f"  -> {level}%{' charging' if charging else ''}")
-                    out.append(DeviceStatus("asus:" + HEADSET_NAME.lower().replace(" ", "-"),
-                                            HEADSET_NAME, level, charging, True, "asus",
-                                            kind="headset"))
+                continue
+            self._diag.append(f"[ASUS] {hname} pid={chosen['product_id']:04x} "
+                              f"usage={chosen.get('usage_page', 0):04x}:"
+                              f"{chosen.get('usage', 0):04x}")
+            res = self._read_headset(chosen["path"], request, parse)
+            if recheck:
+                res = self._settle_charging(chosen["path"], request, parse, res)
+            if res is None:
+                continue
+            level, charging = res
+            if chosen["product_id"] == HEADSET_WIRED_PID:
+                charging = True        # cable mode draws power by definition
+            self._diag.append(f"  -> {level}%{' charging' if charging else ''}"
+                              f"{' (charging unknown)' if charging is None else ''}")
+            out.append(DeviceStatus("asus:" + hname.lower().replace(" ", "-"),
+                                    hname, level, bool(charging), True, "asus",
+                                    kind="headset", charging_known=charging is not None))
         return out
 
     def diagnostics(self) -> List[str]:

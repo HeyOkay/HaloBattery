@@ -8,6 +8,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: OpenMouse src/finalmouse/index.ts at 5a4f643, mainInput 05; HaloBattery PR #284.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -19,7 +22,7 @@ from providers import finalmouse as F  # noqa: E402
 
 
 def frame(cmd, payload):
-    return [F.IN_REPORT, 2 + len(payload), cmd, len(payload)] + list(payload) + [0] * 8
+    return [0x05, 2 + len(payload), cmd, len(payload)] + list(payload) + [0] * 8
 
 
 class FakeDongle:

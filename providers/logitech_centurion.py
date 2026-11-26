@@ -36,10 +36,15 @@ which agree on everything below except where noted:
     headset is off, and the battery reply is 51 0b ... with byte 8 = 04: byte 10 percent,
     byte 12 = 02 charging.
 
-The PRO X 3 LIGHTSPEED (046D:0B45) lists the same three collections on the same
-interface in a reporter's diagnostics (0xFF13, 0xFFA0 and the consumer page, interface
-3), so it is read the same way. Unverified: no PRO X 3 was on hand. The read is read-only
-either way, and a device that does not answer simply shows nothing.
+PRO X 3 (046D:0B45) remains held from normal polling. Its private diagnostic-only
+50/23 reader comes from Sapd/HeadsetControl at
+1d2ccd1412246d85b2f8733d739cc865ba466aab:
+lib/devices/logitech_gpro_x3_lightspeed.hpp L14-24,46-64,80-93 and
+lib/devices/protocols/logitech_centurion_protocol.hpp L89-145,237-275,
+305-325,394-448,554-670. tests/test_protocols.cpp L1589-1596,1643-1666
+records receiver revision 1.02 and 78%. Interface3 FFA0:0001, canonical64 bytes;
+only Root bridge/battery feature lookups and battery function0. No setup or
+recovery requests. Windows receiver and charging transitions remain unverified.
 
 Every request reads: discovery lists features and the battery request reads the level.
 No function that changes a setting is sent. A level above 100 is refused.
@@ -132,6 +137,95 @@ class LogitechCenturionProvider(Provider):
         self._diag: List[str] = []
         # path -> (bridge index, {headset feature id: index}) once discovery succeeded
         self._features: Dict[bytes, Tuple[int, Dict[int, int]]] = {}
+
+    @staticmethod
+    def _x3_payload(reply):
+        if (not isinstance(reply, (bytes, bytearray, list, tuple))
+                or any(type(b) is not int or not 0 <= b <= 255 for b in reply)
+                or len(reply) < 5 or list(reply[:2]) != [0x50, 0x23]):
+            return None
+        length = reply[2]
+        # Prefix + length + flags + payload must fit the canonical 64 bytes.
+        # Flags encode fragmentation; these small exchanges need one frame.
+        if length <= 1 or length + 3 > min(len(reply), 64) or reply[3] != 0:
+            return None
+        return list(reply[4:3 + length])
+
+
+    def _x3_exchange(self, dev, payload, read_size, write_size, *, bridge=None, sub_index=None):
+        report = [0x50, 0x23, len(payload) + 1, 0] + payload
+        report += [0] * (64 - len(report))
+        count = dev.write(report)
+        # Native output is padded to its cached collection caps. Legacy HIDAPI
+        # exposes the canonical caller size. A partial write cannot be queried.
+        if type(count) is not int or count != write_size:
+            raise OSError("PRO X 3 incomplete output report")
+        # Upstream bounds an exchange to eight input reads. Omit its optional
+        # bridge-status retry, keeping at most three requests per poll.
+        for _ in range(8):
+            p = self._x3_payload(dev.read(read_size, READ_TIMEOUT_MS))
+            if p is None or len(p) < 2:
+                continue
+            if bridge is None:
+                if p[:2] == [0, 1]:
+                    return p[2:]
+                continue
+            if p[0] != bridge:
+                continue
+            if p[1] == 0 and len(p) >= 4:
+                if p[3] == 0:
+                    raise Offline("PRO X 3 bridge reports headset disconnected")
+                continue
+            if p[1] == 0x11:  # Receiver ACK, not the headset's battery reply.
+                continue
+            if (p[1] != 0x10 or len(p) < 7 or p[4] != 0
+                    or (p[2] << 8 | p[3]) != len(p) - 4):
+                continue
+            if p[5] == 0xFF and p[6] == sub_index:
+                raise ValueError("PRO X 3 headset rejected feature")
+            if p[5] == sub_index and p[6] == 1:
+                return p[7:]
+        raise TimeoutError("PRO X 3 battery exchange did not answer")
+
+
+    def _read_x3(self, path):
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+            read_size = write_size = 64
+            caps_method = getattr(dev, "get_report_lengths", None)
+            if callable(caps_method):
+                caps = caps_method()
+                sizes = (caps.get("input"), caps.get("output")) if isinstance(caps, dict) else ()
+                if (len(sizes) != 2
+                        or any(type(n) is not int or not 64 <= n <= 32768 for n in sizes)):
+                    raise ValueError("PRO X 3 collection cannot carry a 64-byte input/output report")
+                read_size, write_size = sizes
+            # HeadsetControl Root.getFeature(0003), then bridged
+            # Root.getFeature(0104). The captured indexes 3 and 5 are not constants.
+            bridge_info = self._x3_exchange(dev, [0, 1, 0, 3], read_size, write_size)
+            if len(bridge_info) < 3 or not 0 < bridge_info[0] < 255:
+                raise ValueError("PRO X 3 receiver has no bridge")
+            bridge = bridge_info[0]
+            battery_info = self._x3_exchange(
+                dev, [bridge, 0x11, 0, 5, 0, 0, 1, 1, 4], read_size, write_size,
+                bridge=bridge, sub_index=0)
+            if len(battery_info) < 3 or not 0 < battery_info[0] < 255:
+                raise ValueError("PRO X 3 headset has no battery feature")
+            index = battery_info[0]
+            data = self._x3_exchange(
+                dev, [bridge, 0x11, 0, 3, 0, index, 1], read_size, write_size,
+                bridge=bridge, sub_index=index)
+            if not data or data[0] > 100:
+                raise ValueError("PRO X 3 invalid battery percentage")
+            known = len(data) >= 3 and data[2] in (0, 1, 2)
+            return data[0], known and data[2] in (1, 2), known
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
 
     # ---- transport ---------------------------------------------------------
     def _write(self, dev, data: List[int]) -> None:

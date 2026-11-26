@@ -10,6 +10,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: SDL src/joystick/hidapi/SDL_hidapi_8bitdo.c enhanced report battery byte14.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -22,6 +25,7 @@ from providers import eightbitdo as E  # noqa: E402
 BT_PATH = (b"\\\\?\\hid#{00001124-0000-1000-8000-00805f9b34fb}_vid&00022dc8_pid&6006"
            b"#9&1a2b3c4d&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}")
 USB_PATH = b"\\\\?\\hid#vid_2dc8&pid_6003#8&1234abcd&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}"
+DINPUT_PATH = USB_PATH.replace(b"pid_6003", b"pid_6012")
 
 
 class Clock:
@@ -38,7 +42,7 @@ class Clock:
 def enhanced(rid=0x01, battery=0x4B):
     r = [rid] + [0] * 33
     r[1] = 0x08                   # hat centred
-    r[E.BATTERY_BYTE] = battery
+    r[14] = battery
     return r
 
 
@@ -187,8 +191,28 @@ class ProviderTest(unittest.TestCase):
         self.assertIsNone(out[0].level)
 
     def test_unknown_pid_is_skipped(self):
-        out = self.poll([entry(BT_PATH, pid=0x6012)], {BT_PATH: FakePad([enhanced()])})
+        out = self.poll([entry(BT_PATH, pid=0x6011)], {BT_PATH: FakePad([enhanced()])})
         self.assertEqual(out, [])
+
+    def test_ultimate2_dinput_report_is_read(self):
+        # #520: hold B while pressing Home. The 34-byte report carries level bits 0-6
+        # and charging in bit 7 at byte 14, as SDL's 8BitDo driver reads it.
+        report = enhanced(0x01, 0x80 | 62)
+        out = self.poll([entry(DINPUT_PATH, pid=0x6012, serial="e417d8aabbcc")],
+                        {DINPUT_PATH: FakePad([report])})
+        self.assertEqual(len(out), 1)
+        s = out[0]
+        self.assertEqual((s.name, s.level, s.charging, s.via), ("8BitDo Ultimate 2", 62, True, ""))
+        self.assertEqual((s.kind, s.source), ("gamepad", "8bitdo"))
+        self.assertFalse(s.approx)
+        self.assertEqual(out[0].key, "8bitdo:6012:e417d8aabbcc")
+
+    def test_ultimate2_dinput_without_a_report_is_pending(self):
+        out = self.poll([entry(DINPUT_PATH, pid=0x6012, serial="e417d8aabbcc")],
+                        {DINPUT_PATH: FakePad([])})
+        self.assertIsNone(out[0].level)
+        self.assertIn("no status report", out[0].approx)
+        self.assertEqual(out[0].ui_message, "state.pending")
 
     def test_unopenable_controller_still_shows_without_level(self):
         out = self.poll([entry(BT_PATH)], {})

@@ -20,6 +20,7 @@ import os
 import sys
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -128,6 +129,48 @@ class PollTest(unittest.TestCase):
                          [("eweadn", "EWEADN S9", 70, False, True, "eweadn", "mouse")])
         self.assertTrue(out[0].wake_on_input)
         self.assertEqual({p for p, _ in fake.sent}, {REPLY_PATH})
+
+    def assert_not_queried(self, ents):
+        # Deliberately ignore the enumeration filter: provider selection must
+        # independently verify the identity and sourced collection.
+        E.hid = types.SimpleNamespace(device=mock.Mock())
+        E.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(ents))
+        provider = E.EweadnProvider()
+        self.assertEqual(provider.poll(), [])
+        E.hid.device.assert_not_called()
+        return provider.diagnostics()
+
+    def test_no_expected_receiver_collection_means_no_open_or_write(self):
+        diag = self.assert_not_queried(entries()[:-1])
+        self.assertTrue(any("no battery request sent" in line for line in diag))
+
+    def test_wrong_or_missing_vendor_usage_is_never_opened(self):
+        expected = entries()[4]
+        for changes in ({"usage": 0x0011}, {"usage": None},
+                        {"usage_page": 0x0001}, {"vendor_id": 0x1234},
+                        {"product_id": 0x1234}):
+            with self.subTest(changes=changes):
+                self.assert_not_queried([dict(expected, **changes)])
+
+    def test_wired_transport_is_held_even_with_matching_collection(self):
+        diag = self.assert_not_queried(entries(E.WIRED_VID, E.WIRED_PID))
+        self.assertTrue(any("no sourced battery exchange" in line for line in diag))
+
+    def test_wired_fallback_is_not_opened_when_receiver_does_not_answer(self):
+        fake = FakeReceiver([asleep()] * E.ATTEMPTS)
+        candidates = entries() + entries(E.WIRED_VID, E.WIRED_PID)
+        out, _ = self.poll(fake, candidates)
+        self.assertFalse(out[0].online)
+        self.assertEqual({path for path, _ in fake.sent}, {REPLY_PATH})
+
+    def test_unrelated_vendor_usage_does_not_preempt_captured_receiver(self):
+        expected = entries()[4]
+        unrelated = dict(expected, usage=0x0011, path=b"other-vendor-collection")
+        fake = FakeReceiver([info(70)])
+        out, _ = self.poll(fake, [unrelated, *entries(E.WIRED_VID, E.WIRED_PID), expected])
+        self.assertEqual(out[0].level, 70)
+        self.assertFalse(out[0].charging)
+        self.assertEqual({path for path, _ in fake.sent}, {REPLY_PATH})
 
     def test_a_sleeping_mouse_keeps_an_icon_with_no_level(self):
         fake = FakeReceiver([asleep()] * 3)

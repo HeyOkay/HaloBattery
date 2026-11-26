@@ -24,6 +24,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: ATK HUB 3.2.28 Evision power_info=26/BUFFER_LEN=63; literal frames in PR #279.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -52,11 +55,11 @@ SHAPE = [
 REAL_FRAME = bytes([0x05, 0x01, 0x00, 0x1A] + [0x00] * 4 + [0x5B, 0x00] + [0x00] * 54)
 
 
-def reply(level, power=0, command=A.CMD_POWER, report_id=0x05, code=0x0001):
+def reply(level, power=0, command=0x1A, report_id=0x05, code=0x0001):
     """A 64-byte frame of the shape the receiver sends, report id first."""
     frame = [report_id, code & 0xFF, (code >> 8) & 0xFF, command]
     frame += [0x00] * 4 + [level, power] + [0x00] * 54
-    assert len(frame) == A.WIRE_LEN
+    assert len(frame) == 64
     return bytes(frame)
 
 
@@ -180,7 +183,7 @@ class AtkNearlinkTest(unittest.TestCase):
         self.assertEqual(0x05, sent[0], "report id first, as on the wire")
         self.assertEqual(1, sent[1], "requestCode starts at 1")
         self.assertEqual(0, sent[2], "requestCode is little-endian")
-        self.assertEqual(A.CMD_POWER, sent[3])
+        self.assertEqual(0x1A, sent[3])
         self.assertEqual([0x00] * 60, sent[4:])
 
     def test_the_request_code_increments_with_every_query(self):

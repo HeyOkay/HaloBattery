@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+  <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion><WindowsSdkPackageVersion>10.0.26100.57</WindowsSdkPackageVersion>
+  <UseWinUI>true</UseWinUI><WindowsPackageType>None</WindowsPackageType><Platforms>x64</Platforms><PlatformTarget>x64</PlatformTarget>
+  <SelfContained Condition="'$(SelfContained)' == ''">true</SelfContained>
+  <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+  <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  <RestoreLockedMode Condition="'$(RestoreLockedMode)' == ''">true</RestoreLockedMode>
+  <PublishAot Condition="'$(PublishAot)' == '' and '$(Configuration)' == 'Release' and '$(SelfContained)' == 'true' and '$(HaloBatteryVerification)' != 'true'">true</PublishAot>
+  <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
+  <NuGetLockFilePath Condition="'$(NuGetLockFilePath)' == '' and '$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.aot.true.lock.json</NuGetLockFilePath>
+  <NuGetLockFilePath Condition="'$(NuGetLockFilePath)' == ''">$(MSBuildProjectDirectory)/packages.$(SelfContained).lock.json</NuGetLockFilePath>
+  <WindowsAppSDKSelfContained>$(SelfContained)</WindowsAppSDKSelfContained>
+  <WindowsAppSDKBootstrapInitialize Condition="'$(SelfContained)' == 'true'">false</WindowsAppSDKBootstrapInitialize>
+  <WindowsAppSDKBootstrapInitialize Condition="'$(SelfContained)' != 'true'">true</WindowsAppSDKBootstrapInitialize>
+  <WindowsAppSDKDeploymentManagerInitialize>false</WindowsAppSDKDeploymentManagerInitialize>
+  <WindowsAppSDKUndockedRegFreeWinRTInitialize Condition="'$(SelfContained)' == 'true'">true</WindowsAppSDKUndockedRegFreeWinRTInitialize>
+  <PublishSingleFile>false</PublishSingleFile><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+  <ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>../../halo.ico</ApplicationIcon>
+  <!-- Trim framework dependencies while retaining generated JSON metadata and
+       the activation metadata used by dynamic WinUI XAML. -->
+  <PublishTrimmed Condition="'$(SelfContained)' == 'true'">true</PublishTrimmed>
+  <TrimMode>partial</TrimMode>
+  <JsonSerializerIsReflectionEnabledByDefault Condition="'$(PublishAot)' != 'true'">true</JsonSerializerIsReflectionEnabledByDefault>
+  <JsonSerializerIsReflectionEnabledByDefault Condition="'$(PublishAot)' == 'true'">false</JsonSerializerIsReflectionEnabledByDefault>
+  <AllowUnsafeBlocks Condition="'$(PublishAot)' == 'true'">true</AllowUnsafeBlocks>
+  <CsWinRTAotWarningLevel Condition="'$(PublishAot)' == 'true'">2</CsWinRTAotWarningLevel>
+  <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  <!-- Keep matching linked PDBs in build output for the CI symbol artifact. -->
+  <CopyOutputSymbolsToPublishDirectory Condition="'$(Configuration)' == 'Release'">false</CopyOutputSymbolsToPublishDirectory>
+  <!-- Keep the fixture QA harness out of shipping builds, including when the
+       app assembly is rooted for JSON/WinUI reflection. Opt in explicitly for
+       Release verification; Debug retains the harness by default. -->
+  <HaloBatteryVerification Condition="'$(HaloBatteryVerification)' == '' and '$(Configuration)' == 'Debug'">true</HaloBatteryVerification>
+  <HaloBatteryVerification Condition="'$(HaloBatteryVerification)' == ''">false</HaloBatteryVerification>
+  <DefineConstants Condition="'$(HaloBatteryVerification)' == 'true'">$(DefineConstants);HALO_BATTERY_VERIFICATION</DefineConstants>
+ </PropertyGroup>
+ <ItemGroup Condition="'$(HaloBatteryVerification)' != 'true'">
+  <Compile Remove="**/*Verification.cs;FixtureWindowCapture.cs" />
+ </ItemGroup>
+ <Target Name="RequireSupportedAotMode" BeforeTargets="Restore;PrepareForBuild" Condition="'$(PublishAot)' == 'true'">
+  <Error Condition="'$(Configuration)' != 'Release' or '$(SelfContained)' != 'true' or '$(HaloBatteryVerification)' == 'true'" Text="AOT requires self-contained Release without verification. Use PublishAot=false for QA/Debug." />
+ </Target>
+ <Target Name="RequireCommittedDependencyLock" BeforeTargets="Restore" Condition="'$(RestoreLockedMode)' == 'true'">
+  <Error Condition="!Exists('$(NuGetLockFilePath)')" Text="Missing committed dependency lock: $(NuGetLockFilePath)" />
+ </Target>
+ <ItemGroup>
+  <!-- Scope the runtime pin to .NET: a global RuntimeFrameworkVersion also
+       overrides the unrelated Windows SDK framework reference. -->
+  <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.15" TargetingPackVersion="10.0.15" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="[2.3.9]" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="[2.1.9]" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="[2.5.1]" />
+  <Content Include="../../assets/fonts/*.ttf;../../assets/fonts/OFL-*.txt" Link="Assets/Fonts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../docs/licenses/qlementine-icons-LICENSE.txt" Link="Assets/Licenses/QlementineIcons-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../halo.ico" Link="Assets/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../assets/app-icon-header-dark.svg" Link="Assets/AppIconHeaderDark.svg" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../assets/app-icon-header-light.svg" Link="Assets/AppIconHeaderLight.svg" CopyToOutputDirectory="PreserveNewest" />
+ </ItemGroup>
+ <!-- Preserve app activation/generated JSON metadata. Runtime-created XAML
+      needs the explicit WinUI types in the descriptor after framework trimming. -->
+ <ItemGroup Condition="'$(SelfContained)' == 'true'">
+  <TrimmerRootAssembly Include="$(AssemblyName)" />
+  <TrimmerRootDescriptor Include="$(MSBuildProjectDirectory)/DynamicXaml.Descriptors.xml" />
+ </ItemGroup>
+ <!-- WinUI-generated resources are not Content items in an unpackaged SDK
+      publish. Copy their existing output paths after publishing the app. -->
+ <Target Name="PublishXamlResources" AfterTargets="Publish">
+  <ItemGroup>
+   <_HaloXamlPublish Include="$(TargetDir)**/*.pri;$(TargetDir)**/*.xbf" />
+  </ItemGroup>
+  <Copy SourceFiles="@(_HaloXamlPublish)"
+        DestinationFiles="@(_HaloXamlPublish->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+        SkipUnchangedFiles="true" />
+ </Target>
+</Project>

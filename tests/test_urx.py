@@ -27,9 +27,10 @@ REFUSED = [0xFF, 0x07] + [0x00] * 30
 class FrameTest(unittest.TestCase):
     def test_the_request_is_report_id_then_via_custom_get(self):
         req = U.make_request()
-        self.assertEqual(U.REPORT_SIZE, len(req))
+        # Maker raw-HID payload is32 bytes; zero report ID makes33 caller bytes.
+        self.assertEqual(33, len(req))
         self.assertEqual([0x00, 0x08, 0x00, 0x07], req[:4])
-        self.assertEqual([0] * (U.REPORT_SIZE - 4), req[4:])
+        self.assertEqual([0] * 29, req[4:])
 
     def test_the_captured_reply_reads_76(self):
         self.assertEqual((76, False), U.parse_reply(CAPTURED_76))
@@ -44,8 +45,9 @@ class FrameTest(unittest.TestCase):
         self.assertIsNone(U.parse_reply([0x08, 0x01, 0x07, 0x4C] + [0] * 28))
         self.assertIsNone(U.parse_reply([0x08, 0x00, 0x06, 0x4C] + [0] * 28))
 
-    def test_a_zero_or_oversized_level_is_refused(self):
-        self.assertIsNone(U.parse_reply([0x08, 0x00, 0x07, 0x00] + [0] * 28))
+    def test_source_defined_zero_is_kept_and_oversized_level_is_refused(self):
+        # Maker core75/keymaps/default/keymap.c fd1af64 L167-169: percentage0..100.
+        self.assertEqual((0, False), U.parse_reply([0x08, 0x00, 0x07, 0x00] + [0] * 28))
         self.assertIsNone(U.parse_reply([0x08, 0x00, 0x07, 0x65] + [0] * 28))
 
     def test_a_short_frame_is_ignored(self):
@@ -74,7 +76,7 @@ class FakeDevice:
 
 class PollTest(unittest.TestCase):
     INFO = [{"path": b"via", "interface_number": 1, "usage_page": 0xFF60, "usage": 0x0061,
-             "product_id": U.PID, "product_string": "URX Core75 Wireless"}]
+             "vendor_id": 0x36B0, "product_id": U.PID, "product_string": "URX Core75 Wireless"}]
 
     def setUp(self):
         self._saved = (U.hid, U.hidlist, U.time)
@@ -102,7 +104,8 @@ class PollTest(unittest.TestCase):
     def test_another_channel_is_not_opened(self):
         # if only the vendor page (0xFF00) is present there is no VIA channel at all
         infos = [{"path": b"vendor", "interface_number": 2, "usage_page": 0xFF00,
-                  "usage": 0x0001, "product_id": U.PID}]
+                  "usage": 0x0001, "vendor_id": 0x36B0, "product_id": U.PID,
+                  "product_string": "URX Core75 Wireless"}]
         out, dev = self.poll([], infos=infos)
         self.assertEqual([], dev.opened)
         self.assertIsNone(out[0].level)
@@ -121,6 +124,22 @@ class PollTest(unittest.TestCase):
         self.now[0] += U.ASLEEP_KEEP + 1
         out = provider.poll()
         self.assertIsNone(out[0].level)
+
+    def test_the_evo75_on_the_same_ids_is_not_claimed(self):
+        evo = [{"path": b"via", "interface_number": 1, "usage_page": 0xFF60, "usage": 0x0061,
+                "product_id": U.PID, "product_string": "EVO75 2.4G"}]
+        out, dev = self.poll([CAPTURED_76], infos=evo)
+        self.assertEqual([], out)
+        self.assertEqual([], dev.opened)
+
+    def test_a_3002_receiver_without_a_product_string_gets_no_query(self):
+        for product in ("", None):
+            with self.subTest(product=product):
+                infos = [{"path": b"via", "interface_number": 1, "usage_page": 0xFF60,
+                          "usage": 0x0061, "product_id": U.PID, "product_string": product}]
+                out, dev = self.poll([CAPTURED_76], infos=infos)
+                self.assertEqual([], out)
+                self.assertEqual([], dev.opened)
 
     def test_no_receiver_reports_nothing(self):
         out, _dev = self.poll([], infos=[])

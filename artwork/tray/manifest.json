@@ -22,7 +22,8 @@
         "smart_home": "house",
         "watch": "watch",
         "tracker": "radar",
-        "display": "tv-minimal"
+        "display": "tv-minimal",
+        "phone": "smartphone"
       }
     },
     "simple_icons": {
@@ -1268,6 +1269,83 @@
         1024
       ],
       "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 16,
+      "box": [
+        0,
+        1024,
+        16,
+        1040
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 20,
+      "box": [
+        16,
+        1024,
+        36,
+        1044
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 24,
+      "box": [
+        36,
+        1024,
+        60,
+        1048
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 32,
+      "box": [
+        60,
+        1024,
+        92,
+        1056
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 40,
+      "box": [
+        92,
+        1024,
+        132,
+        1064
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 48,
+      "box": [
+        132,
+        1024,
+        180,
+        1072
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "size": 64,
+      "box": [
+        180,
+        1024,
+        244,
+        1088
+      ],
+      "source": "lucide"
     }
   ],
   "color_masters": [
@@ -1279,17 +1357,6 @@
       "optical_offset_logical_px": [
         0,
         0
-      ],
-      "optical_offset_already_applied": true
-    },
-    {
-      "name": "xbox-color-dark",
-      "size": 256,
-      "file": "xbox-color-dark.png",
-      "source": "simple_icons",
-      "optical_offset_logical_px": [
-        -0.375,
-        0.125
       ],
       "optical_offset_already_applied": true
     },
@@ -1641,6 +1708,49 @@
       "render_stroke_width": 2.3255813953488373,
       "logical_stroke_width": 1,
       "fit_reason": "Match established device-glyph ring clearance with a one-logical-pixel stroke"
+    },
+    "phone": {
+      "file": "lucide-smartphone.svg",
+      "sha256": "04e49a72309fe04fc063b6ddb5a0c4f7bb4843d8ae640df2af603162688c8776",
+      "url": "https://unpkg.com/lucide-static@1.17.0/icons/smartphone.svg",
+      "tool": "tools/make_phone_artwork.py",
+      "view_box": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke_width": 2,
+      "logical_scale": 0.5,
+      "logical_visible_ink_bounds": [
+        4.0,
+        2.5,
+        12.0,
+        13.5
+      ],
+      "logical_optical_offset": [
+        0,
+        0
+      ],
+      "logical_alpha_limit_radius": 6.6,
+      "master_size": 1024,
+      "svg_viewport": [
+        128,
+        128,
+        896,
+        896
+      ],
+      "sampling": "Chromium transparent RGBA SVG, then Pillow LANCZOS alpha masks",
+      "logical_uncentered_ink_bounds": [
+        4.0,
+        2.5,
+        12.0,
+        13.5
+      ],
+      "logical_geometric_centering_translation": [
+        0.0,
+        0.0
+      ]
     }
   }
 }

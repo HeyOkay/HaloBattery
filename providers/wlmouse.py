@@ -5,9 +5,18 @@ Protocol (reverse-engineered by @len0c, see incconutwo/mouse-battery-tray, MIT):
   * reply:   a1|a2 00 02 02 00 83 <charging> <battery%>
   * fallback: the mouse periodically sends an input report 03 00 <battery%> <charging>
 
+Source: incconutwo/mouse-battery-tray, devices.py lines 80-85 (PIDs/query),
+102-125 (feature framing), and 165-175 (preferred FFFF:0000 collection):
+https://github.com/incconutwo/mouse-battery-tray/blob/main/devices.py#L80-L175
+Owner hardware capture, 2026-11-22: Beast X Max cable 36A7:A881, interface 2,
+FFFF:0000; reply 00 a1 00 02 02 00 83 01 60 00 00 00 = 96%, charging.
+The owner also confirmed cable-to-receiver recovery in the Desktop build.
+Only the listed PIDs on FFFF:0000 receive feature requests. Unlisted identities
+can still supply passive heartbeats, but are never sent this query.
+
 A receiver whose mouse is switched off is walked at most every fifth poll once
 nothing is shown (or it never answered after the first tries): each walk sends the
-feature request to every 0xFFFF collection - each refusal costs ~0.75 s - and then
+feature request to its allowed collection - a refusal costs ~0.75 s - and then
 listens ~2 s, and a switched-off mouse used to pay that on every poll forever
 (#62 item 5, review by @ahmedkhursheed23). A change in the receiver's device set -
 the charging cable appearing - is walked at once.
@@ -28,6 +37,7 @@ KNOWN = {
     0xA887: "WLmouse Beast X",
     0xA868: "WLmouse Beast X Mini Pro",
     0xA880: "WLmouse Beast X Max",          # 8K receiver, confirmed on hardware
+    0xA881: "WLmouse Beast X Max",          # USB cable, owner capture above
 }
 
 # receiver PIDs (a mouse on the cable shows up in Windows with its own PID)
@@ -87,6 +97,15 @@ class WLmouseProvider(Provider):
             self._diag.append(f"    open: {e}")
             return None, None
         try:
+            lengths = (65, 64)  # legacy hidapi compatibility when caps are unavailable
+            metadata = getattr(dev, "get_report_lengths", None)
+            caps = metadata() if callable(metadata) else None
+            if isinstance(caps, dict) and caps.get("feature") == 65:
+                # Windows reports the receiver's complete feature size including
+                # ID 0. A 64-byte retry cannot contain this report and returns
+                # ERROR_INVALID_PARAMETER when the mouse is asleep (#413).
+                # https://learn.microsoft.com/windows-hardware/drivers/ddi/hidsdi/nf-hidsdi-hidd_getfeature
+                lengths = (65,)
             report = [0x00] + QUERY + [0x00] * (64 - len(QUERY))
             try:
                 dev.send_feature_report(report)
@@ -94,7 +113,7 @@ class WLmouseProvider(Provider):
                 self._diag.append(f"    send: {e}")
             for _ in range(15):
                 time.sleep(0.05)
-                for length in (65, 64):
+                for length in lengths:
                     try:
                         resp = dev.get_feature_report(0, length)
                     except (OSError, ValueError):
@@ -116,11 +135,13 @@ class WLmouseProvider(Provider):
         dev = hid.device()
         try:
             dev.open_path(path)
+            metadata = getattr(dev, "get_report_lengths", None)
+            caps = metadata() if callable(metadata) else None
+            if isinstance(caps, dict) and caps.get("input") == 0:
+                self._diag.append("    passive read skipped: collection has no input reports")
+                return None, None
             dev.set_nonblocking(True)
-        except (OSError, IOError):
-            return None, None
-        deadline = time.time() + seconds
-        try:
+            deadline = time.time() + seconds
             while time.time() < deadline:
                 try:
                     data = dev.read(64)
@@ -132,6 +153,8 @@ class WLmouseProvider(Provider):
                         self._diag.append(f"    heartbeat: {hexdump(data, 8)}")
                         return batt, chg
                 time.sleep(0.02)
+        except (OSError, ValueError):
+            return None, None
         finally:
             try:
                 dev.close()
@@ -140,8 +163,8 @@ class WLmouseProvider(Provider):
         return None, None
 
     def _read_group(self, ifaces: List[dict]) -> Tuple[Optional[int], Optional[bool]]:
-        vendor = [d for d in ifaces if d.get("usage_page") == 0xFFFF]
-        vendor.sort(key=lambda d: 0 if d.get("usage") == 0 else 1)
+        vendor = [d for d in ifaces if d.get("product_id") in KNOWN
+                  and (d.get("usage_page"), d.get("usage")) == (0xFFFF, 0x0000)]
         for d in vendor:
             self._diag.append(f"  iface={d.get('interface_number')} usage="
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")

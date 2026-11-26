@@ -47,12 +47,13 @@ status shapes, so both live here behind the model bytes proven on the units:
   (his diagnostics caught the `40 03` frame on the cable). The X3 Max announces
   the same shape under its own model code (0x4E): its reporter's diagnostics
   in #228 caught `03 4e 40 01 1e` = 30 %.
-- the `0x10` shape - `03 10 40 <stage> <level/10>` - is the X6/R1 generation:
+- the `0x10` shape - `03 10 40 <state> <level/10>` - is the X6/R1 generation:
   decoded in blak0p's attack-shark-linux protocol documents (validated live
   on the dongle: idle `03 10 40 01 0a` = 100 %) and caught on the R1's own
   receiver by its reporter's probe in #69 (`03 10 40 01 09` = 90 %), and his
   run of the test build shows the same reading in the tray. The
-  level arrives in steps of ten and the frames carry no charging state; the
+  level arrives in steps of ten and the R1 reports 0x03 while charging, as
+  captured and tested by RichBrokie in PR #567; the
   dongle's config ACK (`03 10 50 ...`) and DPI-button (`03 10 10 ...`)
   reports are excluded by the `0x40` command check.
 """
@@ -80,9 +81,13 @@ VID = 0x1D57
 # reporter's diagnostics caught `03 4e 40 01 1e` (30 %) on the same receiver
 # (#228), the X11 shape under a model code of its own.
 PIDS = {
-    0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99)),
+    0xFA65: ("Inphic In9 Pro", (0x95, 0x90, 0x93, 0x99, 0x3F)),
     0xFA60: ("Attack Shark X11 / R1 / X3 Max", (0x55, 0x10, 0x4E)),
 }
+# PR #407, pinned 675198a6b37bb221, Delux M900 Pro receiver capture:
+# 1D57:FA65, input 03 3F 40 01 4A = 74%. This adds a passive observed
+# model, not a request or a claim about its FA60 sibling.
+MODEL_NAMES = {(0xFA65, 0x3F): "Delux M900 Pro"}
 
 REPORT_ID = 0x03                    # hidapi hands it back first on Windows
 CMD_BATTERY = 0x40
@@ -99,6 +104,8 @@ LEVEL_MIN, LEVEL_MAX = 1, 100
 READ_SIZE = 100                     # the vendor app's read buffer
 READ_TIMEOUT_MS = 250
 READ_ATTEMPTS = 5                   # ~1.2 s on the remembered collection
+# The Delux/FA65 reports can be farther apart; keep FA60's existing budget.
+PID_READ_ATTEMPTS = {0xFA65: 12, 0xFA60: READ_ATTEMPTS}
 SWEEP_ATTEMPTS = 2                  # ... and per collection while looking
 MAX_CANDIDATES = 4
 FRAME_HISTORY = 12                  # frames kept per receiver for the diagnostics
@@ -137,16 +144,11 @@ def parse_frame(frame, models) -> Optional[Tuple[Optional[int], bool]]:
     if f[0] not in models or f[1] != CMD_BATTERY:
         return None
     if f[0] == X6_EVENT:
-        # The X6/R1 generation (blak0p's protocol documents, live-validated:
-        # idle `03 10 40 01 0a` = 100 %; the R1's own push in #69): the
-        # heartbeat's level arrives in steps of ten, and its byte 3 is the
-        # DPI stage, not a sub-command - and there is no charging state in
-        # this generation's frames. The dongle's ACK (`... 50 ..`) and the
-        # DPI-button report (`... 10 ..`) share the shape and are already
-        # refused by the command check above.
+        # Captured on an R1 via its receiver: 03 10 40 03 07 while charging,
+        # then 03 10 40 01 08 on battery. The level stays valid in both states.
         level = f[3] * X6_STEP
         if LEVEL_MIN <= level <= LEVEL_MAX:
-            return level, False
+            return level, f[2] == SUB_CHARGING
         return None
     if f[2] == SUB_CHARGING:
         return None, True
@@ -197,6 +199,7 @@ class InphicProvider(Provider):
         self._chosen: Dict[int, bytes] = {}                        # pid -> collection path
         self._hist: Dict[int, List[str]] = {}                      # pid -> recent frames
         self._swept: Dict[int, float] = {}                         # pid -> last sweep
+        self._model: Dict[int, int] = {}                           # observed valid frame only
 
     def _remember(self, pid: int, r, got) -> None:
         """Keep the last few frames per receiver for the diagnostics file (#228).
@@ -235,6 +238,7 @@ class InphicProvider(Provider):
                                      else "  (not a battery frame)"))
                 if got is None:
                     continue
+                self._model[pid] = r[1] if r[0] == REPORT_ID else r[0]
                 if got[0] is not None:
                     # a level frame after a charging one: the level is fresh and the
                     # cable is still in (#228 follow-up - the first frame used to end
@@ -306,7 +310,8 @@ class InphicProvider(Provider):
             # The vendor app's own collection gets the full window while looking
             # for it; the rest only get a short listen before moving on.
             patience = (d.get("usage_page"), d.get("usage")) == STATUS_USAGE
-            attempts = READ_ATTEMPTS if is_chosen or patience else SWEEP_ATTEMPTS
+            attempts = (PID_READ_ATTEMPTS.get(pid, READ_ATTEMPTS)
+                        if is_chosen or patience else SWEEP_ATTEMPTS)
             self._diag.append(f"  listening on iface={d.get('interface_number')} "
                               f"usage={d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
             got = self._listen(d, attempts, models, pid)
@@ -315,6 +320,7 @@ class InphicProvider(Provider):
                     self._chosen[pid] = d["path"]
                 break
 
+        name = MODEL_NAMES.get((pid, self._model.get(pid)), name)
         if got is not None:
             level, charging = got
             ts = time.time()

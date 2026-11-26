@@ -15,6 +15,9 @@ Run from the repository root:
 
     python -m unittest discover -s tests
 """
+
+# Independent wire fixtures: jimchen5209 M31R capture in HaloBattery #309: 09 04 00 00 00 02 37 00 ... 0f.
+# Keep reply bytes/offsets independent of the provider constants under test.
 import os
 import sys
 import types
@@ -26,23 +29,24 @@ from providers import irocks as I  # noqa: E402
 
 
 def frame(cmd, level=0, flag=0, status=0, online=False, header=0x09):
-    f = [header, cmd] + [0x00] * (I.FRAME_LEN - 3)
+    f = [header, cmd] + [0x00] * (17 - 3)
     f[2] = status
-    if cmd == I.CMD_POWER:
+    if cmd == 0x04:
         f[5] = 0x02
-        f[I.LEVEL_INDEX] = level
-        f[I.FLAG_INDEX] = flag
+        f[6] = level
+        f[7] = flag
     else:
         f[5] = 0x01
-        f[I.ONLINE_INDEX] = 0x01 if online else 0x00
-    f.append((0x55 - sum(f[:I.FRAME_LEN - 1])) % 256)
+        f[6] = 0x01 if online else 0x00
+    f.append((0x55 - sum(f[:17 - 1])) % 256)
     return f
 
 
-CAPTURED_55 = frame(I.CMD_POWER, level=0x37, flag=0x00)
-CAPTURED_75_CHARGING = frame(I.CMD_POWER, level=0x4B, flag=0x01)
-CAPTURED_ONLINE = frame(I.CMD_CONNECT, online=True)
-CAPTURED_OFFLINE = frame(I.CMD_CONNECT, online=False)
+# jimchen5209's M31R captures in #309, including their recorded checksum bytes.
+CAPTURED_55 = bytes.fromhex("09 04 00 00 00 02 37 00 00 00 00 00 00 00 00 00 0f")
+CAPTURED_75_CHARGING = bytes.fromhex("09 04 00 00 00 02 4b 01 00 00 00 00 00 00 00 00 fa")
+CAPTURED_ONLINE = bytes.fromhex("09 03 00 00 00 01 01 00 00 00 00 00 00 00 00 00 47")
+CAPTURED_OFFLINE = bytes.fromhex("09 03 00 00 00 01 00 00 00 00 00 00 00 00 00 00 48")
 
 
 class FakeLink:
@@ -90,7 +94,7 @@ class ParseTest(unittest.TestCase):
         self.assertEqual((75, True), I.parse_power(CAPTURED_75_CHARGING))
 
     def test_the_header_0x08_is_accepted_too(self):
-        self.assertEqual((42, False), I.parse_power(frame(I.CMD_POWER, level=42, header=0x08)))
+        self.assertEqual((42, False), I.parse_power(frame(0x04, level=42, header=0x08)))
 
     def test_a_bad_checksum_is_refused(self):
         bad = list(CAPTURED_55)
@@ -99,8 +103,8 @@ class ParseTest(unittest.TestCase):
 
     def test_another_command_or_level_is_refused(self):
         self.assertIsNone(I.parse_power(CAPTURED_ONLINE))          # cmd 0x03
-        self.assertEqual((0, False), I.parse_power(frame(I.CMD_POWER, level=0)))
-        self.assertIsNone(I.parse_power(frame(I.CMD_POWER, level=101)))
+        self.assertEqual((0, False), I.parse_power(frame(0x04, level=0)))
+        self.assertIsNone(I.parse_power(frame(0x04, level=101)))
         self.assertIsNone(I.parse_power([]))
 
     def test_the_online_answers(self):
@@ -149,8 +153,10 @@ class PollTest(unittest.TestCase):
         I.hidlist = types.SimpleNamespace(enumerate=lambda vid=0: list(self.INFO))
         I.IRocksProvider().poll()
         self.assertEqual(2, len(link.sent))
-        self.assertEqual(I.make_request(I.CMD_CONNECT), list(link.sent[0][1]))
-        self.assertEqual(I.make_request(I.CMD_POWER), list(link.sent[1][1]))
+        self.assertEqual(bytes.fromhex("08 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 4a"),
+                         link.sent[0][1])
+        self.assertEqual(bytes.fromhex("08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49"),
+                         link.sent[1][1])
 
     def test_an_offline_receiver_reads_no_cached_level(self):
         out = self.poll({1: [CAPTURED_OFFLINE], 2: [CAPTURED_75_CHARGING]})

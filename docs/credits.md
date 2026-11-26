@@ -36,7 +36,9 @@ The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #12
   is included in [licenses/lucide-1.17.0-LICENSE.txt](licenses/lucide-1.17.0-LICENSE.txt):
   ISC, Copyright (c) 2026 Lucide Icons and Contributors, with the included Feather
   MIT notice, Copyright (c) 2013-present Cole Bemis. The headphones glyph is among
-  the Feather-derived icons listed in that notice.
+  the Feather-derived icons listed in that notice. The optional filled variations
+  use the same licensed sources; their local SVGs, source hashes and generation
+  settings are recorded in `artwork/tray/filled/`.
 - Monochrome Xbox, PlayStation and Nintendo Switch silhouettes and Xbox/Nintendo
   color values: [Simple Icons 9.0.0](https://github.com/simple-icons/simple-icons/tree/9.0.0).
   Its [CC0 1.0 text](https://github.com/simple-icons/simple-icons/blob/9.0.0/LICENSE.md)
@@ -49,3 +51,30 @@ The BlackShark V2 Pro 2020 battery request is documented in [OpenRazer issue #12
 Xbox, PlayStation and Nintendo Switch logos are marks of their respective owners.
 The artwork licenses above do not grant rights to those trademarks; CC0 expressly
 excludes trademark rights.
+
+## Settings interface artwork and fonts
+
+- Native WinUI shell, custom card rendering and page transitions: adapted from
+  the user-provided Chrome Mica Patcher C# WinUI reference source
+  (`App/MainWindow.cs`, `App/Controls/CardView.cs` and
+  `App/MainWindow.TransitionPreview.cs`). Windows App SDK provides Mica,
+  ThemeShadow and native controls; the Python device backend remains Halo
+  Battery's implementation.
+- Navigation and control glyphs: [Lucide](https://lucide.dev/), vendored from
+  `lucide-static` 1.17.0. Original SVGs, source URLs and SHA-256 hashes are in
+  `artwork/settings/`; the native settings companion renders their vector paths. These
+  glyphs use the same ISC license and included Feather MIT notice as the tray
+  glyphs above; see [the bundled license](licenses/lucide-1.17.0-LICENSE.txt).
+- Discord and Ko-fi shortcut outlines (`discord-16`, `coffee-cup-16`): [Qlementine Icons](https://github.com/oclero/qlementine-icons),
+  Copyright 2023 Olivier Cléro, under the bundled
+  [MIT license](licenses/qlementine-icons-LICENSE.txt). The upstream SVGs and pinned
+  sources are recorded in `artwork/settings/qlementine-sources.json`.
+- Outfit Medium and SemiBold: Copyright 2021 The Outfit Project Authors
+  ([Outfit](https://github.com/Outfitio/Outfit-Fonts)).
+- Onest Bold: Copyright 2021 The Onest Project Authors
+  ([Onest](https://github.com/googlefonts/onest)).
+
+Both font families are distributed under the SIL Open Font License, Version 1.1.
+The full notices are bundled as `assets/fonts/OFL-Outfit.txt` and
+`assets/fonts/OFL-Onest.txt` in the source tree and alongside the fonts in frozen
+builds. The settings interface also uses Windows' Segoe UI Variable font.
