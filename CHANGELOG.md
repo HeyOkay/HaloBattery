@@ -11,11 +11,6 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
   mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
-- VXE R1 Pro Max on its cable as `373B:1273` (some units use ATK's vendor id on the
-  cable): the level and charging are read as on `3554:F58C`. On either cable id the
-  mouse keeps its receiver's icon, which turns to charging and back, instead of a
-  second icon that stayed for a poll interval after each plug or unplug; a name,
-  hidden choice or history saved under the old cable key moves to it.
 - Akko Verge S9 Ultra (`36EB:1087` dongle, `36EB:0087` USB cable): read the level from the
   dongle's HID report 2 (`02 10` link, `02 12` battery), decoded from a USBPcap capture of
   the vendor app, with the frame's two-byte trailer computed and the reply's trailer
@@ -24,6 +19,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   charging signal and the level stays the dongle's last reading. Confirmed by the reporter
   of [#505](https://github.com/HeyOkay/HaloBattery/issues/505): the level and the cable
   charging state both work.
+
+- VXE R1 Pro Max on its cable as `373B:1273` (some units use ATK's vendor id on the
+  cable): the level and charging are read as on `3554:F58C`. On either cable id the
+  mouse keeps its receiver's icon, which turns to charging and back, instead of a
+  second icon that stayed for a poll interval after each plug or unplug; a name,
+  hidden choice or history saved under the old cable key moves to it.
 
 ### Changed
 
