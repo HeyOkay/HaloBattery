@@ -23,6 +23,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
   of [#505](https://github.com/HeyOkay/HaloBattery/issues/505): the level and the cable
   charging state both work.
 
+- VXE R1 Pro Max on its cable as `373B:1273` (some units use ATK's vendor id on the
+  cable): the level and charging are read as on `3554:F58C`. On either cable id the
+  mouse keeps its receiver's icon, which turns to charging and back, instead of a
+  second icon that stayed for a poll interval after each plug or unplug; a name,
+  hidden choice or history saved under the old cable key moves to it.
+
 ### Changed
 
 - Prepare a separate production signing chain for application executables,
