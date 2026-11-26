@@ -44,6 +44,7 @@ from .asus import AsusProvider  # noqa: F401
 from .glorious import GloriousProvider  # noqa: F401
 from .gs3075t import Gs3075tProvider  # noqa: F401
 from .lamzu_sw import LamzuSinowealthProvider  # noqa: F401
+from .akko_s9 import AkkoS9Provider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401
@@ -84,6 +85,7 @@ from .jabra import JabraProvider  # noqa: F401
 from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
 from .hyperx_ngenuity import HyperXNgenuityProvider  # noqa: F401
 from .monsgeek import MonsGeekProvider  # noqa: F401
+from .royuan import RoyuanProvider  # noqa: F401
 from .eweadn import EweadnProvider  # noqa: F401
 from .eweadn_ydx import EweadnYdxProvider  # noqa: F401
 from .mchose_kb import MchoseKbProvider  # noqa: F401

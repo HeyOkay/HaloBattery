@@ -42,7 +42,12 @@ class ReleasePermissionsTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
                 sections = jobs(text)
-                self.assertEqual(set(sections), {"build", "publish", "test_build", "test_sign_payload", "test_package", "test_sign_installer", "test_verify"} if name == "release.yml" else {"build", "publish"})
+                expected = {"build", "publish"}
+                if name == "release.yml":
+                    expected |= {"signing_build", "signing_prepare", "signing_package", "signing_verify"}
+                    expected |= {f"{mode}_sign_{stage}" for mode in ("test", "release")
+                                 for stage in ("payload", "internal", "installer")}
+                self.assertEqual(set(sections), expected)
                 self.assertRegex(text.split("\njobs:", 1)[0], r"permissions:\n  contents: read")
                 self.assertRegex(sections["build"], r"permissions:\n      contents: read")
                 self.assertNotIn("contents: write", sections["build"])
@@ -57,9 +62,10 @@ class ReleasePermissionsTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
                 publish = jobs(text)["publish"]
-                self.assertIn("needs: build", publish)
+                source = "signing_verify" if name == "release.yml" else "build"
+                self.assertIn("needs: " + source, publish)
                 self.assertIn("runs-on: ubuntu-latest", publish)
-                self.assertIn("artifact-ids: ${{ needs.build.outputs.release-artifact }}", publish)
+                self.assertIn("artifact-ids: ${{ needs." + source + ".outputs.release-artifact }}", publish)
                 self.assertNotRegex(publish, r"actions/(checkout|setup-python|setup-dotnet)|pip install|dotnet |python |git push|run-id:")
                 self.assertNotIn("./tools/", publish)
                 self.assertNotIn("./scripts/", publish)
@@ -70,7 +76,7 @@ class ReleasePermissionsTests(unittest.TestCase):
 
     def test_only_explicit_pre_release_dispatch_can_publish(self):
         expected = {
-            "release.yml": "github.event_name == 'push' && github.ref_type == 'tag'",
+            "release.yml": "always() && !cancelled() && github.event_name == 'push' && github.ref_type == 'tag' && needs.signing_verify.result == 'success' && needs.signing_verify.outputs.mode == 'Production'",
             "prerelease.yml": "github.event_name == 'workflow_dispatch' && inputs.publish_prerelease && github.ref == 'refs/heads/pre-release'",
         }
         for name, condition in expected.items():
