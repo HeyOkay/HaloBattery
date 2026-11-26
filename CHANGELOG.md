@@ -31,6 +31,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refresh the project README with theme-aware previews and a Russian translation.
 - Prepare a separate production signing chain for application executables,
   Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer. Require
   trusted timestamped signatures and installer checks before stable publication.

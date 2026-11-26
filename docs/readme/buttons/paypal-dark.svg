@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="106" height="48" viewBox="0 -6 106 48" role="img" aria-labelledby="title">
+  <title id="title">PayPal</title>
+  <rect x=".5" y=".5" width="105" height="35" rx="9" fill="#A8DCFF" fill-opacity=".16" stroke="#77B8EE"/>
+  <g transform="translate(10 7)"><path fill="#248AD8" d="M8 5h7c4 0 6 2 5 6s-4 6-8 6h-1l-1 5H5z"/><path fill="#154B9A" d="M4 1h8c5 0 7 2 6 6s-4 6-9 6H8l-1 5H1z"/></g>
+  <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#C9EBFF">
+    <text x="40" y="24" font-size="16" font-weight="600">PayPal</text>
+  </g>
+</svg>

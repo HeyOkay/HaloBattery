@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="68" viewBox="0 -6 160 68" role="img" aria-labelledby="title">
+  <title id="title">Скачать стабильную версию для Windows</title>
+  <rect x=".5" y=".5" width="159" height="61" rx="12" fill="#88FA5A" fill-opacity=".16" stroke="#cacaca"/>
+  <g transform="translate(17 19)"><path fill="#172619" d="M0 0h11v11H0zm13 0h11v11H13zM0 13h11v11H0zm13 0h11v11H13z"/></g>
+  <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#172619">
+    <text x="55" y="28" font-size="19" font-weight="600">Скачать</text>
+    <text x="55" y="47" font-size="13" fill="#344c35">Для Windows</text>
+  </g>
+</svg>
