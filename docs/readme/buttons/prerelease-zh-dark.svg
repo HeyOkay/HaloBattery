@@ -1,7 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="132" height="68" viewBox="0 -6 132 68" role="img" aria-labelledby="title">
   <title id="title">下载预发布版</title>
   <rect x=".5" y=".5" width="131" height="61" rx="12" fill="#B7E68D" fill-opacity=".16" stroke="#656565"/>
-  <path transform="translate(21.55 40) scale(.025 -.025)" fill="#E7F6DC" d="M29 -194Q23 -188 23 -186Q23 -183 102 134T186 465Q208 533 243 584T309 658Q365 705 429 705H431Q493 705 533 667T573 570Q573 465 469 396L482 383Q533 332 533 252Q533 139 448 65T257 -10Q227 -10 203 -2T165 17T143 40T131 59T126 65L62 -188Q60 -194 42 -194H29ZM353 431Q392 431 427 419L432 422Q436 426 439 429T449 439T461 453T472 471T484 495T493 524T501 560Q503 569 503 593Q503 611 502 616Q487 667 426 667Q384 667 347 643T286 582T247 514T224 455Q219 439 186 308T152 168Q151 163 151 147Q151 99 173 68Q204 26 260 26Q302 26 349 51T425 137Q441 171 449 214T457 279Q457 337 422 372Q380 358 347 358H337Q258 358 258 389Q258 396 261 403Q275 431 353 431Z"/>
+  <defs>
+    <filter id="glyph-edge" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".65"/>
+    </filter>
+  </defs>
+  <path filter="url(#glyph-edge)" transform="translate(11 14.25) scale(.63)" fill="#E7F6DC" fill-rule="evenodd" shape-rendering="geometricPrecision" d="M17.8 44.5c1.1-.9 2.3 1.2 4 1.2 2.3 0 3-3.7 3.8-7.5l3.3-16.1c1-4.8 2.9-8.2 6.6-8.2 2.7 0 4.3 1.8 4 4.4-.3 2.9-2.5 5.3-5 6.7 2.9.2 4.3 2.3 3.8 5.6-.7 4.5-3.3 8.1-6.9 8.1-1.3 0-2.5-.6-3.2-1.6l-.8 3.3c-1 4-3.2 7-6.4 7-2.2 0-4.2-1.4-3.2-2.9Z
+       M29.7 32.9c-.6 3 .2 4.7 2 4.7 2.3 0 3.8-3.4 4.1-7 .3-3.3-.6-4.8-2.6-4.5l-1 .2.2-1.1c2.5-1.1 4.3-3.8 4.7-7 .2-2-.5-3.3-1.8-3.3-1.7 0-2.6 2.4-3.3 6.2Z"/>
   <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#E7F6DC">
     <text x="55" y="28" font-size="16" font-weight="600">预发布</text>
     <text x="55" y="47" font-size="13" fill="#C4D7BA">测试版下载</text>
