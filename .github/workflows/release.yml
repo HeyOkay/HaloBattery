@@ -411,7 +411,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact payload artifact to test-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
@@ -473,7 +473,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact payload artifact to release-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
@@ -620,7 +620,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact internal artifact to test-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
@@ -681,7 +681,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact internal artifact to release-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
@@ -837,7 +837,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact installer artifact to test-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_TEST_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
@@ -899,7 +899,7 @@ jobs:
           if ($env:CERTIFICATE_THUMBPRINT -cnotmatch '^[A-F0-9]{40}$') { throw 'Invalid reviewed certificate pin' }
       - name: Submit the exact installer artifact to release-signing
         id: sign
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b
         with:
           api-token: ${{ secrets.SIGNPATH_RELEASE_API_TOKEN }}
           organization-id: c54d1cb1-9c0a-478b-8eb8-036eb7084713
