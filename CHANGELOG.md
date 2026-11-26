@@ -117,6 +117,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Add two more BatteryHub headset readers: MCHOSE V9 Pro 2 (`3837:6011`,
+  charging bit and percent in the MC battery body) and VGN OMNISOUND
+  (`372e:10bb`, level only, charging unknown). Both are unverified in Halo;
+  see `docs/protocols.md`, "Ported BatteryHub headset readers".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

@@ -142,6 +142,8 @@ MESSAGES = {
     'provider.kraken_v4': 'Razer Kraken V4',
     'provider.mchose_kb': 'MCHOSE пернетақталары',
     'provider.mchose_v9': 'MCHOSE V9 Pro',
+    'provider.mchose_v9pro2': 'MCHOSE V9 Pro 2',
+    'provider.vgn': 'VGN OMNISOUND',
     'provider.monsgeek': 'MonsGeek пернетақталары',
     'provider.rapoo': 'Rapoo тінтуірлері мен пернетақталары',
     'provider.shield': 'NVIDIA SHIELD контроллерлері',

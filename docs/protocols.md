@@ -1813,3 +1813,33 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+## Ported BatteryHub headset readers
+
+These are clean-room ports of BatteryHub 1.1.1 (GPL-3.0-or-later) drivers. Halo
+has not tested either model on hardware.
+
+### MCHOSE V9 Pro 2
+
+The V9 Pro 2 dongle (`3837:6011`) exposes usage `ff07:0222` with report id
+`0x55` and 63-byte payloads. The frame after the report id is:
+
+    request  AA 01 00 01 00 01 0B 00 ...
+    reply    AA 01 <flags> <len> 00 01 0B <presence> <charging|percent> ... <xor>
+
+Flags bit 0 enables an XOR checksum over the flags, length, message type,
+sub-command and body. A presence byte of zero means the headset is off or
+asleep. Otherwise the next byte is `charging << 7 | percent`. The same body can
+arrive unsolicited as notification sub-command `0x22`. Only the V9 Pro 2 is
+claimed; the R9 is untested. Source: BatteryHub
+`src/drivers/mchose_headset.cpp`.
+
+### VGN OMNISOUND
+
+The OMNISOUND dongle (`372e:10bb`) uses collection `000c:0001`, report id
+`0x55`, 32-byte input and 64-byte output reports, and feature reports of 16
+bytes. Send the read-only output report `55 65 01`; the reply is either
+`55 65 <percent>` or, unnumbered, `65 <percent>`. VGN's app forces charging to
+false for this dongle and no charging bit is known, so Halo marks charging
+unknown. Only the wireless OMNISOUND is claimed. Source: BatteryHub
+`src/drivers/vgn.cpp`.
