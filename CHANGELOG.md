@@ -11,6 +11,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
   mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
+- ASUS TUF Gaming H3 Wireless headset (`0B05:1963`): battery level from the voltage the
+  headset reports, in Armoury Crate's 25 % steps, using the read request captured from
+  Armoury Crate, and charging on the USB-C cable.
 - Akko Verge S9 Ultra (`36EB:1087` dongle, `36EB:0087` USB cable): read the level from the
   dongle's HID report 2 (`02 10` link, `02 12` battery), decoded from a USBPcap capture of
   the vendor app, with the frame's two-byte trailer computed and the reply's trailer
