@@ -1584,6 +1584,12 @@ def show_settings_error(text: str) -> None:
         log.exception("settings: could not show the launch error")
 
 
+def low_choices(tr):
+    """Alert thresholds shared by Preferences and both device menu renderers."""
+    return [(0, tr("choice.off"))] + [(p, tr("state.level", level=p))
+                                     for p in (5, 10, 15, 20, 25, 30)]
+
+
 class App:
     def __init__(self):
         self.config_existed = os.path.exists(CONFIG_PATH)   # before language initialization
@@ -1780,8 +1786,41 @@ class App:
                 self._settings_fallback = False
                 self.refresh_menus()
 
+    def _device_menu_access(self, owner: Optional[DeviceIcon]):
+        """Resolve this icon's current identity, and guard actions against retirement."""
+        def current_status():
+            st = owner.status if owner is not None else None
+            return st if st is not None and self.icons.get(st.key) is owner else None
+
+        def with_device(action):
+            with self.lock:
+                st = current_status()
+                if st is not None:
+                    action(st)
+
+        return current_status, with_device
+
+    def _device_low_menu(self, tr, current_status, apply_low) -> Menu:
+        """One radio menu; callers supply their guarded device action."""
+        def pick(value):
+            return lambda icon, item: apply_low(value)
+
+        def checked(value):
+            def is_checked(item):
+                st = current_status()
+                return st is not None and self.device_low(st.key) == value
+            return is_checked
+
+        def default_text(item):
+            low = self.cfg["low"]
+            return tr("menu.default_low", level=low) if low else tr("menu.default_off")
+
+        return Menu(Item(default_text, pick(None), checked=checked(None), radio=True),
+                    *[Item(text, pick(value), checked=checked(value), radio=True)
+                      for value, text in low_choices(tr)])
+
     def build_tray_menu(self, owner: Optional[DeviceIcon]) -> Menu:
-        """Quick actions only; all configuration lives in the Settings window."""
+        """Quick app actions and essential actions for this icon's current device."""
         def clean(text):
             text = text.strip()
             while text.endswith(("…", "...")):
@@ -1791,16 +1830,64 @@ class App:
         def label(key, **values):
             return clean(self.tr(key, **values))
 
+        current_status, with_device = self._device_menu_access(owner)
+
         def title():
-            return self.display_name(owner.status) if owner and owner.status else self.tr("settings.header_app")
+            st = current_status()
+            return self.display_name(st) if st is not None else self.tr("settings.header_app")
 
         def detail():
-            return device_state(owner.status, self.time_left_text(owner.status), language=self.cfg["language"]) if owner and owner.status else ""
+            st = current_status()
+            return device_state(st, self.time_left_text(st), language=self.cfg["language"]) if st is not None else ""
+
+        def begin_rename():
+            with self.lock:
+                st = current_status()
+                if st is None:
+                    return None
+                key, current = st.key, self.display_name(st)
+
+            def commit(value):
+                if not isinstance(value, str) or any(
+                        ord(c) < 32 or 127 <= ord(c) <= 159 or c in "\u2028\u2029" for c in value):
+                    return False
+                new = value.strip()[:60]
+                if not new:
+                    return False
+                with self.lock:
+                    status = current_status()
+                    if status is None or status.key != key:
+                        return False
+                    if new == self.display_name(status):
+                        return True
+                    names = self._settings_map("names")
+                    if new == status.name:
+                        names.pop(key, None)
+                    else:
+                        names[key] = new
+                    hidden = self._settings_map("hidden")
+                    if key in hidden:
+                        hidden[key] = new
+                    save_config(self.cfg)
+                    owner.update(status)
+                    self.refresh_menus()
+                log.info("renamed [%s] to %r", key, new)
+                return True
+
+            return current, commit
+
+        device_menu = Menu(
+            Item(label("menu.hide"), lambda i, it: with_device(lambda st: self.hide(owner))),
+            Item(label("menu.low_battery"), self._device_low_menu(label, current_status,
+                 lambda value: with_device(lambda st: self.set_device_low(owner, value)))),
+            Item(label("settings.open_device"),
+                 lambda i, it: with_device(lambda st: self.open_settings(st.key, page="devices"))))
 
         return Menu(
-            flyout.HeaderItem(title, detail),
-            Item(label("settings.open_app"), lambda i, it: self.open_settings(owner.key, page="devices")
-                 if owner is not None else self.open_settings(), default=True),
+            flyout.HeaderItem(title, detail, begin_rename=begin_rename if owner is not None else None,
+                              rename_hint=label("menu.rename_hint")),
+            Item(label("menu.this_device"), device_menu, visible=lambda it: current_status() is not None),
+            Item(label("settings.open_app"), lambda i, it: self.open_settings(page="general"), default=True),
             Item(label("menu.refresh"), lambda i, it: self.request_refresh()),
             Item(lambda it: clean(update_item_text(self.update.version, getattr(self, "install_ok", False),
                                             getattr(self, "update_progress", None), language=self.cfg["language"]))
@@ -1906,7 +1993,7 @@ class App:
         intervals = [(seconds, tr("interval." + str(i)))
                      for i, seconds in enumerate((15, 30, 60, 120, 300))]
         themes = [(m, tr("choice." + m)) for m in ("auto", "white", "black")]
-        lows = [(0, tr("choice.off"))] + [(p, tr("state.level", level=p)) for p in (5, 10, 15, 20, 25, 30)]
+        lows = low_choices(tr)
 
         def pick_language(language):
             return lambda icon, item: self.set_language(language)
@@ -1949,16 +2036,7 @@ class App:
             # pystray accepts only actions with 0-2 parameters, so no "k=key" default here
             return lambda icon, item: self.unhide(key)
 
-        def device_low_picked(value):
-            return lambda _item: bool(owner and owner.status) and (
-                self.device_low(owner.status.key) == value)
-
-        def pick_device_low(value):
-            return lambda icon, item: self.set_device_low(owner, value)
-
-        def default_low_text(_item):
-            low = self.cfg["low"]
-            return tr("menu.default_low", level=low) if low else tr("menu.default_off")
+        current_status, with_device = self._device_menu_access(owner)
 
         def provider_on(name):
             return lambda _item: name not in self.disabled_providers()
@@ -1994,10 +2072,8 @@ class App:
                      visible=lambda it: bool(owner and owner.status and
                                              self.controller_style(owner.status)[0] != "default"))),
                  visible=controller_visible),
-            Item(tr("menu.device_low"), Menu(
-                Item(default_low_text, pick_device_low(None), checked=device_low_picked(None), radio=True),
-                *[Item(t, pick_device_low(p), checked=device_low_picked(p), radio=True)
-                  for p, t in lows])),
+            Item(tr("menu.device_low"), self._device_low_menu(tr, current_status,
+                 lambda value: with_device(lambda st: self.set_device_low(owner, value)))),
             Item(tr("menu.hide"), lambda i, it: self.hide(owner)),
         ] if owner is not None else []
 
