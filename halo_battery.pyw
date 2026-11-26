@@ -709,12 +709,30 @@ def sync_installed_version(app_dir: str = BASE_DIR, version: str = VERSION) -> b
         return False                         # not installed by setup
 
 
+# Keep the app's named-object handle alive, just like probes and diagnostics.
+_app_instance_guard = None
+
+
 def single_instance() -> bool:
+    global _app_instance_guard
     if sys.platform != "win32":
         return True
-    import ctypes
-    ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\HaloBattery_single_instance")
-    return ctypes.windll.kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
+    if _app_instance_guard is not None:
+        return True
+    from halo.diagnostic_guard import InstanceGuard
+    try:
+        guard = InstanceGuard()
+        if not guard.acquire():
+            if not guard.close():
+                log.error("startup: instance guard cleanup incomplete")
+            return False
+    except (OSError, AttributeError):
+        # No exception text: native errors may contain local paths. A missing
+        # console must not turn an unavailable lease into permission to start.
+        log.error("startup: exclusive device access unavailable")
+        return False
+    _app_instance_guard = guard
+    return True
 
 
 # SHQueryUserNotificationState: what Windows itself uses to hold back notifications.
