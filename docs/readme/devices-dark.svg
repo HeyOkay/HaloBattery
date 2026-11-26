@@ -32,7 +32,7 @@
       <text text-anchor="middle" y="102" font-size="35" font-weight="650">100%</text>
 
     </g>
-    <path d="M250 30v158" stroke="#656565" stroke-opacity=".55"/>
+    <path d="M250 30v158" stroke="#fff" stroke-opacity=".075"/>
     <g transform="translate(375 87)">
       <circle r="53" fill="none" stroke="#ffffff" stroke-opacity=".247059" mask="url(#charging-track)" stroke-width="6"/>
       <circle class="charging" r="53" fill="none" stroke="#10c450" stroke-width="6" pathLength="100" stroke-dasharray="65 100" transform="rotate(-90)" stroke-linecap="round"/>
@@ -40,7 +40,7 @@
       <text text-anchor="middle" y="102" font-size="35" font-weight="650">65%</text>
 
     </g>
-    <path d="M500 30v158" stroke="#656565" stroke-opacity=".55"/>
+    <path d="M500 30v158" stroke="#fff" stroke-opacity=".075"/>
     <g transform="translate(625 87)">
       <circle r="53" fill="none" stroke="#ffffff" stroke-opacity=".247059" stroke-width="6"/>
       <circle r="53" fill="none" stroke="#ffb900" stroke-width="6" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90)" stroke-linecap="round"/>
@@ -48,7 +48,7 @@
       <text text-anchor="middle" y="102" font-size="35" font-weight="650">25%</text>
 
     </g>
-    <path d="M750 30v158" stroke="#656565" stroke-opacity=".55"/>
+    <path d="M750 30v158" stroke="#fff" stroke-opacity=".075"/>
     <g transform="translate(875 87)">
       <circle r="53" fill="none" stroke="#ffffff" stroke-opacity=".247059" stroke-width="6"/>
       <circle r="53" fill="none" stroke="#e81123" stroke-width="6" pathLength="100" stroke-dasharray="10 100" transform="rotate(-90)" stroke-linecap="round"/>
