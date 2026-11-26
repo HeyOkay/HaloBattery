@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="132" height="68" viewBox="0 -6 132 68" role="img" aria-labelledby="title">
   <title id="title">下载预发布版</title>
   <rect x=".5" y=".5" width="131" height="61" rx="12" fill="#467D48" fill-opacity=".16" stroke="#cacaca"/>
-  <text x="29" y="40" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="600" fill="#234427">β</text>
+  <text x="29" y="40" text-anchor="middle" font-family="Cambria, Georgia, Times New Roman, serif" font-size="30" font-style="italic" font-weight="400" fill="#234427">Β</text>
   <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#234427">
     <text x="55" y="28" font-size="16" font-weight="600">预发布</text>
     <text x="55" y="47" font-size="13" fill="#234427">测试版下载</text>
