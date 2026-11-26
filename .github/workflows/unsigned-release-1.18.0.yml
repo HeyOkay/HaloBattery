@@ -301,7 +301,23 @@ jobs:
             -F draft=false --jq '.draft')" == false ]]
           # These commands prove that the external immutable-release policy
           # actually protected this publication and its three release assets.
-          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          # GitHub release attestations may appear after publication. Retry
+          # read-only verification only; never repeat publication or uploads.
+          verify_with_retry() {
+            local attempt
+            for attempt in {1..12}; do
+              if "$@"; then
+                return 0
+              fi
+              if [[ "$attempt" -lt 12 ]]; then
+                echo "Waiting for GitHub verification (attempt $attempt/12)."
+                sleep 5
+              fi
+            done
+            echo "GitHub verification failed after 12 attempts." >&2
+            return 1
+          }
+          verify_with_retry gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
           for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
-            gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+            verify_with_retry gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
           done

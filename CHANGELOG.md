@@ -6,6 +6,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry post-publication release and asset attestation verification when GitHub
+  has not yet made the proofs available. Persistent verification errors still
+  fail the workflow; publication and uploads are never repeated by these retries.
+
 ## [1.18.0] - 2026-11-27
 
 ### Added
