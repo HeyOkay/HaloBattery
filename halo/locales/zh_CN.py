@@ -162,6 +162,7 @@ MESSAGES = {
     "provider.mchose_kb": "MCHOSE 键盘",
     "provider.mchose_v9": "MCHOSE V9 Pro",
     "provider.monsgeek": "MonsGeek 键盘",
+    "provider.royuan": "ROYUAN 键盘",
     "provider.redsquare": 'Red Square Alumix TKL 键盘',
     "provider.msi": "MSI 无线设备",
     "provider.rapoo": "Rapoo 鼠标和键盘",

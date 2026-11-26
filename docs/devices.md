@@ -70,6 +70,7 @@
 | [LAMZU Atlantis V2](protocols.md#lamzu-atlantis-v2) | 2.4 GHz receiver (3554:F50D) or USB cable (3554:F50F) | yes (level and charging) |
 | [Lofree Hyzen](protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
 | [Lofree Flow Lite84](protocols.md#lofree-flow-lite84) | 2.4 GHz dongle | yes (level and charging confirmed on test build 1 by reporter, #557) |
+| [ROYUAN 2.4 GHz keyboards](protocols.md#royuan-24-ghz-keyboards-31514011) | 2.4 GHz receiver (3151:4011, reported on an Epomaker TH80 ISO); USB cable for charging | yes (level and wired-mode charging confirmed by reporter, #560); receiver charging remains unknown |
 | [Logitech (more HID++ 2.0 devices, older HID++ 1.0 keyboards and mice, G-series headsets)](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
 | [Logitech G PRO X 2 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver | yes |
 | [Logitech PRO X 3 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver; disabled in 1.17.0 | no; protocol investigation pending |

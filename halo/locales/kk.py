@@ -144,6 +144,7 @@ MESSAGES = {
     'provider.mchose_kb': 'MCHOSE пернетақталары',
     'provider.mchose_v9': 'MCHOSE V9 Pro',
     'provider.monsgeek': 'MonsGeek пернетақталары',
+    'provider.royuan': 'ROYUAN пернетақталары',
     'provider.rapoo': 'Rapoo тінтуірлері мен пернетақталары',
     'provider.shield': 'NVIDIA SHIELD контроллерлері',
     'provider.skullcandy': 'Skullcandy гарнитуралары',

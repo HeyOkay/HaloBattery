@@ -85,6 +85,7 @@ from .jabra import JabraProvider  # noqa: F401
 from .hyperx_cloud_flight import HyperXCloudFlightProvider  # noqa: F401
 from .hyperx_ngenuity import HyperXNgenuityProvider  # noqa: F401
 from .monsgeek import MonsGeekProvider  # noqa: F401
+from .royuan import RoyuanProvider  # noqa: F401
 from .eweadn import EweadnProvider  # noqa: F401
 from .eweadn_ydx import EweadnYdxProvider  # noqa: F401
 from .mchose_kb import MchoseKbProvider  # noqa: F401
