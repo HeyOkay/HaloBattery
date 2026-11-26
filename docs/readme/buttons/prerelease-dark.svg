@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="68" viewBox="0 -6 160 68" role="img" aria-labelledby="title">
   <title id="title">Download pre-release</title>
   <rect x=".5" y=".5" width="159" height="61" rx="12" fill="#B7E68D" fill-opacity=".16" stroke="#656565"/>
-  <text x="29" y="38" text-anchor="middle" font-family="Cambria, Georgia, Times New Roman, serif" font-size="30" font-style="italic" font-weight="400" fill="#E7F6DC">β</text>
+  <path transform="translate(21.55 40) scale(.025 -.025)" fill="#E7F6DC" d="M29 -194Q23 -188 23 -186Q23 -183 102 134T186 465Q208 533 243 584T309 658Q365 705 429 705H431Q493 705 533 667T573 570Q573 465 469 396L482 383Q533 332 533 252Q533 139 448 65T257 -10Q227 -10 203 -2T165 17T143 40T131 59T126 65L62 -188Q60 -194 42 -194H29ZM353 431Q392 431 427 419L432 422Q436 426 439 429T449 439T461 453T472 471T484 495T493 524T501 560Q503 569 503 593Q503 611 502 616Q487 667 426 667Q384 667 347 643T286 582T247 514T224 455Q219 439 186 308T152 168Q151 163 151 147Q151 99 173 68Q204 26 260 26Q302 26 349 51T425 137Q441 171 449 214T457 279Q457 337 422 372Q380 358 347 358H337Q258 358 258 389Q258 396 261 403Q275 431 353 431Z"/>
   <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#E7F6DC">
     <text x="55" y="28" font-size="16" font-weight="600">Pre-release</text>
     <text x="55" y="47" font-size="13" fill="#C4D7BA">Test builds</text>
