@@ -1,6 +1,7 @@
 """Synapse에서 캡처한 HID 보고서로 Hammerhead 수신기 경로를 검증한다."""
 
 from functools import reduce
+from itertools import chain, repeat
 from operator import xor
 from unittest import mock
 
@@ -17,6 +18,8 @@ def frame(prefix, suffix):
 LINK_QUERY = frame("02 00 02 00 00 00 01 18 9a 01", "82 00")
 LINK_REPLY = frame("02 02 02 00 00 00 03 18 9a 01 03 00", "83 00 00")
 LEVEL_QUERY = frame("02 00 03 00 00 00 00 07 80", "87 00")
+# 출처: Synapse 4 --logProtocol의 protocol.log, 2026-11-25 14:55:59.450 응답.
+# 좌/우 0x5E는 각각 94%이며, PR #579의 93%는 Synapse 종료 후 별도로 측정한 값이다.
 LEVEL_REPLY = frame("02 02 03 00 00 00 02 07 80 5e 5e", "85 00 01")
 
 
@@ -26,6 +29,28 @@ def changed_reply(reply, offset, *values):
     result[offset:offset + len(values)] = values
     result[62] = reduce(xor, result[3:62], 0)
     return bytes(result)
+
+
+class ContendedReceiver:
+    # 첫 요청의 응답이 덮어써져, 동일한 요청을 다시 보내야 응답하는 수신기를 재현한다.
+    def __init__(self, answer_on=2, foreign_offset=2, foreign_value=0x7F):
+        self.answer_on = answer_on
+        self.foreign_offset = foreign_offset
+        self.foreign_value = foreign_value
+        self.requests = []
+
+    def send_feature_report(self, request):
+        # 연결 조회와 잔량 조회의 재전송 횟수를 각각 기록한다.
+        self.requests.append(request)
+        return len(request)
+
+    def get_feature_report(self, report_id, size):
+        # 재전송 전에는 checksum이 유효한 다른 요청의 응답만 반환한다.
+        request = self.requests[-1]
+        reply = LINK_REPLY if request == LINK_QUERY else LEVEL_REPLY
+        if self.answer_on and self.requests.count(request) >= self.answer_on:
+            return reply
+        return changed_reply(reply, self.foreign_offset, self.foreign_value)
 
 
 class HammerheadV3XTests(tray_test.HideRenameTestCase):
@@ -95,7 +120,8 @@ class HammerheadV3XTests(tray_test.HideRenameTestCase):
                       changed_reply(LEVEL_REPLY, 6, 1), changed_reply(LEVEL_REPLY, 8, 0x83),
                       LEVEL_REPLY[:62] + b"\x00\x00\x00"):
             with self.subTest(reply=reply):
-                self.device.get_feature_report.side_effect = (LINK_REPLY, reply, reply, reply)
+                # 다른 요청의 응답이 계속 오더라도 유효한 잔량으로 받아들이지 않는다.
+                self.device.get_feature_report.side_effect = chain((LINK_REPLY,), repeat(reply))
                 self.assertEqual(R.RazerProvider().poll(), [])
 
     def test_retries_a_busy_read_without_resending_the_command(self):
@@ -104,6 +130,71 @@ class HammerheadV3XTests(tray_test.HideRenameTestCase):
         self.assertEqual([s.level for s in R.RazerProvider().poll()], [94])
         self.assertEqual(self.device.send_feature_report.call_args_list,
                          [mock.call(LINK_QUERY), mock.call(LEVEL_QUERY)])
+
+    def test_resends_after_three_foreign_replies(self):
+        # transaction, command class, command id가 다른 경우를 두 조회에서 모두 검증한다.
+        for offset, value in ((2, 0x7F), (7, 0x0F), (8, 0x03)):
+            with self.subTest(offset=offset):
+                receiver = ContendedReceiver(foreign_offset=offset, foreign_value=value)
+                self.device.send_feature_report.side_effect = receiver.send_feature_report
+                self.device.get_feature_report.side_effect = receiver.get_feature_report
+                self.device.get_feature_report.reset_mock()
+                self.assertEqual([s.level for s in R.RazerProvider().poll()], [94])
+                self.assertEqual(receiver.requests, [LINK_QUERY] * 2 + [LEVEL_QUERY] * 2)
+                self.assertEqual(self.device.get_feature_report.call_count, 8)
+
+    def test_accepts_a_reply_to_the_last_allowed_send(self):
+        # 마지막 허용 재전송에 응답해도 두 조회가 모두 성공해야 한다.
+        receiver = ContendedReceiver(answer_on=3)
+        self.device.send_feature_report.side_effect = receiver.send_feature_report
+        self.device.get_feature_report.side_effect = receiver.get_feature_report
+        self.assertEqual([s.level for s in R.RazerProvider().poll()], [94])
+        self.assertEqual(receiver.requests, [LINK_QUERY] * 3 + [LEVEL_QUERY] * 3)
+        self.assertEqual(self.device.get_feature_report.call_count, 14)
+
+    def test_foreign_replies_cannot_cause_unbounded_resends(self):
+        # 다른 앱이 계속 응답 버퍼를 덮어쓰더라도 전송 세 번, 읽기 아홉 번에서 끝낸다.
+        receiver = ContendedReceiver(answer_on=0)
+        self.device.send_feature_report.side_effect = receiver.send_feature_report
+        self.device.get_feature_report.side_effect = receiver.get_feature_report
+        self.assertEqual(R.RazerProvider().poll(), [])
+        self.assertEqual(receiver.requests, [LINK_QUERY] * 3)
+        self.assertEqual(self.device.get_feature_report.call_count, 9)
+        self.device.close.assert_called_once_with()
+
+    def test_busy_or_invalid_replies_do_not_cause_resends(self):
+        # busy, 무응답, 짧은 패킷, 길이 오류, checksum 오류는 경합의 증거가 아니다.
+        for reply in (changed_reply(LINK_REPLY, 1, 1), None, LINK_REPLY[:63],
+                      changed_reply(LINK_REPLY, 6, 1), LINK_REPLY[:62] + b"\x00\x00\x00"):
+            with self.subTest(reply=reply):
+                self.device.send_feature_report.reset_mock()
+                self.device.get_feature_report.reset_mock()
+                self.device.get_feature_report.side_effect = repeat(reply)
+                self.assertEqual(R.RazerProvider().poll(), [])
+                self.device.send_feature_report.assert_called_once_with(LINK_QUERY)
+                self.assertEqual(self.device.get_feature_report.call_count, 3)
+
+    def test_short_write_stops_initial_send_or_resend(self):
+        # 짧은 쓰기는 즉시 중단하며, 실패한 재전송 뒤에 추가 읽기를 하지 않는다.
+        for sends, reads in (((63,), 0), ((64, 63), 3)):
+            with self.subTest(sends=sends):
+                self.device.send_feature_report.reset_mock()
+                self.device.get_feature_report.reset_mock()
+                self.device.send_feature_report.side_effect = sends
+                self.device.get_feature_report.side_effect = repeat(changed_reply(LINK_REPLY, 2, 4))
+                self.assertEqual(R.RazerProvider().poll(), [])
+                self.assertEqual(self.device.send_feature_report.call_args_list,
+                                 [mock.call(LINK_QUERY)] * len(sends))
+                self.assertEqual(self.device.get_feature_report.call_count, reads)
+
+    def test_device_removed_during_resend_closes_handle(self):
+        # 재전송 중 장치가 사라져도 예외를 처리하고 핸들을 닫는다.
+        self.device.send_feature_report.side_effect = (64, OSError("receiver removed"))
+        self.device.get_feature_report.side_effect = repeat(changed_reply(LINK_REPLY, 2, 4))
+        self.assertEqual(R.RazerProvider().poll(), [])
+        self.assertEqual(self.device.send_feature_report.call_count, 2)
+        self.assertEqual(self.device.get_feature_report.call_count, 3)
+        self.device.close.assert_called_once_with()
 
     def test_device_removed_mid_poll_closes_handle(self):
         self.device.get_feature_report.side_effect = (LINK_REPLY, OSError("receiver removed"))

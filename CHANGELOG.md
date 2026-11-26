@@ -8,6 +8,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Retry Razer Hammerhead V3 X HyperSpeed battery and link queries a limited
+  number of times when the receiver returns replies to other requests.
 - Label the MSI provider as wireless devices in Portuguese, including keyboards.
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.

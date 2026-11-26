@@ -1328,12 +1328,32 @@ for left and right). When at least one earbud is connected, class `0x07`,
 command `0x80` with zero arguments returns the left and right percentages in
 bytes 9 and 10. Byte 62 is the XOR of bytes 3 through 61. The reader checks
 the reply status, transaction, argument count, and checksum before using it.
+If three reads yield no matching reply and include a checksum-valid success
+reply for a different transaction or command, the reader resends the identical
+captured query, up to three sends and nine reads per query. This follows the
+existing Razer provider's contention handling; contention has not been confirmed
+on Hammerhead hardware. Busy, missing or malformed replies alone do not trigger
+a resend, and a short write stops the query immediately.
 
 The tray shows the lowest valid level among the connected earbuds. `0xFF`
 means a level is unavailable. Like Synapse, the app treats connected earbuds
 as running on battery, so low-battery alerts apply. The charging-case battery
 is unavailable.
 Confirmed on Windows with the `1532:0A64` receiver and both earbuds connected.
+
+**Battery fixture provenance:** `LEVEL_REPLY` in `tests/test_hammerhead_v3x.py`
+is the 65-byte `get` response in Synapse 4's `--logProtocol` `protocol.log` at
+`2026-11-25 14:55:59.450`. Its left/right payload is `5e 5e` (94% each).
+The 93% hardware reading in PR #579 came from a later, separate
+`RazerProvider.poll()` run after closing Synapse; it is not this captured frame.
+
+**Charging-case follow-up (2026-11-26):** the owner placed the earbuds back
+in the charging case and manually refreshed Halo Battery. The device then
+disappeared from the tray. The previous icon can remain visible between polls.
+No docked HID exchange was captured in this check, so the observation does not
+distinguish a changed link bit from missing replies. The existing Synapse-based
+on-battery interpretation for connected readings is retained; no charging flag
+or charging-case battery reading is inferred from this observation.
 
 ### Razer Barracuda X (2022) (2.4 GHz)
 

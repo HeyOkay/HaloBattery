@@ -19,6 +19,7 @@ REPORT_SIZE = 64
 CHECKSUM_INDEX = 62
 LINK = (0x18, 0x9A)
 BATTERY = (0x07, 0x80)
+MAX_SENDS = 3  # 다른 요청의 정상 응답이 반복될 때만 같은 조회를 최대 세 번 전송한다.
 
 
 def _checksum(frame: bytes | bytearray) -> int:
@@ -29,6 +30,14 @@ def _checksum(frame: bytes | bytearray) -> int:
     return result
 
 
+def _is_foreign_reply(reply: bytes, tid: int, command: tuple[int, int]) -> bool:
+    # 손상되거나 busy인 응답과 구분해, 다른 transaction 또는 명령의 정상 응답만 찾는다.
+    return (len(reply) in (REPORT_SIZE, REPORT_SIZE + 1)
+            and reply[:2] == bytes((REPORT_ID, 0x02))
+            and reply[CHECKSUM_INDEX] == _checksum(reply)
+            and (reply[2] != tid or reply[7:9] != bytes(command)))
+
+
 def _query(dev, tid: int, command: tuple[int, int], args: bytes, reply_size: int) -> bytes | None:
     # 64바이트 SET에 이어 같은 report ID로 GET하고, 요청과 짝이 맞는 응답만 읽는다.
     request = bytearray(REPORT_SIZE)
@@ -37,17 +46,23 @@ def _query(dev, tid: int, command: tuple[int, int], args: bytes, reply_size: int
     request[6:9] = (len(args), *command)
     request[9:9 + len(args)] = args
     request[CHECKSUM_INDEX] = _checksum(request)
-    if dev.send_feature_report(bytes(request)) < REPORT_SIZE:
-        return None
     header = bytes((REPORT_ID, 0x02, tid))
     command_header = bytes((reply_size, *command))
-    for _ in range(3):
-        time.sleep(0.11)  # Synapse 캡처에서 SET과 GET 사이 약 100 ms를 기다렸다.
-        reply = bytes(dev.get_feature_report(REPORT_ID, REPORT_SIZE + 1) or ())
-        if (len(reply) in (REPORT_SIZE, REPORT_SIZE + 1)
-                and reply[:3] == header and reply[6:9] == command_header
-                and reply[CHECKSUM_INDEX] == _checksum(reply)):
-            return reply[9:9 + reply_size]
+    for _ in range(MAX_SENDS):
+        # 기존 Razer 경로처럼 응답 버퍼 경합 시 캡처된 동일한 읽기 요청만 재전송한다.
+        if dev.send_feature_report(bytes(request)) < REPORT_SIZE:
+            return None
+        foreign = False
+        for _ in range(3):
+            time.sleep(0.11)  # Synapse 캡처에서 SET과 GET 사이 약 100 ms를 기다렸다.
+            reply = bytes(dev.get_feature_report(REPORT_ID, REPORT_SIZE + 1) or ())
+            if (len(reply) in (REPORT_SIZE, REPORT_SIZE + 1)
+                    and reply[:3] == header and reply[6:9] == command_header
+                    and reply[CHECKSUM_INDEX] == _checksum(reply)):
+                return reply[9:9 + reply_size]
+            foreign = foreign or _is_foreign_reply(reply, tid, command)
+        if not foreign:
+            return None  # 무응답, busy 또는 손상된 응답만으로는 다시 전송하지 않는다.
     return None
 
 
