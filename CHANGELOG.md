@@ -11,11 +11,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
   mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
+- Akko Verge S9 Ultra (`36EB:1087` dongle, `36EB:0087` USB cable): read the level from the
+  dongle's HID report 2 (`02 10` link, `02 12` battery), decoded from a USBPcap capture of
+  the vendor app, with the frame's two-byte trailer computed and the reply's trailer
+  checked. The dongle exchange has no charging flag. Charging comes from the wired id
+  (`36EB:0087`), which the vendor app shows as a *Charging* card: its presence is the
+  charging signal and the level stays the dongle's last reading. Confirmed by the reporter
+  of [#505](https://github.com/HeyOkay/HaloBattery/issues/505): the level and the cable
+  charging state both work.
 
 ### Changed
 
-- Retry Razer Hammerhead V3 X HyperSpeed battery and link queries a limited
-  number of times when the receiver returns replies to other requests.
 - Prepare a separate production signing chain for application executables,
   Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer. Require
   trusted timestamped signatures and installer checks before stable publication.
@@ -117,8 +123,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Use independent protocol fixtures and cover the six originally surviving
   battery/history mutations without changing device requests or controller identities.
+- Retry Razer Hammerhead V3 X HyperSpeed battery and link queries a limited
+  number of times when the receiver returns replies to other requests.
 
 ### Added
+- ROYUAN 2.4 GHz keyboards (`3151:4011` receiver, reported on an Epomaker TH80 ISO):
+  read the receiver's `0xF7` status feature report - keyboard level, link byte and
+  device type - from the exchange documented and hardware-measured in
+  `dniminenn/sharkfin` (GPL-3.0, protocol reference only). Charging is shown from the
+  keyboard's own `3151:4015` enumeration when switched to wired mode (Fn+5) with a USB-C
+  data cable in; the 2.4 GHz status has no usable charging field, so a wall charger stays
+  unknown. Test build 2 confirmed wired charging on hardware; the wireless replies with
+  and without a wall charger differ only in the level byte
+  ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
 - Show Razer Hammerhead V3 X HyperSpeed earbud battery through its 2.4 GHz
   charging-case receiver (`1532:0A64`). When both earbuds are connected, show
   the lower of their reported levels. Use Synapse's on-battery status for
@@ -426,6 +443,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Refuse normal startup when the shared instance guard cannot be created,
+  and retain its handle so app startup respects diagnostic exclusivity.
 - Show the Attack Shark R1 charging animation over its 2.4 GHz receiver,
   including when powered by a wall charger.
 - Extend the Settings Close button hit target to the top-right corner while
@@ -480,6 +499,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
   ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Lofree Flow Lite84: read the dongle on Compx's own USB id `3554:FA0A` as well as
+  `05AC:024F`, keeping the product-string and FF02:0002 collection guard (#557).
+  Confirmed by the reporter of #557 on test build 1: level, charging on the cable,
+  and the reading cleared when unplugged.
 - Keep Lofree Flow queries on the verified receiver control collection, preventing
   fallback writes to AULA F108 and other devices sharing its USB ID (#413).
 - Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
