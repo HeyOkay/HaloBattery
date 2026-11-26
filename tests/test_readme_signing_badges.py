@@ -30,6 +30,14 @@ def job_results(names=PRODUCTION_JOBS):
 
 
 class ReadmeSigningBadgeTests(unittest.TestCase):
+    def test_all_readme_sources_use_gated_badges_including_light_fallback(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ("README.md", "README.ru.md", "README.zh-CN.md"):
+            with self.subTest(name=name):
+                text = (root / name).read_text(encoding="utf-8")
+                self.assertNotIn('="docs/readme/signpath', text)
+                self.assertIn("docs/readme-download-stats/signpath", text)
+
     def test_verified_production_run_enables_attribution(self):
         for branch in ("main", "v1.18.0"):
             with self.subTest(branch=branch), patch(
