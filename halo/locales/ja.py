@@ -134,6 +134,7 @@ MESSAGES = {
     "state.charging": "{state}、充電中",
     "state.asleep": "{state}（前回の残量、デバイスはスリープ中）",
     "provider.ajazz": "AJAZZ マウス",
+"provider.akko_s9": "Akko Verge S9 Ultra ヘッドセット",
     "provider.alienware": "Alienware Pro Wireless キーボード",
     "provider.atk_keyboard": "ATK V75X キーボード",
     "provider.atk_nearlink": "ATK X1 Nearlink マウス",

@@ -44,6 +44,7 @@ from .asus import AsusProvider  # noqa: F401
 from .glorious import GloriousProvider  # noqa: F401
 from .gs3075t import Gs3075tProvider  # noqa: F401
 from .lamzu_sw import LamzuSinowealthProvider  # noqa: F401
+from .akko_s9 import AkkoS9Provider  # noqa: F401
 from .gwolves import GWolvesProvider  # noqa: F401
 from .lofree import LofreeProvider  # noqa: F401
 from .astro import AstroProvider  # noqa: F401

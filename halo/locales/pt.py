@@ -119,6 +119,7 @@ MESSAGES = {
     "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.nintendo": "Controles Nintendo Switch",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
+    "provider.akko_s9": "Headset Akko Verge S9 Ultra",
     "provider.playstation": "Controles PlayStation",
     "provider.plantronics": "Headsets Plantronics (adaptador BT600)",
     "provider.pulsar": "Mouses Pulsar / ATK VXE / Redragon",

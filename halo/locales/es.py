@@ -143,6 +143,7 @@ MESSAGES = {
     "state.charging": "{state}, cargando",
     "state.asleep": "{state} (último valor conocido, dispositivo suspendido)",
     "provider.ajazz": "Ratones AJAZZ",
+"provider.akko_s9": "Auriculares Akko Verge S9 Ultra",
     "provider.alienware": "Teclado Alienware Pro Wireless",
     "provider.atk_keyboard": "Teclado ATK V75X",
     "provider.atk_nearlink": "Ratones ATK X1 Nearlink",
