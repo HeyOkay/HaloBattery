@@ -235,26 +235,32 @@ class SettingsControllerTests(HideRenameTestCase):
 
 
 class CompactTrayTests(HideRenameTestCase):
-    def test_real_menu_contains_only_quick_actions_and_no_configuration_submenus(self):
+    def test_real_menu_keeps_quick_actions_and_one_essential_device_submenu(self):
         app = make_app()
         app.apply([dev()])
         owner = next(iter(app.icons.values()))
         app.open_settings = mock.Mock()
         menu = app.build_tray_menu(owner)
         visible = [i for i in menu.items if i.visible]
-        self.assertEqual(len(visible), 5)
-        self.assertFalse(any(i.submenu for i in visible))
-        visible[1](None)
-        app.open_settings.assert_called_once_with(owner.key, page="devices")
+        self.assertEqual(len(visible), 6)
+        self.assertEqual([i.text for i in visible[1:3]],
+                         [app.tr("menu.this_device"), app.tr("settings.open_app").rstrip(".…")])
+        submenus = [i for i in visible if i.submenu]
+        self.assertEqual([i.text for i in submenus], [app.tr("menu.this_device")])
+        self.assertEqual([i.text for i in submenus[0].submenu.items],
+                         [app.tr("menu.hide"), app.tr("menu.low_battery"),
+                          app.tr("settings.open_device").rstrip(".…")])
+        next(i for i in visible if i.default)(None)
+        app.open_settings.assert_called_once_with(page="general")
         app.wake.clear()
-        visible[2](None)
+        next(i for i in visible if i.text == app.tr("menu.refresh"))(None)
         self.assertTrue(app.wake.is_set())
 
-    def test_placeholder_settings_restores_the_previous_page(self):
+    def test_placeholder_settings_opens_general_page(self):
         app = make_app()
         app.open_settings = mock.Mock()
-        app.build_tray_menu(None).items[1](None)
-        app.open_settings.assert_called_once_with()
+        next(i for i in app.build_tray_menu(None).items if i.default)(None)
+        app.open_settings.assert_called_once_with(page="general")
 
     def test_compact_labels_strip_only_trailing_ellipses(self):
         app = make_app()
@@ -262,7 +268,7 @@ class CompactTrayTests(HideRenameTestCase):
                                 ("Settings...… ", "Settings"),
                                 ("Choose... a device…", "Choose... a device")):
             with self.subTest(label=label), mock.patch.object(app, "tr", return_value=label):
-                self.assertEqual(app.build_tray_menu(None).items[1].text, expected)
+                self.assertEqual(next(i for i in app.build_tray_menu(None).items if i.default).text, expected)
 
     def test_compact_labels_have_no_trailing_ellipsis_in_every_language_and_update_state(self):
         for language in hb.i18n.LANGUAGES:
@@ -276,14 +282,256 @@ class CompactTrayTests(HideRenameTestCase):
                         app.install_ok = state == "install"
                         app.update_progress = 42 if state == "progress" else None
                         visible = [item for item in app.build_tray_menu(owner).items if item.visible]
-                        self.assertEqual(len(visible), 5 if state is None else 6)
+                        self.assertEqual(len(visible), 5 + (owner is not None) + (state is not None))
                         for item in visible[1:]:
                             self.assertFalse(item.text.endswith(("...", "…")))
                         if state == "progress":
-                            self.assertEqual(visible[3].text, hb.update_item_text(
+                            update_item = next(item for item in visible
+                                               if not isinstance(item, hb.flyout.HeaderItem) and "%" in item.text)
+                            self.assertEqual(update_item.text, hb.update_item_text(
                                 "2.0.0", False, 42, language=language))
                         if owner is not None:
                             self.assertIn("Work... mouse…", visible[0].text)
+
+    def device_menu(self, app, menu):
+        return next(i for i in menu.items if i.text == app.tr("menu.this_device"))
+
+    def test_classic_and_compact_thresholds_match_preferences_in_every_locale(self):
+        for language in hb.i18n.LANGUAGES:
+            with self.subTest(language=language):
+                app = make_app({"language": language, "low": 20})
+                app.apply([dev()])
+                owner = next(iter(app.icons.values()))
+                compact = self.device_menu(app, app.build_tray_menu(owner)).submenu.items[1].submenu
+                classic = next(i.submenu for i in app.build_menu(owner).items
+                               if i.text == app.tr("menu.device_low"))
+                preferences = app.build_menu(owner, preferences_only=True)
+                counter = next(i for i in preferences.items if i.text == app.tr("preferences.low"))
+                expected = hb.low_choices(app.tr)
+                self.assertEqual(list(counter.choices), expected)
+                self.assertEqual([i.text for i in compact.items], [i.text for i in classic.items])
+                self.assertEqual([i.text for i in classic.items[1:]], [text for _v, text in expected])
+                for menu in (compact, classic):
+                    for index, value in enumerate((None, 0, 5, 10, 15, 20, 25, 30)):
+                        menu.items[index](None)
+                        self.assertEqual(app.device_low(owner.status.key), value)
+                        self.assertEqual([bool(i.checked) for i in menu.items],
+                                         [j == index for j in range(8)])
+                    menu.items[0](None)
+                    app.cfg["low"] = 0
+                    self.assertEqual(menu.items[0].text, app.tr("menu.default_off"))
+
+    def test_both_threshold_menus_reject_retired_owner_but_follow_current_identity(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        compact = self.device_menu(app, app.build_tray_menu(owner)).submenu.items[1].submenu
+        classic = next(i.submenu for i in app.build_menu(owner).items
+                       if i.text == app.tr("menu.device_low"))
+        previous = owner.status.key
+        owner.status = replace(owner.status, key="new:identity")
+        app.icons[owner.status.key] = app.icons.pop(previous)
+        for menu in (compact, classic):
+            menu.items[4](None)
+            self.assertEqual(app.device_low("new:identity"), 15)
+            self.assertNotIn(previous, app.cfg["lows"])
+        app.icons[owner.status.key] = object()
+        app.set_device_low = mock.Mock()
+        for menu in (compact, classic):
+            for item in menu.items:
+                item(None)
+                self.assertFalse(item.checked)
+        app.set_device_low.assert_not_called()
+
+    def test_device_callbacks_follow_current_status_key_without_header_action(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        menu = app.build_tray_menu(owner)
+        device = self.device_menu(app, menu)
+        app.open_settings = mock.Mock()
+        old_key = owner.status.key
+        owner.status = replace(owner.status, key="new:identity", name="Current mouse")
+        app.icons[owner.status.key] = app.icons.pop(old_key)
+        self.assertNotEqual(owner.key, owner.status.key)
+        self.assertIsNone(menu.items[0].edit)
+        self.assertIn("Current mouse", menu.items[0].text)
+        device.submenu.items[2](None)
+        app.open_settings.assert_called_once_with("new:identity", page="devices")
+        choices = device.submenu.items[1].submenu.items
+        choices[4](None)  # 15%, using the existing persisted per-device override
+        self.assertEqual(app.device_low("new:identity"), 15)
+        self.assertTrue(choices[4].checked)
+        device.submenu.items[0](None)
+        self.assertNotIn("new:identity", app.icons)
+        self.assertEqual(app.cfg["hidden"], {"new:identity": "Current mouse"})
+        self.assertFalse(device.visible)
+
+    def test_low_choices_preserve_default_off_and_each_threshold(self):
+        app = make_app({"low": 20})
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        menu = app.build_tray_menu(owner)
+        choices = self.device_menu(app, menu).submenu.items[1].submenu.items
+        values = (None, 0, 5, 10, 15, 20, 25, 30)
+        self.assertEqual(len(choices), len(values))
+        for index, value in enumerate(values):
+            with self.subTest(value=value):
+                choices[index](None)
+                self.assertEqual(app.device_low(owner.status.key), value)
+                self.assertEqual([bool(i.checked) for i in choices],
+                                 [i == index for i in range(len(choices))])
+                self.assertTrue(all(i.radio for i in choices))
+        choices[0](None)
+        self.assertNotIn(owner.status.key, app.cfg["lows"])
+        self.assertEqual(choices[0].text, app.tr("menu.default_low", level=20))
+        app.cfg["low"] = 0
+        self.assertEqual(choices[0].text, app.tr("menu.default_off"))
+
+    def test_missing_or_replaced_owner_has_no_device_actions(self):
+        for state in ("no-status", "removed", "replaced"):
+            with self.subTest(state=state):
+                app = make_app()
+                app.apply([dev()])
+                owner = next(iter(app.icons.values()))
+                menu = app.build_tray_menu(owner)
+                device = self.device_menu(app, menu)
+                app.rename, app.hide = mock.Mock(), mock.Mock()
+                app.set_device_low, app.open_settings = mock.Mock(), mock.Mock()
+                if state == "no-status":
+                    owner.status = None
+                elif state == "removed":
+                    app.icons.clear()
+                else:
+                    app.icons[owner.status.key] = object()
+                self.assertFalse(device.visible)
+                self.assertIsNone(menu.items[0].edit)
+                device.submenu.items[0](None)
+                device.submenu.items[2](None)
+                for item in device.submenu.items[1].submenu.items:
+                    self.assertFalse(item.checked)
+                    item(None)
+                for callback in (app.rename, app.hide, app.set_device_low, app.open_settings):
+                    callback.assert_not_called()
+                self.assertIsNone(app.build_tray_menu(owner).items[0].edit)
+        app = make_app()
+        menu = app.build_tray_menu(None)
+        self.assertFalse(self.device_menu(app, menu).visible)
+        self.assertIsNone(menu.items[0].edit)
+
+    def test_device_submenu_labels_are_present_and_compact_in_every_locale(self):
+        for language, details in hb.i18n.LANGUAGES.items():
+            with self.subTest(language=language):
+                for key in ("menu.this_device", "menu.low_battery", "menu.rename_hint"):
+                    self.assertIn(key, details.catalog)
+                    self.assertTrue(details.catalog[key].strip())
+                app = make_app({"language": language})
+                app.apply([dev()])
+                owner = next(iter(app.icons.values()))
+                device = self.device_menu(app, app.build_tray_menu(owner))
+                self.assertTrue(device.visible)
+                for item in device.submenu.items:
+                    self.assertFalse(item.text.endswith(("...", "…")))
+                    if item.submenu:
+                        self.assertTrue(all(not i.text.endswith(("...", "…")) for i in item.submenu.items))
+
+    def test_inline_rename_factory_is_read_only_and_commits_unicode_name(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        header = app.build_tray_menu(owner).items[0]
+        app.refresh_menus = mock.Mock()
+        with mock.patch.object(hb, "ask_name") as modal:
+            current, commit = header.begin_rename()
+            self.assertEqual(current, owner.status.name)
+            self.assertEqual(header.rename_hint, app.tr("menu.rename_hint"))
+            self.assertIsNone(header.edit)
+            self.assertEqual(self.saved, [])
+            self.assertNotIn(owner.status.key, app.cfg.get("names", {}))
+            self.assertTrue(commit("  Рабочая мышь 🐁  "))
+            modal.assert_not_called()
+        self.assertEqual(app.cfg["names"][owner.status.key], "Рабочая мышь 🐁")
+        self.assertIn("Рабочая мышь 🐁", owner.titles[-1])
+        app.refresh_menus.assert_called_once_with()
+        self.assertEqual(len(self.saved), 1)
+
+    def test_inline_rename_limits_name_and_restores_default_with_hidden_sync(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        key = owner.status.key
+        app.cfg["names"] = {"other": "Other"}
+        app.cfg["hidden"] = {key: "Old", "other": "Other"}
+        header = app.build_tray_menu(owner).items[0]
+        _, commit = header.begin_rename()
+        self.assertTrue(commit(" " + "鼠" * 100 + " "))
+        self.assertEqual(app.cfg["names"][key], "鼠" * 60)
+        self.assertEqual(app.cfg["hidden"][key], "鼠" * 60)
+        _, restore = header.begin_rename()
+        self.assertTrue(restore(owner.status.name))
+        self.assertEqual(app.cfg["names"], {"other": "Other"})
+        self.assertEqual(app.cfg["hidden"], {key: owner.status.name, "other": "Other"})
+
+    def test_inline_rename_rejects_empty_control_and_non_text_without_writes(self):
+        app = make_app()
+        app.apply([dev()])
+        owner = next(iter(app.icons.values()))
+        _, commit = app.build_tray_menu(owner).items[0].begin_rename()
+        for bad in (None, False, 15, [], "", "  ", "Work\nmouse", "\tWork", "Work\r",
+                    "Mouse\0", "Mouse\x7f", "Mouse\x85", "Mouse\u2028", "Mouse\u2029"):
+            with self.subTest(value=bad):
+                self.assertFalse(commit(bad))
+        self.assertEqual(self.saved, [])
+        self.assertNotIn(owner.status.key, app.cfg.get("names", {}))
+        self.assertTrue(commit(owner.status.name))  # unchanged is a successful no-op
+        self.assertEqual(self.saved, [])
+
+    def test_inline_rename_commit_rejects_owner_or_key_changed_during_edit(self):
+        for state in ("no-status", "removed", "replaced", "new-key"):
+            with self.subTest(state=state):
+                app = make_app()
+                app.apply([dev()])
+                owner = next(iter(app.icons.values()))
+                old_key = owner.status.key
+                header = app.build_tray_menu(owner).items[0]
+                _, commit = header.begin_rename()
+                if state == "no-status":
+                    owner.status = None
+                elif state == "removed":
+                    app.icons.clear()
+                elif state == "replaced":
+                    app.icons[old_key] = object()
+                else:
+                    owner.status = replace(owner.status, key="new:identity")
+                    app.icons[owner.status.key] = app.icons.pop(old_key)
+                self.assertFalse(commit("Wrong device"))
+                self.assertEqual(app.cfg.get("names", {}), {})
+                self.assertEqual(self.saved, [])
+                if state != "new-key":
+                    self.assertIsNone(header.begin_rename())
+
+    def test_inline_rename_factory_resolves_first_status_after_menu_creation(self):
+        app = make_app()
+        owner = types.SimpleNamespace(status=None)
+        header = app.build_tray_menu(owner).items[0]
+        self.assertIsNone(header.begin_rename())
+        owner.status = dev()
+        app.icons[owner.status.key] = owner
+        self.assertEqual(header.begin_rename()[0], owner.status.name)
+        self.assertIsNone(app.build_tray_menu(None).items[0].begin_rename)
+
+    def test_inline_rename_repairs_wrong_type_name_and_hidden_maps(self):
+        for bad in (None, 17, "invalid", []):
+            with self.subTest(value=bad):
+                app = make_app()
+                app.apply([dev()])
+                owner = next(iter(app.icons.values()))
+                _, commit = app.build_tray_menu(owner).items[0].begin_rename()
+                app.cfg["names"], app.cfg["hidden"] = bad, bad
+                self.assertTrue(commit("Work mouse"))
+                self.assertEqual(app.cfg["names"], {owner.status.key: "Work mouse"})
+                self.assertEqual(app.cfg["hidden"], {})
+                self.assertEqual(self.saved[-1]["names"], app.cfg["names"])
 
     @unittest.skipUnless(sys.platform == "win32", "Windows tray notifications")
     def test_double_click_opens_once_and_single_click_does_not_refresh(self):

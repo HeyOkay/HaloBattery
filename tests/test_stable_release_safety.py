@@ -180,16 +180,29 @@ class StablePublisherPolicyTests(unittest.TestCase):
                 self.assertEqual(step(name, TEXT), step(name, stable_only))
 
     def test_only_fresh_publisher_gets_attestation_permissions(self):
-        build = TEXT.split("\n  publish:\n", 1)[0]
         publish = publisher(TEXT)
-        self.assertNotIn("id-token: write", build)
-        self.assertNotIn("attestations: write", build)
-        self.assertIn("      contents: read", build)
+        # Signing jobs now follow the publisher in the document. Check every
+        # other job, rather than only the old build-before-publish prefix.
+        jobs = re.split(r"(?m)(?=^  [A-Za-z_][A-Za-z0-9_-]*:\n)", TEXT.split("\njobs:\n", 1)[1])
+        for job in filter(str.strip, jobs):
+            if job.startswith("  publish:\n"):
+                continue
+            with self.subTest(job=job.splitlines()[0].strip()):
+                self.assertNotIn("id-token: write", job)
+                self.assertNotIn("attestations: write", job)
+                self.assertNotIn("contents: write", job)
+                self.assertIn("      contents: read", job)
         self.assertIn("      id-token: write", publish)
         self.assertIn("      attestations: write", publish)
         self.assertNotIn("artifact-metadata: write", publish)
         self.assertNotRegex(publish, r"actions/checkout|pip install|dotnet |python |./tools/|./scripts/")
-        self.assertIn("    if: github.event_name == 'push' && github.ref_type == 'tag'", publish)
+        gate = re.search(r"(?m)^    if: (.+)$", publish).group(1)
+        self.assertEqual(gate, "always() && !cancelled() && github.event_name == 'push' && "
+                         "github.ref_type == 'tag' && needs.signing_verify.result == 'success' && "
+                         "needs.signing_verify.outputs.mode == 'Production'")
+        self.assertIn("    needs: signing_verify\n", publish)
+        self.assertIn("          artifact-ids: ${{ needs.signing_verify.outputs.release-artifact }}\n", publish)
+        self.assertEqual(publish.count("actions/download-artifact@"), 1)
         self.assertIn("      cancel-in-progress: false", publish)
 
     def test_exact_pinned_action_attests_only_validated_zip_and_installer(self):

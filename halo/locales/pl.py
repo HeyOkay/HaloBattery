@@ -2,9 +2,12 @@
 
 MESSAGES = {
     "device.description": "{name}: {state}",
+    "menu.rename_hint": "Kliknij dwukrotnie, aby zmienić nazwę",
     "menu.rename": "Zmień nazwę…",
     "menu.reset_name": "Przywróć nazwę",
     "menu.icon": "Ikona",
+    "menu.this_device": "To urządzenie",
+    "menu.low_battery": "Alert niskiego poziomu baterii",
     "menu.device_low": "Alert niskiego poziomu baterii (to urządzenie)",
     "menu.default_low": "Domyślnie ({level}%)",
     "menu.default_off": "Domyślnie (wyłączony)",
@@ -356,6 +359,7 @@ MESSAGES = {
     "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.mchose_k99": "MCHOSE K99 V3",
     "provider.ninjutso_sora_v3": "Ninjutso Sora V3",
+    "provider.akko_s9": "Słuchawki Akko Verge S9 Ultra",
     "provider.wraith": "Wraith W1",
     "provider.aula_f108": "Klawiatury AULA F108 Pro",
     "provider.areson": "Myszy Areson / Redragon",

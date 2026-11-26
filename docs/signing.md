@@ -1,122 +1,179 @@
-# Test signing with SignPath
+# Signing and release publication
 
-Test signing is an explicit mode of the existing `release.yml` manual workflow.
-Its build, packaging, signing and verification jobs live in the same workflow.
-Normal manual builds, stable tag builds and per-build pre-releases retain their
-existing behavior.
+The release workflow has three entry points:
 
-The job chain is:
+- An ordinary manual run builds unsigned preview artifacts only.
+- `signpath_test=true` explicitly exercises the complete signing chain from
+  `pre-release`, using the pinned self-signed TEST certificate.
+- Stable tags use production signing. `signpath_release=true` can exercise the
+  production chain from `main` without publishing a release.
 
-1. Build and test the unsigned application without a signing environment or key.
-2. On a fresh runner, sign only the two application executables.
-3. Without a key, verify the returned signatures and unchanged PE content,
-   preserve every dependency, then package the application and compile Inno Setup.
-4. On another fresh signing runner, sign the outer installer.
-5. Without a key, compare the signed installer with the unsigned original,
-   calculate final checksums and upload the TEST artifacts.
+Only a successful production verification on a stable tag can reach the
+immutable release publisher. Missing configuration, certificates, credentials or
+signatures fail the run; there is no unsigned publication fallback.
 
-Signing jobs run no project checkout, build scripts, tests or installer compiler.
-All jobs are GitHub-hosted with read-only repository permissions. Signing inputs
-come from exact artifact IDs in this same run, never a supplied external run ID.
-Artifact names include the attempt number so reruns cannot overwrite an earlier
-attempt. The workflow has no publisher, release permissions or tag operations.
+## Job and credential boundaries
 
-## Account configuration
+1. A token-free job checks repository, mode, version and source, then tests/builds
+   the unsigned app and records a full inventory.
+2. A fresh protected signer signs the main and Settings executables and the
+   exact embedded 64-bit helper extracted from the pinned Inno compiler data.
+3. A token-free job checks signatures and unchanged PE contents/dependencies.
+   A private verified Inno Setup 6.7.4 template embeds that signed helper, then
+   generates its uniquely named internal engine for external signing.
+4. A fresh protected signer signs that exact internal engine.
+5. A token-free job compares it with the original and recompiles with
+   `SignedUninstaller=yes` and the verified signed cache. The uninstaller and
+   temporary Setup copies inherit this signature.
+6. A fresh protected signer signs the outer installer.
+7. A fresh token-free job verifies the package, signatures, original PE contents,
+   full inventory, checksums and provenance. On an isolated GitHub-hosted Windows
+   runner it captures actual temporary executables and exercises silent install,
+   same-version upgrade and uninstall. Captured engines and installed uninstallers
+   must match the verified signed Inno cache. The helper must have the same
+   pinned signature and match its authenticated resource at the exact helper path.
+8. The existing data-only publisher receives only four verified production files:
+   application ZIP, installer, checksums and release notes. It retains draft,
+   attestation, remote digest and immutable-release checks.
 
-The owner confirmed the notification email for `CI builds`. The existing SignPath
-organization is `HaloBattery [OSS]`, ID
-`c54d1cb1-9c0a-478b-8eb8-036eb7084713`; project slug is `HaloBattery`.
-The workflow pins policy `test-signing` and the self-signed test certificate
-thumbprint `17F9F411C424674855A077F9A120A7A434990AF1`. These are public identifiers,
-not credentials. Certificate replacement requires a reviewed pin update.
+TEST and production each have three separate literal signer jobs. Only those
+jobs reference their corresponding environment secret. They perform no checkout,
+dependency installation, compilation, project script execution or tests.
+All earlier and later jobs receive no signing credential. Artifact IDs are from
+this same workflow run; rerun names include run ID and attempt.
 
-The two configurations saved in SignPath are:
+A shared job explicitly requires its selected signer to succeed and the other
+mode's signer to be skipped. It rejects missing or mixed outputs instead of
+falling back to whichever artifact ID happens to exist.
 
-| Slug | ZIP contents selected for signing |
+## SignPath project and configurations
+
+Organization: `HaloBattery [OSS]`,
+`c54d1cb1-9c0a-478b-8eb8-036eb7084713`.
+Project slug: `HaloBattery`. The official SignPath GitHub App is installed for
+the selected `HeyOkay/HaloBattery` repository.
+
+| Configuration | Selected own files |
 | --- | --- |
-| `payload-test` | `HaloBattery.exe`, `_internal/settings-ui/HaloBattery.Settings.exe` |
+| `payload-inno-test`, `payload-inno-release` | `HaloBattery.exe`, `_internal/settings-ui/HaloBattery.Settings.exe`, `inno-helper-amd64.exe` |
+| `internal-test`, `internal-release` | One `uninst-6.7.4-<10 hex digits>.e32` generated by the pinned compiler |
 | `installer-test` | `HaloBattery-test-setup.exe` |
+| `installer-release` | `HaloBattery-<version>-setup.exe` |
 
-Their reviewed XML is in `.github/signpath/`. The default single-PE configuration
-is not used by this workflow. No dependency DLL is selected for signing.
+The reviewed XML lives in `.github/signpath/`. No dependency DLL is selected.
+TEST jobs use `test-signing`; production jobs use `release-signing`. Neither
+policy/configuration is selected by a caller-supplied input.
 
-## GitHub preparation
+SignPath manages file-signing timestamps. Production acceptance requires a
+trusted pinned embedded Authenticode signature, SHA256 file/CMS digests, a
+SHA256 RFC3161 timestamp, and native Windows trust/revocation success.
 
-Before enabling a run, create an environment named `signpath-test` with these
-controls:
+The TEST pin is `17F9F411C424674855A077F9A120A7A434990AF1`.
+TEST accepts Windows trust success or exactly the pinned certificate's
+`CERT_E_UNTRUSTEDROOT` result. Other failures remain fatal. No certificate is
+installed into the Windows trust store.
 
-- Allow deployments only from the branch `pre-release`.
-- Require a maintainer review; the owner may approve their own TEST run.
-- Disable administrator bypass of the environment protection rules.
-- Store `SIGNPATH_TEST_API_TOKEN` as an **environment** secret.
+## Signed Inno compiler helper
 
-Use a SignPath CI user with Submitter permission on `test-signing` only. The
-existing `CI builds` user also has Submitter on `release-signing`; a secret name
-containing TEST does not narrow those account permissions. Do not give that
-broader token to this test workflow. Create a separate test CI user or explicitly
-remove its production role before generating/storing the test credential.
-Enter the credential directly into GitHub; never put it in source, logs or chat.
+Inno 6.7.4 also extracts `HELPER_EXE_AMD64` as `_isetup/_setup64.tmp` during
+installation and removal. The vendor template contains this helper unsigned;
+signing only the enclosing engine does not sign the extracted file.
 
-The token must exist **only** as an environment secret: do not create a repository
-or organization secret with the same name. Only `test_sign_payload` and
-`test_sign_installer` select `environment: signpath-test` and reference it, after
-the environment approvals. Build, packaging and verification jobs have no signing
-environment, secret mapping or signing credential. There is no reusable-workflow
-secret declaration, forwarding or inheritance. A missing environment value fails
-before any signing request.
+`tools/inno_helper.py` accepts only the pinned original `Setup.e32` SHA256
+`0C94D43E2C0F4D8371A2E1813B5446F3BC85ECE3211DC4A6676159B534BBC483`
+and its exact 6,144-byte helper SHA256
+`388A796580234EFC95F3B1C70AD4CB44BFDDC7BA0F9203BF4902B9929B136F95`.
+After signature and unchanged-PE verification, it appends the signed helper to a
+private template copy and updates seven explicit resource/PE size fields. Every
+other original byte is preserved. No general resource editor or input execution
+is used. Original template, original helper, signed helper and patched template
+digests are bound between preparation and final compilation.
 
-Keep these jobs in the ordinary manual workflow: GitHub
-[documents secret forwarding for reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#using-inputs-and-secrets-in-a-reusable-workflow).
-Removing a reusable caller mapping alone is not a reliable credential boundary.
-The ordinary jobs use the direct
-[environment-secret boundary](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+The original vendor ISSig no longer describes this private template. Only signed
+cache builds therefore set `DisablePrecompiledFileVerifications=setup`, after the
+independent pinned-input and exact-transformation checks above. Other vendor
+precompiled-file checks remain enabled. Ordinary preview builds use the original
+compiler data and verification. Each generated engine is also checked to contain
+the exact signed helper; a different/custom-style template fails closed.
 
-Before enabling a run, verify secret **names** in the environment, repository and
-any applicable organization settings, plus the environment reviewers, branch
-restriction and administrator-bypass setting. Do not read or print secret values.
+Runtime verification distinguishes the engine from its helper. Every operation
+must capture a verified engine, and helper bytes are accepted only at the exact
+`_isetup/_setup64.tmp` suffix under that operation's isolated TEMP directory.
+Installed uninstallers must match the engine, never just the helper. Unknown PE
+files remain fatal. Bounded audit evidence retains hashes, signature metadata and
+non-executable `.bin` snapshots even when a stage fails.
 
-Keep repository variable `SIGNPATH_TEST_ENABLED` absent or `false` until the
-source and environment are reviewed. Setting it to `true` enables the explicit
-manual TEST mode; it does not schedule or start a run.
+## Protected environment setup
 
-## First authorized run
+`signpath-test`:
 
-The new source must first be published through an approved PR into `pre-release`.
-Local changes alone cannot run on GitHub Actions. No workflow dispatch is part of
-local preparation.
+- Branch restriction: `pre-release`.
+- Required maintainer review; the owner can approve their own TEST run.
+- Administrator bypass disabled.
+- Environment-only secret `SIGNPATH_TEST_API_TOKEN`, belonging to a CI identity
+  with Submitter access to `test-signing` only.
+- Repository variable `SIGNPATH_TEST_ENABLED=true` after source/setup review.
 
-`release.yml` already exists on the default branch, so it provides the registered
-manual entry point. After the approved integration, invoke its selected branch
-version with explicit input:
+`signpath-release`:
+
+- Allow the protected `main` branch for production dry runs and protected
+  `v*` tags for release signing.
+- Require a maintainer to inspect and approve the exact source SHA. Disable
+  administrator bypass. An independent reviewer is recommended; follow any
+  stronger Foundation requirements.
+- Environment-only secret `SIGNPATH_RELEASE_API_TOKEN`, belonging to a separate
+  CI identity with Submitter access to `release-signing` only.
+- Set SignPath origin verification, allowed source branches and review policies
+  so an unreviewed tag cannot authorize signing. Confirm how SignPath resolves
+  tag ancestry to `main`; do not broaden accepted branches to work around a rejection.
+
+Neither token may also exist as a repository/organization secret. Enter token
+values directly into GitHub; never put them in source, logs or chat. Inspect
+secret names, environment reviewers, ref restrictions and bypass policy before
+activation.
+
+## Production activation after certificate issuance
+
+Production is deliberately inactive while the certificate is pending:
+
+1. Have the Foundation review the successful full TEST run and issue/import the
+   production certificate and confirm the origin/timestamp policy.
+2. Review the actual certificate and commit its uppercase SHA1 thumbprint in
+   `.github/signpath/production.json`. The blank pin and the TEST pin are refused.
+   This is a certificate identity pin, not the file signing digest (SHA256).
+3. Configure the production-only CI identity, secret and protected environment
+   above, and the three production artifact configurations.
+4. Set `SIGNPATH_RELEASE_ENABLED=true` only after these controls are reviewed.
+5. Run the production dry run on the reviewed `main` commit. Its signed output
+   must pass complete verification and installer smoke tests.
+6. Prepare the normal reviewed release PR/version/changelog and stable tag.
+   The tag version must match `VERSION`, and its commit must belong to `main`.
+
+Manual commands:
 
 ```powershell
 gh workflow run release.yml --repo HeyOkay/HaloBattery --ref pre-release -f signpath_test=true
+gh workflow run release.yml --repo HeyOkay/HaloBattery --ref main -f signpath_release=true
 ```
 
-Use the explicit CLI/API input because the Actions page on `main` may still show
-the older input form. All TEST jobs come from the same selected `release.yml`
-commit. This route follows GitHub's documented selected-ref behavior; an
-end-to-end run still needs validation.
+The second command cannot sign before production activation and never publishes.
 
-Review the two signing jobs when their environment approvals appear. Download
-`HaloBattery-SELF-SIGNED-TEST-<run-id>-<attempt>` only after the final verification
-job succeeds. It contains the application ZIP, setup, `SHA256SUMS.txt`, a signing
-report with request/artifact IDs and a TEST notice. Check both signing requests
-used the expected TEST policy/certificate and exact input layouts.
+## Evidence and limitations
 
-## Limits before production
+Only a successful final job produces `HaloBattery-SELF-SIGNED-TEST-<run>-<attempt>`
+or the production release asset artifact. A separate 90-day signing audit artifact
+records all three request IDs, input artifact digests, certificate pin and actual
+installer smoke receipts. TEST files are labelled and never feed a publisher.
 
-The certificate is self-signed. The verifier requires the pinned embedded signer
-and accepts `Valid` or `NotTrusted`; hash mismatch, missing/catalog signatures,
-changed PE contents or unexpected returned files fail. It does not install the
-test certificate into Windows trust or claim Smart App Control compatibility.
+The scripted smoke test runs only on an isolated GitHub-hosted Windows machine,
+refuses existing Halo installations/profiles/processes, disables installer tasks
+and does not launch the app. It does not replace final interactive device testing
+or prove compatibility with every Smart App Control/enterprise policy. Existing
+third-party DLLs retain their original bytes and publisher signatures.
 
-This test signs the application PEs and outer setup only. The generated Inno
-uninstaller and temporary setup copies still need the separately reviewed
-signed-uninstaller pipeline. Redistributed DLLs, including libusb, are a separate
-publisher issue. The production certificate is still pending and no TEST artifact
-may feed a stable or pre-release publisher.
-
-References: [SignPath GitHub integration](https://docs.signpath.io/trusted-build-systems/github),
-[GitHub reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows),
-[GitHub CLI selected-ref dispatch](https://cli.github.com/manual/gh_workflow_run).
+References:
+[Inno external signed-uninstaller handoff](https://jrsoftware.org/inno-setup/documentation/topic_setup_signeduninstaller.htm),
+[Inno temporary Setup copies](https://jrsoftware.org/inno-setup/documentation/topic_setup_signtool.htm),
+[SignPath configuration](https://docs.signpath.io/artifact-configuration/),
+[SignPath timestamps](https://docs.signpath.io/crypto-providers/),
+[GitHub environment boundaries](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).

@@ -10,6 +10,7 @@
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
 | [8BitDo Ultimate 2 Wireless (XInput)](protocols.md#8bitdo-ultimate-2-wireless-xinput) | Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`): level asked from the dongle; USB: gamepad only | Bluetooth: 60 % (reporter, #461); dongle level confirmed (#461, #520); XInput publishes no charging state, on the dongle or the cable |
 | [8BitDo Ultimate 2 Wireless (DInput)](protocols.md#8bitdo-ultimate-2-wireless-dinput) | 2.4 GHz receiver or Bluetooth after B+Home (a USB cable forces XInput) | Level confirmed over the dongle (#520); the charging bit stayed clear with a charger connected, so charging is not shown |
+| [Akko Verge S9 Ultra](protocols.md#akko-verge-s9-ultra) | 2.4 GHz dongle (36EB:1087); USB cable (36EB:0087) for charging | yes (battery and cable charging confirmed by reporter, #505) |
 | [AM Infinity 8K (Angry Miao)](protocols.md#am-infinity-8k-angry-miao) | 2.4 GHz receiver | no |
 | [AJAZZ AJ159 PRO](protocols.md#ajazz-aj159-pro) | 8K receiver (3151:402d) | yes (level only; no charging flag) |
 | [Astro A50 Gen 5 (Logitech 046D:0B1C)](protocols.md#astro-a50-gen-5-logitech-046d0b1c) | Base station | no |
@@ -31,6 +32,7 @@
 | [Ninjutso Sora V2; Sprime PM1](protocols.md#ninjutso-sora-v2-sprime-pm1) | 2.4 GHz receiver or USB cable | unverified |
 | [Corsair Dark Core RGB Pro SE](protocols.md#corsair-dark-core-rgb-pro-se) | 2.4 GHz dongle | yes |
 | [Corsair M65 RGB Ultra Wireless](protocols.md#corsair-m65-rgb-ultra-wireless) | Slipstream receiver or USB cable | yes (battery and charging) |
+| [Corsair SABRE v3 PRO Ultralight](protocols.md#corsair-sabre-v3-pro-ultralight) | 2.4 GHz Slipstream receiver (`1B1C:2B42`) or USB cable (`1B1C:2B43`) | yes (level and charging; receiver and cable, tested by @ahyuk44-gif) |
 | [Corsair Virtuoso RGB Wireless SE / XT](protocols.md#corsair-virtuoso-rgb-wireless-se--xt) | Slipstream receiver or USB cable | yes for the SE on the Multi-Device receiver; XT untried |
 | [Corsair Void Elite Wireless](protocols.md#corsair-void-elite-wireless) | 2.4 GHz receiver | likely |
 | [Corsair HS80 RGB Wireless (original)](protocols.md#corsair-hs80-rgb-wireless-original) | Direct USB cable or 2.4 GHz receiver | yes (charging inferred when connected by USB) |
@@ -50,7 +52,7 @@
 | [Glorious Model O / O- / D / D- Wireless](protocols.md#glorious-model-o-o--d-and-d--wireless) | 2.4 GHz receiver | Model O: level and charging (reporter, #281); O-: confirmed by its owner; D/D- untried |
 | [BEITONG KP40D](protocols.md#beitong-kp40d) | 2.4 GHz receiver (`20bc:515c`); one controller in both XInput and Windows.Gaming.Input, one matching receiver | yes |
 | [Hitscan Hyperlight](protocols.md#hitscan-hyperlight) | 2.4 GHz receiver or USB cable | no |
-| [Inphic In9 Pro, Attack Shark X11 / R1 / X3 Max](protocols.md#inphic-and-attack-shark-mice-1d57-receivers) | 2.4 GHz receiver (`1d57:fa65`, `1d57:fa60`) | yes |
+| [Inphic In9 Pro, Attack Shark X11 / R1 / X3 Max](protocols.md#inphic-and-attack-shark-mice-1d57-receivers) | 2.4 GHz receiver (`1d57:fa65`, `1d57:fa60`) | yes, including R1 charging |
 | [HyperX Cloud Alpha 2](protocols.md#hyperx-cloud-alpha-2) | 2.4 GHz station | yes |
 | [HyperX Cloud Core Wireless](protocols.md#hyperx-cloud-core-wireless) | 2.4 GHz dongle or USB-C | likely |
 | [HyperX Cloud II Core Wireless](protocols.md#hyperx-cloud-ii-core-wireless) | 2.4 GHz dongle or USB cable | yes |
@@ -67,8 +69,8 @@
 | [LAMZU Maya X](protocols.md#lamzu-maya-x) | 8K dongle or USB cable | yes |
 | [LAMZU Atlantis V2](protocols.md#lamzu-atlantis-v2) | 2.4 GHz receiver (3554:F50D) or USB cable (3554:F50F) | yes (level and charging) |
 | [Lofree Hyzen](protocols.md#lofree-hyzen) | 2.4 GHz dongle | no |
-| [Lofree Flow Lite84](protocols.md#lofree-flow-lite84) | 2.4 GHz dongle | yes (earlier community report; current guard not hardware-retested) |
-| [ROYUAN 2.4 GHz keyboards](protocols.md#royuan-24-ghz-keyboards-31514011) | 2.4 GHz receiver (3151:4011, reported on an Epomaker TH80 ISO) | unverified in the app (test build with the reporter, #560) |
+| [Lofree Flow Lite84](protocols.md#lofree-flow-lite84) | 2.4 GHz dongle | yes (level and charging confirmed on test build 1 by reporter, #557) |
+| [ROYUAN 2.4 GHz keyboards](protocols.md#royuan-24-ghz-keyboards-31514011) | 2.4 GHz receiver (3151:4011, reported on an Epomaker TH80 ISO); USB cable for charging | yes (level and wired-mode charging confirmed by reporter, #560); receiver charging remains unknown |
 | [Logitech (more HID++ 2.0 devices, older HID++ 1.0 keyboards and mice, G-series headsets)](protocols.md#logitech-more-hid-20-devices-and-g-series-headsets) | Lightspeed, Unifying or Bolt receiver | likely |
 | [Logitech G PRO X 2 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver | yes |
 | [Logitech PRO X 3 LIGHTSPEED](protocols.md#logitech-g-pro-x-2-lightspeed) | 2.4 GHz receiver; disabled in 1.17.0 | no; protocol investigation pending |
@@ -88,6 +90,7 @@
 | [Nintendo Switch Pro Controller, Joy-Con (L) / (R)](protocols.md#nintendo-switch-pro-controller-joy-con-l--r) | Bluetooth | no |
 | [Ninjutso Sora V3](protocols.md#ninjutso-sora-v3-093aeb02) | 2.4 GHz receiver (`093a:eb02`) or USB cable (`093a:e010`) | yes (battery and charging; wireless and cable, tested by @Cynersi) |
 | [NZXT Lift Elite Wireless](protocols.md#nzxt-lift-elite-wireless-1e712101) | 2.4 GHz receiver and USB cable | yes |
+| [Pulsar X2N CrazyLight and the other mice on the 8K Dongle Gen.2](protocols.md#pulsar-mice-on-the-8k-dongle-gen2-model-names) | 8K dongle (3710:5406) or USB cable (3710:3510) | yes (X2N CrazyLight Mini, dongle and cable) |
 | [Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max, Taidu TSG808](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz dongle and USB cable | yes |
 | [Zaopin Z2 4K](protocols.md#zaopin-z2-4k) | 2.4 GHz 4K receiver, USB-C, and Bluetooth LE | yes |
 | [Pulsar, ATK / VXE, Redragon M916/M913, HECATE](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz receiver and USB cable | mixed (some confirmed) |

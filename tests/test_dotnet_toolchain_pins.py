@@ -37,11 +37,11 @@ class DotnetToolchainPinTests(unittest.TestCase):
                 expected_jobs = {
                     "tests.yml": {"tests", "compatibility"},
                     "prerelease.yml": {"build"},
-                    "release.yml": {"build", "test_build"},
+                    "release.yml": {"build", "signing_build"},
                 }[name]
                 self.assertEqual(versions, [SDK] * len(expected_jobs))
                 # Pin every actual SDK-consuming job, including the isolated
-                # manual TEST build; another SDK in a different job must fail.
+                # shared token-free signing build; another SDK in a different job must fail.
                 body = workflow.split("\njobs:\n", 1)[1]
                 sections = re.split(r"(?m)^  ([A-Za-z_][A-Za-z0-9_-]*):\n", body)
                 sdk_jobs = {sections[index]: sections[index + 1]

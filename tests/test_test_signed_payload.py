@@ -54,6 +54,16 @@ def signed_pe(original, *, pe32=False):
 
 STUB = r"""
 $ErrorActionPreference='Stop'
+Add-Type -TypeDefinition @'
+namespace Halo {
+    public static class TestSignatureTrust {
+        public static int Verify(string path) {
+            return int.Parse(System.Environment.GetEnvironmentVariable("FAKE_TRUST_RESULT"));
+        }
+        public static int VerifyProduction(string path) { return Verify(path); }
+    }
+}
+'@
 function global:Get-AuthenticodeSignature {
     param([string]$LiteralPath)
     $signer=$env:FAKE_SIGNER
@@ -63,13 +73,22 @@ function global:Get-AuthenticodeSignature {
     $certificate = if($env:FAKE_NULL_CERT -eq 'true') {$null} else {
         [pscustomobject]@{Thumbprint=$signer}
     }
-    [pscustomobject]@{Status=$env:FAKE_STATUS;SignerCertificate=$certificate;SignatureType=$env:FAKE_TYPE}
+    $timestamp = if($env:FAKE_TIMESTAMP -eq 'true') {[pscustomobject]@{Thumbprint='C'*40}} else {$null}
+    [pscustomobject]@{Status=$env:FAKE_STATUS;SignerCertificate=$certificate;SignatureType=$env:FAKE_TYPE;TimeStamperCertificate=$timestamp}
 }
 try {
-    if($env:CASE_MODE -eq 'installer') {
-        & $env:VERIFIER -InstallerPath $env:INSTALLER -UnsignedInstallerPath $env:UNSIGNED_INSTALLER
+    $options = @{SigningMode=$env:SIGNING_MODE}
+    if($env:PRODUCTION_PIN) {$options.CertificateThumbprint=$env:PRODUCTION_PIN}
+    if($env:INNO_HELPER) {
+        & $env:VERIFIER -InnoHelperPath $env:INNO_HELPER -UnsignedInnoHelperPath $env:UNSIGNED_INNO_HELPER @options
+    } elseif($env:CASE_MODE -eq 'installer') {
+        & $env:VERIFIER -InstallerPath $env:INSTALLER -UnsignedInstallerPath $env:UNSIGNED_INSTALLER @options
+    } elseif($env:SIGNATURE_PATH) {
+        & $env:VERIFIER -SignaturePath $env:SIGNATURE_PATH @options
+    } elseif($env:INTERNAL_MANIFEST) {
+        & $env:VERIFIER -SignedDirectory $env:SIGNED -DestinationDirectory $env:DESTINATION -InternalManifestPath $env:INTERNAL_MANIFEST @options
     } else {
-        & $env:VERIFIER -SignedDirectory $env:SIGNED -DestinationDirectory $env:DESTINATION -InventoryPath $env:INVENTORY
+        & $env:VERIFIER -SignedDirectory $env:SIGNED -DestinationDirectory $env:DESTINATION -InventoryPath $env:INVENTORY @options
     }
     exit 0
 } catch {[Console]::Error.WriteLine($_.Exception.Message);exit 1}
@@ -126,11 +145,20 @@ class SignedPayloadTests(unittest.TestCase):
 
     def invoke(self, *, status="NotTrusted", signer=THUMBPRINT, thumbprint=THUMBPRINT,
                signature_type="Authenticode", null_certificate=False, installer=None,
-               unsigned_installer=None, bad_second=False):
+               unsigned_installer=None, bad_second=False, native_status=None,
+               signing_mode='Test', production_pin='', internal_manifest='', signature_path='', timestamp=False,
+               inno_helper='', unsigned_inno_helper=''):
+        if native_status is None:
+            native_status = {"Valid": 0, "NotTrusted": -2146762487}.get(status, -2146762485)
         environment = dict(os.environ, PSExecutionPolicyPreference="Bypass",
             TEST_CERT_THUMBPRINT=thumbprint, FAKE_SIGNER=signer, FAKE_STATUS=status,
             FAKE_TYPE=signature_type, FAKE_NULL_CERT=str(null_certificate).lower(),
             FAKE_BAD_SECOND=str(bad_second).lower(),
+            FAKE_TRUST_RESULT=str(native_status),
+            SIGNING_MODE=signing_mode, PRODUCTION_PIN=production_pin, INTERNAL_MANIFEST=str(internal_manifest),
+            SIGNATURE_PATH=str(signature_path),
+            INNO_HELPER=str(inno_helper), UNSIGNED_INNO_HELPER=str(unsigned_inno_helper),
+            FAKE_TIMESTAMP=str(timestamp).lower(),
             VERIFIER=str(HELPER), SIGNED=str(self.signed), DESTINATION=str(self.destination),
             INVENTORY=str(self.inventory), CASE_MODE="installer" if installer else "payload",
             INSTALLER=str(installer or ""), UNSIGNED_INSTALLER=str(unsigned_installer or ""))
@@ -193,6 +221,37 @@ class SignedPayloadTests(unittest.TestCase):
 
     def test_catalog_signature_cannot_substitute_for_embedded_signature(self):
         self.assert_rejected(signature_type="Catalog")
+
+    def test_unknown_error_accepts_only_pinned_test_untrusted_root(self):
+        result = self.invoke(status="UnknownError", native_status=-2146762487)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_untrusted_root_cannot_replace_the_embedded_signer_pin(self):
+        for options in (dict(signer="B" * 40), dict(null_certificate=True),
+                        dict(signature_type="Catalog"), dict(bad_second=True)):
+            with self.subTest(options=options):
+                self.assert_rejected(status="UnknownError", native_status=-2146762487, **options)
+
+    def test_other_native_errors_and_inconsistent_success_are_rejected(self):
+        for status in (0, 0x80096010, 0x800B0111, 0x800B0101, 0x80096004):
+            signed_status = status if status < 0x80000000 else status - 0x100000000
+            with self.subTest(native_status=hex(status)):
+                self.assert_rejected(status="UnknownError", native_status=signed_status)
+
+    def test_not_trusted_or_valid_cannot_hide_other_native_failures(self):
+        for status in ("Valid", "NotTrusted"):
+            for native in (0x80096010, 0x800B0111, 0x800B0101, 0x80096004):
+                with self.subTest(status=status, native_status=hex(native)):
+                    self.assert_rejected(status=status, native_status=native - 0x100000000)
+
+    def test_primary_digest_failure_cannot_use_the_untrusted_root_exception(self):
+        self.assert_rejected(status="HashMismatch", native_status=-2146762487)
+
+    def test_installer_accepts_pinned_test_untrusted_root(self):
+        unsigned, signed = self.installer_fixture()
+        result = self.invoke(status="UnknownError", native_status=-2146762487,
+                             installer=signed, unsigned_installer=unsigned)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_tampered_or_missing_dependency_is_rejected_before_owned_files_change(self):
         dependency = self.destination / "_internal/vendor.dll"
@@ -265,10 +324,100 @@ class SignedPayloadTests(unittest.TestCase):
         signed = self.write(self.root / "installer-output", "HaloBattery-test-setup.exe", signed_pe(unsigned.read_bytes()))
         return unsigned, signed
 
+    def inno_helper_fixture(self):
+        original = unsigned_pe(b'inno-helper')
+        unsigned = self.write(self.root / 'helper-input', 'inno-helper-amd64.exe', original)
+        signed = self.write(self.root / 'helper-output', 'inno-helper-amd64.exe', signed_pe(original))
+        return unsigned, signed
+
+    def test_inno_helper_accepts_exact_original_and_does_not_modify_files(self):
+        unsigned, signed = self.inno_helper_fixture()
+        before = (unsigned.read_bytes(), signed.read_bytes())
+        result = self.invoke(inno_helper=signed, unsigned_inno_helper=unsigned)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(before, (unsigned.read_bytes(), signed.read_bytes()))
+
+    def test_inno_helper_rejects_wrong_names_and_extra_files(self):
+        unsigned, signed = self.inno_helper_fixture()
+        for path in (unsigned, signed):
+            with self.subTest(path=path, defect='name'):
+                wrong = path.with_name('other.exe')
+                path.rename(wrong)
+                self.assert_rejected(inno_helper=wrong if path == signed else signed,
+                                     unsigned_inno_helper=wrong if path == unsigned else unsigned)
+                wrong.rename(path)
+            with self.subTest(path=path, defect='extra'):
+                extra = self.write(path.parent, '.unexpected', b'extra')
+                self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+                extra.unlink()
+
+    def test_inno_helper_rejects_body_changes_mismatched_source_and_bad_signatures(self):
+        unsigned, signed = self.inno_helper_fixture()
+        before = signed.read_bytes()
+        damaged = bytearray(before)
+        damaged[0x205] ^= 1
+        signed.write_bytes(damaged)
+        self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+        signed.write_bytes(before)
+        original = unsigned.read_bytes()
+        unsigned.write_bytes(unsigned_pe(b'foreign-helper'))
+        self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned)
+        unsigned.write_bytes(original)
+        for options in (dict(signer='B'*40), dict(status='HashMismatch'),
+                        dict(signing_mode='Production', production_pin=THUMBPRINT)):
+            with self.subTest(options=options):
+                self.assert_rejected(inno_helper=signed, unsigned_inno_helper=unsigned, **options)
+
     def test_installer_exact_path_and_original_content_are_accepted(self):
         unsigned, signed = self.installer_fixture()
         result = self.invoke(installer=signed, unsigned_installer=unsigned)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_production_rejects_missing_test_or_untrusted_pin(self):
+        for pin in ('', '17F9F411C424674855A077F9A120A7A434990AF1', THUMBPRINT):
+            with self.subTest(pin=pin):
+                self.assert_rejected(signing_mode='Production', production_pin=pin)
+
+    def test_additional_signature_smoke_check_accepts_pin_and_rejects_errors(self):
+        path = self.signed / OWN[0]
+        self.assertEqual(self.invoke(signature_path=path).returncode, 0)
+        for options in (dict(signer='B'*40), dict(status='HashMismatch'),
+                        dict(signing_mode='Production', production_pin=THUMBPRINT)):
+            with self.subTest(options=options):
+                self.assert_rejected(signature_path=path, **options)
+
+    def test_production_rejects_trusted_but_untimestamped_signature(self):
+        self.assert_rejected(signing_mode='Production', production_pin=THUMBPRINT, status='Valid')
+
+    def test_production_checks_native_trust_and_real_timestamp_content(self):
+        for native in (0, -2146762487, -2146762485):
+            with self.subTest(native=native):
+                self.assert_rejected(signing_mode='Production', production_pin=THUMBPRINT,
+                                     status='Valid', timestamp=True, native_status=native)
+
+    def internal_fixture(self):
+        name = 'uninst-6.7.4-a39a7062cf.e32'
+        self.signed = self.root / 'internal-signed'
+        self.destination = self.root / 'internal-original'
+        original = unsigned_pe(b'inno')
+        self.write(self.signed, name, signed_pe(original))
+        self.write(self.destination, name, original)
+        self.inventory.write_text(json.dumps({name: hashlib.sha256(original).hexdigest()}), encoding='utf-8')
+        return name
+
+    def test_internal_cache_manifest_accepts_only_exact_generated_content(self):
+        name = self.internal_fixture()
+        result = self.invoke(internal_manifest=self.inventory)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.destination / name).read_bytes(), (self.signed / name).read_bytes())
+
+    def test_internal_manifest_rejects_traversal_unknown_names_and_wrong_hash(self):
+        self.internal_fixture()
+        for name, digest in (('../evil.exe', 'A'*64), ('evil.exe', 'A'*64),
+                             ('uninst-6.7.4-a39a7062cf.e32', 'B'*64)):
+            self.inventory.write_text(json.dumps({name: digest}), encoding='utf-8')
+            with self.subTest(name=name):
+                self.assert_rejected(internal_manifest=self.inventory)
 
     def test_installer_wrong_filename_extra_file_or_changed_content_is_rejected(self):
         unsigned, signed = self.installer_fixture()

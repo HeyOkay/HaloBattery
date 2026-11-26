@@ -6,8 +6,38 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
+  mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
+  instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
+- Akko Verge S9 Ultra (`36EB:1087` dongle, `36EB:0087` USB cable): read the level from the
+  dongle's HID report 2 (`02 10` link, `02 12` battery), decoded from a USBPcap capture of
+  the vendor app, with the frame's two-byte trailer computed and the reply's trailer
+  checked. The dongle exchange has no charging flag. Charging comes from the wired id
+  (`36EB:0087`), which the vendor app shows as a *Charging* card: its presence is the
+  charging signal and the level stays the dongle's last reading. Confirmed by the reporter
+  of [#505](https://github.com/HeyOkay/HaloBattery/issues/505): the level and the cable
+  charging state both work.
+
 ### Changed
 
+- Prepare a separate production signing chain for application executables,
+  Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer. Require
+  trusted timestamped signatures and installer checks before stable publication.
+- Recognize the pinned self-signed TEST certificate's untrusted-root result on
+  Windows without trusting the certificate or accepting other signature errors.
+- Make tray device names bold with smaller status details and fit menu widths to
+  their content. Double-click the highlighted name to rename it in place; Enter
+  saves and Escape cancels. Add a This device submenu for hiding, low-battery
+  alerts and device settings. Use a system tooltip above the name, balanced
+  name-highlight padding and a rounded rename field. Fit device-action and
+  alert-threshold submenus to their contents. Keep nested selections behind
+  overlapping submenus, close abandoned submenus after a short hover delay,
+  and smooth highlight edges and the rename hint's appearance. Returning to a
+  parent opener dismisses deeper menu levels; all alert menus share the same
+  threshold choices. Keep highlight moves in their existing layer and apply
+  structural window ordering together to avoid flicker in overlapping submenus.
 - Label the MSI provider as wireless devices in Portuguese, including keyboards.
 - Reduce the memory peak when Settings prepares Iconify search: build the name
   index in one buffer without filling the browsing fingerprint cache.
@@ -121,6 +151,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - A Ko-fi shortcut in the settings rail, above the Discord shortcut, opens
   [ko-fi.com/halobattery](https://ko-fi.com/halobattery). The repository also
   shows a Sponsor button with Ko-fi and PayPal.
+- Corsair SABRE v3 PRO Ultralight (`1B1C:2B42` receiver, `1B1C:2B43` on its
+  cable): read the level and charge state through the Slipstream V2 exchange of
+  OpenLinkHub's SABRE v3 packages - 512-byte reports to the paired mouse through
+  the receiver, 64-byte reports on the cable. Only plain property reads are
+  used; silence or refusals never trigger login or mode-changing writes. A cable
+  connecting the mouse to the PC counts as charging when the mouse gives no charge state.
+  Confirmed in [#543](https://github.com/HeyOkay/HaloBattery/issues/543) with
+  test build 3: 94 % on the receiver and 97 % with the charging animation on
+  the PC cable, on the reporter's unit.
 - Read the 8BitDo Ultimate 2 in DInput mode (hold B while pressing Home) from
   its 34-byte status report: level in byte 14, and the charging bit in bit 7.
   On the reporter's unit that bit stayed clear with a charger connected, so
@@ -397,6 +436,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
   stay disabled during normal use.
 
 ### Fixed
+
+- Refuse normal startup when the shared instance guard cannot be created,
+  and retain its handle so app startup respects diagnostic exclusivity.
+- Show the Attack Shark R1 charging animation over its 2.4 GHz receiver,
+  including when powered by a wall charger.
 - Extend the Settings Close button hit target to the top-right corner while
   preserving its visible size, position and hover/pressed feedback.
 
@@ -449,6 +493,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
   ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Lofree Flow Lite84: read the dongle on Compx's own USB id `3554:FA0A` as well as
+  `05AC:024F`, keeping the product-string and FF02:0002 collection guard (#557).
+  Confirmed by the reporter of #557 on test build 1: level, charging on the cable,
+  and the reading cleared when unplugged.
 - Keep Lofree Flow queries on the verified receiver control collection, preventing
   fallback writes to AULA F108 and other devices sharing its USB ID (#413).
 - Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
