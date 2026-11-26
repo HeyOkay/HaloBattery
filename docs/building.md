@@ -135,6 +135,11 @@ A failed upload or attestation can leave an unpublished draft. A rerun stops
 rather than modifying it. Inspect the failed run and draft, retain evidence,
 and recover deliberately; there is no automated asset deletion or overwrite.
 
+After publication, release and asset verification each retry up to 12 times,
+with 5-second pauses, while GitHub makes the attestations available. A persistent
+verification error still fails the workflow. These retries never repeat uploads
+or publication.
+
 ## Pre-release publication
 
 Every push to `pre-release` runs tests and builds Actions artifacts without

@@ -47,7 +47,9 @@ def option(name):
     return args[args.index(name) + 1]
 
 
-if args[0] == "fake-attest":
+if args[0] == "fake-sleep":
+    if args[1:] != ["5"]: stop("unexpected retry interval")
+elif args[0] == "fake-attest":
     if mode == "attestation-fail": stop("injected attestation failure")
     if state["phase"] != "draft" or len(state["assets"]) != 3: stop("attestation before validated upload")
     subjects = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in args[1:]}
@@ -77,9 +79,20 @@ elif args[:2] == ["attestation", "verify"]:
     if bundle.get(args[2]) != hashlib.sha256(Path(args[2]).read_bytes()).hexdigest(): stop("subject digest mismatch")
 elif args[:2] == ["release", "verify"]:
     if state["phase"] != "published": stop("release not published")
+    attempts = state.get("release_verify_attempts", 0) + 1
+    state["release_verify_attempts"] = attempts
+    save()
+    if mode == "delayed-attestation" and attempts < 3: stop("no attestations for tag")
+    if mode == "invalid-attestation": stop("attestation verification failed")
     if mode == "immutability-disabled": stop("no GitHub immutable release attestation")
 elif args[:2] == ["release", "verify-asset"]:
     if state["phase"] != "published": stop("release not published")
+    counts = state.setdefault("asset_verify_attempts", {})
+    filename = Path(args[3]).name
+    counts[filename] = counts.get(filename, 0) + 1
+    save()
+    if mode == "delayed-asset" and counts[filename] < 3: stop("asset attestation not ready")
+    if mode == "invalid-asset": stop("asset attestation verification failed")
     digest = "sha256:" + hashlib.sha256(Path(args[3]).read_bytes()).hexdigest()
     if state["assets"].get(Path(args[3]).name, {}).get("digest") != digest: stop("release asset mismatch")
 elif args[0] == "api":
@@ -248,6 +261,7 @@ class StablePublisherExecutionTests(unittest.TestCase):
             # This wrapper replaces every gh call. No real gh executable is
             # invoked, and no real attestation action or workflow is run.
             wrapper = 'gh() { "$TEST_PYTHON" "$FAKE_GH" "$@"; }; export -f gh\n'
+            wrapper += 'sleep() { gh fake-sleep "$@"; }; export -f sleep\n'
             load = '''
 while IFS='=' read -r name value; do
   case "$name" in
