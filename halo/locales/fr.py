@@ -159,6 +159,8 @@ MESSAGES = {
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Claviers MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.maono": "MAONO PD200W",
+    "provider.roccat": "ROCCAT Syn Max Air",
     "provider.monsgeek": "Claviers MonsGeek",
     "provider.redsquare": 'Clavier Red Square Alumix TKL',
     "provider.msi": "Périphériques sans fil MSI",

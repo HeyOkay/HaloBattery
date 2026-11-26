@@ -117,6 +117,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- Add two more BatteryHub readers: ROCCAT Syn Max Air (`1e7d:3a3f`, voltage
+  curve while discharging; charging message without a percent) and MAONO
+  PD200W (`352f:040e`, register `0x0042`; charging unknown). Both are
+  unverified in Halo; see `docs/protocols.md`, "Ported BatteryHub batch 6".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).

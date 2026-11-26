@@ -160,6 +160,8 @@ MESSAGES = {
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "MCHOSE キーボード",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.maono": "MAONO PD200W",
+    "provider.roccat": "ROCCAT Syn Max Air",
     "provider.monsgeek": "MonsGeek キーボード",
     "provider.redsquare": 'Red Square Alumix TKL キーボード',
     "provider.msi": "MSI ワイヤレスデバイス",

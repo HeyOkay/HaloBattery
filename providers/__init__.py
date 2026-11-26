@@ -17,6 +17,8 @@ from .wraith import WraithProvider  # noqa: F401
 from .mchose import MchoseProvider  # noqa: F401
 from .mchose_k99 import MchoseK99Provider  # noqa: F401
 from .mchose_v9 import MchoseV9Provider  # noqa: F401
+from .maono import MaonoProvider  # noqa: F401
+from .roccat import RoccatProvider  # noqa: F401
 from .bluetooth import BluetoothProvider  # noqa: F401
 from .xinput import XInputProvider  # noqa: F401
 from .logitech import LogitechProvider  # noqa: F401

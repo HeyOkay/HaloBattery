@@ -142,6 +142,8 @@ MESSAGES = {
     'provider.kraken_v4': 'Razer Kraken V4',
     'provider.mchose_kb': 'MCHOSE пернетақталары',
     'provider.mchose_v9': 'MCHOSE V9 Pro',
+    'provider.maono': 'MAONO PD200W',
+    'provider.roccat': 'ROCCAT Syn Max Air',
     'provider.monsgeek': 'MonsGeek пернетақталары',
     'provider.rapoo': 'Rapoo тінтуірлері мен пернетақталары',
     'provider.shield': 'NVIDIA SHIELD контроллерлері',

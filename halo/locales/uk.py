@@ -147,6 +147,8 @@ MESSAGES = {
     "provider.kraken_v4": "Razer Kraken V4",
     "provider.mchose_kb": "Клавіатури MCHOSE",
     "provider.mchose_v9": "MCHOSE V9 Pro",
+    "provider.maono": "MAONO PD200W",
+    "provider.roccat": "ROCCAT Syn Max Air",
     "provider.monsgeek": "Клавіатури MonsGeek",
     "provider.rapoo": "Миші та клавіатури Rapoo",
     "provider.shield": "Контролери NVIDIA SHIELD",
