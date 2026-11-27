@@ -6,7 +6,7 @@
   </g>
   <path d="M64 5v14" stroke="#75B88C"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="#D8F1DE" font-size="12">
-    <text x="22" y="14.4">下载量</text>
-    <text x="70" y="14.4" font-weight="700">22.9k</text>
+    <text x="22" y="16">下载量</text>
+    <text x="70" y="16" font-weight="700">22.9k</text>
   </g>
 </svg>

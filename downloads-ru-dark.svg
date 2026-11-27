@@ -6,7 +6,7 @@
   </g>
   <path d="M100 5v14" stroke="#75B88C"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="#D8F1DE" font-size="12">
-    <text x="22" y="14.4">Скачивания</text>
-    <text x="106" y="14.4" font-weight="700">22.9k</text>
+    <text x="22" y="16">Скачивания</text>
+    <text x="106" y="16" font-weight="700">22.9k</text>
   </g>
 </svg>
