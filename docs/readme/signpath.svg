@@ -6,7 +6,7 @@
   </g>
   <path d="M97 5v14" stroke="#A3B6CD"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="#243B54" font-size="12">
-    <text x="22" y="14.4">Code signing</text>
-    <text x="103" y="14.4" font-weight="700">SignPath</text>
+    <text x="22" y="16">Code signing</text>
+    <text x="103" y="16" font-weight="700">SignPath</text>
   </g>
 </svg>
