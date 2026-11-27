@@ -191,6 +191,11 @@ def set_output_query(path, timeout_ms: int = 700) -> Optional[bytes]:
                         return None
                     if k32.WaitForSingleObject(ctypes.c_void_p(event), wait_ms) != 0:
                         k32.CancelIoEx(ctypes.c_void_p(handle), ctypes.byref(ov))
+                        # The cancelled read still completes into `ov`, `out` and the
+                        # event; wait for it, or the kernel writes into freed memory
+                        # and signals a handle that has been closed and reused.
+                        k32.GetOverlappedResult(ctypes.c_void_p(handle), ctypes.byref(ov),
+                                                ctypes.byref(read), True)
                         continue
                     if not k32.GetOverlappedResult(ctypes.c_void_p(handle), ctypes.byref(ov),
                                                    ctypes.byref(read), False):

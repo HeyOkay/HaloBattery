@@ -720,5 +720,75 @@ class PulsarTest(unittest.TestCase):
         self.assertIn("greyed", diag)
 
 
+class SetOutputQueryCancelTests(unittest.TestCase):
+    """compx.set_output_query against a fake kernel32/hid.dll (#571)."""
+
+    def run_query(self, answers):
+        from providers import compx
+        calls = []
+
+        class Fn:
+            def __init__(self, name, result):
+                self.name, self.result = name, result
+
+            def __call__(self, *args):
+                calls.append((self.name, args))
+                return self.result(*args) if callable(self.result) else self.result
+
+        reads = iter(answers)
+        last = {"error": 0}
+
+        def read_file(handle, out, size, read, ov):
+            answer = next(reads, None)
+            if answer is None:
+                last["error"] = compx._ERROR_IO_PENDING
+                return False
+            for i, b in enumerate(answer):
+                out[i] = b
+            read._obj.value = len(answer)
+            return True
+
+        k32 = types.SimpleNamespace(
+            CreateFileW=Fn("CreateFileW", 0x100), ReadFile=Fn("ReadFile", read_file),
+            CreateEventW=Fn("CreateEventW", 0x200),
+            WaitForSingleObject=Fn("WaitForSingleObject", 0x102),   # WAIT_TIMEOUT
+            GetOverlappedResult=Fn("GetOverlappedResult", False),
+            CancelIoEx=Fn("CancelIoEx", True), CloseHandle=Fn("CloseHandle", True))
+        hidd = types.SimpleNamespace(HidD_SetOutputReport=Fn("HidD_SetOutputReport", True))
+
+        def win_dll(name, **kw):
+            return k32 if "kernel32" in name else hidd
+
+        with mock.patch.object(compx.sys, "platform", "win32"), \
+                mock.patch.object(compx.ctypes, "WinDLL", win_dll), \
+                mock.patch.object(compx.ctypes, "get_last_error", lambda: last["error"]):
+            got = compx.set_output_query(b"\\\\?\\hid#fake", timeout_ms=1)
+        return got, [(name, args) for name, args in calls]
+
+    def test_a_timed_out_read_is_waited_for_before_its_buffers_are_released(self):
+        got, calls = self.run_query([])
+        self.assertIsNone(got)
+        names = [n for n, _ in calls]
+        self.assertEqual(12, names.count("CancelIoEx"))
+        for i, name in enumerate(names):
+            if name != "CancelIoEx":
+                continue
+            nxt = calls[i + 1]
+            self.assertEqual("GetOverlappedResult", nxt[0],
+                             "the cancelled read must be completed before CloseHandle(event)")
+            self.assertIs(True, nxt[1][3], "and waited for (bWait=True)")
+
+    def test_the_power_reply_is_returned_after_other_reports(self):
+        from providers import compx
+        mouse = bytes([0x01, 0x00, 0x05, 0x00]) + bytes(13)
+        power = compx.make_request()
+        power[6], power[7] = 64, 1
+        power[16] = compx.checksum(power[:16])
+        got, calls = self.run_query([mouse, bytes(power)])
+        self.assertEqual(bytes(power), got)
+        self.assertEqual((64, True), compx.parse_power(got))
+        self.assertEqual(1, sum(1 for n, _ in calls if n == "HidD_SetOutputReport"))
+
+
 if __name__ == "__main__":
     unittest.main()
