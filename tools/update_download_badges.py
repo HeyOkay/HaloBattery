@@ -79,7 +79,7 @@ def render_badge(label, title, total, dark):
     width = divider + 46
     border, foreground = ("#75B88C", "#D8F1DE") if dark else ("#75B88C", "#234C30")
     fill = "#A1E6B5"
-    label_element = f'<text x="22" y="16">{label}</text>' if label else ""
+    label_element = f'<text x="22" y="14.4">{label}</text>' if label else ""
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width / 1.2:g}" height="24" viewBox="0 0 {width} 28.8" preserveAspectRatio="xMidYMin meet" role="img" aria-labelledby="title">
   <title id="title">{escape(title)} - {total:,}</title>
   <rect x=".5" y=".5" width="{width - 1}" height="23" rx="7" fill="{fill}" fill-opacity=".16" stroke="{border}"/>
@@ -89,7 +89,7 @@ def render_badge(label, title, total, dark):
   <path d="M{divider} 5v14" stroke="{border}"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="{foreground}" font-size="12">
     {label_element}
-    <text x="{divider + 6}" y="16" font-weight="700">{value}</text>
+    <text x="{divider + 6}" y="14.4" font-weight="700">{value}</text>
   </g>
 </svg>
 '''
