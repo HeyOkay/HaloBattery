@@ -96,10 +96,41 @@ class _VALUE_CAPS(ctypes.Structure):
                 ("DataIndexMax", ctypes.c_uint16)]
 
 
+class _BUTTON_CAPS(ctypes.Structure):
+    """HIDP_BUTTON_CAPS, laid out as hidpi.h declares it on Windows (72 bytes).
+
+    Needed to find which report carries a charge usage: a device may put its
+    charging bit in a different report than its level.
+    """
+    _fields_ = [("UsagePage", ctypes.c_uint16),
+                ("ReportID", ctypes.c_uint8),
+                ("IsAlias", ctypes.c_uint8),
+                ("BitField", ctypes.c_uint16),
+                ("LinkCollection", ctypes.c_uint16),
+                ("LinkUsage", ctypes.c_uint16),
+                ("LinkUsagePage", ctypes.c_uint16),
+                ("IsRange", ctypes.c_uint8),
+                ("IsStringRange", ctypes.c_uint8),
+                ("IsDesignatorRange", ctypes.c_uint8),
+                ("IsAbsolute", ctypes.c_uint8),
+                ("ReportCount", ctypes.c_uint16),
+                ("Reserved2", ctypes.c_uint16),
+                ("Reserved", ctypes.c_uint32 * 9),
+                ("UsageMin", ctypes.c_uint16),
+                ("UsageMax", ctypes.c_uint16),
+                ("StringMin", ctypes.c_uint16),
+                ("StringMax", ctypes.c_uint16),
+                ("DesignatorMin", ctypes.c_uint16),
+                ("DesignatorMax", ctypes.c_uint16),
+                ("DataIndexMin", ctypes.c_uint16),
+                ("DataIndexMax", ctypes.c_uint16)]
+
+
 # Windows' parser writes fixed-size native structures into the array we pass; a
 # wrong stride would turn every following entry into garbage, so refuse to run at
 # all if this build's layout differs from the documented one.
-if ctypes.sizeof(_VALUE_CAPS) != 72 or ctypes.sizeof(_HIDP_CAPS) != 64:  # pragma: no cover
+if (ctypes.sizeof(_VALUE_CAPS) != 72 or ctypes.sizeof(_BUTTON_CAPS) != 72
+        or ctypes.sizeof(_HIDP_CAPS) != 64):  # pragma: no cover
     _LAYOUT_OK = False
 else:
     _LAYOUT_OK = True
@@ -130,6 +161,9 @@ def _load():
         hid.HidP_GetValueCaps.argtypes = [ctypes.c_int, ctypes.POINTER(_VALUE_CAPS),
                                           ctypes.POINTER(ctypes.c_uint16), ctypes.c_void_p]
         hid.HidP_GetValueCaps.restype = ctypes.c_long
+        hid.HidP_GetButtonCaps.argtypes = [ctypes.c_int, ctypes.POINTER(_BUTTON_CAPS),
+                                           ctypes.POINTER(ctypes.c_uint16), ctypes.c_void_p]
+        hid.HidP_GetButtonCaps.restype = ctypes.c_long
         hid.HidP_GetUsages.argtypes = [ctypes.c_int, ctypes.c_uint16, ctypes.c_uint16,
                                        ctypes.POINTER(ctypes.c_uint16),
                                        ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p,
@@ -206,12 +240,15 @@ def read(path: str, vendor_id: int = 0) -> Optional[StandardBattery]:
         caps = _HIDP_CAPS()
         if hid.HidP_GetCaps(pp, ctypes.byref(caps)) != HIDP_SUCCESS:
             return None
-        for report_type, length, count in (
-                (HIDP_FEATURE, caps.FeatureReportByteLength, caps.NumberFeatureValueCaps),
-                (HIDP_INPUT, caps.InputReportByteLength, caps.NumberInputValueCaps)):
+        for report_type, length, count, buttons in (
+                (HIDP_FEATURE, caps.FeatureReportByteLength, caps.NumberFeatureValueCaps,
+                 caps.NumberFeatureButtonCaps),
+                (HIDP_INPUT, caps.InputReportByteLength, caps.NumberInputValueCaps,
+                 caps.NumberInputButtonCaps)):
             if not length or not count:
                 continue
-            found = _read_report(hid, handle, pp, report_type, length, count, vendor_id)
+            found = _read_report(hid, handle, pp, report_type, length, count, vendor_id,
+                                 buttons)
             if found is not None:
                 return found
         return None
@@ -226,62 +263,124 @@ def read(path: str, vendor_id: int = 0) -> Optional[StandardBattery]:
 
 
 def _read_report(hid, handle, pp, report_type: int, length: int, count: int,
-                 vendor_id: int) -> Optional[StandardBattery]:
+                 vendor_id: int, button_count: int = 0) -> Optional[StandardBattery]:
     caps = (_VALUE_CAPS * count)()
     used = ctypes.c_uint16(count)
     if hid.HidP_GetValueCaps(report_type, caps, ctypes.byref(used), pp) != HIDP_SUCCESS:
         return None
+    got = hid.HidD_GetFeature if report_type == HIDP_FEATURE else hid.HidD_GetInputReport
     for index in range(min(count, used.value)):
         cap = caps[index]
         usage = int(cap.UsageMin)
         if (int(cap.UsagePage), usage) not in LEVEL_USAGES:
             continue
-        report = ctypes.create_string_buffer(length)
-        report[0] = bytes((int(cap.ReportID),))
-        got = (hid.HidD_GetFeature if report_type == HIDP_FEATURE else hid.HidD_GetInputReport)
-        if not got(handle, ctypes.cast(report, ctypes.c_void_p), length):
+        report = _fetch(got, handle, int(cap.ReportID), length)
+        if report is None:
             continue
         value = ctypes.c_uint32()
         if hid.HidP_GetUsageValue(report_type, cap.UsagePage, cap.LinkCollection, usage,
                                   ctypes.byref(value), pp, report, length) != HIDP_SUCCESS:
             continue
-        raw = int(value.value)
-        if cap.LogicalMin < 0:
-            raw = ctypes.c_int32(raw).value
+        raw = _signed(int(value.value), int(cap.BitSize), int(cap.LogicalMin))
         level = scale_value(raw, int(cap.LogicalMin), int(cap.LogicalMax), vendor_id)
         if level is None:
             continue
-        usages, known = _charge_usages(hid, pp, report_type, count, report, length)
+        usages, known = _charge_usages(hid, handle, pp, report_type, count, button_count,
+                                       int(cap.ReportID), report, length)
         charging, full = charge_flags(usages)
         return StandardBattery(level, charging, full, known)
     return None
 
 
-def _charge_usages(hid, pp, report_type: int, count: int, report,
-                   length: int) -> Tuple[Set[int], bool]:
-    """The page-0x85 charge usages set in this report, and whether the device has any."""
+def _fetch(got, handle, report_id: int, length: int):
+    """One report from the device, or None. Read-only: Get Feature / Get Input Report."""
+    report = ctypes.create_string_buffer(length)
+    report[0] = bytes((report_id,))
+    if not got(handle, ctypes.cast(report, ctypes.c_void_p), length):
+        return None
+    return report
+
+
+def _signed(raw: int, bits: int, logical_min: int) -> int:
+    """HidP_GetUsageValue returns the field's raw bits; a field with a negative
+    logical minimum is two's complement in its own width, not in 32 bits."""
+    if logical_min < 0 and 0 < bits < 32 and raw & (1 << (bits - 1)):
+        return raw - (1 << bits)
+    if logical_min < 0 and bits == 32:
+        return ctypes.c_int32(raw).value
+    return raw
+
+
+def _charge_declarations(hid, pp, report_type: int, value_count: int,
+                         button_count: int) -> Tuple[Set[int], list]:
+    """Which reports carry a charge usage: (report IDs with charge buttons,
+    [(report ID, link collection, usage)] for charge values)."""
+    button_ids: Set[int] = set()
+    values = []
+    if button_count:
+        bcaps = (_BUTTON_CAPS * button_count)()
+        used = ctypes.c_uint16(button_count)
+        if hid.HidP_GetButtonCaps(report_type, bcaps, ctypes.byref(used), pp) == HIDP_SUCCESS:
+            for index in range(min(button_count, used.value)):
+                cap = bcaps[index]
+                if int(cap.UsagePage) != CHARGE_PAGE:
+                    continue
+                low = int(cap.UsageMin)
+                high = int(cap.UsageMax) if cap.IsRange else low
+                if any(low <= u <= high for u in CHARGE_USAGES):
+                    button_ids.add(int(cap.ReportID))
+    if value_count:
+        vcaps = (_VALUE_CAPS * value_count)()
+        used = ctypes.c_uint16(value_count)
+        if hid.HidP_GetValueCaps(report_type, vcaps, ctypes.byref(used), pp) == HIDP_SUCCESS:
+            for index in range(min(value_count, used.value)):
+                cap = vcaps[index]
+                usage = int(cap.UsageMin)
+                if int(cap.UsagePage) == CHARGE_PAGE and usage in CHARGE_USAGES:
+                    values.append((int(cap.ReportID), int(cap.LinkCollection), usage))
+    return button_ids, values
+
+
+def _charge_usages(hid, handle, pp, report_type: int, value_count: int, button_count: int,
+                   level_id: int, level_report, length: int) -> Tuple[Set[int], bool]:
+    """The page-0x85 charge usages that are set, and whether they could be read.
+
+    Each charge usage is read from the report the parser says carries it - the
+    level's own report, or another one fetched the same read-only way. "Known" means
+    at least one of the four charge usages is declared and its report answered; a
+    device without them, or one whose charge report fails, is "not known" rather
+    than "not charging".
+    """
+    button_ids, values = _charge_declarations(hid, pp, report_type, value_count, button_count)
+    wanted = button_ids | {rid for rid, _, _ in values}
+    if not wanted:
+        return set(), False
+    got = hid.HidD_GetFeature if report_type == HIDP_FEATURE else hid.HidD_GetInputReport
+    reports = {}
+    for rid in sorted(wanted):
+        reports[rid] = level_report if rid == level_id else _fetch(got, handle, rid, length)
     found: Set[int] = set()
     known = False
-    most = int(hid.HidP_MaxUsageListLength(report_type, CHARGE_PAGE, pp))
-    if most:
-        known = True
+    most = int(hid.HidP_MaxUsageListLength(report_type, CHARGE_PAGE, pp)) if button_ids else 0
+    for rid in sorted(button_ids):
+        report = reports.get(rid)
+        if report is None or not most:
+            continue
         buttons = (ctypes.c_uint16 * most)()
         used = ctypes.c_uint32(most)
         if hid.HidP_GetUsages(report_type, CHARGE_PAGE, 0, buttons,
                               ctypes.byref(used), pp, report, length) == HIDP_SUCCESS:
-            found.update(int(u) for u in buttons[:min(most, used.value)])
-    caps = (_VALUE_CAPS * count)()
-    used_caps = ctypes.c_uint16(count)
-    if hid.HidP_GetValueCaps(report_type, caps, ctypes.byref(used_caps), pp) == HIDP_SUCCESS:
-        for index in range(min(count, used_caps.value)):
-            cap = caps[index]
-            usage = int(cap.UsageMin)
-            if int(cap.UsagePage) != CHARGE_PAGE or usage not in CHARGE_USAGES:
-                continue
             known = True
-            value = ctypes.c_uint32()
-            if hid.HidP_GetUsageValue(report_type, CHARGE_PAGE, cap.LinkCollection, usage,
-                                      ctypes.byref(value), pp, report, length) == HIDP_SUCCESS \
-                    and value.value:
+            found.update(int(u) for u in buttons[:min(most, used.value)]
+                         if int(u) in CHARGE_USAGES)
+    for rid, link, usage in values:
+        report = reports.get(rid)
+        if report is None:
+            continue
+        value = ctypes.c_uint32()
+        if hid.HidP_GetUsageValue(report_type, CHARGE_PAGE, link, usage,
+                                  ctypes.byref(value), pp, report, length) == HIDP_SUCCESS:
+            known = True
+            if value.value:
                 found.add(usage)
     return found, known
