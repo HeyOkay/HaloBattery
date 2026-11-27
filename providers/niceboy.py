@@ -7,7 +7,8 @@ usage `0001:0000`. A read-only request `05 24 fa 48` is answered with
 
 `raw = lo | hi << 8` and `millivolts = raw * 990 / 240`. The configuration app
 maps that voltage to 10 % steps; the same table is used here. All three payload
-bytes zero mean the receiver answered but the mouse is asleep or off.
+bytes zero mean the receiver answered but the mouse is asleep or off; its last
+reading then stays greyed for ``ASLEEP_KEEP_S`` and refreshes on movement.
 
 The 248A vendor id is shared with other Telink receivers, so only `fa02` is
 claimed. Protocol source: BatteryHub 1.1.1 src/drivers/niceboy.cpp
@@ -16,6 +17,7 @@ hardware replies.
 """
 from __future__ import annotations
 
+import time
 from typing import List, Optional, Tuple
 
 import hid
@@ -28,6 +30,7 @@ PID = 0xFA02
 REPORT_ID = 0x05
 REPORT_LEN = 33
 TIMEOUT_S = 0.5
+ASLEEP_KEEP_S = 1800.0             # the receiver stays plugged in while the mouse sleeps
 KEY = "niceboy:fa02"
 NAME = "Niceboy MW400"
 
@@ -55,6 +58,13 @@ def _payload(report) -> bytes:
     return b
 
 
+def is_asleep_reply(report) -> bool:
+    """True for a battery reply whose payload is all zero (mouse asleep or off)."""
+    b = _payload(report)
+    return (len(b) >= 7 and b[0] == REPORT_ID and b[2] == 0xFA and b[3] == 0x48
+            and (b[4] | b[5] | b[6]) == 0)
+
+
 def parse_reply(report) -> Optional[Tuple[int, bool]]:
     """(percent, charging) from a battery reply, or None for another report."""
     b = _payload(report)
@@ -71,6 +81,7 @@ class NiceboyProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Optional[Tuple[int, bool, float]] = None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for d in infos:
@@ -102,6 +113,8 @@ class NiceboyProvider(Provider):
                 parsed = parse_reply(reply)
                 if parsed is not None:
                     return parsed
+                if is_asleep_reply(reply):
+                    break                  # the receiver answered for a sleeping mouse
             self._diag.append("  no battery reply (mouse asleep or off)")
             return None
         except (OSError, IOError, ValueError) as e:
@@ -122,13 +135,20 @@ class NiceboyProvider(Provider):
             return []
         d = self._pick(infos)
         if d is None:
+            self._last = None
             return []
         self._diag.append(f"[Niceboy] pid={PID:04x} iface={d.get('interface_number')}")
         parsed = self._query(d["path"])
-        if parsed is None:
-            return []
-        level, charging = parsed
-        return [DeviceStatus(KEY, NAME, level, charging, True, "niceboy", kind="mouse")]
+        if parsed is not None:
+            level, charging = parsed
+            self._last = (level, charging, time.monotonic())
+            return [DeviceStatus(KEY, NAME, level, charging, True, "niceboy", kind="mouse")]
+        if self._last is not None and time.monotonic() - self._last[2] <= ASLEEP_KEEP_S:
+            level, charging, _seen = self._last
+            return [DeviceStatus(KEY, NAME, level, charging, False, "niceboy",
+                                 kind="mouse", wake_on_input=True)]
+        self._last = None
+        return []
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

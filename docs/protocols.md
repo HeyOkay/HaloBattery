@@ -1913,8 +1913,8 @@ The MW400 receiver (`248a:fa02`) exposes interface 0, usage `0001:0000`, with
 voltage to 10 % steps: 4200 mV = 100 %, 4100 = 90 %, 4000 = 80 %, 3900 = 70 %,
 3800 = 60 %, 3700 = 50 %, 3500 = 40 %, 3400 = 30 %, 3200 = 20 %, otherwise 10 %.
 If `lo`, `hi` and `charging` are all zero the receiver answered but the mouse is
-asleep or off, so no reading is published. Source: BatteryHub
-`src/drivers/niceboy.cpp`.
+asleep or off; the last reading then stays greyed for up to 30 minutes.
+Source: BatteryHub `src/drivers/niceboy.cpp`.
 
 ### Press Play
 
@@ -1934,7 +1934,8 @@ and `02` on the receiver. The reply is `00 <status> 00 <link> 02 00 83
 <charging> <percent> ...`. Status `A0` means not ready: repeat SET_FEATURE and
 GET_FEATURE until the 2 s deadline. `A1` is a valid reading; `A3` is rejected;
 `A4` means no mouse on the wireless link. The cable is queried first, because
-the receiver answers `A4` while the mouse is on its cable. Source: BatteryHub
+the receiver answers `A4` while the mouse is on its cable. With no reading on
+either link the last one stays greyed for up to 30 minutes. Source: BatteryHub
 `src/drivers/evga.cpp` and `evga_protocol.h`, from EVGA Unleash captures and
 OpenRGB.
 
@@ -1949,5 +1950,6 @@ usage `ff00:0001` with 64-byte feature reports. The frame is:
 `sum` is the low byte of the sum of bytes 1..63. For the receiver, a read-only
 online check `47 00` must return a nonzero first data byte; then `4f 81` returns
 a battery byte where bit 7 is charging and bits 0..6 are the level. A sleeping
-mouse may need the link poke and up to six 120 ms retries. Only the four listed
-PIDs are claimed. Source: BatteryHub `src/drivers/piao.cpp`.
+mouse may need the link poke and up to six 120 ms retries; while it sleeps the
+last reading stays greyed for up to 10 minutes. Only the four listed PIDs are
+claimed. Source: BatteryHub `src/drivers/piao.cpp`.

@@ -13,7 +13,8 @@ are repeated until a 2 s deadline.
 
 The cable is queried first. While the mouse is on its cable the receiver only
 answers A4; using the cable first avoids a second dimmed entry for the same
-mouse. Protocol source: BatteryHub 1.1.1 src/drivers/evga.cpp and
+mouse. When neither link gives a reading (A4: asleep or off, or still not
+ready) the last reading stays greyed for ``ASLEEP_KEEP_S``. Protocol source: BatteryHub 1.1.1 src/drivers/evga.cpp and
 evga_protocol.h (GPL-3.0-or-later; protocol reference only), from EVGA
 Unleash captures and OpenRGB's EVGAMouseController.
 """
@@ -40,6 +41,7 @@ STATUS_REJECTED = 0xA3
 STATUS_ASLEEP = 0xA4
 DEADLINE_S = 2.0
 RETRY_DELAY_S = 0.01
+ASLEEP_KEEP_S = 1800.0
 KEY = "evga:x20"
 NAME = "EVGA X20"
 
@@ -83,6 +85,7 @@ class EvgaProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Optional[Tuple[int, bool, float]] = None
 
     def _pick(self, infos: List[dict], pid: int) -> Optional[dict]:
         for d in infos:
@@ -139,15 +142,20 @@ class EvgaProvider(Provider):
             log.warning("hid.enumerate(evga): %s", e)
             return []
         cable = self._pick(infos, CABLE)
-        if cable is not None:
-            got = self._query(cable, LINK_WIRED)
-            if got is not None and got[0] == STATUS_OK:
-                return [DeviceStatus(KEY, NAME, got[1], got[2], True, "evga", kind="mouse")]
         receiver = self._pick(infos, RECEIVER)
-        if receiver is not None:
-            got = self._query(receiver, LINK_WIRELESS)
+        for d, link in ((cable, LINK_WIRED), (receiver, LINK_WIRELESS)):
+            if d is None:
+                continue
+            got = self._query(d, link)
             if got is not None and got[0] == STATUS_OK:
+                self._last = (got[1], got[2], time.monotonic())
                 return [DeviceStatus(KEY, NAME, got[1], got[2], True, "evga", kind="mouse")]
+        if (cable is not None or receiver is not None) and self._last is not None \
+                and time.monotonic() - self._last[2] <= ASLEEP_KEEP_S:
+            level, charging, _seen = self._last
+            return [DeviceStatus(KEY, NAME, level, charging, False, "evga",
+                                 kind="mouse", wake_on_input=True)]
+        self._last = None
         return []
 
     def diagnostics(self) -> List[str]:

@@ -157,7 +157,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
   Press Play ICARUS V2 (`7768:6434`), EVGA X20 (`3842:2402` receiver /
   `3842:2420` cable) and IPI PIAO mice (`372e:1014/1015/1028/1056`). Niceboy,
   EVGA and PIAO report charging; Press Play has no charging field and is marked
-  unknown. None has been hardware-tested in Halo yet. See `docs/protocols.md`,
+  unknown. A sleeping Niceboy, EVGA or PIAO mouse keeps its last reading
+  greyed. None has been hardware-tested in Halo yet. See `docs/protocols.md`,
   "Ported BatteryHub families (third batch)".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its

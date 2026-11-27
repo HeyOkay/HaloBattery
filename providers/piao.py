@@ -10,7 +10,8 @@ The checksum is the low byte of the sum of bytes 1..63. For the wireless id the
 reader first sends the read-only online check `47 00`; a zero first data byte
 means the mouse is asleep or off. The battery query `4f 81` returns a byte whose
 bit 7 is charging and bits 0..6 are the percent. A sleeping mouse may need the
-link poke and a few retries.
+link poke and a few retries. While it sleeps its last reading stays greyed
+for ``ASLEEP_KEEP_S``.
 
 Only these PIDs are claimed; other 372E products have their own drivers.
 Protocol source: BatteryHub 1.1.1 src/drivers/piao.cpp (GPL-3.0-or-later;
@@ -39,6 +40,7 @@ REPORT_LEN = 64
 CMD_LINK = 0x47
 CMD_BATTERY = 0x4F
 SUB_BATTERY = 0x81
+ASLEEP_KEEP_S = 600.0              # BatteryHub's grace for this family
 
 
 def make_request(cmd: int, sub: int) -> List[int]:
@@ -92,6 +94,7 @@ class PiaoProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Dict[int, Tuple[int, bool, float]] = {}
 
     def _pick(self, infos: List[dict], pid: int) -> Optional[dict]:
         for d in infos:
@@ -145,20 +148,29 @@ class PiaoProvider(Provider):
         for pid, wireless in PIDS.items():
             d = self._pick(infos, pid)
             if d is None:
+                self._last.pop(pid, None)
                 continue
             self._diag.append(f"[Piao] pid={pid:04x}")
-            if wireless:
-                link = self._query(d["path"], CMD_LINK, 0x00)
-                if link is None or not link or link[0] == 0:
-                    self._diag.append("  mouse asleep or off")
-                    continue
-            data = self._query(d["path"], CMD_BATTERY, SUB_BATTERY)
-            parsed = parse_battery(data) if data else None
-            if parsed is None:
+            parsed = None
+            link = self._query(d["path"], CMD_LINK, 0x00) if wireless else b"\x01"
+            if not link or link[0] == 0:
+                self._diag.append("  mouse asleep or off")
+            else:
+                data = self._query(d["path"], CMD_BATTERY, SUB_BATTERY)
+                parsed = parse_battery(data) if data else None
+            key = f"piao:{pid:04x}"
+            if parsed is not None:
+                level, charging = parsed
+                self._last[pid] = (level, charging, time.monotonic())
+                out.append(DeviceStatus(key, "IPI PIAO mouse", level, charging,
+                                        True, "piao", kind="mouse"))
                 continue
-            level, charging = parsed
-            out.append(DeviceStatus(f"piao:{pid:04x}", "IPI PIAO mouse", level, charging,
-                                    True, "piao", kind="mouse"))
+            last = self._last.get(pid)
+            if last is not None and time.monotonic() - last[2] <= ASLEEP_KEEP_S:
+                out.append(DeviceStatus(key, "IPI PIAO mouse", last[0], last[1], False,
+                                        "piao", kind="mouse", wake_on_input=True))
+            else:
+                self._last.pop(pid, None)
         return out
 
     def diagnostics(self) -> List[str]:

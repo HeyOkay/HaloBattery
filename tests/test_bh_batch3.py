@@ -68,6 +68,21 @@ class NiceboyTest(unittest.TestCase):
         found = run(N, N.NiceboyProvider, infos, FakeHid(replies=[reply]))
         self.assertEqual((found[0].level, found[0].charging), (90, False))
 
+    def test_asleep_keeps_last_reading_greyed(self):
+        infos = [{"path": b"n", "product_id": N.PID, "interface_number": 0,
+                  "usage_page": 1, "usage": 0,
+                  "input_report_byte_length": 33, "output_report_byte_length": 33}]
+        raw = 1002
+        awake = bytes([5, 0, 0xFA, 0x48, raw & 0xFF, raw >> 8, 0]) + bytes(26)
+        asleep = bytes([5, 0, 0xFA, 0x48, 0, 0, 0]) + bytes(26)
+        provider = N.NiceboyProvider()
+        for reply in (awake, asleep):
+            with mock.patch.object(N.hid, "device", return_value=FakeHid(replies=[reply])), \
+                    mock.patch.object(N.hidlist, "enumerate", return_value=infos):
+                found = provider.poll()
+        self.assertEqual((found[0].level, found[0].online, found[0].wake_on_input),
+                         (90, False, True))
+
 
 class PressPlayTest(unittest.TestCase):
     def test_parse(self):
@@ -113,6 +128,18 @@ class EvgaTest(unittest.TestCase):
         found = run(E, E.EvgaProvider, infos, fake)
         self.assertEqual((len(found), found[0].level, found[0].charging), (1, 97, True))
 
+    def test_receiver_asleep_keeps_last_reading_greyed(self):
+        infos = [{"path": b"rx", "product_id": E.RECEIVER, "interface_number": 2,
+                  "usage_page": 0xFFFF, "usage": 0, "feature_report_byte_length": 65}]
+        provider = E.EvgaProvider()
+        for reply in (evga_reply(E.STATUS_OK, E.LINK_WIRELESS, 56),
+                      evga_reply(E.STATUS_ASLEEP, E.LINK_WIRELESS)):
+            with mock.patch.object(E.hid, "device", return_value=FakeHid(features=[reply])), \
+                    mock.patch.object(E.hidlist, "enumerate", return_value=infos):
+                found = provider.poll()
+        self.assertEqual((found[0].level, found[0].online, found[0].wake_on_input),
+                         (56, False, True))
+
 
 class PiaoTest(unittest.TestCase):
     def battery_reply(self, value):
@@ -138,6 +165,22 @@ class PiaoTest(unittest.TestCase):
         found = run(P, P.PiaoProvider, infos,
                     FakeHid(features=[bytes(link), self.battery_reply(0xE4)]))
         self.assertEqual((found[0].level, found[0].charging), (100, True))
+
+    def test_link_down_keeps_last_reading_greyed(self):
+        infos = [{"path": b"p", "product_id": P.WIRELESS, "usage_page": 0xFF00,
+                  "usage": 1, "feature_report_byte_length": 64}]
+        link = bytearray(64)
+        link[0], link[1], link[2], link[3] = 3, 0x50, 0, 1
+        link[5] = 0x47
+        provider = P.PiaoProvider()
+        awake = bytearray(link)
+        awake[7] = 1
+        for features in ([bytes(awake), self.battery_reply(0x4B)], [bytes(link)]):
+            with mock.patch.object(P.hid, "device", return_value=FakeHid(features=features)), \
+                    mock.patch.object(P.hidlist, "enumerate", return_value=infos):
+                found = provider.poll()
+        self.assertEqual((found[0].level, found[0].online, found[0].wake_on_input),
+                         (75, False, True))
 
 
 if __name__ == "__main__":
