@@ -47,7 +47,9 @@ def option(name):
     return args[args.index(name) + 1]
 
 
-if args[0] == "fake-attest":
+if args[0] == "fake-sleep":
+    if args[1:] != ["5"]: stop("unexpected retry interval")
+elif args[0] == "fake-attest":
     if mode == "attestation-fail": stop("injected attestation failure")
     if state["phase"] != "draft" or len(state["assets"]) != 3: stop("attestation before validated upload")
     subjects = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in args[1:]}
@@ -71,15 +73,26 @@ elif args[:2] == ["release", "upload"]:
     save()
 elif args[:2] == ["attestation", "verify"]:
     if not state.get("attested"): stop("no attestation exists")
-    if option("--repo") != repo or option("--signer-workflow") != repo + "/.github/workflows/release.yml": stop("wrong signer identity policy")
+    if option("--repo") != repo or option("--signer-workflow") != repo + "/" + os.environ["EXPECTED_SIGNER_WORKFLOW"]: stop("wrong signer identity policy")
     if option("--source-ref") != "refs/tags/" + tag or option("--source-digest") != source: stop("wrong source policy")
     bundle = json.loads(Path(option("--bundle")).read_text(encoding="utf-8"))
     if bundle.get(args[2]) != hashlib.sha256(Path(args[2]).read_bytes()).hexdigest(): stop("subject digest mismatch")
 elif args[:2] == ["release", "verify"]:
     if state["phase"] != "published": stop("release not published")
+    attempts = state.get("release_verify_attempts", 0) + 1
+    state["release_verify_attempts"] = attempts
+    save()
+    if mode == "delayed-attestation" and attempts < 3: stop("no attestations for tag")
+    if mode == "invalid-attestation": stop("attestation verification failed")
     if mode == "immutability-disabled": stop("no GitHub immutable release attestation")
 elif args[:2] == ["release", "verify-asset"]:
     if state["phase"] != "published": stop("release not published")
+    counts = state.setdefault("asset_verify_attempts", {})
+    filename = Path(args[3]).name
+    counts[filename] = counts.get(filename, 0) + 1
+    save()
+    if mode == "delayed-asset" and counts[filename] < 3: stop("asset attestation not ready")
+    if mode == "invalid-asset": stop("asset attestation verification failed")
     digest = "sha256:" + hashlib.sha256(Path(args[3]).read_bytes()).hexdigest()
     if state["assets"].get(Path(args[3]).name, {}).get("digest") != digest: stop("release asset mismatch")
 elif args[0] == "api":
@@ -180,16 +193,29 @@ class StablePublisherPolicyTests(unittest.TestCase):
                 self.assertEqual(step(name, TEXT), step(name, stable_only))
 
     def test_only_fresh_publisher_gets_attestation_permissions(self):
-        build = TEXT.split("\n  publish:\n", 1)[0]
         publish = publisher(TEXT)
-        self.assertNotIn("id-token: write", build)
-        self.assertNotIn("attestations: write", build)
-        self.assertIn("      contents: read", build)
+        # Signing jobs now follow the publisher in the document. Check every
+        # other job, rather than only the old build-before-publish prefix.
+        jobs = re.split(r"(?m)(?=^  [A-Za-z_][A-Za-z0-9_-]*:\n)", TEXT.split("\njobs:\n", 1)[1])
+        for job in filter(str.strip, jobs):
+            if job.startswith("  publish:\n"):
+                continue
+            with self.subTest(job=job.splitlines()[0].strip()):
+                self.assertNotIn("id-token: write", job)
+                self.assertNotIn("attestations: write", job)
+                self.assertNotIn("contents: write", job)
+                self.assertIn("      contents: read", job)
         self.assertIn("      id-token: write", publish)
         self.assertIn("      attestations: write", publish)
         self.assertNotIn("artifact-metadata: write", publish)
         self.assertNotRegex(publish, r"actions/checkout|pip install|dotnet |python |./tools/|./scripts/")
-        self.assertIn("    if: github.event_name == 'push' && github.ref_type == 'tag'", publish)
+        gate = re.search(r"(?m)^    if: (.+)$", publish).group(1)
+        self.assertEqual(gate, "always() && !cancelled() && github.event_name == 'push' && "
+                         "github.ref_type == 'tag' && needs.signing_verify.result == 'success' && "
+                         "needs.signing_verify.outputs.mode == 'Production'")
+        self.assertIn("    needs: signing_verify\n", publish)
+        self.assertIn("          artifact-ids: ${{ needs.signing_verify.outputs.release-artifact }}\n", publish)
+        self.assertEqual(publish.count("actions/download-artifact@"), 1)
         self.assertIn("      cancel-in-progress: false", publish)
 
     def test_exact_pinned_action_attests_only_validated_zip_and_installer(self):
@@ -203,14 +229,16 @@ class StablePublisherPolicyTests(unittest.TestCase):
 
 @unittest.skipUnless(bash_path(), "Bash required for offline publisher execution")
 class StablePublisherExecutionTests(unittest.TestCase):
-    def run_publisher(self, *, phase="absent", mode="", mutation=None, enabled="true", rerun=False):
+    def run_publisher(self, *, phase="absent", mode="", mutation=None, enabled="true", rerun=False,
+                      workflow_text=TEXT, version="1.17.0", signer_workflow=".github/workflows/release.yml",
+                      release_tag=None):
         with tempfile.TemporaryDirectory(prefix="halo stable publisher ") as temp:
             root = Path(temp)
             fake_gh = root / "fake_gh.py"
             fake_gh.write_text(FAKE_GH_SOURCE, encoding="utf-8")
             assets = root / "release-assets"
             assets.mkdir()
-            payloads = {"HaloBattery-1.17.0.zip": b"fixture ZIP bytes", "HaloBattery-1.17.0-setup.exe": b"fixture installer bytes"}
+            payloads = {f"HaloBattery-{version}.zip": b"fixture ZIP bytes", f"HaloBattery-{version}-setup.exe": b"fixture installer bytes"}
             for name, data in payloads.items(): (assets / name).write_bytes(data)
             (assets / "release_notes.md").write_text("$(touch EXECUTED)\n", encoding="utf-8")
             (assets / "SHA256SUMS.txt").write_bytes("".join(hashlib.sha256(data).hexdigest() + " *" + name + "\r\n" for name, data in payloads.items()).encode())
@@ -221,7 +249,8 @@ class StablePublisherExecutionTests(unittest.TestCase):
             state.write_text(json.dumps(initial), encoding="utf-8")
             log = root / "gh.jsonl"
             env = dict(os.environ, FAKE_STATE=str(state), FAKE_LOG=str(log), FAKE_MODE=mode,
-                       RELEASE_TAG="v1.17.0", GITHUB_SHA="1" * 40, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
+                       RELEASE_TAG=release_tag or "v" + version, GITHUB_SHA="1" * 40, GITHUB_REPOSITORY="HeyOkay/HaloBattery",
+                       EXPECTED_SIGNER_WORKFLOW=signer_workflow,
                        RUNNER_TEMP=str(root), GITHUB_OUTPUT=str(root / "outputs"), IMMUTABILITY_ENABLED=enabled,
                        GH_TOKEN="offline-test-only", GITHUB_TOKEN="offline-test-only",
                        TEST_PYTHON=Path(sys.executable).as_posix(), FAKE_GH=fake_gh.as_posix(),
@@ -232,6 +261,7 @@ class StablePublisherExecutionTests(unittest.TestCase):
             # This wrapper replaces every gh call. No real gh executable is
             # invoked, and no real attestation action or workflow is run.
             wrapper = 'gh() { "$TEST_PYTHON" "$FAKE_GH" "$@"; }; export -f gh\n'
+            wrapper += 'sleep() { gh fake-sleep "$@"; }; export -f sleep\n'
             load = '''
 while IFS='=' read -r name value; do
   case "$name" in
@@ -243,11 +273,11 @@ done < "$GITHUB_OUTPUT"
 '''
             # A subshell also isolates the validator's cd and EXIT trap, as
             # Actions does when starting a separate run step.
-            script = wrapper + "(\n" + step("Validate release assets") + ")\n" + load + step("Attach to release") + load
+            script = wrapper + "(\n" + step("Validate release assets", workflow_text) + ")\n" + load + step("Attach to release", workflow_text) + load
             if rerun:
-                script += step("Attach to release")
+                script += step("Attach to release", workflow_text)
             else:
-                script += 'gh fake-attest "$ZIP" "$SETUP"\n' + step("Publish attested draft")
+                script += 'gh fake-attest "$ZIP" "$SETUP"\n' + step("Publish attested draft", workflow_text)
             result = subprocess.run([bash_path(), "--login", "-e", "-o", "pipefail", "-c", script],
                                     cwd=root, env=env, capture_output=True, text=True, timeout=30)
             final = json.loads(state.read_text(encoding="utf-8"))

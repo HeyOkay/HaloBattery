@@ -108,6 +108,9 @@ HITSCAN_SHAPE = [
 # (#164, both checksums valid): 3710:5406 the dongle, 3710:3414 the cable
 CRAZYLIGHT_DONGLE = bytes.fromhex("08 04 00 00 00 02 14 00 0d ea 00 00 00 00 00 00 3c")
 CRAZYLIGHT_CABLE = bytes.fromhex("08 04 00 00 00 02 19 01 0e 52 00 00 00 00 00 00 cd")
+# the frame a VXE R1 Pro Max answered on its 373b:1273 cable (valid checksum):
+# 40 %, on the cable, 3783 mV
+R1_PRO_MAX_ATK_CABLE = bytes.fromhex("08 04 00 00 00 02 28 01 0e c7 00 00 00 00 00 00 49")
 
 
 def reply(level, power=0, mv=0, command=0x04, header=0x08,
@@ -327,14 +330,88 @@ class PulsarTest(unittest.TestCase):
         # the reporter's second report: the wired mouse is 3554:f58c, product string
         # 'VXE R1 PRO MAX', with the same eight collections as the receiver
         bus = self.one_receiver(vid=0x3554, pid=0xF58C, replies=[reply(54, 1, 4020)])
-        found = P.PulsarProvider().poll()
+        provider = P.PulsarProvider()
+        found = provider.poll()
         self.assertEqual(1, len(found))
         d = found[0]
-        self.assertEqual("pulsar:3554f58c", d.key)
+        self.assertEqual("pulsar:3554f58a", d.key)   # its receiver's key: one icon
+        self.assertEqual({"pulsar:3554f58c": "pulsar:3554f58a"},
+                         provider.legacy_key_aliases())
         self.assertEqual("VXE R1 Pro Max (wired)", d.name)
         self.assertEqual(54, d.level)
         self.assertTrue(d.charging)
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_r1_pro_max_on_its_atk_cable_id_is_read(self):
+        # some units enumerate on the cable as 373b:1273 with the same collections
+        bus = self.one_receiver(vid=0x373B, pid=0x1273, replies=[R1_PRO_MAX_ATK_CABLE])
+        provider = P.PulsarProvider()
+        [d] = provider.poll()
+        self.assertEqual(("pulsar:3554f58a", "VXE R1 Pro Max (wired)", 40, True, "mouse"),
+                         (d.key, d.name, d.level, d.charging, d.kind))
+        self.assertEqual({"pulsar:373b1273": "pulsar:3554f58a"},
+                         provider.legacy_key_aliases())
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_the_cable_and_the_receiver_are_one_icon(self):
+        # one R1 Pro Max: read on its receiver, then put on its cable (the receiver
+        # goes quiet but stays plugged in), then unplugged from the cable again
+        dongle = FakeBus(0x3554, 0xF58A, [reply(25, 0, 3658)])
+        buses = [dongle]
+
+        class Both:
+            def enumerate(self, vid):
+                return [d for b in buses for d in b.enumerate(vid)]
+
+        def device():
+            class Device:
+                def open_path(self, path):
+                    bus = next(b for b in buses if any(c.info["path"] == path for c in b.cols))
+                    self.d = bus.device_class()()
+                    self.d.open_path(path)
+
+                def write(self, frame):
+                    self.d.write(frame)
+
+                def read(self, length, timeout_ms=0):
+                    return self.d.read(length, timeout_ms)
+
+                def close(self):
+                    pass
+            return Device()
+
+        P.output_length = lambda path: None
+        P.hidlist = Both()
+        P.hid = types.SimpleNamespace(device=device)
+        provider = P.PulsarProvider()
+        [d] = provider.poll()
+        self.assertEqual(("pulsar:3554f58a", 25, True), (d.key, d.level, d.online))
+
+        for cable in ((0x373B, 0x1273), (0x3554, 0xF58C)):
+            with self.subTest(cable=cable):
+                buses[:] = [dongle, FakeBus(*cable, [R1_PRO_MAX_ATK_CABLE])]
+                [d] = provider.poll()          # the same icon, now charging
+                self.assertEqual(("pulsar:3554f58a", 40, True, True),
+                                 (d.key, d.level, d.charging, d.online))
+                buses[:] = [dongle]            # cable out, receiver not answering yet:
+                [d] = provider.poll()          # the cable's level, greyed, not charging
+                self.assertEqual(("pulsar:3554f58a", 40, False, False),
+                                 (d.key, d.level, d.charging, d.online))
+                self.assertEqual(P.PIDS[0x3554][0xF58A], d.name)   # not "(wired)"
+
+                self.assertEqual({}, provider.legacy_key_aliases())
+
+        # back on the receiver: its live reading
+        buses[:] = [FakeBus(0x3554, 0xF58A, [reply(39, 0, 3770)])]
+        [d] = provider.poll()
+        self.assertEqual(("pulsar:3554f58a", 39, False, True),
+                         (d.key, d.level, d.charging, d.online))
+
+        # the receiver answering in the same poll as the cable: one icon, the cable's
+        buses[:] = [FakeBus(0x3554, 0xF58A, [reply(25, 0, 3658)]),
+                    FakeBus(0x373B, 0x1273, [R1_PRO_MAX_ATK_CABLE])]
+        [d] = provider.poll()
+        self.assertEqual(("pulsar:3554f58a", 40, True), (d.key, d.level, d.charging))
 
     def test_zaopin_z2_4k_is_read_over_both_transports(self):
         cases = (

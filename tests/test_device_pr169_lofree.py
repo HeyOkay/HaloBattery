@@ -176,10 +176,10 @@ class FlowProviderTest(unittest.TestCase):
     def tearDown(self):
         F.hid, F.hidlist, F.flow_output_length = self._saved
 
-    def one_flow(self, kbd=None, **kw):
+    def one_flow(self, kbd=None, vid=F.FLOW_VID, pid=F.FLOW_PID, **kw):
         kbd = kbd or FakeFlow(**kw)
-        entries = flow_entries()
-        return kbd, {F.FLOW_VID: entries}, {e["path"]: kbd for e in entries}
+        entries = flow_entries(vid=vid, pid=pid)
+        return kbd, {vid: entries}, {e["path"]: kbd for e in entries}
 
     def poll(self, tables, devices, lengths=None):
         """tables: {vid: collection entries}. devices: {path: fake device}.
@@ -250,6 +250,29 @@ class FlowPollTest(FlowProviderTest):
         self.assertEqual("keyboard", d.kind)
         self.assertIn("[Lofree] Lofree Flow Lite84 pid=024f", self.diag())
         self.assertIn("3790 mV", self.diag())
+
+    def test_the_compx_vendor_id_dongle_is_read(self):
+        # #557: the same receiver also ships as 3554:FA0A under Compx's own id
+        kbd, tables, devices = self.one_flow(vid=0x3554, pid=0xFA0A, level=64, charging=0)
+        found = self.poll(tables, devices)
+        self.assertEqual(1, len(found))
+        self.assertEqual("lofree:fa0a", found[0].key)
+        self.assertEqual(64, found[0].level)
+        self.assertFalse(found[0].charging)
+        self.assertTrue(found[0].online)
+        self.assertIn("[Lofree] Lofree Flow Lite84 pid=fa0a", self.diag())
+
+    def test_compxs_id_alone_is_not_enough(self):
+        # 3554 is shared by every Compx receiver: the Flow product string and
+        # the FF02:0002 collection must still match, or nothing is written.
+        entries = flow_entries(vid=0x3554, pid=0xFA0A)
+        for e in entries:
+            e["product_string"] = "CX Keyboard"
+        kbd = FakeFlow()
+        found = self.poll({0x3554: entries}, {e["path"]: kbd for e in entries})
+        self.assertEqual([], found)
+        self.assertEqual([], kbd.writes)
+        self.assertEqual(0, kbd.opened)
 
     def test_the_frames_follow_the_family_rule(self):
         kbd, tables, devices = self.one_flow()
