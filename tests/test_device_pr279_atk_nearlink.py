@@ -314,6 +314,7 @@ class AtkNearlinkTest(unittest.TestCase):
             kept = provider.poll()          # idle now: the receiver goes quiet
         self.assertEqual(1, len(kept), "the reading stays while the receiver is enumerated")
         self.assertFalse(kept[0].online, "a held reading is greyed out")
+        self.assertTrue(kept[0].asleep, "a held reading is asleep, never charging")
         self.assertEqual((91, False), (kept[0].level, kept[0].charging))
         self.assertEqual("atk_nearlink:108c", kept[0].key)
         self.assertTrue(kept[0].wake_on_input, "the kept reading can be woken by input")

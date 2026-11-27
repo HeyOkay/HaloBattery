@@ -365,6 +365,19 @@ class StatusFileTests(HideRenameTestCase):
                          ("Work mouse", 67, False, True, "mouse", 30, "Work mouse: 67%"))
         self.assertIsNone(dev["seconds_left"])
 
+    def test_full_and_asleep_match_the_tooltip(self):
+        app = make_app({"status_file": True})
+        kept = DeviceStatus(KEY + ":2", "Spare", 64, True, False, "razer", kind="mouse",
+                            wake_on_input=True, asleep=True)
+        app.write_status([mouse(100, charging=True), kept])
+        devs = {d["name"]: d for d in self.read()["devices"]}
+        full, spare = devs["Viper"], devs["Spare"]
+        self.assertEqual((True, True, False), (full["charging"], full["full"], full["asleep"]))
+        self.assertEqual("Viper: 100%, fully charged", full["text"])
+        self.assertEqual((False, False, True, False),
+                         (spare["charging"], spare["full"], spare["asleep"], spare["online"]))
+        self.assertEqual("Spare: 64% (last known value, device asleep)", spare["text"])
+
     def test_not_written_when_off(self):
         app = make_app()
         app.write_status([mouse(67)])

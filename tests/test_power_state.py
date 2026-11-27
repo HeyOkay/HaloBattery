@@ -73,5 +73,46 @@ class AsleepStateTests(unittest.TestCase):
         self.assertFalse(off.asleep, "a device that is off is not asleep")
 
 
+class FullStateLanguageTests(unittest.TestCase):
+    def test_every_language_says_fully_charged_in_its_own_words(self):
+        english = hb.device_state(hb.with_power_state(status()), language="en")
+        for code, language in hb.i18n.LANGUAGES.items():
+            with self.subTest(language=code):
+                self.assertIn("state.fully_charged", language.catalog)
+                text = hb.device_state(hb.with_power_state(status()), language=code)
+                self.assertIn("100", text)
+                if code != "en":
+                    self.assertNotEqual(english, text)
+
+
+class AsleepPowerStateTests(unittest.TestCase):
+    """A kept reading is the device's last level, not a charger report (#109)."""
+
+    def kept(self, level=100, charging=True, **kw):
+        return DeviceStatus("pulsar:3554fb50", "VGN Dragonfly F1 SE", level, charging,
+                            False, "pulsar", asleep=True, wake_on_input=True, **kw)
+
+    def test_an_asleep_reading_is_neither_charging_nor_full(self):
+        st = hb.with_power_state(self.kept(full=True))
+        self.assertEqual((False, False), (st.charging, st.full))
+        self.assertEqual("100% (last known value, device asleep)", hb.device_state(st))
+
+    def test_an_asleep_reading_without_a_charging_flag_is_left_alone(self):
+        st = self.kept(64, charging=False)
+        self.assertIs(st, hb.with_power_state(st))
+
+    def test_an_offline_reading_is_not_called_full(self):
+        # switched off on its cable: still on the charger, but not a live 100 %
+        st = hb.with_power_state(DeviceStatus("logitech:4082", "PRO X", 100, True, False,
+                                              "logitech"))
+        self.assertTrue(st.charging)
+        self.assertFalse(st.full)
+
+    def test_applying_it_twice_changes_nothing(self):
+        for st in (status(), status(95, full=True), status(80), self.kept(), self.kept(64, False)):
+            once = hb.with_power_state(st)
+            self.assertIs(once, hb.with_power_state(once))
+
+
 if __name__ == "__main__":
     unittest.main()

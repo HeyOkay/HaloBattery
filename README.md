@@ -39,7 +39,7 @@ Support project via &nbsp;<a href="https://ko-fi.com/halobattery"><picture><sour
   <img src="docs/readme/devices-light.svg" alt="Mouse at 100%, charging keyboard at 65%, headset at 25%, and controller at 10%" width="100%">
 </picture>
 
-- **Read the ring.** With a 20% alert threshold, 21–30% is amber and 20% or less is red. Above 30%, the ring follows the tray theme. With charging animation enabled, a known level pulses green. If the device reports charging without a percentage, a green arc rotates.
+- **Read the ring.** With a 20% alert threshold, 21–30% is amber and 20% or less is red. Above 30%, the ring follows the tray theme. With charging animation enabled, a known level pulses green until the device is fully charged, then the ring stays steady green. If the device reports charging without a percentage, a green arc rotates.
 - **Read the device directly.** Halo Battery checks a 2.4 GHz receiver, a USB cable or Windows Bluetooth. You can close the vendor’s software.
 - **Set up each device.** Choose when each device needs attention. By default, alerts wait while a full-screen game is open.
 

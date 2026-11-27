@@ -249,6 +249,7 @@ class PollTest(unittest.TestCase):
         out = self.poll(entries(), [])
         self.assertEqual(len(out), 1)
         self.assertEqual((out[0].level, out[0].online), (85, False))
+        self.assertTrue(out[0].asleep, "a kept reading is asleep, never charging")
 
     def test_a_silent_dongle_with_no_history_shows_nothing(self):
         self.assertEqual(self.poll(entries(), []), [])

@@ -2,10 +2,9 @@
 
 The poll loop already compares a cheap USB signature every few seconds, so a
 receiver plugged in or a mouse moved to its cable is noticed without waiting
-for the whole poll interval. That still costs a wake-up every few seconds and
-misses changes which do not alter the HID tree (a Bluetooth link coming up, the
-machine resuming). This module listens to the same Windows broadcasts the
-vendor tools use and wakes the poll loop at once:
+for the whole poll interval, but only at the next check, and a resume from
+sleep need not change that signature at all. This module listens to the same
+Windows broadcasts the vendor tools use and wakes the poll loop at once:
 
   * WM_DEVICECHANGE for USB device, HID and Bluetooth radio interfaces, and for
     the generic DBT_DEVNODES_CHANGED which follows any child-device change;
@@ -42,10 +41,12 @@ DEVICE_NOTIFY_WINDOW_HANDLE = 0x00000000
 
 # Interface classes worth a notification: every HID collection, every USB
 # device node (a receiver's audio/consumer interfaces included) and the
-# Bluetooth radio, whose port interface changes when a link comes up.
+# Bluetooth radio itself (GUID_BTHPORT_DEVICE_INTERFACE in bthdef.h: a dongle
+# plugged in, the radio turned on or off). Whether a paired device connecting is
+# reported depends on its driver; the poll remains the fallback for that.
 GUID_HID = "{4D1E55B2-F16F-11CF-88CB-001111000030}"
 GUID_USB = "{A5DCBF10-6530-11D2-901F-00C04FB951ED}"
-GUID_BTHPORT = "{0850302A-B344-4FDA-9BE9-40549B7312D6}"
+GUID_BTHPORT = "{0850302A-B344-4FDA-9BE9-90576B8D46F0}"
 INTERFACES = (GUID_HID, GUID_USB, GUID_BTHPORT)
 
 DEVICE_DELAY = 1.2       # s after the last device message
@@ -65,6 +66,44 @@ def classify(message: int, wparam: int) -> Optional[str]:
         if wparam in (DBT_DEVICEARRIVAL, DBT_DEVICEREMOVECOMPLETE, DBT_DEVNODES_CHANGED):
             return "device"
     return None
+
+
+def _user32_kernel32():
+    """Private user32 and kernel32 handles with a prototype for every call made here.
+
+    `ctypes.windll` is shared with the rest of the app, so prototypes set on it would
+    change other modules' calls too; and a call without a prototype passes a 64-bit
+    handle as a 32-bit int (OverflowError, or a truncated handle).
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    ptr, uint, dword, text, num = (ctypes.c_void_p, wintypes.UINT, wintypes.DWORD,
+                                   wintypes.LPCWSTR, ctypes.c_int)
+    prototypes = (
+        (user32.RegisterClassW, wintypes.ATOM, [ptr]),
+        (user32.UnregisterClassW, wintypes.BOOL, [text, ptr]),
+        (user32.CreateWindowExW, ptr, [dword, text, text, dword, num, num, num, num,
+                                       ptr, ptr, ptr, ptr]),
+        (user32.DestroyWindow, wintypes.BOOL, [ptr]),
+        (user32.DefWindowProcW, ptr, [ptr, uint, ptr, ptr]),
+        (user32.RegisterDeviceNotificationW, ptr, [ptr, ptr, dword]),
+        (user32.UnregisterDeviceNotification, wintypes.BOOL, [ptr]),
+        (user32.GetMessageW, wintypes.BOOL, [ptr, ptr, uint, uint]),
+        (user32.TranslateMessage, wintypes.BOOL, [ptr]),
+        (user32.DispatchMessageW, ctypes.c_ssize_t, [ptr]),
+        (user32.PostQuitMessage, None, [num]),
+        (user32.PostThreadMessageW, wintypes.BOOL,
+         [dword, uint, wintypes.WPARAM, wintypes.LPARAM]),
+        (kernel32.GetModuleHandleW, ptr, [text]),
+        (kernel32.GetCurrentThreadId, dword, []),
+    )
+    for fn, restype, argtypes in prototypes:
+        fn.restype = restype
+        fn.argtypes = argtypes
+    return user32, kernel32
 
 
 class DeviceEventWatcher:
@@ -114,8 +153,8 @@ class DeviceEventWatcher:
             timer.cancel()
         if self._thread_id:
             try:
-                import ctypes
-                ctypes.windll.user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+                user32, _ = _user32_kernel32()
+                user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
             except Exception:
                 pass
 
@@ -183,24 +222,9 @@ class DeviceEventWatcher:
             import uuid
             return GUID.from_buffer_copy(uuid.UUID(text).bytes_le)
 
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
+        user32, kernel32 = _user32_kernel32()
         wndproc_type = ctypes.WINFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT,
                                           ctypes.c_void_p, ctypes.c_void_p)
-        user32.DefWindowProcW.restype = ctypes.c_void_p
-        user32.DefWindowProcW.argtypes = [ctypes.c_void_p, wintypes.UINT,
-                                          ctypes.c_void_p, ctypes.c_void_p]
-        user32.CreateWindowExW.restype = ctypes.c_void_p
-        user32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR,
-                                           wintypes.DWORD, ctypes.c_int, ctypes.c_int,
-                                           ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
-                                           ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-        user32.RegisterDeviceNotificationW.restype = ctypes.c_void_p
-        user32.RegisterDeviceNotificationW.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
-                                                       wintypes.DWORD]
-        user32.GetMessageW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT,
-                                       wintypes.UINT]
-        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
 
         def on_message(hwnd, message, wparam, lparam):
             try:
@@ -224,14 +248,15 @@ class DeviceEventWatcher:
         if not atom:
             ready.set()
             return
-        hwnd = user32.CreateWindowExW(0, class_name, "", 0, 0, 0, 0, 0,
-                                      None, None, instance, None)
-        if not hwnd:
-            ready.set()
-            return
-        self._hwnd = hwnd
+        hwnd = None
         handles = []
         try:
+            hwnd = user32.CreateWindowExW(0, class_name, "", 0, 0, 0, 0, 0,
+                                          None, None, instance, None)
+            if not hwnd:
+                ready.set()
+                return
+            self._hwnd = hwnd
             for text in INTERFACES:
                 size = ctypes.sizeof(DEV_BROADCAST_DEVICEINTERFACE)
                 filt = DEV_BROADCAST_DEVICEINTERFACE()
@@ -257,8 +282,14 @@ class DeviceEventWatcher:
                     user32.UnregisterDeviceNotification(h)
                 except Exception:
                     pass
+            if hwnd:
+                try:
+                    user32.DestroyWindow(hwnd)
+                except Exception:
+                    pass
+            self._hwnd = 0
             try:
-                user32.DestroyWindow(hwnd)
+                user32.UnregisterClassW(class_name, instance)
             except Exception:
                 pass
             self._ok = False

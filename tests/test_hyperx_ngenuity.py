@@ -173,6 +173,7 @@ class HyperXNgenuityTest(unittest.TestCase):
         self.assertEqual(55, kept[0].level)
         self.assertFalse(kept[0].online)
         self.assertTrue(kept[0].wake_on_input)
+        self.assertTrue(kept[0].asleep)
         self.assertTrue(any("keeping" not in line.lower() for line in provider.diagnostics()))
 
     def test_the_other_pid_is_claimed_too(self):

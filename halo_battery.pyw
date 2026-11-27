@@ -1302,13 +1302,22 @@ def phone_link_last_reported(st: DeviceStatus) -> bool:
 
 
 def with_power_state(st: DeviceStatus) -> DeviceStatus:
-    """Mark a charging device at 100 % as full.
+    """Mark a charging device at 100 % as full, and an asleep reading as not charging.
 
     Providers with a real "charged" flag may set `full` themselves (and at a lower
     level); every other protocol only has a charging bit, so 100 % on the charger is
     the point where the icon should stop breathing and the tooltip says "fully charged".
+    Only a live reading gets there: a greyed one is a last known value.
+
+    A reading kept for an asleep device is its last level, not a charger report
+    (#109), so it keeps neither a charging nor a full flag. A device that is switched
+    off on its cable is not asleep and keeps the charging its provider reports.
     """
-    if (st.charging and not st.full and st.level is not None
+    if st.asleep and not st.online:
+        if st.charging or st.full:
+            return replace(st, charging=False, full=False)
+        return st
+    if (st.charging and not st.full and st.online and st.level is not None
             and st.level >= 100 and st.charging_known):
         return replace(st, full=True)
     return st
@@ -3271,6 +3280,7 @@ class App:
         for st in results:
             if st.key in hidden:
                 continue
+            st = with_power_state(st)  # the same charging and full states as the tooltip
             secs = None if st.approx else self.history.seconds_left(st.key, st.level)
             if st.charging or not st.online or not st.charging_known:
                 secs = None
@@ -3279,8 +3289,10 @@ class App:
                 "name": self.display_name(st),
                 "level": st.level,
                 "charging": st.charging,
+                "full": st.full,
                 "charging_known": st.charging_known,
                 "online": st.online,
+                "asleep": st.asleep,
                 "polling_stale": st.polling_stale,
                 "kind": self.pictogram(st),
                 "approx": st.approx or None,
