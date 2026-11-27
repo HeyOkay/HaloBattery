@@ -149,6 +149,7 @@ MESSAGES = {
     'provider.shield': 'NVIDIA SHIELD контроллерлері',
     'provider.skullcandy': 'Skullcandy гарнитуралары',
     'provider.sony_inzone': 'Sony INZONE H9 / H5',
+    "provider.atk_n9": "ATK N9 Pro гарнитурасы",
     'provider.sony_h9ii': 'Sony INZONE H9 II',
     'provider.turtlebeach': 'Turtle Beach гарнитуралары',
     'state.not_reported': 'деректер әлі алынбады',

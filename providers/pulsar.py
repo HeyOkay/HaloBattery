@@ -139,6 +139,12 @@ from .compx import (CHECKSUM_BASE, CMD_POWER, CONTROL_USAGE, PAYLOAD_HEADER, PAY
                     POWER_INDEX, LEVEL_INDEX, VOLTAGE_SLICE, READ_ATTEMPTS, READ_TIMEOUT_MS,
                     checksum, make_request, output_length, parse_power, voltage_mv)
 
+# dongkid/g49-web-control at da76cef7822741421a7612f1db4bbdb18d199dfd:
+# js/protocol.js lines 48-79, 581-603 and js/mouse-api.js lines 164-185.
+# Same report-8 command 04 and checksum. WebHID filters FF04, but on Windows
+# only FF02:0002 carries report 8 (17-byte input/output); FF04 is feature-only.
+REDRAGON_4K_PIDS = frozenset((0xF54C, 0xF54F, 0xF55F, 0xF54E))
+
 CONTROL_INTERFACE = 1           # the tool reads its 17-byte replies on interface 1
 FLUSH_TIMEOUT_MS = 30
 
@@ -180,6 +186,10 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF506: "VGN Dragonfly 4K (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
         0xF55D: "Redragon M916 Pro / M913 (2.4 GHz)",
+        0xF54C: "Redragon M916 Pro 4K (1K receiver)",
+        0xF54F: "Redragon M916 Pro 4K (4K receiver)",
+        0xF55F: "Redragon M916 Pro 4K (alternate 4K receiver)",
+        0xF54E: "Redragon M916 Pro 4K (wired)",
         0xF55E: "Redragon M991 (wired)",
         0xFA09: "Compx 2.4 GHz keyboard",
         0xF520: "Teevolution Terra Pro (1K receiver)",
@@ -458,7 +468,14 @@ class PulsarProvider(Provider):
                 key = f"pulsar:{vid:04x}{pid:04x}"
                 present.add(key)
                 bitmouse = (vid, pid) in atk_bitmouse.PIDS
-                d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine)
+                if vid == 0x3554 and pid in REDRAGON_4K_PIDS:
+                    # Use only the CompX report-8 collection, never feature-only FF04.
+                    d = next((x for x in mine if (x.get("usage_page"), x.get("usage"))
+                              == CONTROL_USAGE and
+                              (output_length(x["path"]) is None or
+                               output_length(x["path"]) >= PAYLOAD_LEN)), None)
+                else:
+                    d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine)
                 if d is None:
                     self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x}: no collection "
                                       f"to read among {len(mine)}")
@@ -476,6 +493,10 @@ class PulsarProvider(Provider):
                 else:
                     reply = self._query(d["path"])
                     parsed = parse_power(reply)
+                    if vid == 0x3554 and pid in REDRAGON_4K_PIDS and parsed is not None:
+                        # Same-target source accepts only a boolean charging flag.
+                        if reply[POWER_INDEX] not in (0, 1):
+                            parsed = None
                 if parsed is None:
                     if not reply:
                         self._diag.append("    no reply (asleep, or the mouse is idle)")

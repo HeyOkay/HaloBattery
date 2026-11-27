@@ -6,6 +6,8 @@
 
 | Device | Connection | Verified on hardware |
 |---|---|---|
+| [ATK N9 Pro](protocols.md#atk-n9-pro) | 2.4 GHz receiver (`373B:11CB`), serial port | yes (50%, discharging; charging transition not tested) |
+| [Redragon M916 Pro 4K](protocols.md#redragon-m916-pro-4k) | 1K/4K receivers (`3554:F54C/F54F/F55F`), cable (`3554:F54E`) | F54F receiver: yes (70%, discharging); other IDs untested |
 | [Endgame Gear XM2we](protocols.md#endgame-gear-xm2we) | Original 2.4 GHz receiver (3367:1961) | yes (battery and charging) |
 | [8BitDo Pro 2, Pro 3, SN30 Pro, SF30 Pro in D-input mode](protocols.md#8bitdo-pro-2-pro-3-sn30-pro-sf30-pro-in-d-input-mode) | Bluetooth or USB | Pro 3 over Bluetooth |
 | [8BitDo Ultimate 2 Wireless (XInput)](protocols.md#8bitdo-ultimate-2-wireless-xinput) | Bluetooth (level); 2.4 GHz receiver (`2dc8:310b`): level asked from the dongle; USB: gamepad only | Bluetooth: 60 % (reporter, #461); dongle level confirmed (#461, #520); XInput publishes no charging state, on the dongle or the cable |

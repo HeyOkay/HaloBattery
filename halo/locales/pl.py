@@ -129,6 +129,7 @@ MESSAGES = {
     "provider.shield": "Kontrolery NVIDIA SHIELD",
     "provider.skullcandy": "Słuchawki Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9",
+    "provider.atk_n9": "Zestaw słuchawkowy ATK N9 Pro",
     "provider.turtlebeach": "Słuchawki Turtle Beach",
     "state.not_reported": "jeszcze nie podano",
     "state.charging_unknown": "{state}, stan ładowania nieznany",

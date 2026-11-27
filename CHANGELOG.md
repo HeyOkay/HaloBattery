@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Redragon M916 Pro 4K receivers (`3554:F54C/F54F/F55F`) and USB cable
+  (`3554:F54E`): read CompX battery and charging on the FF02 report-8 collection.
+- ATK N9 Pro receiver (`373B:11CB`): serial link, battery percentage and charging
+  queries, with bounded reads and no configuration writes.
+
 ### Fixed
 
 - Retry post-publication release and asset attestation verification when GitHub

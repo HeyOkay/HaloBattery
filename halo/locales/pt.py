@@ -168,6 +168,7 @@ MESSAGES = {
     "provider.shield": "Controles NVIDIA SHIELD",
     "provider.skullcandy": "Headsets Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9 / H5",
+    "provider.atk_n9": "Headset ATK N9 Pro",
     "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Headsets Turtle Beach",
     "state.not_reported": "ainda não informado",
