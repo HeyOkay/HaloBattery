@@ -1,0 +1,323 @@
+name: Publish unsigned 1.18.0
+
+# Owner-authorized one-version exception while the production certificate is pending.
+# No generic unsigned flag or signing-failure fallback. All other stable tags
+# keep using the production SignPath chain in release.yml.
+on:
+  push:
+    tags: ['v1.18.0']
+
+concurrency:
+  group: unsigned-release-1.18.0
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'HeyOkay/HaloBattery' && github.event_name == 'push' && github.ref == 'refs/tags/v1.18.0'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      release-artifact: ${{ steps.release_assets.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require exactly the approved unsigned version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_REPOSITORY -cne 'HeyOkay/HaloBattery' -or $env:GITHUB_EVENT_NAME -cne 'push' -or $env:GITHUB_REF -cne 'refs/tags/v1.18.0') { throw 'Only the approved v1.18.0 tag may use this workflow' }
+          $versionMatches = @(Select-String -Path halo_battery.pyw -Pattern '^VERSION = "1\.18\.0"$')
+          if ($versionMatches.Count -ne 1) { throw 'The unsigned exception requires VERSION = 1.18.0' }
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12.10"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.404"
+
+      - name: Check that the tag matches VERSION
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $tag = $env:RELEASE_TAG.TrimStart("v")
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          if ($ver -ne $tag) {
+            Write-Error "Tag v$tag does not match VERSION = `"$ver`" in halo_battery.pyw"
+            exit 1
+          }
+          Write-Host "Version $ver"
+
+      - name: Require stable tags to belong to main
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements-build.txt
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
+      - name: Smoke test
+        # imports every module and runs one full poll on the runner (no devices there)
+        run: python halo_battery.pyw --probe
+
+      - name: Build HaloBattery
+        run: |
+          python tools/make_icon.py halo.ico
+          python tools/make_version.py version_info.txt
+          ./scripts/build_settings.ps1 -ToolchainCache (Join-Path $env:RUNNER_TEMP "halo-settings-aot-toolchain")
+          python tools/build_exe.py
+
+      - name: Archive native settings symbols
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-Settings-symbols-${{ github.sha }}
+          path: .build/settings-ui-obj/**/native/HaloBattery.Settings.pdb
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Zip the HaloBattery folder
+        id: zip
+        shell: pwsh
+        run: |
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          $zip = "HaloBattery-$ver.zip"
+          Compress-Archive -Path dist/HaloBattery -DestinationPath $zip
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $zip"
+
+      - name: Build the installer
+        # Inno Setup turns dist/HaloBattery into HaloBattery-<version>-setup.exe (installer/HaloBattery.iss)
+        id: setup
+        shell: pwsh
+        run: |
+          $iscc = ./scripts/get_inno.ps1
+          $m = Select-String -Path halo_battery.pyw -Pattern '^VERSION = "(.+)"'
+          $ver = $m.Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$ver" installer/HaloBattery.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "setup=dist/HaloBattery-$ver-setup.exe" >> $env:GITHUB_OUTPUT
+
+      - name: Verify unsigned application and installer, then stage release assets
+        shell: pwsh
+        env:
+          ZIP: ${{ steps.zip.outputs.zip }}
+          SETUP: ${{ steps.setup.outputs.setup }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('dist/HaloBattery/HaloBattery.exe',
+                             'dist/HaloBattery/_internal/settings-ui/HaloBattery.Settings.exe',
+                             $env:ZIP, $env:SETUP)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -eq 0) { throw "Missing or empty release file: $path" }
+          }
+          foreach ($path in @('dist/HaloBattery/HaloBattery.exe',
+                             'dist/HaloBattery/_internal/settings-ui/HaloBattery.Settings.exe',
+                             $env:SETUP)) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $path
+            if ($signature.Status -ne 'NotSigned' -or $signature.SignerCertificate) { throw "Expected an unsigned own executable: $path" }
+          }
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          Copy-Item -LiteralPath $env:ZIP, $env:SETUP -Destination release-assets
+          Copy-Item -LiteralPath docs/releases/1.18.0.md -Destination release-assets/release_notes.md
+          $lines = foreach ($name in @('HaloBattery-1.18.0.zip', 'HaloBattery-1.18.0-setup.exe')) {
+            $file = Join-Path release-assets $name
+            "{0} *{1}" -f (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant(), $name
+          }
+          $lines | Out-File -FilePath release-assets/SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload publish assets
+        id: release_assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: HaloBattery-unsigned-1.18.0-assets-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    # A fresh runner receives files only. No project checkout, install or build
+    # step can access the release-write token. Manual runs only create artifacts.
+    needs: build
+    if: github.repository == 'HeyOkay/HaloBattery' && github.event_name == 'push' && github.ref == 'refs/tags/v1.18.0' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stable-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download publish assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.release-artifact }}
+          path: release-assets
+
+      - name: Validate release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" == v1.18.0 ]]
+          version="${RELEASE_TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          zip="HaloBattery-$version.zip"
+          setup="HaloBattery-$version-setup.exe"
+          cd release-assets
+          # Build output is data only. Reject unexpected files and symlinks.
+          [[ "$(find . -mindepth 1 -maxdepth 1 | wc -l)" -eq 4 ]]
+          for file in "$zip" "$setup" SHA256SUMS.txt release_notes.md; do
+            [[ -f "$file" && ! -L "$file" ]]
+          done
+          # Compute hashes only for the two expected names, never paths from a manifest.
+          expected="$(mktemp "$RUNNER_TEMP/halobattery-expected.XXXXXX")"
+          actual="$(mktemp "$RUNNER_TEMP/halobattery-actual.XXXXXX")"
+          trap 'rm -f "$expected" "$actual"' EXIT
+          printf '%s *%s\n' "$(sha256sum "$zip" | cut -d ' ' -f 1)" "$zip" \
+            "$(sha256sum "$setup" | cut -d ' ' -f 1)" "$setup" > "$expected"
+          sed 's/\r$//' SHA256SUMS.txt > "$actual"
+          cmp --silent "$expected" "$actual"
+          echo "zip=release-assets/$zip" >> "$GITHUB_OUTPUT"
+          echo "setup=release-assets/$setup" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=$(sha256sum "$zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "setup-sha256=$(sha256sum "$setup" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "sums-sha256=$(sha256sum SHA256SUMS.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to release
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IMMUTABILITY_ENABLED: ${{ vars.STABLE_RELEASE_IMMUTABILITY_ENABLED }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+        run: |
+          # The owner sets this acknowledgement only after enabling repository
+          # release immutability. Reading that setting requires an admin token,
+          # which this deliberately limited publisher must never receive.
+          if [[ "$IMMUTABILITY_ENABLED" != true ]]; then
+            echo "Enable repository release immutability and set STABLE_RELEASE_IMMUTABILITY_ENABLED=true before publishing." >&2
+            exit 1
+          fi
+          [[ "$RELEASE_TAG" == v1.18.0 ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          [[ "$RELEASE_TAG" == v1.18.0 ]]
+          version="${RELEASE_TAG#v}"
+          [[ "$ZIP" == "release-assets/HaloBattery-$version.zip" ]]
+          [[ "$SETUP" == "release-assets/HaloBattery-$version-setup.exe" ]]
+          # Include every page and drafts. Reruns never overwrite old assets;
+          # partial drafts require explicit owner inspection and recovery.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")"
+          if [[ -n "$existing" ]]; then
+            echo "Refusing to modify an existing release or draft for $RELEASE_TAG." >&2
+            exit 1
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.ref')" == "refs/tags/$RELEASE_TAG" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" == "$GITHUB_SHA" ]]
+          release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f "tag_name=$RELEASE_TAG" -f "target_commitish=$GITHUB_SHA" -f "name=$RELEASE_TAG" \
+            -F draft=true -F body=@release-assets/release_notes.md --jq '.id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$release_id"$'\ttrue\t'"$RELEASE_TAG" ]]
+          initial_assets="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --jq '.[].id')"
+          [[ -z "$initial_assets" ]]
+          # Deliberately no replacement/delete option, including for drafts.
+          gh release upload "$RELEASE_TAG" "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attest validated release assets
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.assets.outputs.zip }}
+            ${{ steps.assets.outputs.setup }}
+          create-storage-record: false
+
+      - name: Publish attested draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          SETUP: ${{ steps.assets.outputs.setup }}
+          ZIP_SHA256: ${{ steps.assets.outputs.zip-sha256 }}
+          SETUP_SHA256: ${{ steps.assets.outputs.setup-sha256 }}
+          SUMS_SHA256: ${{ steps.assets.outputs.sums-sha256 }}
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$(sha256sum "$ZIP" | cut -d ' ' -f 1)" == "$ZIP_SHA256" ]]
+          [[ "$(sha256sum "$SETUP" | cut -d ' ' -f 1)" == "$SETUP_SHA256" ]]
+          [[ "$(sha256sum release-assets/SHA256SUMS.txt | cut -d ' ' -f 1)" == "$SUMS_SHA256" ]]
+          for subject in "$ZIP" "$SETUP"; do
+            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/unsigned-release-1.18.0.yml" \
+              --source-ref "refs/tags/$RELEASE_TAG" --source-digest "$GITHUB_SHA" \
+              --bundle "$ATTESTATION_BUNDLE"
+          done
+          identity="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '[.id,.draft,.tag_name] | @tsv')"
+          [[ "$identity" == "$RELEASE_ID"$'\ttrue\t'"$RELEASE_TAG" ]]
+          expected="$(printf '%s\tsha256:%s\tuploaded\n' "${ZIP##*/}" "$ZIP_SHA256" \
+            "${SETUP##*/}" "$SETUP_SHA256" SHA256SUMS.txt "$SUMS_SHA256" | LC_ALL=C sort)"
+          uploaded="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+            --jq '.[] | [.name,.digest,.state] | @tsv' | LC_ALL=C sort)"
+          [[ "$uploaded" == "$expected" ]]
+          [[ "$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false --jq '.draft')" == false ]]
+          # These commands prove that the external immutable-release policy
+          # actually protected this publication and its three release assets.
+          # GitHub release attestations may appear after publication. Retry
+          # read-only verification only; never repeat publication or uploads.
+          verify_with_retry() {
+            local attempt
+            for attempt in {1..12}; do
+              if "$@"; then
+                return 0
+              fi
+              if [[ "$attempt" -lt 12 ]]; then
+                echo "Waiting for GitHub verification (attempt $attempt/12)."
+                sleep 5
+              fi
+            done
+            echo "GitHub verification failed after 12 attempts." >&2
+            return 1
+          }
+          verify_with_retry gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          for asset in "$ZIP" "$SETUP" release-assets/SHA256SUMS.txt; do
+            verify_with_retry gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done

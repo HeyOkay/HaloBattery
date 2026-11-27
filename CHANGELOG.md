@@ -6,14 +6,44 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry post-publication release and asset attestation verification when GitHub
+  has not yet made the proofs available. Persistent verification errors still
+  fail the workflow; publication and uploads are never repeated by these retries.
+
+## [1.18.0] - 2026-11-27
+
 ### Added
 
 - Pulsar mice on the shared 8K Dongle Gen.2 (`3710:5406`) are named by the model the
   mouse reports (X2N, X2H, X3, Xlite CrazyLight and the other XS-1 generation shapes)
   instead of always "X2 CrazyLight Mini". Adds the X2N CrazyLight cable id `3710:3510`.
+- ASUS TUF Gaming H3 Wireless headset (`0B05:1963`): battery level from the voltage the
+  headset reports, in Armoury Crate's 25 % steps, using the read request captured from
+  Armoury Crate, and charging on the USB-C cable.
+- Akko Verge S9 Ultra (`36EB:1087` dongle, `36EB:0087` USB cable): read the level from the
+  dongle's HID report 2 (`02 10` link, `02 12` battery), decoded from a USBPcap capture of
+  the vendor app, with the frame's two-byte trailer computed and the reply's trailer
+  checked. The dongle exchange has no charging flag. Charging comes from the wired id
+  (`36EB:0087`), which the vendor app shows as a *Charging* card: its presence is the
+  charging signal and the level stays the dongle's last reading. Confirmed by the reporter
+  of [#505](https://github.com/HeyOkay/HaloBattery/issues/505): the level and the cable
+  charging state both work.
+
+- VXE R1 Pro Max on its cable as `373B:1273` (some units use ATK's vendor id on the
+  cable): the level and charging are read as on `3554:F58C`. On either cable id the
+  mouse keeps its receiver's icon, which turns to charging and back, instead of a
+  second icon that stayed for a poll interval after each plug or unplug; a name,
+  hidden choice or history saved under the old cable key moves to it.
 
 ### Changed
 
+- Refresh the project README with theme-aware previews and a Russian translation.
+- Prepare a separate production signing chain for application executables,
+  Inno's embedded 64-bit helper, uninstallers and temporary setup copies, and the outer installer.
+  Production signing activation follows certificate issuance and verification
+  of trusted timestamped signatures and installer checks.
 - Recognize the pinned self-signed TEST certificate's untrusted-root result on
   Windows without trusting the certificate or accepting other signature errors.
 - Make tray device names bold with smaller status details and fit menu widths to
@@ -94,10 +124,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - URX Core75 now checks the product string as well as `36B0:3002`, so an
   EVO75 on the same receiver id is no longer labelled as a URX board (#448).
-- Keep the SignPath TEST credential in the protected signing jobs only; build
+- Keep the TEST signing credential in the protected signing jobs only; build
   and packaging jobs do not receive or forward it.
 
-- Add isolated, opt-in SignPath test signing for application and installer builds.
+- Add isolated, opt-in test signing for application and installer builds.
 - MCHOSE V9 no longer retries a refused output report as a feature report;
   Atlas Air no longer falls back to an unverified CoAP tunnel. Affected devices
   can show no reading until that connection's protocol is verified. Malformed
@@ -114,6 +144,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
   battery/history mutations without changing device requests or controller identities.
 
 ### Added
+- ROYUAN 2.4 GHz keyboards (`3151:4011` receiver, reported on an Epomaker TH80 ISO):
+  read the receiver's `0xF7` status feature report - keyboard level, link byte and
+  device type - from the exchange documented and hardware-measured in
+  `dniminenn/sharkfin` (GPL-3.0, protocol reference only). Charging is shown from the
+  keyboard's own `3151:4015` enumeration when switched to wired mode (Fn+5) with a USB-C
+  data cable in; the 2.4 GHz status has no usable charging field, so a wall charger stays
+  unknown. Test build 2 confirmed wired charging on hardware; the wireless replies with
+  and without a wall charger differ only in the level byte
+  ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
 - Port four more BatteryHub device families: Niceboy MW400 (`248a:fa02`),
   Press Play ICARUS V2 (`7768:6434`), EVGA X20 (`3842:2402` receiver /
   `3842:2420` cable) and IPI PIAO mice (`372e:1014/1015/1028/1056`). Niceboy,
@@ -423,6 +462,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Refuse normal startup when the shared instance guard cannot be created,
+  and retain its handle so app startup respects diagnostic exclusivity.
 - Show the Attack Shark R1 charging animation over its 2.4 GHz receiver,
   including when powered by a wall charger.
 - Extend the Settings Close button hit target to the top-right corner while
@@ -477,6 +518,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   SteelSeries Aerox instead of clamping them to a misleading 100% reading.
 - Keep VGN N75 PRO preferences/history separate from ATK V75X while preserving
   ATK's cable/receiver key. Poll one active keyboard at a time, with cable priority.
+- Lofree Flow Lite84: read the dongle on Compx's own USB id `3554:FA0A` as well as
+  `05AC:024F`, keeping the product-string and FF02:0002 collection guard (#557).
+  Confirmed by the reporter of #557 on test build 1: level, charging on the cable,
+  and the reading cleared when unplugged.
 - Keep Lofree Flow queries on the verified receiver control collection, preventing
   fallback writes to AULA F108 and other devices sharing its USB ID (#413).
 - Integrate guarded AULA F108 Pro, MCHOSE K7 V2 Ultra+, EWEADN X23 Pro,
@@ -1859,7 +1904,8 @@ First public release.
   in or unplugged.
 - Settings and the autostart entry are migrated from the app's earlier name, Battery Tray.
 
-[Unreleased]: ../../compare/v1.17.0...HEAD
+[Unreleased]: ../../compare/v1.18.0...HEAD
+[1.18.0]: ../../compare/v1.17.0...v1.18.0
 [1.17.0]: ../../compare/v1.15.0...v1.17.0
 [1.15.0]: ../../compare/v1.14.0...v1.15.0
 [1.14.0]: ../../compare/v1.13.0...v1.14.0

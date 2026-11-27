@@ -56,6 +56,20 @@ SolidCompression=yes
 WizardStyle=modern
 ; The tray app is closed by PrepareToInstall below; Restart Manager is not needed.
 CloseApplications=no
+#ifdef SignedUninstallerCache
+; The token-free CI compiler reuses a separately verified, externally signed
+; cache. Inno embeds this signature in uninstallers and temporary setup copies.
+; No signing command or credential is passed to the compiler.
+#ifdef SignedInnoHelper
+; Only the independently pinned, append-only patched private Setup.e32 template
+; differs from the vendor compiler data. Keep all other ISSig checks enabled.
+DisablePrecompiledFileVerifications=setup
+#else
+  #error Signed cache builds require the verified signed Inno helper.
+#endif
+SignedUninstaller=yes
+SignedUninstallerDir={#SignedUninstallerCache}
+#endif
 
 [Tasks]
 Name: "autostart"; Description: "Start Halo Battery when I sign in to Windows"

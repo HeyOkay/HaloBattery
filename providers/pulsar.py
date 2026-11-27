@@ -7,6 +7,7 @@ Protocol from andrewrabert/python-pulsar-mouse-tool, which also backs the
   * 3554:f58f  ATK VXE R1 SE+ (wired)                373b:1085  ATK VXE R1 SE+ (2.4 GHz)
   * 373b:11b6  ATK A9 Ultimate (wired)               373b:11d9  ATK A9 Ultimate (2.4 GHz dongle)
   * 3554:f58a  VXE R1 Pro Max (1 kHz dongle, #87)    3554:f58c  the same mouse on its cable
+                                                     373b:1273  the same, on some units
   * 3710:5406  Pulsar X2 CrazyLight Mini (2.4 GHz)   3710:3414  the same mouse on the cable
   * 3710:3510  Pulsar X2N CrazyLight on its cable (see the ReadCIDMID note below)
   * the Kysona M600 and the VXE Dragonfly R1 Pro use the same protocol (their ids are
@@ -23,6 +24,18 @@ wired mouse lists the same eight collections as the receiver, and the panel belo
 with the same command 0x04 frame. Both transports are confirmed on that reporter's
 hardware - the receiver read the mouse's level, and on the cable the level agreed with
 ATK's own panel (hub.atk.pro) and the charging flag followed the cable.
+
+Some R1 Pro Max units enumerate on their cable under ATK's vendor id instead, as
+373b:1273 ('compx' / 'VXE R1 PRO MAX'), while their receiver is still 3554:f58a. It
+lists the same eight collections (ff02:0002 on interface 1) and, read on hardware,
+answered the same command 0x04 frame with a valid checksum: 08 04 00 00 00 02 28 01
+0e c7 .. 49 (40 %, on the cable, 3783 mV), with the receiver quiet meanwhile.
+Either cable id is reported under its receiver's key (RECEIVER_OF): it is one
+mouse, so it is one icon, which turns to charging on the cable and back when the
+cable is out. Two keys made the app show both for a whole poll interval on each plug
+and unplug, as it keeps a device that vanished until a full poll confirms it gone.
+The old cable keys are offered as aliases (legacy_key_aliases), so a name, a hidden
+choice or the history saved under them moves to the receiver's key.
 
 The ATK and Compx builds are also handled by the OpenMouse project's ATK/VXE panel
 (@openmouse/protocol, drivers/atk): it lists 3554:f58a for the R1 Pro Max receiver
@@ -189,6 +202,9 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x1085: "ATK VXE R1 SE+ (2.4 GHz)",
         0x101A: "ATK X1 Pro (2.4 GHz)",
         0x101B: "ATK Fire X 8K (2.4 GHz dongle)",
+        # the R1 Pro Max on its cable as some units enumerate it ('VXE R1 PRO MAX'):
+        # the same collections as 3554:f58c, read on hardware (docstring)
+        0x1273: "VXE R1 Pro Max (wired)",
     },
     0x3770: {
         0x0300: "Hitscan Hyperlight (8K receiver)",
@@ -207,6 +223,11 @@ PIDS: Dict[int, Dict[int, str]] = {
         0x3854: "G-Wolves mouse (8K receiver)",
     },
 }
+
+# cable key -> its receiver's key: one mouse on either transport, reported under the
+# receiver's key so the tray keeps one icon across a plug or unplug (docstring)
+RECEIVER_OF: Dict[str, str] = {"pulsar:3554f58c": "pulsar:3554f58a",
+                               "pulsar:373b1273": "pulsar:3554f58a"}
 
 # ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
 # and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
@@ -268,6 +289,13 @@ class PulsarProvider(Provider):
         self._last: Dict[str, Tuple[str, int, bool, float, str]] = {}
         # key -> the name the mouse reported ("" when it did not give a known one)
         self._models: Dict[str, str] = {}
+        self._aliases: Dict[str, str] = {}     # cable keys that answered last poll
+        self._via_cable: set = set()           # receiver keys last read on the cable
+
+    def legacy_key_aliases(self) -> Dict[str, str]:
+        """The cable keys this provider used before RECEIVER_OF -> the receiver key it
+        now reports them under; only those that answered in the last poll."""
+        return dict(self._aliases)
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         """The collection to open.
@@ -412,6 +440,7 @@ class PulsarProvider(Provider):
         out = self._poll_sonix()
         now = time.time()
         found: set = set()      # answered this poll
+        aliases: Dict[str, str] = {}
         present: set = set()    # enumerated this poll, answering or not
         protocols = {vid: dict(pids) for vid, pids in PIDS.items()}
         for (vid, pid), name in atk_bitmouse.PIDS.items():
@@ -458,6 +487,15 @@ class PulsarProvider(Provider):
                 if vid == 0x3710 and pid in MODEL_PIDS:
                     name = self._model(key, d["path"], MODEL_PIDS[pid]) or name
                 kind = KINDS.get((vid, pid), "mouse")
+                if key in RECEIVER_OF:           # the cable: one key with its receiver
+                    aliases[key] = RECEIVER_OF[key]
+                    key = RECEIVER_OF[key]
+                    out = [s for s in out if s.key != key]   # the cable's reading wins
+                    self._via_cable.add(key)
+                elif key in aliases.values():
+                    continue                     # read on the cable already this poll
+                else:
+                    self._via_cable.discard(key)
                 self._last[key] = (name, level, on_cable, now, kind)
                 found.add(key)
                 out.append(DeviceStatus(key, name, level, on_cable, True, "pulsar",
@@ -468,10 +506,14 @@ class PulsarProvider(Provider):
         # long it sleeps. Only a receiver pulled out drops the device: Windows
         # re-creates a removed icon at a new tray position, which is what the
         # 2026-10-03 screen-off report was about.
+        self._aliases = aliases
         for key in list(self._last):
             name, level, charging, seen, kind = self._last[key]
             if key in found:
                 continue
+            if key in self._via_cable:       # off the cable: the receiver's, not charging
+                vid, pid = int(key[7:11], 16), int(key[11:15], 16)
+                name, charging = PIDS.get(vid, {}).get(pid, name), False
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
                                   f"{' (charging)' if charging else ''} greyed "
@@ -480,6 +522,7 @@ class PulsarProvider(Provider):
                                         kind=kind, wake_on_input=True))
             else:
                 del self._last[key]
+                self._via_cable.discard(key)
                 self._models.pop(key, None)
         return out
 
