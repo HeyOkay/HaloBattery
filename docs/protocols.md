@@ -1921,8 +1921,14 @@ Attack Shark X98 and AJAZZ AK820 Max Plus use interface 0, usage `ff02:0002`,
     reply    AA 55 CC 33 0E <percent> <state>
 
 State 0 is offline; 1..3 is online. The state is 1 both on battery and while
-charging on the X98, so charging is not inferred. The dongle is `8fff`; the
-X98 cable is `a034` and the AK820 Max Plus cable is `a036`.
+charging on the X98, so charging is not inferred from it. The dongle is
+`8fff`; the X98 cable is `a034` and the AK820 Max Plus cable is `a036`.
+
+Charging comes from the cable instead: the cable ids only enumerate while the
+keyboard is cabled to this PC, which powers it, so Halo shows it charging then
+(also when it answers over the receiver in 2.4 GHz mode). Without the cable the
+charger state is unknown and alerts stay suppressed. An offline or silent
+keyboard keeps its last reading greyed for up to 30 minutes.
 
 ### CROCIRIS
 

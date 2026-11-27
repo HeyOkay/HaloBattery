@@ -155,8 +155,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
 - Port four more BatteryHub device families: Zebronics `3554:fc0a`, Semico
   keyboards (`1a2c:8fff/a034/a036`), CROCIRIS X7 (`36f9:aa20`) and Scyrox
-  V12M (`395a:0006`). CROCIRIS reports charging; Zebronics, Semico and Scyrox
-  have no confirmed charging field and are marked unknown. None has been
+  V12M (`395a:0006`). CROCIRIS reports charging; Semico shows charging while
+  its USB cable is in this PC; Zebronics and Scyrox have no confirmed charging
+  field and are marked unknown. Semico and Scyrox keep a sleeping device's
+  last reading greyed. None has been
   hardware-tested in Halo yet. See `docs/protocols.md`, "Ported BatteryHub
   families (second batch)".
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver

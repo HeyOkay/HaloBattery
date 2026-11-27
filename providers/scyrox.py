@@ -20,7 +20,7 @@ protocol reference only), from late-autumn-gif/mousedock (MIT) and BrimDeck.
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import hid
 
@@ -32,6 +32,7 @@ PID = 0x0006
 REPORT_LEN = 64
 READ_TIMEOUT_MS = 100
 DEADLINE_S = 1.5
+ASLEEP_KEEP_S = 1800.0             # the mouse sleeps; its receiver stays plugged in
 KEY = "scyrox:v12m"
 NAME = "Scyrox V12M"
 
@@ -44,11 +45,22 @@ def make_request() -> List[int]:
     return request
 
 
-def parse_profile(report) -> Optional[int]:
-    """Battery percent from the active profile frame, or None."""
+def _frame(report) -> bytes:
     b = bytes(report or b"")
     if len(b) > 1 and b[0] == 0x00 and b[1] == 0x08:
         b = b[1:]
+    return b
+
+
+def is_stream_end(report) -> bool:
+    """True for the profile-stream terminator (or our own request echoed back)."""
+    b = _frame(report)
+    return len(b) >= REPORT_LEN and b[0] == 0x08 and b[1] == 0x01 and b[3] == 0
+
+
+def parse_profile(report) -> Optional[int]:
+    """Battery percent from the active profile frame, or None."""
+    b = _frame(report)
     if len(b) < REPORT_LEN or b[0] != 0x08 or b[1] != 0x01:
         return None
     if b[3] == 0:                      # end of the profile stream
@@ -64,6 +76,7 @@ class ScyroxProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Optional[Tuple[int, float]] = None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for d in infos:
@@ -95,6 +108,8 @@ class ScyroxProvider(Provider):
                 level = parse_profile(reply)
                 if level is not None:
                     return level
+                if is_stream_end(reply):
+                    break                  # no active profile in this stream
             self._diag.append("  no active profile frame")
             return None
         except (OSError, IOError, ValueError) as e:
@@ -115,14 +130,20 @@ class ScyroxProvider(Provider):
             return []
         d = self._pick(infos)
         if d is None:
+            self._last = None
             return []
         self._diag.append(f"[Scyrox] pid={PID:04x} iface={d.get('interface_number')} "
                           f"product={d.get('product_string')!r}")
         level = self._query(d["path"])
-        if level is None:
-            return []
-        return [DeviceStatus(KEY, NAME, level, False, True, "scyrox",
-                             kind="mouse", charging_known=False)]
+        if level is not None:
+            self._last = (level, time.monotonic())
+            return [DeviceStatus(KEY, NAME, level, False, True, "scyrox",
+                                 kind="mouse", charging_known=False)]
+        if self._last is not None and time.monotonic() - self._last[1] <= ASLEEP_KEEP_S:
+            return [DeviceStatus(KEY, NAME, self._last[0], False, False, "scyrox",
+                                 kind="mouse", wake_on_input=True, charging_known=False)]
+        self._last = None
+        return []
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

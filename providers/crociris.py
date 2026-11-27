@@ -66,7 +66,7 @@ class CrocirisProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
-        self._last: Optional[Tuple[int, bool, float]] = None
+        self._last: Optional[Tuple[int, bool, float, str]] = None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for d in infos:
@@ -125,13 +125,13 @@ class CrocirisProvider(Provider):
         parsed = self._query(d["path"])
         if parsed is not None:
             level, charging = parsed
-            self._last = (level, charging, time.monotonic())
             product = (d.get("product_string") or "").strip()
             name = product if product and "receiver" not in product.lower() else "CROCIRIS X7"
+            self._last = (level, charging, time.monotonic(), name)
             return [DeviceStatus(KEY, name, level, charging, True, "crociris", kind="mouse")]
         if self._last is not None and time.monotonic() - self._last[2] <= ASLEEP_KEEP_S:
-            level, charging, _ = self._last
-            return [DeviceStatus(KEY, "CROCIRIS X7", level, charging, False, "crociris",
+            level, charging, _seen, name = self._last
+            return [DeviceStatus(KEY, name, level, charging, False, "crociris",
                                  kind="mouse", wake_on_input=True)]
         self._last = None
         return []

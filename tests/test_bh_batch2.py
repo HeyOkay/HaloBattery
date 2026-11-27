@@ -75,6 +75,35 @@ class SemicoTest(unittest.TestCase):
         self.assertEqual((found[0].level, found[0].name), (64, "Wireless keyboard"))
         self.assertFalse(found[0].charging_known)
 
+    def _poll(self, provider, infos, replies):
+        fake = FakeHid(replies=replies)
+        with mock.patch.object(M.hid, "device", return_value=fake), \
+                mock.patch.object(M.hidlist, "enumerate", return_value=infos):
+            return provider.poll()
+
+    def test_cable_in_this_pc_means_charging(self):
+        dongle = {"path": b"k", "product_id": M.DONGLE, "interface_number": 0,
+                  "usage_page": 0xFF02, "usage": 2,
+                  "input_report_byte_length": 65, "output_report_byte_length": 65}
+        cable = dict(dongle, path=b"c", product_id=M.X98_CABLE)
+        reply = bytes([0xAA, 0x55, 0xCC, 0x33, 0x0E, 81, 1]) + bytes(58)
+        found = self._poll(M.SemicoProvider(), [dongle, cable], [reply])
+        self.assertEqual((found[0].name, found[0].level, found[0].charging,
+                          found[0].charging_known), ("Attack Shark X98", 81, True, True))
+
+    def test_asleep_keeps_last_reading_greyed(self):
+        infos = [{"path": b"k", "product_id": M.DONGLE, "interface_number": 0,
+                  "usage_page": 0xFF02, "usage": 2,
+                  "input_report_byte_length": 65, "output_report_byte_length": 65}]
+        provider = M.SemicoProvider()
+        awake = bytes([0xAA, 0x55, 0xCC, 0x33, 0x0E, 70, 1]) + bytes(58)
+        asleep = bytes([0xAA, 0x55, 0xCC, 0x33, 0x0E, 0, 0]) + bytes(58)
+        self._poll(provider, infos, [awake])
+        found = self._poll(provider, infos, [asleep])
+        self.assertEqual((found[0].level, found[0].online, found[0].wake_on_input,
+                          found[0].charging_known), (70, False, True, False))
+        self.assertEqual(self._poll(provider, [], []), [])
+
 
 class CrocirisTest(unittest.TestCase):
     def test_parse(self):
@@ -118,6 +147,22 @@ class ScyroxTest(unittest.TestCase):
                 mock.patch.object(S.hidlist, "enumerate", return_value=infos):
             found = S.ScyroxProvider().poll()
         self.assertEqual((found[0].level, found[0].charging_known), (55, False))
+
+    def test_stream_end_stops_early_and_keeps_last_reading(self):
+        infos = [{"path": b"s", "product_id": S.PID, "usage_page": 0xFF00, "usage": 2,
+                  "input_report_byte_length": 64, "output_report_byte_length": 64}]
+        provider = S.ScyroxProvider()
+        with mock.patch.object(S.hid, "device", return_value=FakeHid(replies=[self.frame(48)])), \
+                mock.patch.object(S.hidlist, "enumerate", return_value=infos):
+            provider.poll()
+        self.assertTrue(S.is_stream_end(self.frame(active=False)))
+        with mock.patch.object(S.hid, "device",
+                               return_value=FakeHid(replies=[self.frame(active=False)])), \
+                mock.patch.object(S.hidlist, "enumerate", return_value=infos), \
+                mock.patch.object(S, "DEADLINE_S", 30.0):
+            found = provider.poll()        # would hang 30 s without the early stop
+        self.assertEqual((found[0].level, found[0].online, found[0].wake_on_input),
+                         (48, False, True))
 
 
 if __name__ == "__main__":
