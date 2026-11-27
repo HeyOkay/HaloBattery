@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="121.667" height="24" viewBox="0 0 146 28.8" preserveAspectRatio="xMidYMin meet" role="img" aria-labelledby="title">
-  <title id="title">Всего скачиваний файлов выпусков - 22,649</title>
+  <title id="title">Всего скачиваний файлов выпусков - 22,855</title>
   <rect x=".5" y=".5" width="145" height="23" rx="7" fill="#A1E6B5" fill-opacity=".16" stroke="#75B88C"/>
   <g transform="translate(-2 -1)" fill="none" stroke="#234C30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M14 6v9m-3-3 3 3 3-3M9 17v3h10v-3"/>
   </g>
   <path d="M100 5v14" stroke="#75B88C"/>
   <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" fill="#234C30" font-size="12">
-    <text x="22" y="16">Скачивания</text>
-    <text x="106" y="16" font-weight="700">22.6k</text>
+    <text x="22" y="14.4">Скачивания</text>
+    <text x="106" y="14.4" font-weight="700">22.9k</text>
   </g>
 </svg>
