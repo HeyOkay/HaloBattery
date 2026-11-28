@@ -152,6 +152,26 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported from BatteryHub 1.1.1
+
+Every row is unverified in Halo: the reader comes from BatteryHub's documented
+protocol, not from a Halo capture. Check charging transitions before calling any
+of them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [NuPhy WH80](protocols.md#nuphy) | USB cable (19f5:a011) | no |
+| [NuPhy Halo96 V2](protocols.md#nuphy) | 2.4 GHz receiver (19f5:3247) with custom QMK firmware | no |
+| [DARKRIM SHADOW](protocols.md#darkrim-shadow) | USB cable (3654:6901) | no |
+| [Pulsar X2 V3 / X2 V3 eS / Feinmann FO1](protocols.md#pulsar-x2-v3-feinmann-and-zywoo) | 1K/8K receiver or USB cable (3710:5402/5404/3406) | no |
+| [Pulsar PRO Dongle / ZYWOO The Chosen X](protocols.md#pulsar-x2-v3-feinmann-and-zywoo) | 2.4 GHz receiver or USB cable (3710:5405/7401) | no |
+| [ATK Zero](protocols.md#atk-zero-8k-nano-mercury-and-z87) | USB cable or receiver (373b:1154/124f/1155) | no |
+| [ATK 8K Nano / Mercury I / Z87](protocols.md#atk-zero-8k-nano-mercury-and-z87) | Receiver or cable (373b:1178/107c/1012) | no |
+| [Keychron 4K Link mice](protocols.md#keychron-additions) | 4K receiver (3434:d038) | no |
+| [Keychron 1K Link mice](protocols.md#keychron-additions) | 1K receiver (3434:d030/d031) | no |
+| [Keychron Link-KM mouse](protocols.md#keychron-additions) | 2.4 GHz receiver (3434:d029) | no |
+| [Keychron K5 Max and Q6 Ultra 8K](protocols.md#keychron-additions) | Receiver or USB cable (3434:0a50/1260) | no |
+
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),

@@ -54,7 +54,13 @@ USAGE = (0xFF05, 0x0001)
 
 PIDS: Dict[Tuple[int, int], str] = {
     (0x373B, 0x1216): "ATK VXE NK mouse (2.4 GHz)",
+    (0x373B, 0x1154): "ATK Zero (wired)",
+    (0x373B, 0x124F): "ATK Zero (8K receiver)",
+    (0x373B, 0x1155): "ATK Zero (2.4 GHz receiver)",
 }
+
+ZERO_PIDS = frozenset({0x1154, 0x124F, 0x1155})
+ZERO_CABLE = 0x1154
 
 REPORT_LEN = FRAME_LEN + 1
 REPLY_TIMEOUT_S = 0.7   # what OpenMouse's driver allows for one exchange
@@ -62,14 +68,15 @@ READ_TIMEOUT_MS = 100
 FLUSH_TIMEOUT_MS = 30
 
 
-def make_request(command: int) -> List[int]:
+def make_request(command: int, target: int = TARGET_MOUSE,
+                 checksum: Optional[int] = None) -> List[int]:
     frame = [0x00] * FRAME_LEN
     frame[1] = MARKER
     frame[2] = REQUEST_LEN
-    frame[4] = TARGET_MOUSE
+    frame[4] = target
     frame[5] = command
     frame[6] = REPLY_LEN
-    frame[0] = sum(frame[1:]) & 0xFF
+    frame[0] = checksum if checksum is not None else (sum(frame[1:]) & 0xFF)
     return [REPORT_ID] + frame
 
 
@@ -105,6 +112,60 @@ def _exchange(dev, command: int, diag: List[str]) -> Optional[int]:
         if value is not None:
             return value
     return None
+
+
+def parse_zero_reply(r, command: int) -> Optional[int]:
+    """ATK Zero's reply uses target 0 or 1 and only status 00 is fresh."""
+    if not r or len(r) < 8:
+        return None
+    if r[0] != REPORT_ID or r[1] != MARKER or r[2] != 0x00:
+        return None
+    if r[5] != command or r[6] != 1:
+        return None
+    return r[7]
+
+
+def _zero_exchange(dev, command: int, target: int, diag: List[str]) -> Optional[int]:
+    dev.write(make_request(command, target=target, checksum=0x7D))
+    deadline = time.monotonic() + REPLY_TIMEOUT_S
+    while time.monotonic() < deadline:
+        r = dev.read(REPORT_LEN, READ_TIMEOUT_MS)
+        if not r:
+            continue
+        diag.append(f"  reply: {hexdump(r, 10)}")
+        value = parse_zero_reply(r, command)
+        if value is not None:
+            return value
+    return None
+
+
+def read_zero_power(path: bytes, diag: List[str], wired: bool) -> Optional[Tuple[int, bool]]:
+    """(percent, charging) for the ATK Zero over its cable or a Zero receiver."""
+    dev = hid.device()
+    try:
+        dev.open_path(path)
+    except (OSError, IOError) as e:
+        diag.append(f"  open: {e}")
+        return None
+    try:
+        for _ in range(4):
+            if not dev.read(REPORT_LEN, FLUSH_TIMEOUT_MS):
+                break
+        target = 0 if wired else 1
+        level = _zero_exchange(dev, CMD_BATTERY, target, diag)
+        if level is None or not 1 <= level <= 100:
+            diag.append(f"  no level (got {level})")
+            return None
+        charging = wired and _zero_exchange(dev, CMD_CHARGING, target, diag) == 0x02
+        return level, charging
+    except (OSError, IOError, ValueError) as e:
+        diag.append(f"  query error: {e}")
+        return None
+    finally:
+        try:
+            dev.close()
+        except Exception:
+            pass
 
 
 def read_power(path: bytes, diag: List[str]) -> Optional[Tuple[int, bool]]:

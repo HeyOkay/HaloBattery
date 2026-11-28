@@ -63,6 +63,7 @@ PIDS = {
     0xD028: "Keychron Ultra-Link 8K",
     0xD048: "Keychron M5",
     0xD026: "Keychron Nape Pro",      # "Keychron Link-KM" (#270): vendor channel on iface 1
+    0xD029: "Keychron Link-KM mouse",
 }
 
 
@@ -123,6 +124,102 @@ def output_fallback_allowed(d: dict) -> bool:
     keychron_battery.c uses HID_OUTPUT_REPORT, not a feature report.
     """
     return ((d.get("usage_page") or 0), (d.get("usage") or 0)) == BATTERY_COLLECTION
+
+
+# --- Keychron models added from BatteryHub 1.1.1's keychron.cpp -------------
+# The provider above reads the Ultra-Link 8K/Link-KM mice with B3 06. The
+# remaining families use separate, documented exchanges:
+#   D038 4K Link       FF0A:0001, 41 00 81 01 -> level byte 6, state byte 5
+#   D030/D031 1K Link  page 008C, feature 51/06 -> level byte 11, charge byte 12
+#   D029 Link-KM mouse FFC1:0001, B5/B3 06 (the existing B3 06 path)
+#   0A50 K5 Max        FF60:0061, B2 slots then A4 -> level byte 1, state byte 4
+#   1260 Q6 Ultra 8K   FF60:0061, B2 slots then A7 31 -> level byte 2, charge byte 3
+# All are read-only. Protocol and hardware evidence: BatteryHub 1.1.1
+# src/drivers/keychron.cpp (GPL-3.0-or-later; protocol reference only).
+
+FOUR_K = 0xD038
+LEGACY_PIDS = (0xD030, 0xD031)
+LINK_KM_MOUSE = 0xD029
+KEYBOARD_PIDS = (0x0A50, 0x1260)
+RAW_USAGE = (0xFF60, 0x0061)
+
+
+def _strip_id(report):
+    b = bytes(report or b"")
+    if len(b) == 65 and b[0] == 0x00:
+        b = b[1:]
+    return b
+
+
+def make_4k_request(cmd: int, sub: int = 0x01) -> List[int]:
+    payload = [0x00] * REPORT_SIZE
+    payload[0] = cmd
+    payload[2] = 0x81
+    payload[3] = sub
+    payload[63] = (0xA1 - sum(payload[:63])) & 0xFF
+    return [0x00] + payload
+
+
+def parse_4k(reply) -> Optional[Tuple[int, bool]]:
+    b = _strip_id(reply)
+    if len(b) < 13 or b[0] != 0x41 or b[3] != 0x01:
+        return None
+    if not 1 <= b[6] <= 100:
+        return None
+    return b[6], b[5] != 0
+
+
+def parse_legacy(reply) -> Optional[Tuple[int, int, bool]]:
+    """(mouse pid, percent, charging) from the D030/D031 feature reply."""
+    b = _strip_id(reply)
+    if len(b) < 13 or b[0] != 0x51 or b[1] != 0x06 or b[2] != 0x01:
+        return None
+    if (b[4] | (b[5] << 8)) != 0x3434 or b[11] > 100:
+        return None
+    return b[6] | (b[7] << 8), b[11], b[12] == 0x01
+
+
+def _raw_query(dev, cmd: bytes, timeout: float = 0.6) -> Optional[bytes]:
+    for _ in range(4):
+        if not dev.read(33, 30):
+            break
+    request = bytes([0x00]) + cmd + bytes(32 - len(cmd))
+    dev.write(request)
+    for _ in range(max(2, int(timeout / 0.1))):
+        reply = dev.read(33, 100)
+        if not reply:
+            continue
+        b = bytes(reply)
+        if b[:len(cmd)] == cmd or (len(b) > len(cmd) and b[1:1 + len(cmd)] == cmd):
+            return b
+    return None
+
+
+def parse_raw_keyboard(reply, pid: int) -> Optional[Tuple[int, bool]]:
+    b = bytes(reply or b"")
+    if b and b[0] == 0x00:
+        b = b[1:]
+    if pid == 0x1260:
+        if len(b) < 4 or b[0:2] != b"\xA7\x31" or b[2] > 100:
+            return None
+        return b[2], b[3] != 0
+    if len(b) < 5:
+        return None
+    if b[0] != 0xA4 or b[1] > 100:
+        return None
+    return b[1], b[4] == 1
+
+
+def keyboard_name(pid: int) -> str:
+    return "Keychron Q6 Ultra 8K" if pid == 0x1260 else "Keychron K5 Max"
+
+
+def legacy_name(pid: int) -> str:
+    return {0xD032: "Keychron M3", 0xD033: "Keychron M3",
+            0xD035: "Keychron M1", 0xD036: "Keychron M3 mini",
+            0xD03E: "Keychron M3 mini", 0xD03B: "Keychron M2",
+            0xD03D: "Keychron M2 mini", 0xD03F: "Keychron M6",
+            0xD044: "Keychron M7"}.get(pid, "Keychron mouse")
 
 
 class KeychronProvider(Provider):
@@ -234,6 +331,206 @@ class KeychronProvider(Provider):
             except Exception:
                 pass
 
+    def _read_4k(self, d: dict) -> Optional[Tuple[int, bool, str]]:
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+        except (OSError, IOError) as e:
+            self._diag.append(f"  [4K] open: {e}")
+            return None
+        try:
+            for _ in range(4):
+                if not dev.read(REPORT_SIZE, 30):
+                    break
+            dev.write(make_4k_request(0x01))
+            first = b""
+            deadline = time.monotonic() + 0.6
+            while time.monotonic() < deadline:
+                first = dev.read(REPORT_SIZE, 100)
+                if first:
+                    break
+            b = _strip_id(first)
+            if len(b) < 8 or b[0] != 0x01 or b[3] != 0x01:
+                self._diag.append("  [4K] no 01 reply")
+                return None
+            tag = b[6] | (b[7] << 8)
+            if tag in (0x3434, 0x362D):
+                self._diag.append("  [4K] receiver answered as 8K; not the 4K layout")
+                return None
+            dev.write(make_4k_request(0x41))
+            deadline = time.monotonic() + 0.6
+            while time.monotonic() < deadline:
+                reply = dev.read(REPORT_SIZE, 100)
+                parsed = parse_4k(reply) if reply else None
+                if parsed is not None:
+                    return parsed[0], parsed[1], "Keychron 4K mouse"
+            self._diag.append("  [4K] no 41 battery reply")
+            return None
+        except (OSError, ValueError) as e:
+            self._diag.append(f"  [4K] query: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def _read_legacy(self, d: dict) -> Optional[Tuple[int, int, bool]]:
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+        except (OSError, IOError) as e:
+            self._diag.append(f"  [1K] open: {e}")
+            return None
+        try:
+            try:
+                dev.send_feature_report([0x51, 0x06])
+            except (OSError, ValueError) as e:
+                self._diag.append(f"  [1K] feature send: {e}")
+                return None
+            reply = b""
+            for _ in range(5):
+                time.sleep(0.04)
+                for length in (1001, 65):
+                    try:
+                        reply = dev.get_feature_report(0x51, length)
+                    except (OSError, ValueError):
+                        reply = b""
+                        continue
+                    if reply:
+                        break
+                if reply:
+                    break
+            parsed = parse_legacy(reply) if reply else None
+            if parsed is None:
+                self._diag.append("  [1K] no 51/06 reply")
+                return None
+            return parsed
+        except (OSError, ValueError) as e:
+            self._diag.append(f"  [1K] query: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _slot_pid(reply, wanted) -> Optional[int]:
+        b = bytes(reply or b"")
+        if b and b[0] == 0x00:
+            b = b[1:]
+        if len(b) < 2 or b[0] != 0xB2:
+            return None
+        slots = min(b[1], 5)
+        for i in range(slots):
+            off = 2 + 5 * i
+            if off + 4 >= len(b):
+                break
+            vid = b[off] | (b[off + 1] << 8)
+            pid = b[off + 2] | (b[off + 3] << 8)
+            if vid == 0x3434 and pid in wanted and b[off + 4] == 1:
+                return pid
+        return None
+
+    def _read_keyboard(self, d: dict, pid: Optional[int], via_receiver: bool) -> Optional[Tuple[int, int, bool]]:
+        dev = hid.device()
+        try:
+            dev.open_path(d["path"])
+        except (OSError, IOError) as e:
+            self._diag.append(f"  [keyboard] open: {e}")
+            return None
+        try:
+            kbpid = pid
+            if via_receiver:
+                slots = _raw_query(dev, b"\xB2", 0.3)
+                wanted = set(range(0x0A50, 0x0A59)) | {0x1260}
+                kbpid = self._slot_pid(slots, wanted) if slots else None
+                if kbpid is None:
+                    self._diag.append("  [keyboard] no keyboard in the receiver slots")
+                    return None
+            if kbpid is None:
+                return None
+            cmd = b"\xA7\x31" if kbpid == 0x1260 else b"\xA4"
+            reply = _raw_query(dev, cmd, 0.4)
+            if reply is None and kbpid != 0x1260:
+                reply = _raw_query(dev, cmd, 0.4)   # first one wakes the link
+            parsed = parse_raw_keyboard(reply, kbpid) if reply else None
+            if parsed is None:
+                self._diag.append(f"  [keyboard] no reply for {kbpid:04x}")
+                return None
+            return kbpid, parsed[0], parsed[1]
+        except (OSError, ValueError) as e:
+            self._diag.append(f"  [keyboard] query: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def _special(self, infos: List[dict]) -> List[DeviceStatus]:
+        out: List[DeviceStatus] = []
+        seen = set()
+        # 4K Link receiver
+        for d in [x for x in infos if x.get("product_id") == FOUR_K
+                  and (x.get("usage_page"), x.get("usage")) == (0xFF0A, 0x0001)]:
+            got = self._read_4k(d)
+            if got is not None:
+                level, charging, name = got
+                out.append(DeviceStatus(f"keychron:{FOUR_K:04x}:{_identity(d)}", name,
+                                        level, charging, True, "keychron", kind="mouse"))
+            break
+        # 1K receivers: mouse via feature 51/06 and K5 Max via raw A4
+        for pid in LEGACY_PIDS:
+            for d in [x for x in infos if x.get("product_id") == pid
+                      and (x.get("usage_page") or 0) == 0x008C]:
+                got = self._read_legacy(d)
+                if got is not None:
+                    mouse_pid, level, charging = got
+                    out.append(DeviceStatus(f"keychron:{pid:04x}:{mouse_pid:04x}",
+                                            legacy_name(mouse_pid), level, charging,
+                                            True, "keychron", kind="mouse"))
+                break
+            for d in [x for x in infos if x.get("product_id") == pid
+                      and (x.get("usage_page"), x.get("usage")) == RAW_USAGE]:
+                got = self._read_keyboard(d, None, True)
+                if got is not None:
+                    kbpid, level, charging = got
+                    key = f"keychron-kb:{kbpid:04x}"
+                    if key not in seen:
+                        seen.add(key)
+                        out.append(DeviceStatus(key, keyboard_name(kbpid), level, charging,
+                                                True, "keychron", kind="keyboard"))
+                break
+        # Q6 Ultra 8K behind the Ultra-Link 8K receiver
+        for d in [x for x in infos if x.get("product_id") == 0xD028
+                  and (x.get("usage_page"), x.get("usage")) == RAW_USAGE
+                  and "keychron" in (x.get("product_string") or "").lower()]:
+            got = self._read_keyboard(d, None, True)
+            if got is not None:
+                kbpid, level, charging = got
+                key = f"keychron-kb:{kbpid:04x}"
+                if key not in seen:
+                    seen.add(key)
+                    out.append(DeviceStatus(key, keyboard_name(kbpid), level, charging,
+                                            True, "keychron", kind="keyboard"))
+            break
+        # Keyboards on their USB cable
+        for pid in KEYBOARD_PIDS:
+            for d in [x for x in infos if x.get("product_id") == pid
+                      and (x.get("usage_page"), x.get("usage")) == RAW_USAGE]:
+                got = self._read_keyboard(d, pid, False)
+                if got is not None:
+                    kbpid, level, charging = got
+                    key = f"keychron-kb:{kbpid:04x}"
+                    if key not in seen:
+                        seen.add(key)
+                        out.append(DeviceStatus(key, keyboard_name(kbpid), level, charging,
+                                                True, "keychron", kind="keyboard"))
+                break
+        return out
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         self._legacy_aliases = {}
@@ -243,6 +540,7 @@ class KeychronProvider(Provider):
             log.warning("hid.enumerate(keychron): %s", e)
             return []
         out = []
+        out += self._special(infos)
         for pid in PIDS:
             mine = [d for d in infos if d["product_id"] == pid]
             if not mine:
