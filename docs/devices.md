@@ -23,6 +23,7 @@
 | [ATK V75X](protocols.md#atk-v75x) | 2.4 GHz receiver and USB cable | author-confirmed battery and charging on both |
 | [Audeze Maxwell](protocols.md#audeze-maxwell) | 2.4 GHz dongle or USB-C cable | yes |
 | [Bluetooth devices, tested on the 1MORE SonoFlow headset (users also report Audio-Technica and JBL Tune 760NC headphones working)](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth (on by default, can be turned off in the menu) | yes |
+| [IO Graphite 2 Pro Wireless](protocols.md#bluetooth-devices-tested-on-the-1more-sonoflow-headset) | Bluetooth | [battery percentage reported by an owner](https://github.com/HeyOkay/HaloBattery/issues/490) |
 | [Arbiter Studio Akitsu / 3950 / Medium](protocols.md#arbiter-studio-akitsu) | 8K receiver or USB cable | unverified |
 | [Areson/Redragon M915RGB-WL, M913](protocols.md#areson-redragon-m915-m913) | 2.4 GHz receiver | unverified |
 | [CHERRY MX 3.0S Wireless](protocols.md#cherry-mx-30s-wireless) | 2.4 GHz receiver or USB cable | unverified |

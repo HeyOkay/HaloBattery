@@ -11,6 +11,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Retry post-publication release and asset attestation verification when GitHub
   has not yet made the proofs available. Persistent verification errors still
   fail the workflow; publication and uploads are never repeated by these retries.
+- Show the charging indicator when Windows supplies a charging state for a connected Bluetooth device.
 
 ## [1.18.0] - 2026-11-27
 

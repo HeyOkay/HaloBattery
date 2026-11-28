@@ -5,7 +5,7 @@ Windows' own DLLs with ctypes. No PowerShell process, no extra packages.
     NativeReader().connections(roots)                                       (the watcher's 2 s check)
 
 PnP   cfgmgr32: present BTHENUM / BTHLE / BTHLEDEVICE nodes, their name and status, and the
-      battery {104EA319-...} 2 / connection {83DA6326-...} 15 properties, read node by node.
+      battery, optional charging state and connection properties, read node by node.
       PowerShell's bulk Get-PnpDeviceProperty returned a different subset on consecutive runs
       (4 to 13 of the same 13 values, sometimes without the battery); a per-node read does not.
 WinRT combase: BluetoothDevice / BluetoothLEDevice.FromBluetoothAddressAsync(MAC) ->
@@ -27,6 +27,7 @@ from typing import List, Optional, Tuple
 
 K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
 K_CONN = "{83DA6326-97A6-4088-9453-A1923F573B29} 15"
+K_CHARGE = "{49CD1F76-5626-4B17-A4E8-18B4AA1A2213} 11"     # System.Devices.ChargingState
 DEVPKEY_NAME = "{B725F130-47EF-101A-A5F1-02608C9EEBAC} 10"   # what Get-PnpDevice shows as FriendlyName
 ENUMERATORS = ("BTHENUM", "BTHLE", "BTHLEDEVICE")
 QUERY_TIMEOUT_MS = 3000                                      # per device, as the script's Wait(3000)
@@ -142,6 +143,7 @@ def pnp_nodes() -> Tuple[List[dict], List[dict]]:
     """(devs, props) in the PowerShell snapshot's shape; instance ids upper-case like Get-PnpDevice."""
     cfg, _ = _dlls()
     k_name, k_bat, k_conn = _propkey(DEVPKEY_NAME), _propkey(K_BAT), _propkey(K_CONN)
+    k_charge = _propkey(K_CHARGE)
     devs, props = [], []
     for enum in ENUMERATORS:
         for iid in _id_list(cfg, enum):
@@ -155,7 +157,7 @@ def pnp_nodes() -> Tuple[List[dict], List[dict]]:
                 status = "Unknown"
             uid = iid.upper()
             devs.append({"id": uid, "name": _prop(cfg, devinst.value, k_name), "status": status})
-            for text, key in ((K_BAT, k_bat), (K_CONN, k_conn)):
+            for text, key in ((K_BAT, k_bat), (K_CONN, k_conn), (K_CHARGE, k_charge)):
                 value = _prop(cfg, devinst.value, key)
                 if value is not None:
                     props.append({"id": uid, "key": text, "data": value})
