@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "artwork" / "tray"
+ASSETS = ROOT / "assets" / "artwork" / "tray"
 SIZES = (16, 20, 24, 32, 40, 48, 64)
 PINNED_SHA256 = "05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117"
 

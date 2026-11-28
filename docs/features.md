@@ -216,7 +216,7 @@ folder recursively, which would also remove portable user data.
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
 2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
 3. Install .NET SDK 10.0.404 for the native settings window. From the repository
-   root, run `python -m pip install -r requirements.txt`,
+   root, run `python -m pip install -r requirements/requirements.txt`,
    `python tools/make_icon.py halo.ico`, then `./scripts/build_settings.ps1`
    in PowerShell. Keep its `.build/settings-ui` output in place.
 4. Run `scripts\install_and_run.bat`, then right-click the tray icon → **Settings… → General → Start with Windows**.
