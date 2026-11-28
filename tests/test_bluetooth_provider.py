@@ -39,6 +39,50 @@ def raw_phone(*args, **kwargs):
 
 
 class BluetoothProviderTests(unittest.TestCase):
+    def test_charging_state_is_grouped_by_address_and_refreshes(self):
+        provider = bluetooth.BluetoothProvider()
+        data = snapshot()
+        other_mac = "112233445566"
+        other = json.loads(json.dumps(snapshot(40)).replace(MAC, other_mac))
+        for name in ("devs", "props", "aep"):
+            data[name].extend(other[name])
+        # The level can be on the root and the charging property on a service node.
+        charge = dict(id="BTHENUM\\{0000111E-0000-1000-8000-00805F9B34FB}\\7&1&0&" + MAC + "_C00000000",
+                      key=bluetooth.K_CHARGE, data=1)
+        data["props"].append(charge)
+        statuses = {s.key: s for s in provider.handle(json.dumps(data))}
+        self.assertTrue(statuses[KEY].charging)
+        self.assertTrue(statuses[KEY].charging_known)
+        self.assertFalse(statuses["bt:" + other_mac].charging)
+        self.assertTrue(statuses["bt:" + other_mac].charging_known)
+        charge["data"] = 0
+        self.assertFalse(next(s for s in provider.handle(json.dumps(data)) if s.key == KEY).charging)
+
+    def test_unknown_invalid_and_conflicting_charging_states(self):
+        for values in ([2], [255], [True], [1.0], ["1"], [None], [0, 1]):
+            with self.subTest(values=values):
+                data = snapshot()
+                data["props"].extend(dict(id=ROOT, key=bluetooth.K_CHARGE, data=v) for v in values)
+                status, = bluetooth.group_devices(data, [])
+                self.assertEqual(status.level, 75)
+                self.assertFalse(status.charging)
+                self.assertFalse(status.charging_known)
+
+    def test_cached_level_or_lost_connection_clears_charging(self):
+        for data in (snapshot(None), snapshot(connected=False), {}):
+            with self.subTest(data=data):
+                provider = bluetooth.BluetoothProvider()
+                prop = dict(id=ROOT, key=bluetooth.K_CHARGE, data=1)
+                first = snapshot()
+                first["props"].append(prop)
+                self.assertTrue(provider.handle(json.dumps(first))[0].charging)
+                if "props" in data:
+                    data["props"].append(prop)
+                stale, = provider.handle(json.dumps(data))
+                self.assertFalse(stale.online)
+                self.assertFalse(stale.charging)
+                self.assertFalse(stale.charging_known)
+
     def test_level_boundaries_and_invalid_values(self):
         for value in (0, 100, 55, "75"):
             with self.subTest(value=value):

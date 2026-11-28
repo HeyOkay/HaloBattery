@@ -1380,6 +1380,16 @@ Protocol from [ShadowBitBasher/DJI-Mic-Control](https://github.com/ShadowBitBash
 
 The level Windows itself knows (`DEVPKEY_Bluetooth_Battery`). Only devices connected right now are shown: the link state comes from WinRT (`BluetoothDevice.ConnectionStatus`, the same source as Windows Settings). A device that is also read over HID keeps one icon: the HID reading wins and the Bluetooth copy is dropped
 
+For connected devices with a fresh battery reading, Halo Battery can also use the
+charging state published by Windows. The value 1 means charging and 0 means
+not charging. The battery percentage alone cannot establish whether a charger
+is attached. [Microsoft property reference](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-chargingstate)
+
+An IO Graphite 2 Pro Wireless owner reported a battery level over Bluetooth.
+Charging-state reporting on this headset is unconfirmed. The 2.4 GHz receiver
+and the USB audio connection did not return a battery level in the upstream tests.
+[Bluetooth report](https://github.com/HeyOkay/HaloBattery/issues/490) and [USB and receiver tests](https://github.com/HeyOkay/HaloBattery/issues/537).
+
 ## Others
 
 ### Alienware Pro Wireless Gaming Keyboard

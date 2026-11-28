@@ -115,6 +115,22 @@ def run_watcher(reader, until, provider=None):
 
 
 class SnapshotHelpersTests(unittest.TestCase):
+    def test_pnp_backends_request_the_same_optional_charge_property(self):
+        cfg = mock.Mock()
+        cfg.CM_Locate_DevNodeW.return_value = bluetooth_native.CR_SUCCESS
+        cfg.CM_Get_DevNode_Status.return_value = bluetooth_native.CR_SUCCESS
+        values = {bluetooth_native.K_BAT: 75, bluetooth_native.K_CHARGE: 1}
+        with mock.patch.object(bluetooth_native, "_dlls", return_value=(cfg, None)), \
+                mock.patch.object(bluetooth_native, "_id_list",
+                                  side_effect=lambda _, enum: [ROOT] if enum == "BTHENUM" else []), \
+                mock.patch.object(bluetooth_native, "_propkey", side_effect=lambda text: text), \
+                mock.patch.object(bluetooth_native, "_prop", side_effect=lambda _, dev, key: values.get(key)):
+            nodes, props = bluetooth_native.pnp_nodes()
+        status, = bluetooth.group_devices({"devs": nodes, "props": props}, [])
+        self.assertTrue(status.charging)
+        for script in (bluetooth.PS_SCRIPT, bluetooth.WATCH_SCRIPT):
+            self.assertIn("'" + bluetooth.K_CHARGE + "'", script)
+
     def test_roots_are_the_device_nodes_with_upper_case_addresses(self):
         devs = [{"id": "BTHENUM\\DEV_a1b2c3d4e5f6\\7&1"},
                 {"id": "BTHLE\\DEV_112233445566\\8&2"},

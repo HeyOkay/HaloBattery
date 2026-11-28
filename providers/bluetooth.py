@@ -2,6 +2,7 @@
 (the ones shown in Settings > Bluetooth & devices).
 
 Battery:  DEVPKEY_Bluetooth_Battery {104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2 (PnP)
+Charging: System.Devices.ChargingState where Windows exposes it on a Bluetooth node.
 Link:     WinRT BluetoothDevice.ConnectionStatus (BluetoothLEDevice for LE),
           queried directly by MAC address: the same source Windows Settings uses.
           Fallback when WinRT is unavailable: the undocumented PnP key
@@ -34,6 +35,7 @@ from .base import DeviceStatus, Provider, log
 
 K_BAT = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2"
 K_CONN = "{83DA6326-97A6-4088-9453-A1923F573B29} 15"
+K_CHARGE = bluetooth_native.K_CHARGE
 
 PS_COMMON = r"""
 $ErrorActionPreference = 'SilentlyContinue'
@@ -78,11 +80,11 @@ function Get-BtConn($roots) {
 }
 
 function Get-BtSnapshot {
-  # --- PnP: battery level (and the fallback connection flag) ---
+  # --- PnP: battery level, optional charging state, and the fallback connection flag ---
   $devs = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })
   $props = @()
   if ($devs.Count -gt 0) {
-    $props = @(Get-PnpDeviceProperty -InstanceId $devs.InstanceId -KeyName '%BAT%', '%CONN%' |
+    $props = @(Get-PnpDeviceProperty -InstanceId $devs.InstanceId -KeyName '%BAT%', '%CONN%', '%CHARGE%' |
                Where-Object { $_.Data -ne $null } |
                ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; key = $_.KeyName; data = $_.Data } })
   }
@@ -95,7 +97,7 @@ function Get-BtSnapshot {
 }
 
 function Get-ConnKey($aep) { return (@($aep | ForEach-Object { "$($_.addr)=$($_.conn)" }) -join ',') }
-""".replace("%BAT%", K_BAT).replace("%CONN%", K_CONN)
+""".replace("%BAT%", K_BAT).replace("%CONN%", K_CONN).replace("%CHARGE%", K_CHARGE)
 
 # one-shot query (fallback and diagnostics)
 PS_SCRIPT = PS_COMMON + r"""
@@ -251,7 +253,7 @@ def group_devices(data: dict, diag: List[str],
         return by_mac.setdefault(mac, {"level": None, "pnp_conn": None, "aep_conn": None,
                                        "name": None, "root_name": None, "aep_name": None,
                                        "status_ok": False, "aep_err": False,
-                                       "kind": "", "audio": False})
+                                       "kind": "", "audio": False, "charge_states": set()})
 
     for d in devs:
         mac = mac_of(d.get("id"))
@@ -278,6 +280,9 @@ def group_devices(data: dict, diag: List[str],
             d = info.get(p.get("id")) or {}
             g["name"] = g["name"] or d.get("name")
             g["status_ok"] = g["status_ok"] or str(d.get("status", "")).upper() == "OK"
+        elif key in (K_CHARGE, "SYSTEM.DEVICES.CHARGINGSTATE"):
+            value = p.get("data")
+            g["charge_states"].add(value if type(value) is int and value in (0, 1) else None)
         elif key == K_CONN.upper():
             b = _as_bool(p.get("data"))
             if b is not None:
@@ -323,8 +328,13 @@ def group_devices(data: dict, diag: List[str],
                     f"connected: WinRT={g['aep_conn']} PnP={g['pnp_conn']} "
                     f"-> {'shown' if shown else 'hidden'} [{src}], kind: {kind or 'unknown'}")
         if shown:
-            out.append(DeviceStatus(f"bt:{mac}", name, level, False, not cached, "bluetooth",
-                                    kind=kind, charging_known=not cached,
+            states = g["charge_states"]
+            charging = not cached and states == {1}
+            # Keep level-only devices eligible for their existing battery notifications.
+            # An explicit Unknown or conflicting service-node reports suppress those alerts.
+            known = not cached and (not states or states == {0} or states == {1})
+            out.append(DeviceStatus(f"bt:{mac}", name, level, charging, not cached, "bluetooth",
+                                    kind=kind, charging_known=known,
                                     polling_stale=cached))
     if not by_mac:
         diag.append("[Bluetooth] no Bluetooth devices found")
