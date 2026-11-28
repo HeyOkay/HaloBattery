@@ -5,6 +5,10 @@ from .crociris import CrocirisProvider  # noqa: F401
 from .scyrox import ScyroxProvider  # noqa: F401
 from .semico import SemicoProvider  # noqa: F401
 from .zebronics import ZebronicsProvider  # noqa: F401
+from .evga import EvgaProvider  # noqa: F401
+from .niceboy import NiceboyProvider  # noqa: F401
+from .piao import PiaoProvider  # noqa: F401
+from .pressplay import PressPlayProvider  # noqa: F401
 from .ninjutso_sprime import NinjutsoSprimeProvider  # noqa: F401
 from .moondrop import MoondropProvider  # noqa: F401
 from .msi import MsiProvider  # noqa: F401

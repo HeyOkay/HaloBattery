@@ -2035,3 +2035,62 @@ frame per profile, plus axis frames `23`/`25`; the active profile frame has
 `[3] != 0`, `[4] == [5]`, a DPI-stage count of 1..5 at `[7]`, no error at
 `[62]`, and the battery level at `[20]`. A frame with `[3] == 0` ends the
 stream. No charging field is confirmed, so it is marked unknown.
+
+## Ported BatteryHub families (third batch)
+
+These are clean-room ports of BatteryHub 1.1.1 (GPL-3.0-or-later), using its
+driver notes as protocol references only. Halo has not seen these models on
+hardware, so charging transitions remain unconfirmed.
+
+### Niceboy
+
+The MW400 receiver (`248a:fa02`) exposes interface 0, usage `0001:0000`, with
+33-byte input/output reports. Send `05 24 fa 48` and accept a report whose
+`[0] = 05`, `[2] = fa`, `[3] = 48`:
+
+    05 .. FA 48 <lo> <hi> <charging> ...
+
+`raw = lo | hi << 8`, `millivolts = raw * 990 / 240`. The vendor app maps that
+voltage to 10 % steps: 4200 mV = 100 %, 4100 = 90 %, 4000 = 80 %, 3900 = 70 %,
+3800 = 60 %, 3700 = 50 %, 3500 = 40 %, 3400 = 30 %, 3200 = 20 %, otherwise 10 %.
+If `lo`, `hi` and `charging` are all zero the receiver answered but the mouse is
+asleep or off; the last reading then stays greyed for up to 30 minutes.
+Source: BatteryHub `src/drivers/niceboy.cpp`.
+
+### Press Play
+
+The ICARUS V2 (`7768:6434`) uses usage `ffb2:0001` with 64-byte reports. Send a
+64-byte output report beginning `06 05`; a valid reply begins `06 05 26` and
+carries the level at byte 13. This protocol has no charging field, so
+`charging_known` is false. Only `6434` is claimed; the AJAZZ AJ159NL P on
+`7768:6425` uses a different exchange. Source: BatteryHub
+`src/drivers/pressplay_icarus.cpp`.
+
+### EVGA
+
+The X20 receiver `3842:2402` and cable `3842:2420` expose interface 2,
+`ffff:0000`, as a feature-report-only collection. The request is a 65-byte
+feature report 0: `00 00 00 <link> 02 00 83 ...`, with link `00` on the cable
+and `02` on the receiver. The reply is `00 <status> 00 <link> 02 00 83
+<charging> <percent> ...`. Status `A0` means not ready: repeat SET_FEATURE and
+GET_FEATURE until the 2 s deadline. `A1` is a valid reading; `A3` is rejected;
+`A4` means no mouse on the wireless link. The cable is queried first, because
+the receiver answers `A4` while the mouse is on its cable. With no reading on
+either link the last one stays greyed for up to 30 minutes. Source: BatteryHub
+`src/drivers/evga.cpp` and `evga_protocol.h`, from EVGA Unleash captures and
+OpenRGB.
+
+### Piao
+
+The PIAO receiver (`372e:1014`) and wired ids (`1015`, `1028`, `1056`) use
+usage `ff00:0001` with 64-byte feature reports. The frame is:
+
+    request  03 <sum> 50 00 00 <cmd> <sub> ...
+    reply    03 50 00 <len> 00 <echo> <data...>
+
+`sum` is the low byte of the sum of bytes 1..63. For the receiver, a read-only
+online check `47 00` must return a nonzero first data byte; then `4f 81` returns
+a battery byte where bit 7 is charging and bits 0..6 are the level. A sleeping
+mouse may need the link poke and up to six 120 ms retries; while it sleeps the
+last reading stays greyed for up to 10 minutes. Only the four listed PIDs are
+claimed. Source: BatteryHub `src/drivers/piao.cpp`.
