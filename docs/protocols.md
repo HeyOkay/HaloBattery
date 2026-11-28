@@ -1932,3 +1932,29 @@ No EQ, microphone, firmware or configuration writes. The macOS-specific 63-byte
 CDC workaround is not used on Windows. The source marks N9 Pro as untested. A real N9 Pro Windows poll returned
 `04 00 04 00 01 ...` (connected), then `04 00 03 00 32 ...` (50%, not charging).
 Comparison with ATK Hub and hardware charging transitions remain pending.
+
+
+#### Receiver power-cycle refresh
+
+The Redragon M916 Pro 4K and ATK N9 Pro providers opt into a five-second refresh
+only while their supported receiver is enumerated. The polling coordinator caches
+this optional metadata on the provider worker and schedules that provider alone;
+it does no device I/O in pump/consume and retains its two-worker/lease limits,
+error backoff, disabled-provider handling and fullscreen quiet mode. Removing the
+receiver clears the opt-in on the next poll. The general configured battery
+interval remains unchanged for other providers. This is a bounded query cadence,
+not an immediate USB hotplug event: the receivers stay enumerated when their
+wireless device switches off.
+
+Measured on the F54F receiver with the mouse's physical switch off: command 04
+stopped answering; the existing CompX cache therefore preserves the last percent
+with online=False (off/asleep) and input-wake recovery. No new device commands
+are needed for these power-cycle fixes. A mouse sleeping and a mouse switched off
+are indistinguishable when the receiver is silent.
+
+
+Hardware cycle verification on Windows: with both receivers left connected, the
+M916 Pro 4K and N9 Pro were switched off together and both live application
+statuses changed to online=False. Switching them back on restored online=True
+without restarting the application (mouse 55%, headset 50%). Hardware charging
+transitions and comparisons against vendor battery displays remain untested.

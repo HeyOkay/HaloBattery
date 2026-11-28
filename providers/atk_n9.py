@@ -48,6 +48,7 @@ class AtkN9Provider(Provider):
 
     def __init__(self):
         self._diag = []
+        self.refresh_interval = None
 
     def _query(self, port, command):
         port.reset_input_buffer()
@@ -72,6 +73,7 @@ class AtkN9Provider(Provider):
 
     def poll(self):
         self._diag = []
+        self.refresh_interval = None
         if serial is None or list_ports is None:
             self._diag.append("[ATK N9] pyserial is not installed")
             return []
@@ -84,6 +86,9 @@ class AtkN9Provider(Provider):
         for info in ports:
             if (info.vid, info.pid) != (VID, PID):
                 continue
+            # Power cycling the headset leaves the USB receiver present, so
+            # hotplug cannot wake the ordinary battery polling interval.
+            self.refresh_interval = 5.0
             self._diag.append(f"[ATK N9 Pro] {VID:04x}:{PID:04x} {info.device}")
             try:
                 with serial.Serial(info.device, 9600, timeout=0.1, write_timeout=0.5) as port:

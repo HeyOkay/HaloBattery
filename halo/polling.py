@@ -64,6 +64,8 @@ class _Slot:
     circuit: bool = False
     recovering: bool = False
     pending: bool = False
+    refresh_interval: float | None = None
+    refresh_due: float = 0.0
 
 
 class PollingRuntime:
@@ -101,6 +103,7 @@ class PollingRuntime:
         self._queued = set()
         self._disabled = set()
         self._configured = False
+        self._refresh_enabled = True
         self._fullmode = False
         self._closed = False
         self._workers_stop = False
@@ -122,12 +125,14 @@ class PollingRuntime:
         for worker in self._workers:
             worker.start()
 
-    def configure(self, disabled, fullmode=False):
+    def configure(self, disabled, fullmode=False, *, refresh=None):
         with self._condition:
             previous, previous_mode = self._disabled, self._fullmode
             self._disabled = {name for name in disabled if isinstance(name, str)}
             self._fullmode = bool(fullmode)
             self._configured = True
+            if refresh is not None:
+                self._refresh_enabled = bool(refresh)
             for owner in self._provider_order:
                 slot = self._slots[owner]
                 if slot.name in self._disabled and slot.name not in previous:
@@ -498,8 +503,17 @@ class PollingRuntime:
             slot, kind, epoch, fullmode = job
             value = None
             lines, pending, error, aliases = [], False, None, {}
+            refresh_interval = None
             try:
                 value, lines, pending = self._execute(slot, kind, fullmode)
+                if kind == "poll":
+                    # Read optional metadata on the worker, outside the coordinator lock.
+                    try:
+                        interval = getattr(slot.provider, "refresh_interval", None)
+                        if type(interval) in (int, float) and 2.5 <= interval <= 60:
+                            refresh_interval = float(interval)
+                    except Exception:
+                        pass
             except BaseException as exc:
                 error = self._error(exc)
             if kind == "poll" and error is None:
@@ -530,6 +544,8 @@ class PollingRuntime:
                     else:
                         slot.retry_at = now + _CIRCUIT_COOLDOWN
                     if kind == "poll":
+                        slot.refresh_interval = refresh_interval
+                        slot.refresh_due = now + (slot.refresh_interval or 0)
                         self._fresh.difference_update(s.key for s in slot.statuses)
                         if recovered:
                             value = self._recovery_values(slot.statuses, value)
@@ -587,6 +603,10 @@ class PollingRuntime:
             for slot in self._slots.values():
                 if slot.running and slot.deadline is not None and now >= slot.deadline:
                     self._fail_locked(slot, "provider deadline expired", now)
+                if (not self._closed and self._configured and self._refresh_enabled
+                        and slot.name not in self._disabled and slot.refresh_interval is not None
+                        and now >= slot.refresh_due and not slot.running and not slot.lease):
+                    self._queue_locked(slot.owner, "poll")
             if self._diag_deadline is not None and now >= self._diag_deadline:
                 self._hid_diagnostics.append("HID diagnostics deadline expired; previous cached data retained")
                 self._hid_diagnostics = self._hid_diagnostics[-128:]

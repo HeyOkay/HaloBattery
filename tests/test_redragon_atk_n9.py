@@ -89,6 +89,21 @@ class AtkN9Tests(unittest.TestCase):
         self.assertFalse(found[0].charging_known)
         self.assertEqual(1, len(port.writes))
 
+    def test_power_cycle_recovers_with_same_identity(self):
+        info = types.SimpleNamespace(vid=0x373B, pid=0x11CB, device="COM3", serial_number="unit")
+        ports = [FakePort(), FakePort(connected=0), FakePort(battery=49)]
+        provider = A.AtkN9Provider()
+        with mock.patch.object(A.list_ports, "comports", return_value=[info]), \
+                mock.patch.object(A.serial, "Serial", side_effect=ports):
+            readings = [provider.poll()[0] for _ in ports]
+        self.assertEqual([True, False, True], [s.online for s in readings])
+        self.assertEqual([50, None, 49], [s.level for s in readings])
+        self.assertEqual(1, len({s.key for s in readings}))
+        self.assertEqual(5, provider.refresh_interval)
+        with mock.patch.object(A.list_ports, "comports", return_value=[]):
+            self.assertEqual([], provider.poll())
+        self.assertIsNone(provider.refresh_interval)
+
     def test_unrelated_device_is_never_opened(self):
         found, factory = self.poll(FakePort(), pid=0x1204)
         self.assertEqual([], found)
@@ -107,6 +122,23 @@ class AtkN9Tests(unittest.TestCase):
 
 
 class RedragonTests(unittest.TestCase):
+    def test_power_cycle_greys_cached_level_and_recovers(self):
+        info = dict(product_id=0xF54F, path=b"report8", usage_page=0xFF02, usage=2)
+        frame = list(bytes.fromhex("08 04 00 00 00 02 37 00 0f 40 00 00 00 00 00 00 c1"))
+        provider = P.PulsarProvider()
+        with mock.patch.object(P.hidlist, "enumerate", side_effect=lambda vid: [info] if vid == 0x3554 else []), \
+                mock.patch.object(P, "output_length", return_value=17), \
+                mock.patch.object(provider, "_query", side_effect=[frame, None, frame]):
+            readings = [provider.poll()[0] for _ in range(3)]
+        self.assertEqual([True, False, True], [s.online for s in readings])
+        self.assertEqual([55, 55, 55], [s.level for s in readings])
+        self.assertTrue(readings[1].wake_on_input)
+        self.assertEqual(1, len({s.key for s in readings}))
+        self.assertEqual(5, provider.refresh_interval)
+        with mock.patch.object(P.hidlist, "enumerate", return_value=[]):
+            self.assertEqual([], provider.poll())
+        self.assertIsNone(provider.refresh_interval)
+
     def test_boundaries_and_unknown_charge_are_not_invented(self):
         info = dict(product_id=0xF54F, path=b"report8", usage_page=0xFF02, usage=2)
         for level, flag, valid in ((0, 0, True), (100, 1, True), (101, 0, False),

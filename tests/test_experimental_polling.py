@@ -122,6 +122,70 @@ class PollingRuntimeTests(unittest.TestCase):
     def idle(self, runtime):
         return runtime.stats()["running"] == 0 and runtime.stats()["queued"] == 0
 
+    def test_targeted_refresh_polls_only_opted_in_provider(self):
+        fast, normal = FakeProvider("atk_n9"), FakeProvider("other")
+        fast.refresh_interval = 5
+        runtime = self.runtime([fast, normal])
+        runtime.request_poll()
+        self.wait(runtime, lambda: self.idle(runtime))
+        self.clock.advance(4.9)
+        runtime.pump()
+        self.assertEqual(1, len(fast.calls))
+        self.clock.advance(0.1)
+        self.wait(runtime, lambda: len(fast.calls) == 2 and self.idle(runtime))
+        self.assertEqual(1, len(normal.calls))
+        self.assertTrue(all(name.startswith("halo-provider-") for name in fast.calls))
+
+    def test_refresh_respects_quiet_disabled_and_receiver_removal(self):
+        provider = FakeProvider("atk_n9")
+        provider.refresh_interval = 5
+        runtime = self.runtime([provider])
+        runtime.request_poll()
+        self.wait(runtime, lambda: self.idle(runtime))
+        runtime.configure(set(), refresh=False)
+        runtime.configure(set())  # A settings refresh must preserve quiet policy.
+        self.clock.advance(10)
+        runtime.pump()
+        self.assertEqual(1, len(provider.calls))
+        runtime.configure(set(), refresh=True)
+        self.wait(runtime, lambda: len(provider.calls) == 2 and self.idle(runtime))
+        runtime.configure({"atk_n9"})
+        self.clock.advance(10)
+        runtime.pump()
+        self.assertEqual(2, len(provider.calls))
+        provider.refresh_interval = None
+        runtime.configure(set())
+        self.wait(runtime, lambda: len(provider.calls) == 3 and self.idle(runtime))
+        self.clock.advance(10)
+        runtime.pump()
+        self.assertEqual(3, len(provider.calls))
+
+    def test_refresh_never_duplicates_an_inflight_poll(self):
+        provider = FakeProvider("atk_n9")
+        provider.refresh_interval = 5
+        runtime = self.runtime([provider])
+        runtime.request_poll()
+        self.wait(runtime, lambda: self.idle(runtime))
+        provider.gate = self.gate()
+        self.clock.advance(5)
+        self.wait(runtime, lambda: len(provider.calls) == 2)
+        for _ in range(20):
+            runtime.pump()
+        self.assertEqual(2, len(provider.calls))
+        self.assertEqual(0, runtime.stats()["queued"])
+
+    def test_invalid_refresh_metadata_cannot_schedule_a_tight_loop(self):
+        for interval in (True, 0, 1, float("nan"), float("inf"), "5"):
+            with self.subTest(interval=interval):
+                provider = FakeProvider("atk_n9")
+                provider.refresh_interval = interval
+                runtime = self.runtime([provider])
+                runtime.request_poll()
+                self.wait(runtime, lambda: self.idle(runtime))
+                self.clock.advance(100)
+                runtime.pump()
+                self.assertEqual(1, len(provider.calls))
+
     def test_native_work_stays_on_two_fixed_workers_and_cached_reads_are_not_fresh(self):
         provider = FakeProvider("keychron")
         runtime = self.runtime([provider])

@@ -295,6 +295,7 @@ class PulsarProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self.refresh_interval = None
         # key -> (name, level, charging, when it was last read, pictogram)
         self._last: Dict[str, Tuple[str, int, bool, float, str]] = {}
         # key -> the name the mouse reported ("" when it did not give a known one)
@@ -447,6 +448,7 @@ class PulsarProvider(Provider):
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
+        self.refresh_interval = None
         out = self._poll_sonix()
         now = time.time()
         found: set = set()      # answered this poll
@@ -465,6 +467,8 @@ class PulsarProvider(Provider):
                 mine = [d for d in infos if d["product_id"] == pid]
                 if not mine:
                     continue
+                if vid == 0x3554 and pid in REDRAGON_4K_PIDS:
+                    self.refresh_interval = 5.0
                 key = f"pulsar:{vid:04x}{pid:04x}"
                 present.add(key)
                 bitmouse = (vid, pid) in atk_bitmouse.PIDS

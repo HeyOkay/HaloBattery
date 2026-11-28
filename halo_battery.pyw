@@ -2621,7 +2621,8 @@ class App:
     def poll_once(self) -> List[DeviceStatus]:
         runtime = getattr(self, "_polling_runtime", None)
         if runtime is not None:
-            runtime.configure(self.disabled_providers(), bool(self.cfg.get("playstation_full_mode")))
+            runtime.configure(self.disabled_providers(), bool(self.cfg.get("playstation_full_mode")),
+                              refresh=not self.quiet())
             runtime.request_poll()
             return self.consume_polling()
         results: List[DeviceStatus] = []

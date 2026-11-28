@@ -15,6 +15,11 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Refresh connected Redragon M916 Pro 4K and ATK N9 Pro receivers every five
+  seconds on their existing provider workers, so power cycles update the icons
+  without waiting for the general battery interval. Quiet mode still suppresses
+  these extra polls, and unplugged/disabled receivers stop refreshing.
+
 - Retry post-publication release and asset attestation verification when GitHub
   has not yet made the proofs available. Persistent verification errors still
   fail the workflow; publication and uploads are never repeated by these retries.
