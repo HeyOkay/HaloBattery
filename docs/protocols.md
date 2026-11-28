@@ -1894,3 +1894,58 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+## Ported BatteryHub single-model readers
+
+These readers follow BatteryHub 1.1.1 (GPL-3.0-or-later) protocol notes; the
+Halo implementations are clean re-writes. Halo has not tested these models, so
+charging transitions remain unconfirmed.
+
+### AKG
+
+The N9 Hybrid dongle (`0ecb:20d9`) exposes interface 3, usage `ff13:0001`,
+62-byte input/output reports. A read-only RACE request is:
+
+    write  06 07 80 05 5A 03 00 D6 0C 00 ...
+    read   07 <valid> 80 ... 05 5D 05 00 D6 0C 00 00 <percent> ...
+
+Only bytes 3 through `3 + <valid> - 1` are searched, because the rest of the
+report is leftover from earlier notifications. The newest matching frame wins.
+There is no charging field. The reply is polled for up to 600 ms; a failed
+read is retried inside that window because the reply is not always ready on
+the first read. Source: BatteryHub `src/drivers/akg.cpp`.
+
+### Alienware AW920H
+
+The dongle (`413c:a515`) exposes interface 5, usage `ff13:0001`, 62-byte
+output/input reports. Send `06 c0 0a 00 ...`; accept
+
+    07 c0 0a 09 00 <linked> <percent> <charging> <critical> .. <critical pct> ...
+
+Byte 13 is the XOR of bytes 3..12 and byte 6 must be nonzero. Byte 8 = 1 means
+the level is in byte 11; otherwise it is byte 6. Charging is byte 7 = 1. The
+query is retried three times over 600 ms because roughly one in a hundred is
+dropped. A headset that still stays silent keeps its last level for three
+minutes, marked as not current and with charging unknown, before its icon is
+dropped. The Bluetooth id `413c:a514` is left to the OS Bluetooth reader.
+Source: BatteryHub `src/drivers/alienware.cpp`.
+
+### AULA A7Pro
+
+The receiver (`38a6:0001`) exposes interface 0, usage `ff90:0001`, 64-byte
+input/output reports. Send `55 65 01`; the reply is `55 65 <percent> <power>`.
+Power `00` is external power (cable), `02` is battery. Below 100 % on the
+cable it is shown as charging; at 100 % the charge light is off, so a full
+battery on the cable is shown as 100 % and not as charging. The same id is used by the A700, so the product string must be
+`AULA-A7Pro`. Source: BatteryHub `src/drivers/aula_headset.cpp`.
+
+### PULSE Explore
+
+The PlayStation Link adapter (`054c:0ecc`) uses usage `ff01:0020` on interface
+3 with 64-byte feature reports. Read `82` for link state (byte 1 = 1 when
+connected), `A0` for the ASCII device name, and `B0` for status. Status byte 55
+holds the two earbud levels as nibbles: low = left, high = right, each 0..15.
+Halo publishes the lower earbud; both levels are in the diagnostics. Charging and
+the case level are not decoded, and other PlayStation Link devices are ignored
+because their status layout is unverified. Source: BatteryHub
+`src/drivers/playstation_link.cpp`.

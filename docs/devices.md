@@ -152,6 +152,18 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported BatteryHub single-model readers
+
+Unverified in Halo: these readers come from BatteryHub's protocol notes and
+captures. Check charging transitions before calling any of them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [AKG N9 Hybrid](protocols.md#akg) | USB-C dongle (0ecb:20d9) | no |
+| [Alienware AW920H](protocols.md#alienware-aw920h) | 2.4 GHz dongle (413c:a515) | no |
+| [AULA A7Pro](protocols.md#aula-a7pro) | 2.4 GHz receiver (38a6:0001) | no |
+| [PULSE Explore](protocols.md#pulse-explore) | PlayStation Link adapter (054c:0ecc) | no |
+
 ## Excluded from 1.17.0
 
 The current Endgame 4K reader (`3367:1970`), Kysona Uranus (`3151:5031`),

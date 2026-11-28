@@ -6,6 +6,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add four single-model readers from BatteryHub: AKG N9 Hybrid (`0ecb:20d9`,
+  charging unknown), Alienware AW920H (`413c:a515`, charging byte), AULA A7Pro
+  (`38a6:0001`; a full battery on the cable is not shown as charging) and PULSE
+  Explore on the PlayStation Link adapter (`054c:0ecc`, the lower earbud,
+  charging unknown). None has been hardware-tested in Halo yet. See
+  `docs/protocols.md`, "Ported BatteryHub single-model readers".
+
 ### Fixed
 
 - Retry post-publication release and asset attestation verification when GitHub

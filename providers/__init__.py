@@ -8,6 +8,10 @@ from .machenike import MachenikeProvider  # noqa: F401
 from .arbiter import ArbiterProvider  # noqa: F401
 from .areson import AresonProvider  # noqa: F401
 from .alienware import AlienwareProvider  # noqa: F401
+from .alienware_aw920h import AlienwareAw920hProvider  # noqa: F401
+from .akg import AkgProvider  # noqa: F401
+from .aula_a7pro import AulaA7ProProvider  # noqa: F401
+from .pslink import PsLinkProvider  # noqa: F401
 from .barracuda import BarracudaProvider  # noqa: F401
 from .barracuda_x import BarracudaXProvider  # noqa: F401
 from .audeze import AudezeProvider  # noqa: F401
