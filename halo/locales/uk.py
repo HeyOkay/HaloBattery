@@ -95,6 +95,7 @@ MESSAGES = {
     "provider.darmoshark": "Darmoshark N5",
     "provider.gs3075t": "Клавіатури GANSS GS3075T",
     "provider.gwolves": "Миші G-Wolves",
+    "provider.hid_battery": "Інші пристрої зі стандартним HID",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",

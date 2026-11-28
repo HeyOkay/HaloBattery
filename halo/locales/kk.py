@@ -89,6 +89,7 @@ MESSAGES = {
     'provider.dji': 'DJI Mic Mini 2',
     'provider.darmoshark': 'Darmoshark N5',
     'provider.gwolves': 'G-Wolves тінтуірлері',
+    'provider.hid_battery': 'Басқа стандартты HID құрылғылары',
     'provider.glorious': 'Glorious Model O Wireless',
     'provider.gs3075t': 'GANSS GS3075T пернетақталары',
     'provider.hyperx': 'HyperX Cloud II Wireless',

@@ -178,7 +178,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
                        AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
-                       AttackSharkR5Provider, SonyH9IIProvider)
+                       AttackSharkR5Provider, SonyH9IIProvider, HidBatteryProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
@@ -288,6 +288,7 @@ PROVIDER_LABELS = {
     "glorious": "Glorious Model O Wireless",
     "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
+    "hid_battery": "Other standard-HID devices",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -370,7 +371,9 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             AttackSharkR11Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(), RoyuanProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider(),
+            # last: it is the fallback for devices no vendor driver above can read
+            HidBatteryProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -1254,6 +1257,37 @@ def drop_bluetooth_duplicates(results: List[DeviceStatus],
     return kept
 
 
+def drop_hid_battery_duplicates(results: List[DeviceStatus],
+                                logged: Set[str]) -> List[DeviceStatus]:
+    """A vendor reading beats the standard-HID fallback for the same device.
+
+    The fallback reads collections whose own top-level usage is a battery level. A
+    vendor driver can read the same physical device through a different collection,
+    which would otherwise put two icons in the tray; the device family name ties
+    them together, exactly as it does for Bluetooth copies. A fallback reading stays
+    when no vendor provider reports the device at all, which is the case it exists for.
+    """
+    vendors = [device_family(st.name) for st in results
+               if st.source != "hid_battery" and st.level is not None]
+    kept: List[DeviceStatus] = []
+    for st in results:
+        if st.source == "hid_battery":
+            fam = device_family(st.name)
+            # both sides need enough of a name to be a device, not a fragment
+            duplicate = bool(fam) and any(
+                fam == v or (min(len(fam), len(v)) >= 6 and (fam in v or v in fam))
+                for v in vendors)
+            if duplicate:
+                if st.key not in logged:
+                    logged.add(st.key)
+                    log.info("[HID] %s is read by its own driver, the standard-HID "
+                             "copy is not shown", st.name)
+                continue
+            logged.discard(st.key)
+        kept.append(st)
+    return kept
+
+
 try:                             # Win32 only; harmless to define elsewhere
     import ctypes as _ctypes
 
@@ -1658,6 +1692,7 @@ class App:
         self.placeholder: Optional[pystray.Icon] = None
         self.lock = threading.RLock()
         self._bt_dup_logged: Set[str] = set()   # Bluetooth copies already reported
+        self._hid_dup_logged: Set[str] = set()  # standard-HID copies already reported
         self.wake = WakeEvent()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
@@ -2752,7 +2787,11 @@ class App:
             bt = list(self.bt_cache)
             results = dedupe_controllers(results, bt) + bt
             results = drop_bluetooth_duplicates(results, self._bt_dup_logged)
-        return results
+        # A vendor protocol always wins over the standard-HID fallback.
+        logged = getattr(self, "_hid_dup_logged", None)
+        if logged is None:                 # apps built in tests skip __init__
+            logged = self._hid_dup_logged = set()
+        return drop_hid_battery_duplicates(results, logged)
 
     def show_bluetooth(self):
         """New Bluetooth results between two polls: merge them with the last poll's

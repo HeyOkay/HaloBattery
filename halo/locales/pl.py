@@ -78,6 +78,7 @@ MESSAGES = {
     "provider.corsair": "Słuchawki Corsair",
     "provider.dji": "DJI Mic Mini 2",
     "provider.gwolves": "Myszy G-Wolves",
+    "provider.hid_battery": "Inne urządzenia ze standardowym HID",
     "provider.glorious": "Glorious Model O Wireless",
     "provider.hyperx": "HyperX Cloud II Wireless",
     "provider.hyperx_alpha2": "HyperX Cloud Alpha 2",

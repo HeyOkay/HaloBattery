@@ -24,6 +24,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
   re-reads it.
 - `status.json` gains `full` and `asleep` and follows the tooltip: it no longer
   reports a sleeping mouse as charging.
+- Read the standard HID battery fields of devices that publish them instead of a
+  vendor protocol: page 0x06 usage 0x20 (Battery Strength) or page 0x85 usage 0x65
+  (Relative State of Charge), with the page-0x85 charging, discharging, full and AC
+  usages as the charge state. Only collections whose own top-level usage is a
+  battery level are opened, only feature and input reports are read, and a vendor
+  driver's reading always wins over the fallback. Windows' own HID parser supplies
+  the report layout, so nothing is guessed.
 
 ### Fixed
 
