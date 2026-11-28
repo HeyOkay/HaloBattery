@@ -124,10 +124,11 @@ class AulaA7ProProvider(Provider):
             return []
         level, power = parsed
         external_power = power == 0x00
+        # At 100 % on the cable the vendor app shows no charge light: a full
+        # battery on external power is reported as 100 %, not as charging.
         charging = external_power and level < 100
-        approx = "on cable, full" if external_power and level == 100 else ""
-        return [DeviceStatus(KEY, NAME, level, charging, True, "aula",
-                             approx=approx, kind="headset")]
+        self._diag.append(f"  -> {level}%, {'external power' if external_power else 'battery'}")
+        return [DeviceStatus(KEY, NAME, level, charging, True, "aula", kind="headset")]
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

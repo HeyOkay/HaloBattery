@@ -30,7 +30,10 @@ class FakeHid:
         return self.replies.pop(0) if self.replies else []
 
     def get_input_report(self, report_id, length):
-        return self.inputs.pop(0) if self.inputs else []
+        value = self.inputs.pop(0) if self.inputs else []
+        if isinstance(value, Exception):
+            raise value
+        return value
 
     def get_feature_report(self, report_id, length):
         return self.features.pop(0) if self.features else b""
@@ -66,6 +69,14 @@ class AkgTest(unittest.TestCase):
         found = run(A, A.AkgProvider, infos, FakeHid(inputs=[akg_report(61)]))
         self.assertEqual((found[0].level, found[0].charging_known), (61, False))
 
+    def test_read_error_is_retried_until_the_reply_arrives(self):
+        infos = [{"path": b"a", "product_id": A.PID, "interface_number": 3,
+                  "usage_page": 0xFF13, "usage": 1,
+                  "input_report_byte_length": 62, "output_report_byte_length": 62}]
+        fake = FakeHid(inputs=[OSError("not ready"), OSError("not ready"), akg_report(42)])
+        found = run(A, A.AkgProvider, infos, fake)
+        self.assertEqual(found[0].level, 42)
+
 
 def alienware_reply(level=95, charging=False):
     b = bytearray(62)
@@ -95,6 +106,32 @@ class AlienwareTest(unittest.TestCase):
                     FakeHid(replies=[alienware_reply(88, True)]))
         self.assertEqual((found[0].level, found[0].charging), (88, True))
 
+    def test_silent_headset_keeps_last_reading_then_drops(self):
+        infos = [{"path": b"w", "product_id": W.PID, "interface_number": 5,
+                  "usage_page": 0xFF13, "usage": 1,
+                  "input_report_byte_length": 62, "output_report_byte_length": 62}]
+        provider = W.AlienwareAw920hProvider()
+        clock = [1000.0]
+
+        def advance(seconds):
+            clock[0] += seconds
+
+        def poll(fake):
+            with mock.patch.object(W.hid, "device", return_value=fake), \
+                    mock.patch.object(W.hidlist, "enumerate", return_value=infos), \
+                    mock.patch.object(W.time, "monotonic", side_effect=lambda: clock[0]), \
+                    mock.patch.object(W.time, "sleep", side_effect=advance):
+                return provider.poll()
+
+        fresh = poll(FakeHid(replies=[alienware_reply(70, True)]))
+        self.assertFalse(fresh[0].polling_stale)
+        clock[0] += 30
+        held = poll(FakeHid())
+        self.assertEqual((held[0].level, held[0].polling_stale), (70, True))
+        self.assertEqual((held[0].charging, held[0].charging_known), (False, False))
+        clock[0] += W.HOLD_S
+        self.assertEqual(poll(FakeHid()), [])
+
 
 class AulaTest(unittest.TestCase):
     def test_parse(self):
@@ -109,7 +146,24 @@ class AulaTest(unittest.TestCase):
         found = run(U, U.AulaA7ProProvider, infos,
                     FakeHid(replies=[[], bytes([0x55, 0x65, 100, 0]) + bytes(60)]))
         self.assertEqual((found[0].level, found[0].charging), (100, False))
-        self.assertEqual(found[0].approx, "on cable, full")
+        self.assertEqual(found[0].approx, "")
+
+    def test_cable_below_full_is_charging(self):
+        infos = [{"path": b"u", "product_id": U.PID, "product_string": "AULA-A7Pro",
+                  "interface_number": 0, "usage_page": 0xFF90, "usage": 1,
+                  "input_report_byte_length": 64, "output_report_byte_length": 64}]
+        cable = run(U, U.AulaA7ProProvider, infos,
+                    FakeHid(replies=[[], bytes([0x55, 0x65, 80, 0]) + bytes(60)]))
+        battery = run(U, U.AulaA7ProProvider, infos,
+                      FakeHid(replies=[[], bytes([0x55, 0x65, 80, 2]) + bytes(60)]))
+        self.assertTrue(cable[0].charging)
+        self.assertFalse(battery[0].charging)
+
+    def test_a700_is_not_claimed(self):
+        infos = [{"path": b"u", "product_id": U.PID, "product_string": "AULA-A700",
+                  "interface_number": 0, "usage_page": 0xFF90, "usage": 1,
+                  "input_report_byte_length": 64, "output_report_byte_length": 64}]
+        self.assertEqual(run(U, U.AulaA7ProProvider, infos, FakeHid()), [])
 
 
 class PsLinkTest(unittest.TestCase):
@@ -136,7 +190,7 @@ class PsLinkTest(unittest.TestCase):
                                  bytes(status)])
         found = run(P, P.PsLinkProvider, infos, fake)
         self.assertEqual((found[0].level, found[0].charging_known), (67, False))
-        self.assertEqual(found[0].approx, "L 93%, R 67%")
+        self.assertEqual(found[0].approx, "")
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ CMD = bytes([0xC0, 0x0A, 0x09])
 TOTAL_TIMEOUT_S = 0.6
 ATTEMPT_S = 0.18
 ATTEMPTS = 3
+HOLD_S = 180            # a silent headset keeps its last reading this long
 KEY = "alienware:a515"
 NAME = "Alienware AW920H"
 
@@ -71,6 +72,7 @@ class AlienwareAw920hProvider(Provider):
 
     def __init__(self):
         self._diag: List[str] = []
+        self._last: Optional[Tuple[int, float]] = None
 
     def _pick(self, infos: List[dict]) -> Optional[dict]:
         for d in infos:
@@ -143,8 +145,15 @@ class AlienwareAw920hProvider(Provider):
         self._diag.append(f"[Alienware AW920H] pid={PID:04x} iface={d.get('interface_number')}")
         parsed = self._query(d["path"])
         if parsed is None:
+            last = self._last
+            if last is not None and time.monotonic() - last[1] < HOLD_S:
+                self._diag.append("  keeping the last reading")
+                return [DeviceStatus(KEY, NAME, last[0], False, False, "alienware",
+                                     kind="headset", charging_known=False,
+                                     polling_stale=True)]
             return []
         level, charging = parsed
+        self._last = (level, time.monotonic())
         return [DeviceStatus(KEY, NAME, level, charging, True, "alienware", kind="headset")]
 
     def diagnostics(self) -> List[str]:

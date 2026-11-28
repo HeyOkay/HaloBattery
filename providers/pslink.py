@@ -127,9 +127,9 @@ class PsLinkProvider(Provider):
                 self._diag.append(f"  status: {hexdump(status, 8)}")
                 return []
             left, right = levels
-            approx = f"L {left}%, R {right}%" if left != right else ""
+            self._diag.append(f"  left {left}%, right {right}% -> {min(left, right)}%")
             return [DeviceStatus(KEY, NAME, min(left, right), False, True, "pslink",
-                                 approx=approx, kind="headset", charging_known=False)]
+                                 kind="headset", charging_known=False)]
         finally:
             try:
                 dev.close()

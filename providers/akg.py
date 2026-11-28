@@ -86,13 +86,17 @@ class AkgProvider(Provider):
                 self._diag.append(f"  write: {e}")
                 return None
             deadline = time.monotonic() + TIMEOUT_S
+            read_error = False
             while time.monotonic() < deadline:
                 time.sleep(0.015)
                 try:
                     report = dev.get_input_report(REPORT_ID, REPORT_LEN)
                 except (OSError, ValueError) as e:
-                    self._diag.append(f"  read: {e}")
-                    return None
+                    # the reply may not be ready yet; keep asking until the deadline
+                    if not read_error:
+                        self._diag.append(f"  read: {e}")
+                    read_error = True
+                    continue
                 if not report:
                     continue
                 self._diag.append(f"  report: {hexdump(report, 12)}")
