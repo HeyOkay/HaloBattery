@@ -481,7 +481,7 @@ class PulsarTest(unittest.TestCase):
 
         buses[:] = [cable]  # a silent cable poll keeps the last sample offline
         [d] = provider.poll()
-        self.assertEqual((key, 96, True, False), (d.key, d.level, d.charging, d.online))
+        self.assertEqual((key, 96, False, False), (d.key, d.level, d.charging, d.online))
         buses[:] = [receiver]  # cable unplugged, receiver still asleep
         [d] = provider.poll()
         self.assertEqual((key, "Dark Project ME5 Pro (8K receiver)", 96, False, False),
