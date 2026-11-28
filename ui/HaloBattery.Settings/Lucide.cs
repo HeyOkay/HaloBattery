@@ -1,5 +1,5 @@
-// Geometry from artwork/settings/lucide-*.svg, lucide-static v1.17.0, ISC.
-// See artwork/settings/README.md and sources.json for attribution and provenance.
+// Geometry from assets/artwork/settings/lucide-*.svg, lucide-static v1.17.0, ISC.
+// See assets/artwork/settings/README.md and sources.json for attribution and provenance.
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;

@@ -92,7 +92,7 @@ class PreviewGlyphTests(unittest.TestCase):
 
     def test_builtin_profiles_remain_exact_and_do_not_require_master_png(self):
         raw=prepare_preview(MONO,rasterizer=Raster())
-        manifest=json.loads((Path(__file__).resolve().parents[1]/'artwork/tray/manifest.json').read_text(encoding='utf-8'))
+        manifest=json.loads((Path(__file__).resolve().parents[1]/'assets/artwork/tray/manifest.json').read_text(encoding='utf-8'))
         for kind,name in manifest['sources']['lucide']['glyphs'].items():
             glyph=with_builtin_profile('lucide:'+name,raw)
             self.assertGreaterEqual(glyph.memory_bytes,raw.memory_bytes)
