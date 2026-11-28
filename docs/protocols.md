@@ -590,6 +590,29 @@ K87's `0x01` while full and off the cable stays a full status and never shows a
 ring. Level and charging confirmed in
 [#378](https://github.com/HeyOkay/HaloBattery/issues/378).
 
+### MCHOSE G75 Pro
+
+The G75 Pro ships with a Compx receiver (`3554:FA09`, product string
+`2.4G Wireless Receiver`) that lists the same interface-1 `ff02:0002` collection
+with 20-byte reports, and answers the same getBattery frame as the K87:
+
+    -> 13 4A 01 00 .. 00 5E
+    <- 13 4A 01 00 02 2F 01 00 .. 00 90       0x2F = 47 %, checksum matches
+
+Measured on a G75 Pro on battery. The 0x4A command and its level byte on this
+receiver were first published by
+[baigegege/halobattery-mchose-zh](https://github.com/baigegege/halobattery-mchose-zh)
+(`providers/compx.py`, measured on a G75 3.0). The charge nibble keeps the K87 /
+G98 Pro meaning; a G75 on its cable was not observed.
+
+`3554:FA09` is also the receiver of the AULA F75 and LEOBOG Hi75C Pro, which the
+Compx report-8 reader in `providers/pulsar.py` claims. On the G75 Pro that reader
+skips the collection (its 17-byte frame does not fit the 20-byte output report),
+so one keyboard does not get two icons. A silent `FA09` receiver gets no
+placeholder icon from this provider, so an AULA owner never sees a ghost
+"MCHOSE G75 Pro"; a G75 that was read before keeps its greyed level while it
+sleeps.
+
 ### MCHOSE A5 Pro Max
 
 **Connection:** 1K receiver (2023:F013), 4K receiver (2023:F015) or USB cable (2023:F019)
