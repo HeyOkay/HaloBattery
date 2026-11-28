@@ -19,7 +19,7 @@ def github_json(repository, path, token):
 
 
 def verified_production_run(repository, token):
-    """Only production signing and its final verification activate attribution."""
+    """Only a published, verified production release activates attribution."""
     page = 1
     while True:
         result = github_json(
@@ -29,7 +29,7 @@ def verified_production_run(repository, token):
         )
         runs = result["workflow_runs"]
         for run in runs:
-            trusted_source = run["head_branch"] == "main" or re.fullmatch(
+            trusted_source = run.get("event") == "push" and re.fullmatch(
                 r"v[0-9]+\.[0-9]+\.[0-9]+", run["head_branch"] or ""
             )
             if not trusted_source or run["head_repository"]["full_name"] != repository:
@@ -40,9 +40,12 @@ def verified_production_run(repository, token):
             # so a successful earlier attempt cannot mask a failed verification.
             jobs = github_json(repository, f'actions/runs/{run["id"]}/jobs?per_page=100', token)
             conclusions = {job["name"]: job["conclusion"] for job in jobs["jobs"]}
-            required = ("release_sign_payload", "release_sign_internal", "release_sign_installer", "signing_verify")
+            required = ("release_sign_payload", "release_sign_internal", "release_sign_installer", "signing_verify", "publish")
             if all(conclusions.get(name) == "success" for name in required):
-                return {"run_id": run["id"], "source_sha": run["head_sha"], "url": run["html_url"]}
+                return {
+                    "run_id": run["id"], "source_sha": run["head_sha"],
+                    "url": run["html_url"], "release_tag": run["head_branch"],
+                }
         if len(runs) < 100:
             return None
         page += 1
@@ -107,7 +110,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     evidence_path = args.output_dir / "signing-active.json"
     evidence = json.loads(evidence_path.read_text(encoding="utf-8")) if evidence_path.exists() else None
-    if not evidence:
+    if not evidence or not evidence.get("release_tag"):
         evidence = verified_production_run(args.repository, os.environ.get("GH_TOKEN"))
     render_signing_badges(args.output_dir, evidence)
     evidence_path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")

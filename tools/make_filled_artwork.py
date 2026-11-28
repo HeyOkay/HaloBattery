@@ -27,7 +27,7 @@ except ImportError:
     from make_icon_artwork import regenerate
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "artwork" / "tray" / "filled"
+ASSETS = ROOT / "assets" / "artwork" / "tray" / "filled"
 MODULE = ROOT / "halo" / "icon_artwork_filled.py"
 SIZES = (16, 20, 24, 32, 40, 48, 64)
 NAMESPACE = "http://www.w3.org/2000/svg"

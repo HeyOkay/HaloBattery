@@ -1,7 +1,7 @@
 {
   "package": "qlementine-icons",
   "author": "Olivier Cléro",
-  "license": "../../docs/licenses/qlementine-icons-LICENSE.txt",
+  "license": "../../../docs/licenses/qlementine-icons-LICENSE.txt",
   "license_source": "https://raw.githubusercontent.com/oclero/qlementine-icons/e7cf96d0c60836b285f117cede9ed8c4113ebfa8/LICENSE",
   "icons": {
     "discord-16": {

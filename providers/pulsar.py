@@ -137,7 +137,8 @@ from .base import DeviceStatus, Provider, hexdump, log
 from .pulsar_models import model_name
 from .compx import (CHECKSUM_BASE, CMD_POWER, CONTROL_USAGE, PAYLOAD_HEADER, PAYLOAD_LEN,
                     POWER_INDEX, LEVEL_INDEX, VOLTAGE_SLICE, READ_ATTEMPTS, READ_TIMEOUT_MS,
-                    checksum, make_request, output_length, parse_power, voltage_mv)
+                    checksum, make_request, output_length, parse_power, set_output_query,
+                    voltage_mv)
 
 CONTROL_INTERFACE = 1           # the tool reads its 17-byte replies on interface 1
 FLUSH_TIMEOUT_MS = 30
@@ -150,16 +151,38 @@ MODEL_MID_INDEX = 7
 # Pulsar ids (vendor 0x3710) whose mouse is asked for its model, and how it is connected
 MODEL_PIDS = {0x5406: "2.4 GHz", 0x3510: "wired"}
 
+# This 8K dongle rejects WriteFile on its vendor collection and only answers
+# HID SET_REPORT, so it takes the path in compx.set_output_query().
+SET_REPORT_PIDS = {(0x373B, 0x1278)}
+
+# The same mouse on its cable is a different id with the same collection. It is
+# tried on the normal write first; if that is refused, SET_REPORT is tried too.
+SET_REPORT_FALLBACK_PIDS = {(0x373B, 0x12A7)}
+
 SONIX_VID = 0x3710
 SONIX_PIDS = {
+    0x5402: ("Pulsar X2 V3 (1K receiver)", False),
     0x5403: ("Pulsar X2 V3 Mini (8K wireless)", False),
     0x3402: ("Pulsar X2 V3 Mini (wired)", True),
+    0x3406: ("Pulsar X2 V3 eS (wired)", True),
+    0x5404: ("Pulsar Feinmann FO1 (8K receiver)", False),
 }
 SONIX_INTERFACE = 3
 SONIX_WIRE_LEN = 64
 SONIX_REPORT_LEN = 65          # hidapi report id + the 64-byte USB control payload
 SONIX_BATTERY_COMMAND = (0x08, 0x81, 0x01)
+SONIX_CHARGING_COMMAND = (0x08, 0x83, 0x01)
 SONIX_LEVEL_INDEX = 7          # wire byte 6, shifted by hidapi's report-id byte
+
+# The PRO Dongle and the wired ZYWOO mouse use the B4 status mailbox, not the
+# Sonix feature report. Their 65-byte Generic Desktop collection answers
+# `b4` with [b4][percent][..][..][84/85][40][charging].
+B4_PIDS = {
+    0x5405: ("Pulsar PRO Dongle (ZYWOO)", False),
+    0x7401: ("Pulsar ZYWOO The Chosen X", True),
+}
+B4_MARKER = 0xB4
+B4_TAIL = 0x40
 
 
 # vendor id -> product ids
@@ -205,6 +228,10 @@ PIDS: Dict[int, Dict[int, str]] = {
         # the R1 Pro Max on its cable as some units enumerate it ('VXE R1 PRO MAX'):
         # the same collections as 3554:f58c, read on hardware (docstring)
         0x1273: "VXE R1 Pro Max (wired)",
+        # 8K Compx dongle, shared by the F1 V3 Ultimate+ and the A9 Air+. Its
+        # firmware refuses the interrupt-OUT write, so it goes through SET_REPORT.
+        0x1278: "ATK F1 V3 Ultimate+ (2.4 GHz)",
+        0x12A7: "ATK F1 V3 Ultimate+ (wired)",
     },
     0x3770: {
         0x0300: "Hitscan Hyperlight (8K receiver)",
@@ -257,14 +284,14 @@ def parse_model(r) -> Optional[Tuple[int, int]]:
     return frame[MODEL_CID_INDEX], frame[MODEL_MID_INDEX]
 
 
-def make_sonix_request() -> List[int]:
+def make_sonix_request(command=SONIX_BATTERY_COMMAND) -> List[int]:
     """hidapi form of the X2 V3's 64-byte report-0 feature request.
 
     The first zero is hidapi's report id; the second starts the 64-byte packet that
     the libusb reference sends. Its checksum stays at wire bytes 62-63.
     """
-    wire = ([0x00] + list(SONIX_BATTERY_COMMAND) +
-            [0x00] * (SONIX_WIRE_LEN - len(SONIX_BATTERY_COMMAND) - 3))
+    wire = ([0x00] + list(command) +
+            [0x00] * (SONIX_WIRE_LEN - len(command) - 3))
     check = sum(wire) & 0xFFFF
     wire += [check & 0xFF, check >> 8]
     return [0x00] + wire
@@ -278,6 +305,32 @@ def parse_sonix_power(response) -> Optional[int]:
         return None
     level = response[SONIX_LEVEL_INDEX]
     return level if 0 <= level <= 100 else None
+
+
+def parse_sonix_charging(response) -> Optional[bool]:
+    """The 08 83 01 charging reply; None when it is not a reply to that command."""
+    if not response or len(response) <= SONIX_LEVEL_INDEX:
+        return None
+    if tuple(response[2:5]) != SONIX_CHARGING_COMMAND:
+        return None
+    value = response[SONIX_LEVEL_INDEX]
+    return bool(value) if value in (0, 1) else None
+
+
+def parse_b4(response, direct: bool) -> Optional[Tuple[int, bool]]:
+    """(percent, charging) from a B4 status reply, or None."""
+    if not response:
+        return None
+    b = bytes(response)
+    if b and b[0] == 0x00 and len(b) >= 65:
+        b = b[1:]
+    if len(b) < 7 or b[0] != B4_MARKER or b[1] > 100:
+        return None
+    if b[4] not in ((0x84, 0x85, 0x86) if direct else (0x84, 0x85)):
+        return None
+    if b[5] != B4_TAIL or b[6] not in (0, 1):
+        return None
+    return b[1], bool(b[6])
 
 
 class PulsarProvider(Provider):
@@ -409,6 +462,75 @@ class PulsarProvider(Provider):
             except Exception:
                 pass
 
+    def _query_sonix_charging(self, path: bytes) -> Optional[bool]:
+        """The 08 83 01 cable/charging query on the same Sonix mailbox."""
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  charging open: {e}")
+            return None
+        try:
+            try:
+                n = dev.send_feature_report(make_sonix_request(SONIX_CHARGING_COMMAND))
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  charging send: {e}")
+                return None
+            if n is not None and n < 0:
+                self._diag.append("  charging send: refused")
+                return None
+            time.sleep(0.05)
+            try:
+                response = dev.get_feature_report(0, SONIX_REPORT_LEN)
+            except (OSError, IOError, ValueError) as e:
+                self._diag.append(f"  charging read: {e}")
+                return None
+            self._diag.append(f"  charging reply: {hexdump(response, 16)}")
+            return parse_sonix_charging(response)
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
+    def _query_b4(self, path: bytes, direct: bool) -> Optional[Tuple[int, bool]]:
+        dev = hid.device()
+        try:
+            dev.open_path(path)
+        except (OSError, IOError) as e:
+            self._diag.append(f"  B4 open: {e}")
+            return None
+        try:
+            for _ in range(4):
+                if not dev.read(65, FLUSH_TIMEOUT_MS):
+                    break
+            request = [0x00] * 65
+            request[1] = B4_MARKER
+            dev.write(request)
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                try:
+                    response = dev.read(65, 100)
+                except (OSError, ValueError) as e:
+                    self._diag.append(f"  B4 read: {e}")
+                    return None
+                if not response:
+                    continue
+                self._diag.append(f"  B4 reply: {hexdump(response, 10)}")
+                parsed = parse_b4(response, direct)
+                if parsed is not None:
+                    return parsed
+            self._diag.append("  no B4 battery reply")
+            return None
+        except (OSError, ValueError) as e:
+            self._diag.append(f"  B4 query: {e}")
+            return None
+        finally:
+            try:
+                dev.close()
+            except Exception:
+                pass
+
     def _poll_sonix(self) -> List[DeviceStatus]:
         out = []
         try:
@@ -430,14 +552,57 @@ class PulsarProvider(Provider):
                               f"iface={d.get('interface_number')} "
                               f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
             level = self._query_sonix(d["path"])
-            if level is not None:
+            if level is None:
+                continue
+            charging = True
+            charging_known = True
+            if not wired:
+                answer = self._query_sonix_charging(d["path"])
+                if answer is None:
+                    charging = False
+                    charging_known = False
+                else:
+                    charging = answer
+            out.append(DeviceStatus(f"pulsar:{SONIX_VID:04x}{pid:04x}", name, level,
+                                    charging, True, "pulsar", kind="mouse",
+                                    charging_known=charging_known))
+        return out
+
+    def _poll_b4(self) -> List[DeviceStatus]:
+        out = []
+        try:
+            infos = hidlist.enumerate(SONIX_VID)
+        except Exception as e:  # pragma: no cover
+            log.warning("hid.enumerate(%04x): %s", SONIX_VID, e)
+            return out
+        for pid, (name, direct) in B4_PIDS.items():
+            mine = [d for d in infos if d.get("product_id") == pid]
+            if not mine:
+                continue
+            candidates = [d for d in mine
+                          if (d.get("usage_page"), d.get("usage")) == (0x0001, 0x0000)
+                          and output_length(d["path"]) in (None, 65)]
+            if not candidates:
+                self._diag.append(f"[Pulsar B4] pid={SONIX_VID:04x}:{pid:04x} '{name}': "
+                                  f"no 65-byte 0001:0000 collection")
+                continue
+            for d in candidates:
+                self._diag.append(f"[Pulsar B4] pid={SONIX_VID:04x}:{pid:04x} '{name}' "
+                                  f"iface={d.get('interface_number')} "
+                                  f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+                parsed = self._query_b4(d["path"], direct)
+                if parsed is None:
+                    continue
+                level, charging = parsed
                 out.append(DeviceStatus(f"pulsar:{SONIX_VID:04x}{pid:04x}", name, level,
-                                        wired, True, "pulsar", kind="mouse"))
+                                        charging, True, "pulsar", kind="mouse"))
+                break
         return out
 
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
         out = self._poll_sonix()
+        out += self._poll_b4()
         now = time.time()
         found: set = set()      # answered this poll
         aliases: Dict[str, str] = {}
@@ -445,6 +610,7 @@ class PulsarProvider(Provider):
         protocols = {vid: dict(pids) for vid, pids in PIDS.items()}
         for (vid, pid), name in atk_bitmouse.PIDS.items():
             protocols.setdefault(vid, {})[pid] = name
+        zero_cable = False
         for vid, pids in protocols.items():
             try:
                 infos = hidlist.enumerate(vid)
@@ -456,6 +622,11 @@ class PulsarProvider(Provider):
                 if not mine:
                     continue
                 key = f"pulsar:{vid:04x}{pid:04x}"
+                zero = (vid, pid) == (0x373B, 0x1154) or pid in atk_bitmouse.ZERO_PIDS
+                if zero and pid != atk_bitmouse.ZERO_CABLE and zero_cable:
+                    self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x}: "
+                                      "ATK Zero is on the cable; receiver skipped")
+                    continue
                 present.add(key)
                 bitmouse = (vid, pid) in atk_bitmouse.PIDS
                 d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine)
@@ -472,7 +643,23 @@ class PulsarProvider(Provider):
                                   f" output={output_length(d['path'])}")
                 if bitmouse:
                     reply = None
-                    parsed = atk_bitmouse.read_power(d["path"], self._diag)
+                    if pid in atk_bitmouse.ZERO_PIDS:
+                        parsed = atk_bitmouse.read_zero_power(
+                            d["path"], self._diag, wired=(pid == atk_bitmouse.ZERO_CABLE))
+                    else:
+                        parsed = atk_bitmouse.read_power(d["path"], self._diag)
+                elif (vid, pid) in SET_REPORT_PIDS:
+                    self._diag.append("    sent with HID SET_REPORT (WriteFile is refused)")
+                    reply = set_output_query(d["path"])
+                    if reply is None:
+                        self._diag.append("    SET_REPORT was refused or the dongle did not answer")
+                    parsed = parse_power(reply)
+                elif (vid, pid) in SET_REPORT_FALLBACK_PIDS:
+                    reply = self._query(d["path"])
+                    if reply is None:
+                        self._diag.append("    no interrupt-OUT reply; trying HID SET_REPORT")
+                        reply = set_output_query(d["path"])
+                    parsed = parse_power(reply)
                 else:
                     reply = self._query(d["path"])
                     parsed = parse_power(reply)
@@ -481,6 +668,8 @@ class PulsarProvider(Provider):
                         self._diag.append("    no reply (asleep, or the mouse is idle)")
                     continue
                 level, on_cable = parsed
+                if zero and pid == atk_bitmouse.ZERO_CABLE:
+                    zero_cable = True
                 mv = voltage_mv(reply)
                 if mv:
                     self._diag.append(f"  {mv} mV")
@@ -499,7 +688,8 @@ class PulsarProvider(Provider):
                 self._last[key] = (name, level, on_cable, now, kind)
                 found.add(key)
                 out.append(DeviceStatus(key, name, level, on_cable, True, "pulsar",
-                                        kind=kind))
+                                        kind=kind,
+                                        charging_known=not (zero and pid != atk_bitmouse.ZERO_CABLE)))
         # A mouse that stopped answering is not necessarily a mouse that went away
         # (idle it stops answering - see the docstring), so its last reading stays
         # greyed out for as long as its receiver is still in the USB tree, however
@@ -516,10 +706,10 @@ class PulsarProvider(Provider):
                 name, charging = PIDS.get(vid, {}).get(pid, name), False
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
-                                  f"{' (charging)' if charging else ''} greyed "
-                                  f"(its receiver is still plugged in)")
-                out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
-                                        kind=kind, wake_on_input=True))
+                                  f"{' (was charging)' if charging else ''} greyed "
+                                  f"(its receiver is still plugged in; asleep, not charging)")
+                out.append(DeviceStatus(key, name, level, False, False, "pulsar",
+                                        kind=kind, asleep=True, wake_on_input=True))
             else:
                 del self._last[key]
                 self._via_cable.discard(key)

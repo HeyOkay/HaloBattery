@@ -35,6 +35,13 @@ class DeviceStatus:
     polling_paused: bool = False  # cached by choice; explain in menu, keep normal icon
     polling_stale: bool = False   # native I/O failed; retained reading is not current
 
+    # Power states kept at the end so every existing positional construction keeps
+    # its meaning (key, name, level, charging, online, source).
+    full: bool = False            # on power and fully charged (charging may also be set)
+    asleep: bool = False          # True with online=False: the receiver answered but the
+                                  # device is asleep, so the level is its last reading; it
+                                  # is not on a charger and must not keep a charging flag
+
     # Presentation metadata; English approx remains available to diagnostics.
     ui_message: str = ""
     ui_params: dict = field(default_factory=dict)

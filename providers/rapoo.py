@@ -339,8 +339,10 @@ class RapooProvider(Provider):
             if key in found or now - last[2] >= ASLEEP_KEEP:
                 continue
             name, kind = self._meta.get(key, ("Rapoo device", "mouse"))
-            out.append(DeviceStatus(key, name, last[0], last[1], False, "rapoo",
-                                    kind=kind))
+            # A mouse that stopped answering is asleep or off, not on a charger:
+            # its last reading keeps the level, never the charging flag (#109).
+            out.append(DeviceStatus(key, name, last[0], False, False, "rapoo",
+                                    kind=kind, asleep=True, wake_on_input=True))
         return out
 
     def diagnostics(self) -> List[str]:

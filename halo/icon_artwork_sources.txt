@@ -11,7 +11,7 @@ https://unpkg.com/lucide-static@1.17.0/
 
 Historical 56 masks: extracted from the central glyph region of the cleaned handoff
 prototype/lab-assets.json at 16,20,24,32,40,48,64 px. Demonstration arcs and states
-are excluded. Color masters: artwork/optical-master-{xbox,playstation}-color.png.
+are excluded. Color masters: assets/artwork/optical-master-{xbox,playstation}-color.png.
 Xbox uses the canonical centered master (zero optical offset) on both taskbar
 themes. Its 256px outer circle has visible bounds [33,33,223,223], centered on
 [128,128]. The former dark-only variant baked in a -0.375,+0.125 logical-pixel
@@ -54,7 +54,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Microphone: official lucide-static 1.17.0 mic.svg (ISC), stored locally as
-artwork/tray/lucide-mic.svg; source:
+assets/artwork/tray/lucide-mic.svg; source:
 https://unpkg.com/lucide-static@1.17.0/icons/mic.svg
 SHA256: 05ea78b25f9ec6284612abe51f8a95f07c28659825409ed6a5cb286322efa117
 Reproduce: tools/make_microphone_artwork.py, then tools/make_icon_artwork.py.
@@ -63,7 +63,7 @@ Uniform 0.5 logical px per SVG unit; stroke 1 logical px; visible-ink bounds
 development-only headless Chromium step; runtime uses only embedded alpha masks.
 
 Speaker and Webcam: official lucide-static 1.17.0 SVGs (ISC), pinned locally as
-artwork/tray/lucide-speaker.svg and artwork/tray/lucide-webcam.svg.
+assets/artwork/tray/lucide-speaker.svg and assets/artwork/tray/lucide-webcam.svg.
 https://unpkg.com/lucide-static@1.17.0/icons/speaker.svg
 SHA256: a7169d896cf1f1dcadebd67a8a3c9d650c84e27b9395fa85e63462154b2052c3
 https://unpkg.com/lucide-static@1.17.0/icons/webcam.svg
@@ -82,7 +82,7 @@ then tools/make_icon_artwork.py. Shared development-only Chromium conversion;
 no SVG library, network fetch or runtime data file is needed by the app.
 
 Health: official lucide-static 1.17.0 heart-pulse.svg (ISC), pinned as
-artwork/tray/lucide-heart-pulse.svg, matching https://icon-sets.iconify.design/lucide/heart-pulse/.
+assets/artwork/tray/lucide-heart-pulse.svg, matching https://icon-sets.iconify.design/lucide/heart-pulse/.
 https://unpkg.com/lucide-static@1.17.0/icons/heart-pulse.svg
 SHA256: b4854916e71088f488cf0c20de6695979e4b617a36cb95f1a3eb1fb2bfb306ed
 Uniform 0.5 scale; one logical pixel round stroke. The SVG ink center is near
@@ -91,7 +91,7 @@ measured 1024px alpha bounds on [512,512] once before mask generation. Exact
 measured bounds and translation are in the manifest. No runtime/theme offset.
 
 Smart home: official lucide-static 1.17.0 house.svg (ISC), pinned as
-artwork/tray/lucide-house.svg, matching https://icon-sets.iconify.design/lucide/house/.
+assets/artwork/tray/lucide-house.svg, matching https://icon-sets.iconify.design/lucide/house/.
 https://unpkg.com/lucide-static@1.17.0/icons/house.svg
 SHA256: b2a1a51bb3ed4f996d086f6ec9c15d09256c6a70ca7f41f5a00d892c55b03d7a
 Uniform scale 0.45 with render-only stroke 1/0.45 SVG units, preserving one
@@ -109,7 +109,7 @@ SHA256: fb1260e517492839289f2607871a055b9eac9b82f765a88f897d3f27db1a2141
 https://unpkg.com/lucide-static@1.17.0/icons/radar.svg
 SHA256: 6092285ad2f49aecbd4521a31ac0ad3a17fa75a2406f5d98b8695df0205e0c13
 All three are ISC, absent from the pinned LICENSE's Feather-derived MIT list.
-Sources remain byte-identical in artwork/tray/lucide-{watch,tv-minimal,radar}.svg.
+Sources remain byte-identical in assets/artwork/tray/lucide-{watch,tv-minimal,radar}.svg.
 Source ink is geometrically centered once; exact bounds and scaling are recorded
 in the manifest. Watch/Radar use uniform 0.5 scale and one logical pixel stroke.
 Reproduce using tools/make_{watch,display,tracker}_artwork.py, then the embedding

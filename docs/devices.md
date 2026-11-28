@@ -152,6 +152,40 @@ the other Arctis Nova and older Arctis models, and other Xbox-compatible control
 
 Is your device not in the table, or does it show a wrong level? See [Add your device](../README.md#add-your-device).
 
+## Ported from BatteryHub 1.1.1
+
+Every row is unverified in Halo: the reader comes from BatteryHub's documented
+protocol, not from a Halo capture. Check charging transitions before calling any
+of them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [NuPhy WH80](protocols.md#nuphy) | USB cable (19f5:a011) | no |
+| [NuPhy Halo96 V2](protocols.md#nuphy) | 2.4 GHz receiver (19f5:3247) with custom QMK firmware | no |
+| [DARKRIM SHADOW](protocols.md#darkrim-shadow) | USB cable (3654:6901) | no |
+| [Pulsar X2 V3 / X2 V3 eS / Feinmann FO1](protocols.md#pulsar-x2-v3-feinmann-and-zywoo) | 1K/8K receiver or USB cable (3710:5402/5404/3406) | no |
+| [Pulsar PRO Dongle / ZYWOO The Chosen X](protocols.md#pulsar-x2-v3-feinmann-and-zywoo) | 2.4 GHz receiver or USB cable (3710:5405/7401) | no |
+| [ATK Zero](protocols.md#atk-zero-8k-nano-mercury-and-z87) | USB cable or receiver (373b:1154/124f/1155) | no |
+| [ATK 8K Nano / Mercury I / Z87](protocols.md#atk-zero-8k-nano-mercury-and-z87) | Receiver or cable (373b:1178/107c/1012) | no |
+| [Keychron 4K Link mice](protocols.md#keychron-additions) | 4K receiver (3434:d038) | no |
+| [Keychron 1K Link mice](protocols.md#keychron-additions) | 1K receiver (3434:d030/d031) | no |
+| [Keychron Link-KM mouse](protocols.md#keychron-additions) | 2.4 GHz receiver (3434:d029) | no |
+| [Keychron K5 Max and Q6 Ultra 8K](protocols.md#keychron-additions) | Receiver or USB cable (3434:0a50/1260) | no |
+
+## Ported BatteryHub families (second batch)
+
+Every row is unverified in Halo: the reader comes from BatteryHub's documented
+protocol, not a Halo capture. Check charging transitions before calling any of
+them confirmed.
+
+| Device | Connection | Verified on hardware |
+|---|---|---|
+| [Zebronics wireless mouse](protocols.md#zebronics) | 2.4 GHz receiver (3554:fc0a) | no |
+| [Attack Shark X98](protocols.md#semico) | 2.4 GHz receiver or USB cable (1a2c:8fff/a034) | no |
+| [AJAZZ AK820 Max Plus](protocols.md#semico) | 2.4 GHz receiver or USB cable (1a2c:8fff/a036) | no |
+| [CROCIRIS X7 / X7 Ultra Max](protocols.md#crociris) | 8K receiver (36f9:aa20) | no |
+| [Scyrox V12M](protocols.md#scyrox) | 2.4 GHz receiver (395a:0006) | no |
+
 ## Ported BatteryHub families (third batch)
 
 Every row is unverified in Halo: the reader comes from BatteryHub's documented
@@ -185,7 +219,7 @@ Devices added by integrating the open upstream pull requests; details and author
 | Headsets | Logitech G535, Logitech G325, Turtle Beach Stealth Pro II (incl. Xbox 10f5:2285) / Stealth 700 Gen 3 / Atlas Air (confirmed), HyperX Cloud II Wireless (Kingston), Cloud Alpha Wireless, Cloud Flight Wireless, Skullcandy PLYR, MCHOSE V9 Pro, Sony INZONE H9 / H5 / H9 II (earlier H9 II level test confirmed), ASUS ROG Strix Go 2.4, Jabra (Link 380 / 390), Razer BlackShark V3, Barracuda Pro receiver and Barracuda X (2022), SteelSeries Arctis Nova 3P Wireless (confirmed) |
 | Keyboards | ATTACKSHARK X66, Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X / VGN N75 PRO, AULA F108 Pro, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), MCHOSE K87, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
 | Keyboards | Lofree Flow Lite84, ASUS ROG OMNI keyboards, ATK V75X, AULA F87 Pro V2C, AULA F75 / LEOBOG Hi75C Pro (Compx receiver), Teevolution Terra Pro, MCHOSE K87 / G98 Pro, MCHOSE K99 V3, MonsGeek FUN60 Pro, Corsair K65 PLUS Wireless, URX Core75, Alienware Pro Wireless |
-| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O / O- / D / D- Wireless, Logitech MX Revolution, Teevolution Terra Pro (F520/F523), Ninjutso Sora V3, Attack Shark R11 Ultra |
+| Mice | Hitscan Hyperlight 8K, HyperX Pulsefire Haste 2 Wireless, i-Rocks M31R, Scyrox 8K, ASUS ROG OMNI receiver and TX Gaming Mini Miku, Redragon M991, DAREU A950, Pulsar X2 V3 Mini 8K, Lamzu Atlantis V2 (2.4 GHz), Rapoo VT7 Gen 2 / V700DIY-98 / VT9 Pro V2, AJAZZ AJ179 V2 MAX, MCHOSE K7 V2 Ultra+, Delux M900 Pro, EWEADN X23 Pro, ATK X1 Ultimate / X1 Pro / A9 Ultimate / A9 SE / NK NANO Nearlink / Fire X 8K / F1 V3 Ultimate+, Finalmouse UltralightX, Inphic In9 Pro and Attack Shark X11 / R1 / X3 Max, Razer Pro Type Ultra receiver and Viper V3 Pro SE / V4 Pro, G-Wolves 8K, AULA V9 Max+, LAMZU Thorn, EWEADN S9, Cougar Revenger Pro 4K, Corsair M75 Wireless / Sabre v2 Pro Ultralight, Keychron Nape Pro, Glorious Model O / O- / D / D- Wireless, Logitech MX Revolution, Teevolution Terra Pro (F520/F523), Ninjutso Sora V3, Attack Shark R11 Ultra |
 | Controllers | NVIDIA SHIELD (2017), FlyDigi Vader 5 Pro |
 
 ## Phone Link selected mobile device

@@ -18,8 +18,8 @@ class CiMatrixTests(unittest.TestCase):
         self.assertIn("if: always()", required)
         self.assertIn("./scripts/build_settings.ps1", required)
         self.assertIn('python: ["3.13.17", "3.14.10"]', text)
-        self.assertIn("python -m ruff check halo_battery.pyw halo providers tools tests", text)
-        self.assertIn("--require-hashes -r requirements-lint.txt", text)
+        self.assertIn("python -m ruff check --config .github/ruff.toml halo_battery.pyw halo providers tools tests", text)
+        self.assertIn("--require-hashes -r requirements/requirements-lint.txt", text)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL, "Windows PowerShell required")
     def test_actual_required_check_guard_rejects_failed_skipped_and_cancelled_inputs(self):
