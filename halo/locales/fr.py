@@ -106,6 +106,7 @@ MESSAGES = {
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
     "provider.urx": "URX Core75",
+    "provider.waizowl": "Souris Waizowl",
     "provider.lamzu": "Souris LAMZU",
     "provider.lamzu_sw": "Lamzu Tachi (8K receiver)",
     "provider.lofree": "Claviers Lofree, souris AULA V9",

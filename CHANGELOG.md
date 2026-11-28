@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Waizowl OGM Pro V2 on the OGM 8K receiver (`1915:0728`), read with the requests of
+  Waizowl's own web driver (Waizowl Hub). On its USB cable (`1915:07A2`) the mouse is
+  shown as charging on the same icon, with the last level read before it was plugged
+  in: the cable reply always says 100 %.
+
 ### Fixed
 
 - Retry post-publication release and asset attestation verification when GitHub

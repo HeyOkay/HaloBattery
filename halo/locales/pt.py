@@ -107,6 +107,7 @@ MESSAGES = {
     "provider.jbl": "JBL Quantum",
     "provider.keychron": "Keychron",
     "provider.urx": "URX Core75",
+    "provider.waizowl": "Mouses Waizowl",
     "provider.lamzu": "Mouses LAMZU",
     "provider.lamzu_sw": "Lamzu Tachi (receptor 8K)",
     "provider.lofree": "Teclados Lofree, mouses AULA V9",
