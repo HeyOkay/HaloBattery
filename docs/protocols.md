@@ -547,6 +547,14 @@ same receiver ships with other Sonix boards (other GANSS T-series models, the
 ATTACKSHARK X66), so only a receiver whose product string contains "GS3075T"
 (the reporter's says "GS3075T 2.4G") is asked.
 
+### Waizowl OGM Pro V2
+
+**Connection:** OGM 8K 2.4 GHz receiver (`1915:0728`) or USB cable (`1915:07A2`, "OGM V2 GV"); vendor collection `ff0a:0001`, 64-byte frames on report id 0.
+
+From Waizowl's own web driver, Waizowl Hub (owlnest.waizowl.com, bundle `assets/js/index-BRQYaWvg.js`), device module for product 1832 (the receiver): `DRIVER_NOTIFY_DONGLE_STATUS` `[01 00 81 01]` answers with byte 4 bit 3 set while the mouse is awake, and `DRIVER_NOTIFY_CMD` `[41 00 81 01]` answers with the level in byte 6 (`parseNotify`). Each request is zero-padded to 63 bytes with a checksum byte `(0xA1 - sum) & 0xFF` (the hub's `getCheckSum`). Replies are not checksum-checked, as in the hub (it routes them by byte 0 and byte 3 only): at 29 % the notify reply's last byte did not follow that rule. Measured on an OGM Pro V2 at 46 % and 29 %. The receiver exchange has no charging flag.
+
+On its USB cable the mouse is `1915:07A2`, the hub's module for product 1954 (`wirelessOrUsb: "usb"`), same collection and framing. It sends `DRIVER_NOTIFY_CMD` `[01 00 81 01]` and reads byte 6 of the reply that starts with `01` and has byte 3 in (1, 3). That byte said 100 % while charging, although the receiver read 29 % just before plugging in and 35 % just after unplugging, so the cable level is not shown: the mouse is shown as charging with "about N % before it was plugged in" from the last receiver reading, or "level not reported while charging". The cable and the receiver share one tray icon (`waizowl:0728`) and the cable wins while both are plugged in.
+
 ### Darmoshark N5
 
 **Connection:** 2.4 GHz receiver (`1915:0723`, "1K NRF Receiver") or USB cable (`1915:073c`)

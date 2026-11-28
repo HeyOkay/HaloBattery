@@ -34,6 +34,9 @@ battery/charging parsers unless the named source establishes a different frame.
   `FFFF:0000` ([#529](https://github.com/HeyOkay/HaloBattery/pull/529)). Native
   feature length 65 avoids invalid short reads; feature-only paths skip input
   reads and always close. Legacy HIDAPI retains its known 65/64-byte variants.
+- Waizowl: OGM 8K receiver `1915:0728` and the OGM Pro V2 cable `1915:07A2`,
+  `FF0A:0001` only (the `Validate` of Waizowl Hub's modules 1832 and 1954), with
+  the hub's read requests alone. Other `1915` products are not targets.
 - Keychron: current sourced receiver collections, Ultra-Link multi-device
   identities and conservative aliases from [#522](https://github.com/HeyOkay/HaloBattery/pull/522)
   supersede the older proposed rewrite and remain unchanged.

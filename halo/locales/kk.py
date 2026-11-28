@@ -98,6 +98,7 @@ MESSAGES = {
     'provider.jbl': 'JBL Quantum',
     'provider.keychron': 'Keychron',
     'provider.urx': 'URX Core75',
+    'provider.waizowl': 'Waizowl тінтуірлері',
     'provider.lamzu': 'LAMZU тінтуірлері',
     'provider.lamzu_sw': 'Lamzu Tachi (8K қабылдағышы)',
     'provider.lofree': 'Lofree пернетақталары, AULA V9 тінтуірлері',

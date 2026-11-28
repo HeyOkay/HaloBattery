@@ -173,7 +173,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        VaxeeProvider, WLmouseProvider, XInputProvider, SteamProvider, EndgameWEProvider,
                        AjazzProvider, AtkKeyboardProvider, AtkNearlinkProvider, AttackSharkX66Provider, AttackSharkR11Provider, AulaProvider, AulaF108Provider, DareuProvider,
                        EweadnProvider, EweadnYdxProvider, FinalmouseProvider, HyperXAlphaWirelessProvider, HyperXCloudFlightProvider,
-                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RoyuanProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider, AkkoS9Provider,
+                       InphicProvider, JabraProvider, LamzuAtlantisProvider, MchoseKbProvider, MchoseV9Provider, MonsGeekProvider, RoyuanProvider, RapooProvider, ShieldProvider, SkullcandyProvider, SonyInzoneProvider, TurtleBeachProvider, Endgame4kProvider, PlantronicsProvider, HyperXNgenuityProvider, IRocksProvider, AlienwareProvider, GloriousProvider, Gs3075tProvider, LamzuSinowealthProvider, UrxProvider, WaizowlProvider, KrakenV4Provider, BlackSharkV3XProvider, NinjutsoSoraV3Provider, AkkoS9Provider,
                        RedSquareProvider,
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
@@ -312,6 +312,7 @@ PROVIDER_LABELS = {
     "ninjutso_sprime": "Ninjutso / Sprime mice",
     "royal_kludge": "Royal Kludge MG6 Pro",
     "urx": "URX Core75",
+    "waizowl": "Waizowl mice",
     "lofree": "Lofree keyboards, AULA V9 mice",
     "logitech": "Logitech",
     "logitech_g325": "Logitech G325 LIGHTSPEED",
@@ -370,7 +371,7 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             AttackSharkR11Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(), RoyuanProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), WaizowlProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider()]
 
 
 # ---------------------------------------------------------------- config
