@@ -238,6 +238,52 @@ class PulsarTest(unittest.TestCase):
         self.assertIn("[Pulsar] pid=3554:f58a 'VXE R1 Pro / R1 Pro Max (2.4 GHz)'", diag)
         self.assertIn("3900 mV", diag)
 
+    def test_dark_project_me5_pro_8k_receiver(self):
+        # Independent hardware capture: ferloom/Wireless-Device-Battery-Monitor PR #703.
+        captured = bytes.fromhex("08 04 00 00 00 02 1e 00 0e 88 00 00 00 00 00 00 93")
+        echo = bytes.fromhex("08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49")
+        bus = self.one_receiver(vid=0x3554, pid=0xF5BC, lengths={(0xFF02, 2): 17},
+                                replies=[echo, reply(70, 2, 3900), captured])
+        provider = P.PulsarProvider()
+        [device] = provider.poll()
+        self.assertEqual(("pulsar:3554f5bc", "Dark Project ME5 Pro (8K receiver)",
+                          "mouse", 30, False),
+                         (device.key, device.name, device.kind, device.level, device.charging))
+        self.assertIn("3720 mV", "\n".join(provider.diagnostics()))
+        self.assertEqual([(0xFF02, 0x0002)], bus.written())
+
+    def test_dark_project_me5_accepts_a_real_empty_battery(self):
+        self.one_receiver(pid=0xF5BC, lengths={(0xFF02, 2): 17}, replies=[reply(0, 0, 3500)])
+        [device] = P.PulsarProvider().poll()
+        self.assertEqual((0, False, True), (device.level, device.charging, device.online))
+
+    def test_me5_uses_voltage_while_charging(self):
+        wired = bytes.fromhex("08 04 00 00 00 02 5f 01 10 69 00 00 00 00 00 00 6e")
+        self.one_receiver(pid=0xFB2D, replies=[wired])
+        provider = P.PulsarProvider()
+        [device] = provider.poll()
+        self.assertEqual((99, True), (device.level, device.charging))
+        self.assertIn("HID 95%, 4201 mV, displayed 99%", "\n".join(provider.diagnostics()))
+
+    def test_me5_voltage_boundaries(self):
+        for raw, charging, mv, expected in (
+            (10, False, None, 10), (45, False, 0, 45), (70, True, 65535, 70),
+            (40, False, 2499, 40), (40, False, 4501, 40),
+            (5, False, 3000, 1), (5, False, 3420, 5), (15, False, 3540, 16),
+            (100, True, 0, 99), (100, True, 4109, 99), (100, True, 4110, 100),
+            (95, False, 4110, 100),
+        ):
+            with self.subTest(raw=raw, charging=charging, mv=mv):
+                self.assertEqual(expected, P.me5_display_level(raw, charging, mv))
+
+    def test_dark_project_me5_uses_only_its_control_collection(self):
+        for iface, page, size in ((1, 0xFF06, 17), (2, 0xFF02, 17), (1, 0xFF02, 49)):
+            with self.subTest(iface=iface, page=page, size=size):
+                bus = self.one_receiver(pid=0xF5BC, shape=[(iface, page, 2)],
+                                        lengths={(page, 2): size})
+                self.assertEqual([], P.PulsarProvider().poll())
+                self.assertEqual([], bus.written())
+
     def test_the_atk_fire_x_8k_receiver_is_read(self):
         # #247: 373b:101b 'ATK Mouse 8K Dongle' lists the same eight collections as
         # the R1 Pro Max receiver, ff02:0002 among them
@@ -353,12 +399,7 @@ class PulsarTest(unittest.TestCase):
                          provider.legacy_key_aliases())
         self.assertEqual([(0xFF02, 0x0002)], bus.written())
 
-    def test_the_cable_and_the_receiver_are_one_icon(self):
-        # one R1 Pro Max: read on its receiver, then put on its cable (the receiver
-        # goes quiet but stays plugged in), then unplugged from the cable again
-        dongle = FakeBus(0x3554, 0xF58A, [reply(25, 0, 3658)])
-        buses = [dongle]
-
+    def use_buses(self, buses):
         class Both:
             def enumerate(self, vid):
                 return [d for b in buses for d in b.enumerate(vid)]
@@ -383,6 +424,45 @@ class PulsarTest(unittest.TestCase):
         P.output_length = lambda path: None
         P.hidlist = Both()
         P.hid = types.SimpleNamespace(device=device)
+
+    def test_me5_cable_and_receiver_share_one_icon(self):
+        # USB capture on the owner's ME5 Pro: 95%, charging, 4088 mV.
+        wired = bytes.fromhex("08 04 00 00 00 02 5f 01 0f f8 00 00 00 00 00 00 e0")
+        key = "pulsar:3554f5bc"
+        receiver = FakeBus(0x3554, 0xF5BC, [reply(25, 0, 3658)])
+        cable = FakeBus(0x3554, 0xFB2D, [wired])
+        buses = [receiver, cable]
+        self.use_buses(buses)
+        provider = P.PulsarProvider()
+        [d] = provider.poll()
+        self.assertEqual((key, "Dark Project ME5 Pro (wired)", 96, True, True),
+                         (d.key, d.name, d.level, d.charging, d.online))
+        self.assertIn("HID 95%, 4088 mV, displayed 96%", "\n".join(provider.diagnostics()))
+        self.assertEqual([(0xFF02, 2)], cable.written())
+
+        buses[:] = [cable]  # a silent cable poll keeps the last sample offline
+        [d] = provider.poll()
+        self.assertEqual((key, 96, True, False), (d.key, d.level, d.charging, d.online))
+        buses[:] = [receiver]  # cable unplugged, receiver still asleep
+        [d] = provider.poll()
+        self.assertEqual((key, "Dark Project ME5 Pro (8K receiver)", 96, False, False),
+                         (d.key, d.name, d.level, d.charging, d.online))
+        buses[:] = [receiver, cable]  # replugged, but charging has not been reported again
+        [d] = provider.poll()
+        self.assertEqual((key, "Dark Project ME5 Pro (8K receiver)", 96, False, False),
+                         (d.key, d.name, d.level, d.charging, d.online))
+        buses[:] = [FakeBus(0x3554, 0xF5BC, [reply(94, 0, 4020)])]
+        [d] = provider.poll()
+        self.assertEqual((key, 80, False, True), (d.key, d.level, d.charging, d.online))
+        buses.clear()
+        self.assertEqual([], provider.poll())
+
+    def test_the_cable_and_the_receiver_are_one_icon(self):
+        # one R1 Pro Max: read on its receiver, then put on its cable (the receiver
+        # goes quiet but stays plugged in), then unplugged from the cable again
+        dongle = FakeBus(0x3554, 0xF58A, [reply(25, 0, 3658)])
+        buses = [dongle]
+        self.use_buses(buses)
         provider = P.PulsarProvider()
         [d] = provider.poll()
         self.assertEqual(("pulsar:3554f58a", 25, True), (d.key, d.level, d.online))

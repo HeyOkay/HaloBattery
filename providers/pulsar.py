@@ -109,6 +109,11 @@ both check out, the command is the one we asked for, and the level is 0..100.
 Additional measured CompX IDs: Scyrox 3554:F5F7/F5F6 (#182), ATK A9 SE
 373B:10C9 (#347), Lamzu Atlantis V2 3554:F50D (#408), Cougar Revenger Pro
 3554:F5DF/F5DE/F5DC (#354), Zaopin Z2 4K 3554:F526/F527.
+Dark Project ME5 Pro's 8K receiver (3554:F5BC) and USB cable (3554:FB2D)
+use the same power query on ff02:0002, as measured in
+https://github.com/Nuitfanee/ClickSync/issues/13 and a-simeshin/compx-pair's docs/protocol.md.
+ferloom/Wireless-Device-Battery-Monitor PR #703 has the captured replies and
+checks for an echoed request before decoding the battery and its charging flag.
 Pulsar X2 V3 Mini uses the Sonix feature protocol from jonkristian/pulsar-x3-python
 (#213). NK NANO 373B:1216 is dispatched separately to atk_bitmouse (#350).
 
@@ -128,6 +133,7 @@ krisgfx9/Wireless-Device-Battery-Monitor, src/drivers/kysona.cpp (its PR #4096).
 from __future__ import annotations
 
 import time
+from bisect import bisect_right
 from typing import Dict, List, Optional, Tuple
 
 import hid
@@ -176,6 +182,8 @@ PIDS: Dict[int, Dict[int, str]] = {
         0xF58F: "ATK VXE R1 SE+ (wired)",
         0xF58A: "VXE R1 Pro / R1 Pro Max (2.4 GHz)",
         0xF58C: "VXE R1 Pro Max (wired)",
+        0xF5BC: "Dark Project ME5 Pro (8K receiver)",
+        0xFB2D: "Dark Project ME5 Pro (wired)",
         0xF505: "VGN Dragonfly 4K (receiver)",
         0xF506: "VGN Dragonfly 4K (wired)",
         0xF5D5: "Redragon M991 / K1NG Max (2.4 GHz)",
@@ -227,7 +235,8 @@ PIDS: Dict[int, Dict[int, str]] = {
 # cable key -> its receiver's key: one mouse on either transport, reported under the
 # receiver's key so the tray keeps one icon across a plug or unplug (docstring)
 RECEIVER_OF: Dict[str, str] = {"pulsar:3554f58c": "pulsar:3554f58a",
-                               "pulsar:373b1273": "pulsar:3554f58a"}
+                               "pulsar:373b1273": "pulsar:3554f58a",
+                               "pulsar:3554fb2d": "pulsar:3554f5bc"}
 
 # ids whose pictogram is not a mouse: the Compx exchange is shared with keyboards,
 # and the AULA F75's receiver publishes the same ff02:0002 collection (#247)
@@ -235,6 +244,36 @@ KINDS: Dict[Tuple[int, int], str] = {(0x3554, 0xFA09): "keyboard",
                                      (0x3554, 0xF520): "mouse",
                                      (0x3554, 0xF523): "mouse",
                                      (0x1B1C, 0x2B2A): "mouse"}
+
+
+# Default 5%-step table and interpolation from the installed Dark Project ME5 Pro
+# HIDUsb.dll 1.0.0.32, RVAs 0x5e78 and 0x61c0. The vendor UI also smooths its
+# display over time. Here each valid sample supplies a fresh voltage estimate.
+ME5_VOLTAGES = (3050, 3420, 3480, 3540, 3600, 3660, 3720, 3760, 3800, 3840, 3880,
+                3920, 3940, 3960, 3980, 4000, 4020, 4040, 4060, 4080, 4110)
+
+
+def me5_display_level(raw: int, charging: bool, mv: Optional[int]) -> int:
+    if raw == 0:
+        return 0
+    if mv is None or not 2500 <= mv <= 4500:   # missing or implausible single-cell voltage
+        return min(raw, 99) if charging else raw
+    band = bisect_right(ME5_VOLTAGES, mv) - 1
+    if band < 0:
+        return 1
+    if band == len(ME5_VOLTAGES) - 1:
+        return 99 if charging and raw < 100 else 100
+
+    lower, upper = ME5_VOLTAGES[band:band + 2]
+    level = band * 5 + (mv - lower) // ((upper - lower) // 5)
+    return level + 1 if level in (0, 15) else level
+
+
+def parse_me5_power(r) -> Optional[Tuple[int, bool]]:
+    power = parse_power(r)
+    if power is None or r[POWER_INDEX] not in (0, 1) or list(r[:PAYLOAD_LEN]) == make_request():
+        return None
+    return power
 
 
 def make_model_request() -> List[int]:
@@ -297,7 +336,7 @@ class PulsarProvider(Provider):
         now reports them under; only those that answered in the last poll."""
         return dict(self._aliases)
 
-    def _pick(self, infos: List[dict]) -> Optional[dict]:
+    def _pick(self, infos: List[dict], strict_control: bool = False) -> Optional[dict]:
         """The collection to open.
 
         The ATK/VXE panel of the OpenMouse project opens the collection with usage
@@ -317,6 +356,9 @@ class PulsarProvider(Provider):
         """
         control = [d for d in infos
                    if (d.get("usage_page"), d.get("usage")) == CONTROL_USAGE]
+        if strict_control:
+            return next((d for d in control if d.get("interface_number") == CONTROL_INTERFACE
+                         and output_length(d["path"]) in (None, PAYLOAD_LEN)), None)
         for d in control + infos:
             if output_length(d["path"]) in (None, PAYLOAD_LEN):
                 if not control:
@@ -353,7 +395,7 @@ class PulsarProvider(Provider):
                 if accept(r) is not None:
                     return list(r)
                 time.sleep(0.02)
-            what = "power" if accept is parse_power else "model"
+            what = "model" if accept is parse_model else "power"
             self._diag.append(f"  no {what} reply (events and short frames are ignored)")
             return None
         except (OSError, IOError, ValueError) as e:
@@ -458,7 +500,8 @@ class PulsarProvider(Provider):
                 key = f"pulsar:{vid:04x}{pid:04x}"
                 present.add(key)
                 bitmouse = (vid, pid) in atk_bitmouse.PIDS
-                d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine)
+                me5 = vid == 0x3554 and pid in (0xF5BC, 0xFB2D)
+                d = atk_bitmouse.pick(mine) if bitmouse else self._pick(mine, strict_control=me5)
                 if d is None:
                     self._diag.append(f"[Pulsar] pid={vid:04x}:{pid:04x}: no collection "
                                       f"to read among {len(mine)}")
@@ -474,7 +517,7 @@ class PulsarProvider(Provider):
                     reply = None
                     parsed = atk_bitmouse.read_power(d["path"], self._diag)
                 else:
-                    reply = self._query(d["path"])
+                    reply = self._query(d["path"], accept=parse_me5_power if me5 else parse_power)
                     parsed = parse_power(reply)
                 if parsed is None:
                     if not reply:
@@ -482,7 +525,11 @@ class PulsarProvider(Provider):
                     continue
                 level, on_cable = parsed
                 mv = voltage_mv(reply)
-                if mv:
+                if me5:
+                    raw = level
+                    level = me5_display_level(raw, on_cable, mv)
+                    self._diag.append(f"  HID {raw}%, {mv} mV, displayed {level}%")
+                elif mv:
                     self._diag.append(f"  {mv} mV")
                 if vid == 0x3710 and pid in MODEL_PIDS:
                     name = self._model(key, d["path"], MODEL_PIDS[pid]) or name
@@ -507,17 +554,20 @@ class PulsarProvider(Provider):
         # re-creates a removed icon at a new tray position, which is what the
         # 2026-10-03 screen-off report was about.
         self._aliases = aliases
+        plugged_cables = {RECEIVER_OF[k] for k in present if k in RECEIVER_OF}
         for key in list(self._last):
             name, level, charging, seen, kind = self._last[key]
             if key in found:
                 continue
-            if key in self._via_cable:       # off the cable: the receiver's, not charging
+            if key in self._via_cable and key not in plugged_cables:
                 vid, pid = int(key[7:11], 16), int(key[11:15], 16)
                 name, charging = PIDS.get(vid, {}).get(pid, name), False
-            if key in present:
+                self._last[key] = (name, level, charging, seen, kind)
+                self._via_cable.discard(key)
+            if key in present or key in plugged_cables:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
                                   f"{' (charging)' if charging else ''} greyed "
-                                  f"(its receiver is still plugged in)")
+                                  f"(still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
                                         kind=kind, wake_on_input=True))
             else:

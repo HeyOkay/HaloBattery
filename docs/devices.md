@@ -93,6 +93,7 @@
 | [NZXT Lift Elite Wireless](protocols.md#nzxt-lift-elite-wireless-1e712101) | 2.4 GHz receiver and USB cable | yes |
 | [Pulsar X2N CrazyLight and the other mice on the 8K Dongle Gen.2](protocols.md#pulsar-mice-on-the-8k-dongle-gen2-model-names) | 8K dongle (3710:5406) or USB cable (3710:3510) | yes (X2N CrazyLight Mini, dongle and cable) |
 | [Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max, Taidu TSG808](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz dongle and USB cable | yes |
+| [Dark Project ME5 Pro](protocols.md#dark-project-me5-pro) | 2.4 GHz (8K receiver) and USB cable | yes (receiver and wired reports, including charging) |
 | [Zaopin Z2 4K](protocols.md#zaopin-z2-4k) | 2.4 GHz 4K receiver, USB-C, and Bluetooth LE | yes |
 | [Pulsar, ATK / VXE, Redragon M916/M913, HECATE](protocols.md#pulsar-x2-v2-mini-pulsar-x2-crazylight-mini-atk-vxe-r1-se-vxe-r1-pro-max) | 2.4 GHz receiver and USB cable | mixed (some confirmed) |
 | [Plantronics Voyager 8200 UC (BT600 adapter)](protocols.md#plantronics-voyager-8200-uc-bt600-adapter) | Bluetooth headset through the BT600 USB adapter | confirmed |
