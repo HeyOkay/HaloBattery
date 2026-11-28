@@ -72,7 +72,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - name: Install dependencies
-        run: python -m pip install --require-hashes -r requirements-build.txt
+        run: python -m pip install --require-hashes -r requirements/requirements-build.txt
 
       - name: Unit tests
         run: python -m unittest discover -s tests
@@ -318,7 +318,7 @@ jobs:
         with:
           dotnet-version: '10.0.404'
       - name: Install locked dependencies
-        run: python -m pip install --require-hashes -r requirements-build.txt
+        run: python -m pip install --require-hashes -r requirements/requirements-build.txt
       - name: Unit tests
         run: python -m unittest discover -s tests
       - name: Build unsigned application

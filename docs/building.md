@@ -1,13 +1,13 @@
 # Building HaloBattery
 
 Run `scripts/build_exe.bat` from the repository root on Windows. Install .NET SDK
-10.0.404 first; `global.json` disables SDK roll-forward. Local packaging uses the
+10.0.404 first; `ui/global.json` disables SDK roll-forward. Local packaging uses the
 Python interpreter you invoke and records its version. CI packages with exactly
 Python 3.12.10, the available Windows binary release for the existing 3.12 build
 line; this is a toolchain pin, not a claim that it contains every later source-only
 Python security fix. A Python runtime upgrade needs its own package validation.
 
-The local builder installs `requirements-build.txt` into a fresh build-only
+The local builder installs `requirements/requirements-build.txt` into a fresh build-only
 environment with mandatory hashes and binary wheels. Existing global packages
 are not accepted as already-verified build dependencies. The environment is not
 included in the application. The optional `--wheelhouse` argument to
@@ -61,7 +61,7 @@ the custom frame rather than silently skipping it. JIT QA retains reflection.
 The default native-tool cache is `.build/settings-aot-toolchain`.
 `-ToolchainCache` selects a dedicated local build directory, and
 `-OfflineToolchain` refuses a missing archive. CI uses a cache under RUNNER_TEMP.
-The default NuGet feed is repository `NuGet.Config`; an explicit `-NuGetConfig`
+The default NuGet feed is `ui/NuGet.Config`; an explicit `-NuGetConfig`
 and `-PackagesDirectory` can select an offline feed/cache. For example:
 
 ```powershell

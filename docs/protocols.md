@@ -273,7 +273,7 @@ Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.co
 
 Read over that COM port at 115200 baud rather than HID: the dongle answers a fixed exchange - two initialisation frames, then a status query - and replies with a 14-byte frame starting `04 FF 0B 00 96 C3 14 04`, with the level in byte 12 and the charging flag in byte 11 (1 = charging). The port is opened with DTR and RTS raised, and Sony's own app (INZONE Hub) has to be closed because it claims the same port.
 
-The frame sequence and the reply signature come from [janit88/InZoneH9Tray](https://github.com/janit88/InZoneH9Tray) (`inzone_tray.py`), contributed for both the white and the black version in [#278](https://github.com/HeyOkay/HaloBattery/pull/278) by @BoringMan314. It needs `pyserial`, which the released builds bundle; a source run gets it from `requirements.txt`, and the provider says so in the diagnostics when it is missing.
+The frame sequence and the reply signature come from [janit88/InZoneH9Tray](https://github.com/janit88/InZoneH9Tray) (`inzone_tray.py`), contributed for both the white and the black version in [#278](https://github.com/HeyOkay/HaloBattery/pull/278) by @BoringMan314. It needs `pyserial`, which the released builds bundle; a source run gets it from `requirements/requirements.txt`, and the provider says so in the diagnostics when it is missing.
 
 ### Sony INZONE H5
 
