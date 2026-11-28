@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="106" height="48" viewBox="0 -3.745 106 48" role="img" aria-labelledby="title">
+  <title id="title">Ko-fi</title>
+  <rect x=".5" y=".5" width="105" height="35" rx="9" fill="#FFB7B0" fill-opacity=".16" stroke="#E58886"/>
+  <g transform="translate(10 7)"><path fill="none" stroke="#603343" stroke-width="2" d="M17 5h2a4 4 0 0 1 0 8h-3"/><path fill="#FFF5F1" stroke="#603343" stroke-width="1" d="M1 4h17v9a7 7 0 0 1-7 7H8a7 7 0 0 1-7-7z"/><path fill="#c6324d" d="M9 15 4.8 11a2.8 2.8 0 0 1 4.2-3 2.8 2.8 0 0 1 4.2 3z"/></g>
+  <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" fill="#442438">
+    <text x="40" y="24.764" font-size="16" font-weight="600">Ko-fi</text>
+  </g>
+</svg>

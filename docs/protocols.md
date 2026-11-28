@@ -475,6 +475,34 @@ The original reading was confirmed by the reporter. The online check follows
 the driver's polarity, which a real ROYUAN receiver reply with its keyboard in
 use also shows (`00 64 00 00 01 01 01` after the report id, #372); it sends no
 new hardware commands.
+### ROYUAN 2.4 GHz keyboards (3151:4011)
+
+**Connection:** `3151:4011` receiver ("2.4G Wireless Keyboard"), interface 2, `FFFF:0002`.
+
+The receiver answers a status request itself, so a keyboard's level is read without
+relaying anything to the keyboard. [`dniminenn/sharkfin`](https://github.com/dniminenn/sharkfin)
+documents the exchange in `docs/PROTOCOL.md` and measured it on this receiver id with a
+paired keyboard: a 64-byte feature report (report id 0) on `FFFF:0002`, request `F7` with
+a bit7 checksum (`FF - sum`) at payload byte 7. The reply carries the keyboard level at
+payload byte 1, the keyboard link byte at 3 (zero while online - the polarity the
+MonsGeek driver reads too), and the device type at 6 (1 keyboard, 2 mouse, 3 both). A
+level of zero is the receiver answering before the keyboard has reported, not a reading.
+The status has no usable charging field: `krisgfx9/Wireless-Device-Battery-Monitor` measured
+this dongle reporting "charging" with no cable attached, so it is not trusted. The charging
+signal used here is the keyboard itself: when switched to wired mode (Fn+5) with a USB-C **data** cable in, it enumerates as
+`3151:4015` ("EPOMAKER TH80 ISO") while the receiver reports the keyboard offline with its
+cached level, and that presence is shown as charging. A wall charger cannot be seen from
+the PC at all. Confirmed on hardware with test build 2: wired mode showed 74 % and
+charging, while the wireless replies with and without a wall charger were identical
+except for the level byte itself (`4c` -> `59`), so the status carries no charger state
+there. A cable connected while the keyboard stays in 2.4 GHz mode is not part of that
+confirmed signal. Only the receiver id and collection are claimed, and the request is
+read-only. sharkfin is GPL-3.0 and is used as the protocol reference only; no code is
+taken from it. Reported on an Epomaker TH80 ISO in
+[#560](https://github.com/HeyOkay/HaloBattery/issues/560): test build 1 read 73 % against
+the vendor app's coarse 70 % band. The same receiver ships with other ROYUAN-built
+boards, so the icon names the receiver family.
+
 ### Inphic and Attack Shark mice (1D57 receivers)
 
 **Connection:** the model's own 2.4 GHz dongle — `1d57:fa65` (Inphic In9 Pro) or `1d57:fa60` (Attack Shark X11, R1, X3 Max)
@@ -645,9 +673,9 @@ The battery is read with the command 0x04 frame of the next section. The dongle 
 
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
-**Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 3554:F506, 3710:3414)
+**Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 373B:1273, 3554:F506, 3710:3414)
 
-17-byte big-endian frames, report id 0x08: command 0x04 asks for the power details and answers with the level in byte 6, the on-cable flag in byte 7 and millivolts in bytes 8-9, with a checksum (0x55 minus the sum of the first 16 bytes) in byte 16. From andrewrabert/python-pulsar-mouse-tool, which also backs the "HID: pulsar" driver in review for Linux; the Kysona M600 and VXE Dragonfly R1 Pro use the same protocol but their ids are not claimed here. The ATK/VXE control panel of the OpenMouse project (@openmouse/protocol, drivers/atk) lists the R1 Pro Max receiver as 3554:f58a and reads it with the same command 0x04 frame, opening the collection with usage page 0xFF02 and usage 0x0002 - the R1 Pro Max dongle has five other interface-1 collections and the first of them is not the one that answers, so that collection is now preferred; a collection whose output report cannot carry the 17-byte frame is skipped, because Windows refuses that write and the refusal looks exactly like a device that is switched off. The framing is also in G-Wolves' own web driver (mouse.xyz), whose Compx class sends the same report-0x08 frame with a checksum of 0x55 minus the sum of the payload. The R1 Pro Max is confirmed on hardware on both of its transports, by the reporter of #87: this provider read the mouse on its stock 1 kHz receiver, on the `ff02:0002` collection, and on its cable the level agreed with ATK's own panel (hub.atk.pro) with the charging flag following the cable in both directions, so the cable id (3554:F58C) is read on hardware as well rather than only claimed from their report. A frame whose checksum does not match is refused rather than shown. The X2 CrazyLight Mini (#164) was tested by its reporter on both of its transports with this same frame - the dongle and the cable both answered command 0x04 with valid checksums, the cable reporting charging - so both of its ids (3710:5406, 3710:3414) are claimed from that report; the app-side reading was confirmed on their run of this branch in #164 - the dongle read 20 %, the same raw level as their own test, and the cable read while charging.
+17-byte big-endian frames, report id 0x08: command 0x04 asks for the power details and answers with the level in byte 6, the on-cable flag in byte 7 and millivolts in bytes 8-9, with a checksum (0x55 minus the sum of the first 16 bytes) in byte 16. From andrewrabert/python-pulsar-mouse-tool, which also backs the "HID: pulsar" driver in review for Linux; the Kysona M600 and VXE Dragonfly R1 Pro use the same protocol but their ids are not claimed here. The ATK/VXE control panel of the OpenMouse project (@openmouse/protocol, drivers/atk) lists the R1 Pro Max receiver as 3554:f58a and reads it with the same command 0x04 frame, opening the collection with usage page 0xFF02 and usage 0x0002 - the R1 Pro Max dongle has five other interface-1 collections and the first of them is not the one that answers, so that collection is now preferred; a collection whose output report cannot carry the 17-byte frame is skipped, because Windows refuses that write and the refusal looks exactly like a device that is switched off. The framing is also in G-Wolves' own web driver (mouse.xyz), whose Compx class sends the same report-0x08 frame with a checksum of 0x55 minus the sum of the payload. The R1 Pro Max is confirmed on hardware on both of its transports, by the reporter of #87: this provider read the mouse on its stock 1 kHz receiver, on the `ff02:0002` collection, and on its cable the level agreed with ATK's own panel (hub.atk.pro) with the charging flag following the cable in both directions, so the cable id (3554:F58C) is read on hardware as well rather than only claimed from their report. Some R1 Pro Max units enumerate on their cable under ATK's vendor id as 373B:1273 ('VXE R1 PRO MAX') with the same collections; one such unit answered the same frame on its cable (40 %, charging, 3783 mV, valid checksum), so that id is read as the same wired mouse. On either cable id the R1 Pro Max is reported under its receiver's key, so it stays one icon that turns to charging on the cable and back when the cable is out (the old cable keys are offered as aliases, so a saved name, hidden choice or history moves with it). A frame whose checksum does not match is refused rather than shown. The X2 CrazyLight Mini (#164) was tested by its reporter on both of its transports with this same frame - the dongle and the cable both answered command 0x04 with valid checksums, the cable reporting charging - so both of its ids (3710:5406, 3710:3414) are claimed from that report; the app-side reading was confirmed on their run of this branch in #164 - the dongle read 20 %, the same raw level as their own test, and the cable read while charging.
 
 VGN's Dragonfly 4K receiver (`3554:f505`) and the same mouse on its cable (`3554:f506`) follow the same exchange - the receiver lists six vendor pages on interface 1 with `ff02:0002` among them. The receiver is **confirmed on hardware by @TweaknFreak** ([owner confirmation](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6637051514)): the level it showed agreed with the vendor tool's 53 %, so the id is claimed from a working read rather than from the collection shape; the owner later [confirmed the cable and return to the receiver](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6704340833). The maintainer [recorded both ids as confirmed in stable 1.17.0](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6879098152).
 
@@ -794,6 +822,22 @@ The cable is not a receiver: its charging reading wins without querying the
 silent receiver, and unplugging it restores the receiver with the same icon
 and device key. Silent-device backoff is unchanged.
 
+### Akko Verge S9 Ultra
+
+**Connection:** 2.4 GHz dongle (`36EB:1087`, product `Akko S9 Ultra_Dongle`); Bluetooth carries a level through Windows and needs no reader here.
+
+The dongle is one HID interface (interface 3) whose reports are 64 bytes with **report id `0x02`**, next to the headset's audio interfaces. The vendor app's traffic was captured with USBPcap in [#505](https://github.com/HeyOkay/HaloBattery/issues/505):
+
+    request  02 10 01 00 00 ...   link status:  02 10 01 00 01 ...  headset on
+                                                  02 10 01 00 00 ...  off or out of range
+    request  02 12 01 00 00 ...   battery:      02 12 01 00 64 ...  100 %
+                                                  02 12 01 00 63 ...  99 %
+                                                  02 12 01 01 00 ...  no level reported
+
+Every frame ends with a two-byte trailer over its first 62 bytes (the all-zero `02 10 01 00` request carries `4B 43`, the all-zero `02 12 01 00` request `71 12` and the `02 10 01 00 01` reply `71 E1`; fitted to all 16 distinct frames in the captures). The provider checksums its requests and refuses a reply whose trailer does not match. Byte 4 is the level, a plain 0-100 percentage; the two captures read 100 and 99 while the vendor app showed the same numbers. Byte 3 reads 0 whenever a level came back and 1 in the one phase where the vendor app had no value either, so its meaning is not established and it is logged only. **The dongle exchange has no charging flag, and the vendor app did not show charging on the dongle either** - `charging_known` stays False rather than guessing. The vendor app's `0x03` frame (a 16-byte value at startup) was not needed by any later battery read and is not sent.
+
+**Charging is on the PC cable.** Plugged in over USB the headset enumerates as `36EB:0087` (`Akko S9 Ultra_USB`, interface 3 is the same report-2 exchange) and the dongle's link goes down (`02 12 01 01 00`, no level). The vendor app shows that wired device as a separate *Charging* card without a percentage, and the wired device's own `02 12` reply carries `BC` at byte 4 - outside the 1-100 range, and the app shows no number then either - so the reply is not decoded here. The wired id's presence is the charging signal, the same way it is on the Rapoo and Corsair models: the icon keeps the last level from the dongle and shows charging. A wall charger does not enumerate and cannot be seen. **Confirmed by the reporter of #505**: the dongle level and the cable charging state both work.
+
 ### Ninjutso Sora V3 (093a:eb02)
 
 **Connection:** 2.4 GHz receiver `093a:eb02` or USB cable `093a:e010`; the
@@ -879,9 +923,11 @@ The transaction Lofree's own web driver (hyzen.lofree.tech) uses, on report 0x04
 
 ### Lofree Flow Lite84
 
-**Target:** `05ac:024f`, captured product `2.4G Wireless Receiver`, control
-collection `FF02:0002`. The USB ID is shared with Apple keyboards and AULA F108
-receivers, so a matching ID elsewhere never authorizes a Flow request.
+**Target:** `05ac:024f` (Apple's id, copied by Compx) and `3554:fa0a` (Compx's own
+id, #557), both with captured product `2.4G Wireless Receiver`, control
+collection `FF02:0002`. Both USB ids are shared - `05ac:024f` with Apple
+keyboards and AULA F108 receivers, `3554:fa0a` with every other Compx receiver -
+so a matching ID elsewhere never authorizes a Flow request.
 
 Source: Lofree Control HUB (`lofree.tech/home`, bundle `index-BTVblIUr.js`),
 recorded in [`providers/lofree.py`](../providers/lofree.py) and
@@ -893,8 +939,10 @@ before command `04` supplies the percentage at index 6 and charging flag at 7.
 Only that receiver product and control collection are selected. Unknown output
 caps remain compatible with the previously supported path; known incompatible
 caps refuse the request before opening a device. There is no fallback to another
-collection or to an AULA receiver. Existing community hardware confirmation
-does not represent a new hardware test of this guard.
+collection or to an AULA receiver. **Confirmed on test build 1 by the reporter of
+[#557](https://github.com/HeyOkay/HaloBattery/issues/557)**: with the Compx
+`3554:FA0A` receiver the level showed, charging appeared on the cable, and it
+cleared when unplugged.
 
 ### Logitech G502 LIGHTSPEED, G502 X PLUS
 
@@ -1082,6 +1130,39 @@ Source: no public project documents this query. The controller's owner
 (@nickfizz0208) identified it as the ASUS vendor power query in #269 and checked
 it with his own build against Armoury Crate (65% in both); the charging label of
 byte 10 comes from the ASUS GearLink SDK, as he reported there.
+
+### ASUS TUF Gaming H3 Wireless
+
+**Connection:** 2.4 GHz dongle (`0B05:1963`), the first collection on interface 3
+with a 64-byte feature report
+
+Feature report `0xFF`, 64 bytes: `FF 07 00 FD 04 0C F1 02 01`, then the feature report
+is read back (35 ms later, three tries, as for the ROG Strix Go 2.4). The battery
+frame starts `FF 12 05 FE 0C`; bytes 11-12 are the battery voltage, little-endian.
+The level is Solaar's Li-ion curve (the one the Logitech provider uses) rounded up
+to Armoury Crate's 25 % steps, so it reads what Armoury Crate shows. A voltage
+outside 3000-4500 mV, another header, the `FF AA` error and an all-zero frame are no
+reading.
+
+Byte 9 is the charger. With all ASUS software stopped, every frame read `0x03` on
+battery (218 of 218) and `0x05` on the USB-C cable (217 of 217). While ASUS software
+(`asus_framework.exe`, Armoury Crate) polls the same dongle, its traffic shows
+through: on battery a short `0x0A` frame now and then, and on the cable `0x0A`,
+`0x03` and `0x05` frames of about 3 s each in turn. So `0x05` is charging at once;
+a `0x03` frame is read again 3 s later, and two `0x03` frames 3 s apart are on
+battery; one `0x03` frame alone leaves the charger unknown; `0x0A` says nothing. At
+most two re-reads (6 s) a poll, only while the answer is open. Once battery is
+settled, a later poll's `0x03` frame is battery at once, with no re-read, until a
+frame says anything else. **Confirmed on hardware**: 3904 mV on battery with Armoury
+Crate at 75 % (the curve's 67 %, rounded up to 75 %); charging read on the cable.
+
+Source: two USBPcap captures of Armoury Crate 6.0.0 reading the headset's Power
+page: 3970 mV with Armoury Crate at 100 %, 3913-3919 mV at 75 %. Armoury Crate
+shows 25 % steps; the curve gives 77 % and 69 %, which it rounds up (the ROG Strix
+Go 2.4's 54 % and 28 % round up to its 75 % and 50 % the same way). It polls about
+every 9 s with this request and another one (`FF 0A 00 FD 04 00 00 05 81 AA C6 01`),
+and writes `FF 08 00 FF 04 0C F1 03 02 xx` after each read; the app sends neither.
+Bytes 16-17 (`68 10`, 4200 mV) did not change between the captures and are not read.
 
 ### Fractal Design Scape
 

@@ -118,7 +118,12 @@ attestations bind the ZIP and installer to the exact tag commit and release
 workflow. Publication follows verification of those attestations; afterward,
 `gh release verify <tag>` and `gh release verify-asset <tag> <file>` check the
 immutable release and its assets. These attestations do not code-sign the EXE
-or replace the pending SignPath integration.
+or replace Authenticode signatures. Stable publication additionally requires the
+complete production signing chain described in [Signing](signing.md).
+The single owner-authorized exception is `v1.18.0`, published unsigned by
+`unsigned-release-1.18.0.yml` while the production certificate is pending. Its
+checksums, provenance, main ancestry, reviewed source and immutable publication
+still apply.
 
 Only the publisher receives `contents: write`, `id-token: write` and
 `attestations: write`. Build/test jobs keep read-only repository permissions,
@@ -129,6 +134,11 @@ not a substitute for the actual GitHub repository setting.
 A failed upload or attestation can leave an unpublished draft. A rerun stops
 rather than modifying it. Inspect the failed run and draft, retain evidence,
 and recover deliberately; there is no automated asset deletion or overwrite.
+
+After publication, release and asset verification each retry up to 12 times,
+with 5-second pauses, while GitHub makes the attestations available. A persistent
+verification error still fails the workflow. These retries never repeat uploads
+or publication.
 
 ## Pre-release publication
 
@@ -169,5 +179,5 @@ to use only the latest stable release.
 
 ## Test code signing
 
-See [Test signing with SignPath](signing.md) for the explicit manual TEST mode,
+See [Test code signing](signing.md) for the explicit manual TEST mode,
 protected environment setup and remaining production-signing requirements.

@@ -35,10 +35,11 @@ summing to 0x55. The driver marks keyboard commands with bit 7 of the payload's 
 4, which is byte 5 of the frame on the wire, and it asks command 0x03 ("is the
 keyboard online": byte 6 is 1) before command 0x04. Both are answered on the family's
 control collection
-0xFF02:0x0002, the one this provider opens. Only the 2.4 GHz dongle (05AC:024F,
-manufacturer 'CX' - a copy of Apple's vendor id) is claimed: no wired id was
-reported. Confirmed on a Flow Lite84 on its 2.4 GHz dongle (#165): the level and the
-charging state both showed.
+0xFF02:0x0002, the one this provider opens. The 2.4 GHz dongle is claimed under both
+ids it ships with - 05AC:024F (a copy of Apple's vendor id) and Compx's own 3554:FA0A
+(#557), both 'CX' '2.4G Wireless Receiver', gated on the product string and the
+FF02:0002 collection - and no wired id was reported. Confirmed on a Flow Lite84 on its
+2.4 GHz dongle (#165): the level and the charging state both showed.
 
 AULA V9 mice - the same exchange, measured on a V9 Max+ (dongle 320F:22A0, cable
 320F:22B7) against the maker's own app (AULA HUB, an Electron app whose HID calls were
@@ -102,6 +103,8 @@ READ_MS = 100
 
 # the Flow Lite84: the Compx frame of providers/pulsar.py with the keyboard flag
 FLOW_VID, FLOW_PID = 0x05AC, 0x024F          # 'CX' '2.4G Wireless Receiver'
+FLOW_RECEIVERS = ((FLOW_VID, FLOW_PID),
+                  (0x3554, 0xFA0A))          # the same receiver under Compx's own id (#557)
 FLOW_NAME = "Lofree Flow Lite84"
 FLOW_PRODUCT = "2.4G Wireless Receiver"  # captured on the confirmed Flow dongle
 FLOW_CONTROL_USAGE = (0xFF02, 0x0002)        # where the family answers (pulsar.py opens it too)
@@ -314,17 +317,19 @@ class LofreeProvider(Provider):
             except Exception:
                 pass
 
-    def _flow_pick(self, infos: List[dict]) -> Optional[dict]:
+    def _flow_pick(self, infos: List[dict], vendor_id: int, product_id: int) -> Optional[dict]:
         """Only the named Flow receiver's source-backed FF02:0002 endpoint.
 
-        05AC:024F is shared with Apple keyboards and the AULA F108 Pro. A
-        different collection or physical receiver cannot borrow the control
-        collection's identity. The named web-driver source opens FF02:0002;
-        there is no sourced alternate endpoint to try when its caps reject
-        the frame. Unknown caps remain allowed on that verified endpoint.
+        05AC:024F is shared with Apple keyboards and the AULA F108 Pro, and
+        3554:FA0A with every other Compx receiver. A different collection or
+        physical receiver cannot borrow the control collection's identity: the
+        vendor and product id, the receiver's own product string and FF02:0002
+        must all match. The named web-driver source opens FF02:0002; there is
+        no sourced alternate endpoint to try when its caps reject the frame.
+        Unknown caps remain allowed on that verified endpoint.
         """
         control = [d for d in infos
-                   if d.get("vendor_id") == FLOW_VID and d.get("product_id") == FLOW_PID
+                   if d.get("vendor_id") == vendor_id and d.get("product_id") == product_id
                    and isinstance(d.get("product_string"), str)
                    and d["product_string"].strip().casefold() == FLOW_PRODUCT.casefold()
                    and (d.get("usage_page"), d.get("usage")) == FLOW_CONTROL_USAGE]
@@ -489,28 +494,29 @@ class LofreeProvider(Provider):
         return out
 
     def _poll_flow(self, out: List[DeviceStatus]) -> None:
-        """The Flow Lite84 dongle (#165): a second vendor id with its own exchange."""
-        try:
-            infos = hidlist.enumerate(FLOW_VID)
-        except Exception as e:  # pragma: no cover
-            log.warning("hid.enumerate(flow lite84): %s", e)
-            return
-        mine = [d for d in infos if d["product_id"] == FLOW_PID]
-        if not mine:
-            return
-        d = self._flow_pick(mine)
-        if d is None:
-            return
-        self._diag.append(f"[Lofree] {FLOW_NAME} pid={FLOW_PID:04x} "
-                          f"iface={d.get('interface_number')} "
-                          f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
-        res = self._flow_read(d["path"])
-        if res is None:
-            return
-        level, charging = res
-        self._diag.append(f"  -> {level}%")
-        out.append(DeviceStatus(f"lofree:{FLOW_PID:04x}", FLOW_NAME, level, charging, True,
-                                "lofree", kind="keyboard"))
+        """The Flow Lite84 dongle (#165): its own exchange, on two receiver ids."""
+        for vid, pid in FLOW_RECEIVERS:
+            try:
+                infos = hidlist.enumerate(vid)
+            except Exception as e:  # pragma: no cover
+                log.warning("hid.enumerate(flow lite84): %s", e)
+                continue
+            mine = [d for d in infos if d["product_id"] == pid]
+            if not mine:
+                continue
+            d = self._flow_pick(mine, vid, pid)
+            if d is None:
+                continue
+            self._diag.append(f"[Lofree] {FLOW_NAME} pid={pid:04x} "
+                              f"iface={d.get('interface_number')} "
+                              f"{d.get('usage_page', 0):04x}:{d.get('usage', 0):04x}")
+            res = self._flow_read(d["path"])
+            if res is None:
+                continue
+            level, charging = res
+            self._diag.append(f"  -> {level}%")
+            out.append(DeviceStatus(f"lofree:{pid:04x}", FLOW_NAME, level, charging, True,
+                                    "lofree", kind="keyboard"))
 
     def diagnostics(self) -> List[str]:
         return list(self._diag)

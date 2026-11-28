@@ -1,15 +1,8 @@
 # Code signing policy
 
-SignPath Foundation approved HaloBattery on 18 November 2026 and created the
-project organization with a valid self-signed test certificate. The owner accepted
-the invitation and confirmed the CI notification email. The two explicit TEST
-artifact configurations are valid, and GitHub's `signpath-test` environment is
-restricted to reviewed `pre-release` runs with owner approval.
-
-The local [test-signing pipeline](signing.md) is prepared. A test-only CI
-credential, authorized source integration and the first successful hosted run are
-still required before CI signing is active. The production certificate remains
-pending. This setup does not identify any published binaries as signed.
+The production signing pipeline verifies Authenticode signatures and the
+reviewed source of each build. Downloaded files should be checked individually
+for a valid signature.
 
 ## Responsibilities
 
@@ -35,7 +28,8 @@ acceptance of the complete package.
 The [privacy policy](privacy.md) describes local data processing, GitHub update
 and release-note requests, and user-initiated Iconify downloads.
 
-The planned service is subject to the [Foundation conditions](https://signpath.org/terms)
-and [application process](https://signpath.org/apply).
-Team MFA, service approval, artifact restrictions and the signing integration
-must be confirmed before this policy can describe an active signing service.
+<a href="https://signpath.org/"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg">
+  <img src="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg" alt="Code signing">
+</picture></a>

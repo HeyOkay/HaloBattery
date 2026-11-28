@@ -4,7 +4,7 @@ The PNG is rendered from assets/app-icon.svg and checked in so regular builds
 need only Pillow. Device tray icons continue to use their own renderer.
 
 Usage: python tools/make_icon.py [output.ico]
-       python tools/make_icon.py docs/logo.png   (256 px)
+       python tools/make_icon.py output.png   (256 px)
 """
 from pathlib import Path
 import sys
