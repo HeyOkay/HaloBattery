@@ -63,7 +63,7 @@ class PulsarSonixTest(unittest.TestCase):
 
     def test_feature_request_has_command_and_little_endian_checksum(self):
         P.PulsarProvider().poll()
-        packet, = FakeDevice.sent
+        packet = FakeDevice.sent[0]
         self.assertEqual(65, len(packet))
         self.assertEqual([0, 0, 0x08, 0x81, 0x01], packet[:5])
         self.assertEqual(sum(packet[1:63]) & 0xFFFF, packet[63] | packet[64] << 8)

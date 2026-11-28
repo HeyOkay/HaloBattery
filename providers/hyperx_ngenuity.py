@@ -190,7 +190,7 @@ class HyperXNgenuityProvider(Provider):
             if last and time.time() - last[3] < ASLEEP_KEEP:
                 out.append(DeviceStatus(key, name, last[0], last[1], False, "hyperx_ngenuity",
                                         kind="mouse", charging_known=last[2],
-                                        wake_on_input=True))
+                                        wake_on_input=True, asleep=True))
         # a dongle that is gone drops its device (and its kept reading)
         for key in list(self._last):
             if key not in present:

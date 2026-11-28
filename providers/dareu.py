@@ -121,7 +121,7 @@ class DareuProvider(Provider):
                 _, level, charging = self._last[key]
                 self._diag.append(f"  keeping {level}% greyed (the receiver is still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False, "dareu",
-                                        kind="mouse", wake_on_input=True))
+                                        kind="mouse", wake_on_input=True, asleep=True))
         # a receiver gone from the USB tree drops its last reading
         for key in set(self._last) - {s.key for s in out}:
             del self._last[key]

@@ -14,13 +14,13 @@ SOURCE_HASH = "04e49a72309fe04fc063b6ddb5a0c4f7bb4843d8ae640df2af603162688c8776"
 
 class PhoneArtworkTests(unittest.TestCase):
     def test_pinned_phone_source_and_filled_derivation_keep_provenance(self):
-        source = (ROOT / "artwork/tray/lucide-smartphone.svg").read_bytes()
+        source = (ROOT / "assets/artwork/tray/lucide-smartphone.svg").read_bytes()
         self.assertEqual(hashlib.sha256(source).hexdigest(), SOURCE_HASH)
-        self.assertEqual(source, (ROOT / "artwork/settings/lucide-smartphone.svg").read_bytes())
-        manifest = json.loads((ROOT / "artwork/tray/filled/manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(source, (ROOT / "assets/artwork/settings/lucide-smartphone.svg").read_bytes())
+        manifest = json.loads((ROOT / "assets/artwork/tray/filled/manifest.json").read_text(encoding="utf-8"))
         record = manifest["glyphs"]["phone"]
         self.assertEqual(record["upstream_sha256"], SOURCE_HASH)
-        filled = ROOT / "artwork/tray/filled" / record["file"]
+        filled = ROOT / "assets/artwork/tray/filled" / record["file"]
         self.assertEqual(hashlib.sha256(filled.read_bytes()).hexdigest(), record["sha256"])
         self.assertTrue((ROOT / "docs/licenses/lucide-1.17.0-LICENSE.txt").is_file())
 

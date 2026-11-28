@@ -153,7 +153,8 @@ class AttackSharkR11Provider(Provider):
         last = self._last
         if last is not None and time.time() - last[2] <= ASLEEP_KEEP:
             return [DeviceStatus(KEY, NAME, last[0], last[1], False,
-                                 "attackshark_r11", kind="mouse", wake_on_input=True)]
+                                 "attackshark_r11", kind="mouse", wake_on_input=True,
+                                 asleep=True)]
         # The silence outlasted the greyed icon: the session is over, so the
         # pre-cable level must not leak into whatever is connected next.
         self._last = None
