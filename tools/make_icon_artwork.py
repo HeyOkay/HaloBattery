@@ -1,7 +1,7 @@
 """Embed repo-native tray assets, replacing only icon_artwork.py's _PNG literal.
 
 Usage: python tools/make_icon_artwork.py [--check]
-See artwork/tray/README.md for editing masks and provenance.
+See assets/artwork/tray/README.md for editing masks and provenance.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import textwrap
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "artwork" / "tray"
+ASSETS = ROOT / "assets" / "artwork" / "tray"
 MODULE = ROOT / "halo" / "icon_artwork.py"
 
 
