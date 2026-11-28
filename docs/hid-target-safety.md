@@ -83,3 +83,8 @@ semantics from [#378](https://github.com/HeyOkay/HaloBattery/issues/378) are ret
 The corrected shared request is source-verified and offline-tested,
 **not yet owner-retested on K87 or G98 Pro hardware**. No additional identities
 are inferred from a product name.
+
+The G75 Pro's Compx receiver `3554:FA09` receives the same frame on the same
+interface-1 `FF02:0002` collection only. It answered on the owner's G75 Pro
+(47 %, valid checksum). Other Compx receivers (`FA0A`, mouse dongles) are not
+targets of this provider.

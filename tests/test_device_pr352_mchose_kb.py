@@ -188,6 +188,42 @@ class PollTest(unittest.TestCase):
         self.assertEqual((out[0].level, out[0].charging, out[0].charging_known),
                          (100, False, True))
 
+    def test_the_g75_pro_on_the_compx_receiver_is_read(self):
+        # captured on a G75 Pro: 13 4A 01 00 02 2F 01 00 .. 00 90 (47 %)
+        captured = bytes.fromhex("13 4a 01 00 02 2f 01 00 00 00 00 00 00 00 00 00 00 00 00 90")
+        fake = FakeKeyboard([list(captured)])
+        ents = entries(vid=0x3554, pid=0xFA09)
+        out, _ = self.poll(fake, ents)
+        self.assertEqual([(s.key, s.name, s.level, s.charging, s.online, s.kind) for s in out],
+                         [("mchose_kb:3554fa09", "MCHOSE G75 Pro", 47, False, True, "keyboard")])
+        self.assertEqual(fake.sent, [(ents[2]["path"], K.REQUEST)])
+
+    def test_a_silent_compx_receiver_gets_no_ghost_icon(self):
+        # the receiver id is shared with AULA / LEOBOG keyboards read by providers/pulsar.py
+        fake = FakeKeyboard()
+        out, _ = self.poll(fake, entries(vid=0x3554, pid=0xFA09))
+        self.assertEqual(out, [])
+
+    def test_a_g75_that_falls_asleep_keeps_its_level_greyed(self):
+        fake = FakeKeyboard([reply(0x2F, 0x01)])
+        ents = entries(vid=0x3554, pid=0xFA09)
+        K.hid = types.SimpleNamespace(device=lambda: fake)
+        K.hidlist = types.SimpleNamespace(
+            enumerate=lambda vid=0: [e for e in ents if e["vendor_id"] == vid])
+        p = K.MchoseKbProvider()
+        self.assertEqual(p.poll()[0].level, 47)
+        out = p.poll()
+        self.assertEqual([(s.key, s.level, s.online) for s in out],
+                         [("mchose_kb:3554fa09", 47, False)])
+
+    def test_other_compx_receivers_are_left_alone(self):
+        for vid, pid in ((0x3554, 0xFA0A), (0x3554, 0xF508), (0x41E4, 0xFA09)):
+            with self.subTest(vid=vid, pid=pid):
+                fake = FakeKeyboard([reply()])
+                out, _ = self.poll(fake, entries(vid=vid, pid=pid))
+                self.assertEqual(out, [])
+                self.assertEqual(fake.sent, [])
+
     def test_another_mchose_vendor_id_is_left_alone(self):
         fake = FakeKeyboard([reply()])
         out, _ = self.poll(fake, entries(vid=0x5253))

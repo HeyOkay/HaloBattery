@@ -1,4 +1,4 @@
-"""MCHOSE K87 and G98 Pro keyboards on their 2.4 GHz receivers.
+"""MCHOSE K87, G98 Pro and G75 Pro keyboards on their 2.4 GHz receivers.
 
 K87 is 41E4:2001; the G98 Pro reports 41E4:2004 but exposes the same
 ff02:0002 command collection and the same getBattery exchange, so it is
@@ -26,7 +26,23 @@ The 8-byte feature report on the same interface (usage page 0xFF04, report id 6)
 status channel; it reports the same 100 in its own layout, but the output channel above is
 the one the vendor driver reads the level from.
 
-Only the 0xFF02 collection is written to, and only for this vendor/product pair.
+Only the 0xFF02 collection is written to, and only for the vendor/product pairs below.
+
+MCHOSE G75 Pro on the Compx receiver (``3554:FA09``)
+---------------------------------------------------
+The G75 Pro ships with a Compx receiver that lists the same interface-1 FF02:0002 collection
+with 20-byte reports. It answers the same getBattery frame. Measured on hardware (G75 Pro on
+the receiver, keyboard on battery):
+
+    -> 13 4A 01 00 .. 00 5E
+    <- 13 4A 01 00 02 2F 01 00 .. 00 90       0x2F = 47 %, checksum matches
+
+The 0x4A command and its level byte on this receiver were first published by
+baigegege/halobattery-mchose-zh (``providers/compx.py``, measured on a G75 3.0).
+
+The receiver id is shared with AULA / LEOBOG keyboards that providers/pulsar.py reads with the
+Compx report-8 frame, so a silent FA09 receiver gets no placeholder icon here: an AULA owner
+never sees a ghost "MCHOSE G75 Pro". A G75 that was read before keeps its greyed level.
 """
 from __future__ import annotations
 
@@ -39,7 +55,14 @@ from . import hidlist
 from .base import DeviceStatus, Provider, hexdump, log
 
 VENDOR = 0x41E4
-PRODUCTS = {0x2001: "MCHOSE K87", 0x2004: "MCHOSE G98 Pro"}
+# (vendor id, product id) -> tray name
+PRODUCTS = {(VENDOR, 0x2001): "MCHOSE K87",
+            (VENDOR, 0x2004): "MCHOSE G98 Pro",
+            (0x3554, 0xFA09): "MCHOSE G75 Pro"}
+# receivers that get a "no reading yet" icon while the keyboard is silent; the shared Compx
+# receiver does not (see the module docstring)
+PLACEHOLDER = {(VENDOR, 0x2001), (VENDOR, 0x2004)}
+VENDORS = sorted({vid for vid, _ in PRODUCTS})
 USAGE_PAGE = 0xFF02
 USAGE = 0x0002
 INTERFACE = 1
@@ -138,28 +161,35 @@ class MchoseKbProvider(Provider):
             except Exception:
                 pass
 
+    @staticmethod
+    def _key(vid: int, pid: int) -> str:
+        # MCHOSE's own ids keep their original keys, so saved settings and history stay attached
+        return f"mchose_kb:{pid:04x}" if vid == VENDOR else f"mchose_kb:{vid:04x}{pid:04x}"
+
     def poll(self) -> List[DeviceStatus]:
         self._diag = []
-        try:
-            infos = hidlist.enumerate(VENDOR)
-        except Exception as e:  # pragma: no cover
-            log.warning("hid.enumerate(mchose_kb): %s", e)
-            return []
+        infos = []
+        for vendor in VENDORS:
+            try:
+                infos.extend(hidlist.enumerate(vendor))
+            except Exception as e:  # pragma: no cover
+                log.warning("hid.enumerate(mchose_kb %04x): %s", vendor, e)
 
         out: List[DeviceStatus] = []
         seen = set()
         for d in infos:
-            pid = d.get("product_id")
-            if d.get("vendor_id") != VENDOR or pid not in PRODUCTS:
+            ident = (d.get("vendor_id"), d.get("product_id"))
+            if ident not in PRODUCTS:
                 continue
             if ((d.get("usage_page"), d.get("usage")) != (USAGE_PAGE, USAGE)
                     or d.get("interface_number") != INTERFACE):
                 continue
-            key = f"mchose_kb:{pid:04x}"
+            pid = ident[1]
+            key = self._key(*ident)
             if key in seen:
                 continue
             product = (d.get("product_string") or "").strip()
-            name = PRODUCTS[pid] if PRODUCTS[pid] else product
+            name = PRODUCTS[ident] if PRODUCTS[ident] else product
             self._diag.append(f"[MCHOSE-KB] pid={pid:04x} product='{product}' "
                               f"iface={d.get('interface_number')} usage={USAGE_PAGE:04x}")
             got = self._read(d["path"])
@@ -180,17 +210,16 @@ class MchoseKbProvider(Provider):
         if not seen:
             # only the models actually present; do not invent a K87 when a
             # different MCHOSE keyboard is the one that went quiet
-            present = sorted({d.get("product_id") for d in infos
-                              if d.get("vendor_id") == VENDOR
-                              and d.get("product_id") in PRODUCTS})
-            for pid in present:
-                key = f"mchose_kb:{pid:04x}"
+            present = sorted({(d.get("vendor_id"), d.get("product_id")) for d in infos
+                              if (d.get("vendor_id"), d.get("product_id")) in PRODUCTS})
+            for ident in present:
+                key = self._key(*ident)
                 last = self._last.get(key)
                 if last:
                     out.append(DeviceStatus(key, last[1], last[0], False, False,
                                             "mchose_kb", kind="keyboard", wake_on_input=True))
-                else:
-                    out.append(DeviceStatus(key, PRODUCTS[pid], None, False, False,
+                elif ident in PLACEHOLDER:
+                    out.append(DeviceStatus(key, PRODUCTS[ident], None, False, False,
                                             "mchose_kb", kind="keyboard", wake_on_input=True))
         return out
 

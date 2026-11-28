@@ -6,6 +6,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- MCHOSE G75 Pro on its Compx receiver (`3554:FA09`): read with the MCHOSE M HUB
+  getBattery frame already used for the K87 and G98 Pro, on the same `ff02:0002`
+  collection. A silent receiver gets no placeholder icon, because AULA and LEOBOG
+  keyboards share its id.
+
 ### Fixed
 
 - Retry post-publication release and asset attestation verification when GitHub
