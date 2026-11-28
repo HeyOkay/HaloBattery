@@ -8,6 +8,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Dark Project ME5 Pro battery level on its 2.4 GHz 8K receiver (`3554:F5BC`)
+  and USB cable (`3554:FB2D`), with one icon across both connections and a
+  charging indicator driven by the mouse's power report. The percentage uses the
+  model's voltage calibration, so it can update between the firmware's coarse readings.
 - React to a receiver or cable arriving or leaving, and to a resume from sleep, as
   soon as Windows reports it instead of at the next poll: a hidden window receives
   the same device and power broadcasts the vendor tools use and coalesces a dock's

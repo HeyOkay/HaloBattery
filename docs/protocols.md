@@ -671,6 +671,35 @@ The Pulsar/ATK reader uses this frame from `andrewrabert/python-pulsar-mouse-too
 
 The battery is read with the command 0x04 frame of the next section. The dongle is shared by Pulsar's XS-1 generation, so its product id does not name the mouse: after a valid power reply the mouse is asked once for its model with command 0x10 in the same 17-byte frame (`08 10`, fourteen zeros, checksum). The command number is from DenzoNL/lamzuctl, which lists it as "16 | ReadCIDMID | Read CID/MID" (PROTOCOL.md line 933, commit 3921b2c). The reply layout is from the hardware capture below: status 0 in byte 2, the customer id in byte 6 and the model id in byte 7. The name table and its naming rule are from Pulsar's web driver (bbb.pulsar.gg/cMouse): devicename.json, customer id 87, entry = model id - 1, kept in `providers/pulsar_models.py`. Ids the table lacks keep the name of the product id. Confirmed on an X2N CrazyLight Mini through the dongle and on its cable, which lists the same ff02:0002 collection: both answered `08 10 00 00 00 03 57 1a e4 00 00 00 00 00 00 00 e5` (customer 87, model 26), and on the cable the power reply carried the charging flag. The same exchange is in krisgfx9/Wireless-Device-Battery-Monitor (src/drivers/kysona.cpp, PR #4096); the other model names are from the table and are not hardware-tested.
 
+### Dark Project ME5 Pro
+
+The ME5 Pro's 8K receiver (`3554:F5BC`, USB product string `ME5 8k Receiver`)
+exposes the CompX control collection `FF02:0002` on interface 1. Its report 8,
+command 4 returns the battery percentage, charging flag and voltage using the
+Pulsar framing below. The receiver ID, collection and battery command were
+verified on a ME5 Pro in [ClickSync issue 13](https://github.com/Nuitfanee/ClickSync/issues/13).
+[BatteryHub PR 703](https://github.com/ferloom/Wireless-Device-Battery-Monitor/pull/703)
+records a power reply of 30% at 3720 mV. Halo Battery uses the collection with a
+17-byte output report and ignores a copy of its battery request if the receiver
+echoes it before replying. The owner ran the Windows x64 build with this 8K
+receiver and saw 25% in Halo Battery over 2.4 GHz.
+
+On its USB cable the ME5 Pro enumerates as `3554:FB2D` and exposes the same
+control collection, as documented in [compx-pair](https://github.com/a-simeshin/compx-pair).
+The owner's wired mouse returned `08 04 00 00 00 02 5f 01 0f f8 00 00 00 00 00 00 e0`
+(95%, charging, 4088 mV). Both transports use the receiver's tray key. A valid
+cable reading takes precedence when both answer. After unplugging the cable, a
+silent receiver retains the last level in grey until the mouse reports again.
+
+The firmware percentage can stay at 95 while voltage rises. A later wired report
+from the same mouse was `08 04 00 00 00 02 5f 01 10 69 00 00 00 00 00 00 6e`.
+At 4201 mV the owner's Dark Project software displayed 99%. Halo Battery uses the
+voltage curve from the Windows driver's `HIDUsb.dll` 1.0.0.32 to calculate the
+percentage on each fresh sample. The two wired reports above yield 96% and 99%.
+The manufacturer also smooths its display over time, so intermediate readings
+can differ. Diagnostics include the original percentage, voltage and displayed
+estimate. [Manufacturer's ME5 Pro software download](https://darkproject.ru/products/DP-ME5-2001)
+
 ### Pulsar X2 V2 Mini, Pulsar X2 CrazyLight Mini, ATK VXE R1 SE+, VXE R1 Pro Max
 
 **Connection:** 2.4 GHz dongle (3554:F508, 373B:1085, 3554:F58A, 3554:F505, 3710:5406) and USB cable (3554:F507, 3554:F58F, 3554:F58C, 373B:1273, 3554:F506, 3710:3414)
