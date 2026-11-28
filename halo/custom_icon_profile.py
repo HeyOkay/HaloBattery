@@ -1,6 +1,6 @@
 """Exact offline rendering profiles for the app's existing Lucide glyphs.
 
-Names are the explicit inverse of artwork/tray/manifest.json sources.lucide.glyphs
+Names are the explicit inverse of assets/artwork/tray/manifest.json sources.lucide.glyphs
 (lucide-static 1.17.0). This module does no source verification: the catalog must
 call it only after verifying the Iconify name, source hash and license metadata.
 Other collections and names retain the general real-ink SVG fitting policy.

@@ -93,6 +93,10 @@ class SpecificTests(unittest.TestCase):
                 (dict(level=0), "", "0%"),                               # zero is a level, not "no link"
                 (dict(level=100), LEFT, "100%, " + LEFT),
                 (dict(level=85, charging=True), LEFT, "85%, charging"),
+                (dict(level=100, charging=True, full=True), LEFT, "100%, fully charged"),
+                (dict(level=95, charging=True, full=True), "", "95%, fully charged"),
+                (dict(level=100, charging=True, full=True, online=False), "",
+                 "100%, fully charged (last known value, device asleep)"),
                 (dict(level=85, charging_known=False), LEFT, "85%, charging status unknown"),
                 (dict(level=85, online=False), LEFT, "85% (last known value, device asleep)"),
                 (dict(level=85, charging=True, online=False), "", "85%, charging (last known value, device asleep)"),

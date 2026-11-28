@@ -273,7 +273,7 @@ Protocol from [justik13/razer-blackshark-v2-hyperspeed-webhid](https://github.co
 
 Read over that COM port at 115200 baud rather than HID: the dongle answers a fixed exchange - two initialisation frames, then a status query - and replies with a 14-byte frame starting `04 FF 0B 00 96 C3 14 04`, with the level in byte 12 and the charging flag in byte 11 (1 = charging). The port is opened with DTR and RTS raised, and Sony's own app (INZONE Hub) has to be closed because it claims the same port.
 
-The frame sequence and the reply signature come from [janit88/InZoneH9Tray](https://github.com/janit88/InZoneH9Tray) (`inzone_tray.py`), contributed for both the white and the black version in [#278](https://github.com/HeyOkay/HaloBattery/pull/278) by @BoringMan314. It needs `pyserial`, which the released builds bundle; a source run gets it from `requirements.txt`, and the provider says so in the diagnostics when it is missing.
+The frame sequence and the reply signature come from [janit88/InZoneH9Tray](https://github.com/janit88/InZoneH9Tray) (`inzone_tray.py`), contributed for both the white and the black version in [#278](https://github.com/HeyOkay/HaloBattery/pull/278) by @BoringMan314. It needs `pyserial`, which the released builds bundle; a source run gets it from `requirements/requirements.txt`, and the provider says so in the diagnostics when it is missing.
 
 ### Sony INZONE H5
 
@@ -708,7 +708,7 @@ estimate. [Manufacturer's ME5 Pro software download](https://darkproject.ru/prod
 
 VGN's Dragonfly 4K receiver (`3554:f505`) and the same mouse on its cable (`3554:f506`) follow the same exchange - the receiver lists six vendor pages on interface 1 with `ff02:0002` among them. The receiver is **confirmed on hardware by @TweaknFreak** ([owner confirmation](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6637051514)): the level it showed agreed with the vendor tool's 53 %, so the id is claimed from a working read rather than from the collection shape; the owner later [confirmed the cable and return to the receiver](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6704340833). The maintainer [recorded both ids as confirmed in stable 1.17.0](https://github.com/HeyOkay/HaloBattery/issues/323#issuecomment-6879098152).
 
-The ATK X1 Pro 1K dongle (373B:101A, #230), the ATK Fire X 8K (373B:101B) and the Compx keyboard receivers (3554:FA09 - seen on the AULA F75 in #247 and the LEOBOG Hi75C Pro in #257) list the same ff02:0002 control collection and are read with the same frame; the receiver id is shared by those keyboards, so the tray name is the receiver's, not one model's. The Corsair Sabre v2 Pro Ultralight (1B1C:2B2A, #290) is the same exchange too:
+The ATK X1 Pro 1K dongle (373B:101A, #230), the ATK Fire X 8K (373B:101B) and the Compx keyboard receivers (3554:FA09 - seen on the AULA F75 in #247 and the LEOBOG Hi75C Pro in #257) list the same ff02:0002 control collection and are read with the same frame; the receiver id is shared by those keyboards, so the tray name is the receiver's, not one model's. The 8K CompX dongle `373B:1278` ("Wireless mouse 8k dongle-L", shared by the ATK F1 V3 Ultimate+ and the A9 Air+) publishes the same `ff02:0002` collection and carries the same level/flag/millivolt bytes, but its firmware **refuses WriteFile** on that collection: the query is sent as HID `SET_REPORT` (`HidD_SetOutputReport`) and the reply is read from the same handle. That transport was measured on this receiver id by [sdparklab/Voltide's ATK provider](https://github.com/sdparklab/Voltide/blob/HEAD/src/Providers/ATKA9AiraddProvider.cs) (MIT); it also found that the checksum, 0x4D over bytes 1-15, is the family's 0x55 rule with the report id counted in. Reported in [#571](https://github.com/HeyOkay/HaloBattery/issues/571): test build 1 read the level on hardware. The same mouse on its USB cable enumerates as `373B:12A7` with the same `ff02:0002` collection and frame - the normal write is tried first, `SET_REPORT` if it is refused - and that is where its charging state comes from: the dongle disappears while the cable is in, so it cannot report the charger. The Corsair Sabre v2 Pro Ultralight (1B1C:2B2A, #290) is the same exchange too:
 its receiver publishes ff02:0002 and no ff42 at all, so it is read here rather than by
 the bragi path. The Teevolution Terra Pro (3554:F523, #300) is the same exchange behind the 'RapidSync' product string, with its vendor collection on interface 2. Its 1K sibling `3554:F520` is the same reader and is now claimed too; **confirmed on hardware** by @7-1ME in #448 at 100% (4235 mV). The ATK X1 Pro is [confirmed on hardware by @gnrlk3nobi](https://github.com/HeyOkay/HaloBattery/issues/230#issuecomment-6631717770) in #230: it read immediately, the level stayed within about 5 % of ATK HUB in both states (the two apps sample at different moments, so the sign flips), and the charging state followed the cable. The keyboard receiver and the Fire X 8K are still waiting for their testers.
 
@@ -1923,3 +1923,88 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+## Ported BatteryHub device families
+
+These readers were ported from BatteryHub 1.1.1 (GPL-3.0-or-later) as protocol
+references; no source code was copied. BatteryHub tested some of these devices
+on hardware, but Halo has not yet seen any of the new models, so every charging
+transition below remains unconfirmed in this app.
+
+### NuPhy
+
+- **WH80, `19f5:a011` USB cable.** Interface 1, usage `0001:0000`, unnumbered
+  64-byte reports. Read-only request `55 05 00 21 01 20 00 00`; reply starts
+  `aa 05 00 <sum> 01 20 00 00`, checksum is the low byte of the sum of bytes
+  4..63, byte 8 holds `bit 7 = charging`, `bits 0..6 = percent`. The stock
+  firmware reports in 10 % steps.
+- **Halo96 V2, `19f5:3247` receiver.** Requires the custom QMK/VIA firmware
+  from ollycrossley/nuphy-custom-firmware. Interface 1, usage `000c:0001`,
+  input report id 3, exact product string `NuPhy Halo96 V2 Dongle`. The
+  keyboard broadcasts consumer usages about every 15 s: optional `0f`
+  charging prefix, `07` start, `08 + high nibble`, `10 + low nibble`, `00`
+  release. Frames may not span more than 500 ms and samples expire after 35 s.
+  The Bluetooth id `19f5:324a` remains with the normal Windows Bluetooth
+  battery property.
+  Source: BatteryHub `docs/nuphy.md`, `docs/nuphy-halo96-v2.md`.
+
+### DARKRIM SHADOW
+
+`3654:6901`, interface 3, usage `ff02:0002`, 64-byte reports. Read-only GET:
+`fe <seq> 10 00 01 00 01 02 00 01 00 <crc16>`, where seq is a nonzero four-bit
+counter and CRC-16/CCITT-FALSE (poly 0x1021, init 0xffff) is stored big-endian.
+A valid reply is `fe <seq> 10 00 02 00 00 03 00 01 01 <value> <crc16>`; the
+single TLV value is `bit 7 = charging`, `bits 0..6 = percent`. Wait up to 800 ms
+for the matching sequence; startup notifications arrive first and are ignored.
+BatteryHub measured coarse 10 % steps and confirmed charging at 90 %; the
+parser does not round. Source: BatteryHub `docs/darkrim.md`.
+
+### Pulsar X2 V3, Feinmann and ZYWOO
+
+- **Sonix family, `3710:5402` X2 V3 1K, `5403` X2 V3 Mini 8K, `3402` Mini
+  cable, `3406` X2 V3 eS cable, `5404` Feinmann FO1.** Feature report 0,
+  command `08 81 01`, level at packet byte 6. Charging is a second read,
+  `08 83 01`, whose packet byte 6 is 1 on the cable. The 1K dongle documents
+  that charging query; on the other dongles a missing answer leaves the
+  charging state unknown rather than claiming "not charging".
+- **B4 mailbox, `3710:5405` PRO Dongle/ZYWOO and `7401` wired ZYWOO.**
+  65-byte Generic Desktop collection; write `b4`, read
+  `b4 <percent> .. 84/85 40 <charging>` (marker 86 is also accepted on the
+  wired mouse). Source: BatteryHub `src/drivers/pulsar.cpp`.
+
+### ATK Zero, 8K Nano, Mercury and Z87
+
+- **Zero, `373b:1154` cable and `124f` / `1155` receivers.** The same 64-byte
+  BITMOUSE framing as the NK NANO, usage `ff05:0001`, but target 0 on the
+  cable and 1 on a receiver, and checksum `0x7d`. Command 07 reads the level;
+  command 08 answers `02` for charging on the cable. The cable is preferred
+  when both identities are present.
+- **8K Nano, `373b:1178`.** Usage `ff10:0001`; feature report 0 carries
+  `00 82`, the reply is an input report starting `82`, byte 9 is the link
+  state (0 = no mouse), byte 8 is `bit 7 = charging`, `bits 0..6 = percent`.
+- **Mercury I / M1, `373b:107c`.** Usage `ff22:0001` feature mailbox,
+  `aa 01` hello, then memory reads at `0100fe94` (expected `0100fe5c`) and
+  `0100fe78` (capacity). No charging state is exposed.
+- **Z87, `373b:1012`.** Usage `ff1c:0092`, exact product string
+  `ATK Z87 Dongle`; request `04 <seq le> 1a ...`, reply byte 8 = percent and
+  byte 9 = 1 or 2 for charging. A `ff` command byte means the keyboard sleeps.
+  Source: BatteryHub `src/drivers/atk_bitmouse.cpp`, `atk_mercury.cpp`,
+  `atk_keyboard.cpp`.
+
+### Keychron additions
+
+- **4K Link receiver, `3434:d038`.** Usage `ff0a:0001`, request
+  `41 00 81 01` with the Launcher checksum; level is reply byte 6 and state
+  byte 5 (nonzero = charging). A first `01` query whose tag is `3434`/`362d`
+  means the 8K layout and is left to the existing reader.
+- **1K Link receivers, `3434:d030` / `d031`.** Usage page `008c`, feature
+  report `51` command `06`; reply bytes 4..5 are `3434`, 6..7 the mouse pid,
+  11 the level and 12 the charging flag.
+- **K5 Max, `3434:0a50`**, on the D030 receiver or its cable, and **Q6 Ultra
+  8K, `3434:1260`**, on the D028 receiver or its cable: `ff60:0061`, 33-byte
+  raw reports. `b2` lists the receiver slots; then `a4` (K5) returns level at
+  byte 1 and state at byte 4, or `a7 31` (Q6) returns level at byte 2 and
+  charging at byte 3. The first A4 may be lost while the link wakes, so it is
+  retried once.
+- **Link-KM mouse, `3434:d029`**, uses the existing `b3 06` Ultra-Link path.
+  Source: BatteryHub `src/drivers/keychron.cpp`.

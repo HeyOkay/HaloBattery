@@ -170,6 +170,7 @@ class PollTests(FinalmouseTestCase):
         answers[36] = [0]
         [st] = p.poll()
         self.assertEqual((st.level, st.online), (80, False))
+        self.assertTrue(st.asleep)
         self.assertEqual(self.commands()[-1], 36, "nothing asked after 'not connected'")
         self.assertTrue(st.wake_on_input,
                         "a sleeping mouse is awake by the time its movement lands, so the "

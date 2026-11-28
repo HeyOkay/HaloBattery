@@ -177,6 +177,8 @@ class VT9ProTests(unittest.TestCase):
                 device = Device(frames)
                 result = self.poll([item], {b"vt9pro": device})
                 self.assertEqual([(s.level, s.online) for s in result], [(100, False)])
+                self.assertTrue(result[0].asleep, "silence means asleep, not a charger")
+                self.assertFalse(result[0].charging, "a greyed reading keeps no charging flag")
                 self.assertEqual(device.closed, 1)
         self.assertEqual(self.poll([], {}), [])
         self.assertNotIn("rapoo:185a", self.provider._last)

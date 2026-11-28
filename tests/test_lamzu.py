@@ -121,6 +121,7 @@ class PollTest(unittest.TestCase):
             c.answer = None
         res = self.poll(entries, cols)
         self.assertEqual([(r.level, r.online) for r in res], [(81, False)])
+        self.assertTrue(res[0].asleep)
         self.provider._last = (81, False, time.time() - L.ASLEEP_KEEP)
         self.assertEqual(self.poll(entries, cols), [])
 

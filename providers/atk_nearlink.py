@@ -210,7 +210,7 @@ class AtkNearlinkProvider(Provider):
                                   "(its receiver is still plugged in)")
                 out.append(DeviceStatus(key, name, level, charging, False,
                                         "atk_nearlink", kind="mouse",
-                                        wake_on_input=True))
+                                        wake_on_input=True, asleep=True))
             else:
                 del self._last[key]
         return out

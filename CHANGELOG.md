@@ -12,6 +12,29 @@ and the project follows [Semantic Versioning](https://semver.org/).
   and USB cable (`3554:FB2D`), with one icon across both connections and a
   charging indicator driven by the mouse's power report. The percentage uses the
   model's voltage calibration, so it can update between the firmware's coarse readings.
+- React to a receiver or cable arriving or leaving, and to a resume from sleep, as
+  soon as Windows reports it instead of at the next poll: a hidden window receives
+  the same device and power broadcasts the vendor tools use and coalesces a dock's
+  burst of interfaces into one refresh. The existing check every few seconds stays
+  as the fallback.
+- A charging device at 100 % is now shown as fully charged: its ring stops breathing
+  and stays green, and the tooltip says so, translated in every language. A provider
+  with a real "charged" flag can set the same state below 100 %. Only a live reading
+  counts, never a greyed last known value.
+- The last level kept for a sleeping mouse is never shown as charging or fully
+  charged, so a mouse that fell asleep on its cable no longer looks like it is still
+  charging (#109). Pulsar, Rapoo, ATK, Attack Shark R11, Dareu, Finalmouse, HyperX
+  and Lamzu mice mark that reading as asleep, and moving a sleeping Rapoo mouse now
+  re-reads it.
+- `status.json` gains `full` and `asleep` and follows the tooltip: it no longer
+  reports a sleeping mouse as charging.
+- Read the standard HID battery fields of devices that publish them instead of a
+  vendor protocol: page 0x06 usage 0x20 (Battery Strength) or page 0x85 usage 0x65
+  (Relative State of Charge), with the page-0x85 charging, discharging, full and AC
+  usages as the charge state. Only collections whose own top-level usage is a
+  battery level are opened, only feature and input reports are read, and a vendor
+  driver's reading always wins over the fallback. Windows' own HID parser supplies
+  the report layout, so nothing is guessed.
 
 ### Fixed
 
@@ -160,6 +183,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
   unknown. Test build 2 confirmed wired charging on hardware; the wireless replies with
   and without a wall charger differ only in the level byte
   ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
+- Read the ATK F1 V3 Ultimate+ on its 2.4 GHz CompX 8K receiver (`373B:1278`)
+  with the shared 17-byte power query, so the tray shows its level (#571). This
+  dongle refuses the interrupt-OUT write, so the query goes out as HID
+  `SET_REPORT` and the reply is read from the same handle. On its USB cable the
+  mouse is `373B:12A7`: the same frame is read there, which is also where its
+  charging state comes from (the dongle is gone while the cable is in).
+- Port the cleanly documented BatteryHub device families: NuPhy WH80/Halo96 V2,
+  DARKRIM SHADOW, ATK Zero / 8K Nano / Mercury / Z87, Pulsar X2 V3 / Feinmann /
+  ZYWOO and the additional Keychron 4K, 1K and keyboard models. See
+  `docs/protocols.md`, "Ported BatteryHub device families".
+  These are protocol ports with offline fixtures only: none of the new models
+  has been tested on hardware in Halo, so their charging transitions are not
+  yet confirmed.
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).
