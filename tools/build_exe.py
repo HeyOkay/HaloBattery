@@ -149,7 +149,7 @@ def main() -> None:
         environment = Path(directory)
         venv.EnvBuilder(with_pip=True).create(environment)
         python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        install_build_requirements(python, ROOT / "requirements-build.txt", args.wheelhouse)
+        install_build_requirements(python, ROOT / "requirements" / "requirements-build.txt", args.wheelhouse)
         if args.prepare_local_build:
             prepare_local_build(python, args.native_ui,
                                 args.native_intermediate or workpath.parent / "settings-ui-obj")

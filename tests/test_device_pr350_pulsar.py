@@ -169,6 +169,8 @@ class PulsarTest(unittest.TestCase):
             for pid in pids:
                 if (vid, pid) in P.atk_bitmouse.PIDS:
                     continue        # another protocol: tests/test_atk_bitmouse.py
+                if (vid, pid) in P.SET_REPORT_PIDS:
+                    continue        # HID SET_REPORT transport: tests/test_pulsar.py
                 with self.subTest(vid=vid, pid=pid):
                     bus = FakeBus(vid, pid, [reply(33)])
                     P.output_length = lambda path: None

@@ -23,7 +23,7 @@ RUNTIME_ARCHIVES = {
 
 class DotnetToolchainPinTests(unittest.TestCase):
     def test_local_sdk_and_publisher_require_reviewed_patch_without_roll_forward(self):
-        pin = json.loads((ROOT / "global.json").read_text(encoding="utf-8"))["sdk"]
+        pin = json.loads((ROOT / "ui" / "global.json").read_text(encoding="utf-8"))["sdk"]
         self.assertEqual(pin, {"version": SDK, "rollForward": "disable", "allowPrerelease": False})
         publisher = (ROOT / "scripts/build_settings.ps1").read_text(encoding="utf-8")
         self.assertRegex(publisher, r"\$sdkVersion\.Trim\(\) -ne '" + re.escape(SDK) + "'")

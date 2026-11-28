@@ -1,5 +1,5 @@
 <p align="center">
-<a href="https://halobattery.app/"><img src="docs/readme/links/website.svg" align="middle" alt="Website" width="40"></a>&emsp;<strong>English</strong>&#8202;·&#8202;<a href="README.ru.md"><img src="docs/readme/links/ru-language.svg" align="middle" alt="Русский" width="46"></a>&#8202;·&#8202;<a href="README.zh-CN.md"><img src="docs/readme/links/language.svg" align="middle" alt="简体中文" width="50"></a>&emsp;<a href="docs/code-signing.md"><picture><source media="(max-width: 440px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-compact-dark.svg"><source media="(max-width: 440px) and (prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-compact.svg"><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg"><img src="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg" align="middle" alt="Code signing"></picture></a>&nbsp;<a href="https://github.com/HeyOkay/HaloBattery/releases"><picture><source media="(max-width: 440px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-compact-dark.svg"><source media="(max-width: 440px) and (prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-compact-light.svg"><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-light.svg"><img src="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-light.svg" align="middle" alt="Total release asset downloads"></picture></a>
+<a href="https://halobattery.app/"><img src="docs/readme/links/website.svg" align="absmiddle" alt="Website"></a>&emsp;<strong>English</strong>&#8202;·&#8202;<a href="docs/readme/README.ru.md"><img src="docs/readme/links/ru-language.svg" align="absmiddle" alt="Русский"></a>&#8202;·&#8202;<a href="docs/readme/README.zh-CN.md"><img src="docs/readme/links/language.svg" align="absmiddle" alt="简体中文"></a>&emsp;<a href="docs/code-signing.md"><picture><source media="(max-width: 440px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-compact-dark.svg"><source media="(max-width: 440px) and (prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-compact.svg"><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg"><img src="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/signpath.svg" align="absmiddle" alt="Code signing"></picture></a>&nbsp;<a href="https://github.com/HeyOkay/HaloBattery/releases"><picture><source media="(max-width: 440px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-compact-dark.svg?v=2"><source media="(max-width: 440px) and (prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-compact-light.svg?v=2"><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-dark.svg?v=2"><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-light.svg?v=2"><img src="https://raw.githubusercontent.com/HeyOkay/HaloBattery/docs/readme-download-stats/downloads-en-light.svg?v=2" align="absmiddle" alt="Total release asset downloads"></picture></a>
 </p>
 
 <p align="center">
@@ -16,10 +16,10 @@
 
 A ring for your mouse, keyboard, headset and controller, each with its own low-battery alert.
 
-<a href="https://github.com/HeyOkay/HaloBattery/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/stable-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/stable-light.svg"><img src="docs/readme/buttons/stable-light.svg" alt="Download the stable release for Windows"></picture></a>&ensp;<wbr><a href="https://github.com/HeyOkay/HaloBattery/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/prerelease-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/prerelease-light.svg"><img src="docs/readme/buttons/prerelease-light.svg" alt="Browse pre-release builds"></picture></a><br>
+<a href="https://github.com/HeyOkay/HaloBattery/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/stable-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/stable-light.svg"><img src="docs/readme/buttons/stable-light.svg" alt="Download the stable release for Windows"></picture></a>&ensp; <a href="https://github.com/HeyOkay/HaloBattery/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/prerelease-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/prerelease-light.svg"><img src="docs/readme/buttons/prerelease-light.svg" alt="Browse pre-release builds"></picture></a><br>
 <sub>Windows 10 / 11 · x64 · Installer and portable ZIP</sub>
 
-Support project via &nbsp;<a href="https://ko-fi.com/halobattery"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/ko-fi-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/ko-fi.svg"><img src="docs/readme/buttons/ko-fi.svg" width="94" align="middle" alt="Support Halo Battery on Ko-fi"></picture></a>&ensp;<wbr><a href="https://paypal.me/hellobattery"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/paypal-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/paypal.svg"><img src="docs/readme/buttons/paypal.svg" width="94" align="middle" alt="Donate to Halo Battery with PayPal"></picture></a>
+Support project via &nbsp;<a href="https://ko-fi.com/halobattery"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/ko-fi-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/ko-fi.svg"><img src="docs/readme/buttons/ko-fi.svg" width="94" align="absmiddle" alt="Support Halo Battery on Ko-fi"></picture></a>&ensp; <a href="https://paypal.me/hellobattery"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/paypal-dark.svg"><source media="(prefers-color-scheme: light)" srcset="docs/readme/buttons/paypal.svg"><img src="docs/readme/buttons/paypal.svg" width="94" align="absmiddle" alt="Donate to Halo Battery with PayPal"></picture></a>
 
 </div>
 
@@ -33,13 +33,15 @@ Support project via &nbsp;<a href="https://ko-fi.com/halobattery"><picture><sour
 
 ## Features
 
+<p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/devices-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/readme/devices-light.svg">
-  <img src="docs/readme/devices-light.svg" alt="Mouse at 100%, charging keyboard at 65%, headset at 25%, and controller at 10%" width="100%">
+  <img src="docs/readme/devices-light.svg" alt="Mouse at 100%, charging keyboard at 65%, headset at 25%, and controller at 10%" width="760">
 </picture>
+</p>
 
-- **Read the ring.** With a 20% alert threshold, 21–30% is amber and 20% or less is red. Above 30%, the ring follows the tray theme. With charging animation enabled, a known level pulses green. If the device reports charging without a percentage, a green arc rotates.
+- **Read the ring.** With a 20% alert threshold, 21–30% is amber and 20% or less is red. Above 30%, the ring follows the tray theme. With charging animation enabled, a known level pulses green until the device is fully charged, then the ring stays steady green. If the device reports charging without a percentage, a green arc rotates.
 - **Read the device directly.** Halo Battery checks a 2.4 GHz receiver, a USB cable or Windows Bluetooth. You can close the vendor’s software.
 - **Set up each device.** Choose when each device needs attention. By default, alerts wait while a full-screen game is open.
 
@@ -66,12 +68,12 @@ Choose the stable release above, then pick a file under **Assets**. To try upcom
 
 To verify your download, compare its SHA-256 hash with the entry in `SHA256SUMS.txt` from the same release.
 
-<a href="docs/features.md"><img src="docs/readme/links/features.svg" align="middle" alt="Features and settings"></a> · <a href="docs/features.md#portable-mode"><img src="docs/readme/links/portable.svg" align="middle" alt="Portable mode"></a> · <a href="docs/features.md#run-from-source"><img src="docs/readme/links/source.svg" align="middle" alt="Run from source"></a>
+<a href="docs/features.md"><img src="docs/readme/links/features.svg" align="absmiddle" alt="Features and settings"></a> · <a href="docs/features.md#portable-mode"><img src="docs/readme/links/portable.svg" align="absmiddle" alt="Portable mode"></a> · <a href="docs/features.md#run-from-source"><img src="docs/readme/links/source.svg" align="absmiddle" alt="Run from source"></a>
 
 ## Supported devices
 
 Mice, keyboards, headsets and controllers over a 2.4 GHz receiver, a USB cable or Bluetooth.
-**<a href="docs/devices.md"><img src="docs/readme/links/device-list.svg" align="middle" alt="See the full list →"></a>** It shows the connection and whether each device has been tested on real hardware.
+**<a href="docs/devices.md"><img src="docs/readme/links/device-list.svg" align="absmiddle" alt="See the full list →"></a>** It shows the connection and whether each device has been tested on real hardware.
 
 ## Add your device
 
@@ -85,9 +87,9 @@ Is your device not detected, or does it show a wrong level? Send a diagnostics r
      <img src="docs/contributing/diagnostics-menu-light.png" alt="The tray menu of a device, with the Diagnostics item marked" width="216">
    </picture>
 
-3. Halo Battery opens `diagnostics.txt` in your default app for text files. <a href="../../issues/new?template=device.yml"><img src="docs/readme/links/issue.svg" align="middle" alt="Open an issue"></a>, write the device name and how it is connected (receiver, cable or Bluetooth), and drag the file into the comment box. By default the file is in `%APPDATA%\HaloBattery`. In portable mode it is beside the executable.
+3. Halo Battery opens `diagnostics.txt` in your default app for text files. <a href="../../issues/new?template=device.yml"><img src="docs/readme/links/issue.svg" align="absmiddle" alt="Open an issue"></a>, write the device name and how it is connected (receiver, cable or Bluetooth), and drag the file into the comment box. By default the file is in `%APPDATA%\HaloBattery`. In portable mode it is beside the executable.
 
-The report contains Bluetooth MAC addresses and device serial numbers. You can replace them with `xx` before you post. <a href=".github/CONTRIBUTING.md"><img src="docs/readme/links/contributing.svg" align="middle" alt="CONTRIBUTING.md"></a> explains the report, how to record a USB capture of the maker's app, and how to open a pull request.
+The report contains Bluetooth MAC addresses and device serial numbers. You can replace them with `xx` before you post. <a href=".github/CONTRIBUTING.md"><img src="docs/readme/links/contributing.svg" align="absmiddle" alt="CONTRIBUTING.md"></a> explains the report, how to record a USB capture of the maker's app, and how to open a pull request.
 
 <details>
 <summary><b>Troubleshooting</b></summary>
@@ -95,21 +97,21 @@ The report contains Bluetooth MAC addresses and device serial numbers. You can r
 1. Close Synapse, the WLmouse web driver and other battery tools: they may hold the receiver.
 2. Wake the mouse up by moving it.
 3. If the battery level still does not appear and the device uses a USB receiver, unplug the receiver and plug it back in.
-4. Choose **Diagnostics** from the tray menu and send the report as <a href="#add-your-device"><img src="docs/readme/links/add-device.svg" align="middle" alt="Add your device"></a> tells you.
+4. Choose **Diagnostics** from the tray menu and send the report as <a href="#add-your-device"><img src="docs/readme/links/add-device.svg" align="absmiddle" alt="Add your device"></a> tells you.
 5. **"python312.dll was not found"**, or **Start with Windows** says the app runs from a temporary folder: the app was started straight from the ZIP, or only `HaloBattery.exe` was copied out of it. Extract the whole ZIP to a folder of its own and run `HaloBattery.exe` from there.
 
-Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in the app's own folder in <a href="docs/features.md#portable-mode"><img src="docs/readme/links/portable-inline.svg" align="middle" alt="portable mode"></a>). The `data folder:` line near the top of the diagnostics report shows the active folder.
+Settings, the log and the diagnostics report live in `%APPDATA%\HaloBattery` (in the app's own folder in <a href="docs/features.md#portable-mode"><img src="docs/readme/links/portable-inline.svg" align="absmiddle" alt="portable mode"></a>). The `data folder:` line near the top of the diagnostics report shows the active folder.
 
 </details>
 
 ## Community
 
-<a href=".github/CONTRIBUTING.md"><img src="docs/readme/links/contribute.svg" align="middle" alt="Contribute to the project"></a> · <a href="https://discord.gg/K796KR9xtk"><img src="docs/readme/links/discord.svg" align="middle" alt="Join the Discord community"></a>
+<a href=".github/CONTRIBUTING.md"><img src="docs/readme/links/contribute.svg" align="absmiddle" alt="Contribute to the project"></a> · <a href="https://discord.gg/K796KR9xtk"><img src="docs/readme/links/discord.svg" align="absmiddle" alt="Join the Discord community"></a>
 
 ## Credits
 
-Device protocols come from OpenRazer, HeadsetControl, Solaar, rivalcfg, G-Helper and other open projects, and from captures and test runs sent by the community. **<a href="docs/credits.md"><img src="docs/readme/links/credits.svg" align="middle" alt="Full credits →"></a>**
+Device protocols come from OpenRazer, HeadsetControl, Solaar, rivalcfg, G-Helper and other open projects, and from captures and test runs sent by the community. **<a href="docs/credits.md"><img src="docs/readme/links/credits.svg" align="absmiddle" alt="Full credits →"></a>**
 
-MIT licensed, see <a href="LICENSE"><img src="docs/readme/links/license.svg" align="middle" alt="LICENSE"></a>. <a href="docs/code-signing.md"><img src="docs/readme/links/signing.svg" align="middle" alt="Code-signing policy"></a>.
+MIT licensed, see <a href="LICENSE"><img src="docs/readme/links/license.svg" align="absmiddle" alt="LICENSE"></a>. <a href="docs/code-signing.md"><img src="docs/readme/links/signing.svg" align="absmiddle" alt="Code-signing policy"></a>.
 
-<a href="docs/privacy.md"><img src="docs/readme/links/privacy.svg" align="middle" alt="Privacy"></a>
+<a href="docs/privacy.md"><img src="docs/readme/links/privacy.svg" align="absmiddle" alt="Privacy"></a>

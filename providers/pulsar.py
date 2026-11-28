@@ -137,7 +137,8 @@ from .base import DeviceStatus, Provider, hexdump, log
 from .pulsar_models import model_name
 from .compx import (CHECKSUM_BASE, CMD_POWER, CONTROL_USAGE, PAYLOAD_HEADER, PAYLOAD_LEN,
                     POWER_INDEX, LEVEL_INDEX, VOLTAGE_SLICE, READ_ATTEMPTS, READ_TIMEOUT_MS,
-                    checksum, make_request, output_length, parse_power, voltage_mv)
+                    checksum, make_request, output_length, parse_power, set_output_query,
+                    voltage_mv)
 
 CONTROL_INTERFACE = 1           # the tool reads its 17-byte replies on interface 1
 FLUSH_TIMEOUT_MS = 30
@@ -149,6 +150,14 @@ MODEL_CID_INDEX = 6
 MODEL_MID_INDEX = 7
 # Pulsar ids (vendor 0x3710) whose mouse is asked for its model, and how it is connected
 MODEL_PIDS = {0x5406: "2.4 GHz", 0x3510: "wired"}
+
+# This 8K dongle rejects WriteFile on its vendor collection and only answers
+# HID SET_REPORT, so it takes the path in compx.set_output_query().
+SET_REPORT_PIDS = {(0x373B, 0x1278)}
+
+# The same mouse on its cable is a different id with the same collection. It is
+# tried on the normal write first; if that is refused, SET_REPORT is tried too.
+SET_REPORT_FALLBACK_PIDS = {(0x373B, 0x12A7)}
 
 SONIX_VID = 0x3710
 SONIX_PIDS = {
@@ -219,6 +228,10 @@ PIDS: Dict[int, Dict[int, str]] = {
         # the R1 Pro Max on its cable as some units enumerate it ('VXE R1 PRO MAX'):
         # the same collections as 3554:f58c, read on hardware (docstring)
         0x1273: "VXE R1 Pro Max (wired)",
+        # 8K Compx dongle, shared by the F1 V3 Ultimate+ and the A9 Air+. Its
+        # firmware refuses the interrupt-OUT write, so it goes through SET_REPORT.
+        0x1278: "ATK F1 V3 Ultimate+ (2.4 GHz)",
+        0x12A7: "ATK F1 V3 Ultimate+ (wired)",
     },
     0x3770: {
         0x0300: "Hitscan Hyperlight (8K receiver)",
@@ -635,6 +648,18 @@ class PulsarProvider(Provider):
                             d["path"], self._diag, wired=(pid == atk_bitmouse.ZERO_CABLE))
                     else:
                         parsed = atk_bitmouse.read_power(d["path"], self._diag)
+                elif (vid, pid) in SET_REPORT_PIDS:
+                    self._diag.append("    sent with HID SET_REPORT (WriteFile is refused)")
+                    reply = set_output_query(d["path"])
+                    if reply is None:
+                        self._diag.append("    SET_REPORT was refused or the dongle did not answer")
+                    parsed = parse_power(reply)
+                elif (vid, pid) in SET_REPORT_FALLBACK_PIDS:
+                    reply = self._query(d["path"])
+                    if reply is None:
+                        self._diag.append("    no interrupt-OUT reply; trying HID SET_REPORT")
+                        reply = set_output_query(d["path"])
+                    parsed = parse_power(reply)
                 else:
                     reply = self._query(d["path"])
                     parsed = parse_power(reply)
@@ -681,10 +706,10 @@ class PulsarProvider(Provider):
                 name, charging = PIDS.get(vid, {}).get(pid, name), False
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
-                                  f"{' (charging)' if charging else ''} greyed "
-                                  f"(its receiver is still plugged in)")
-                out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
-                                        kind=kind, wake_on_input=True))
+                                  f"{' (was charging)' if charging else ''} greyed "
+                                  f"(its receiver is still plugged in; asleep, not charging)")
+                out.append(DeviceStatus(key, name, level, False, False, "pulsar",
+                                        kind=kind, asleep=True, wake_on_input=True))
             else:
                 del self._last[key]
                 self._via_cable.discard(key)

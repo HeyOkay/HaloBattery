@@ -154,7 +154,7 @@ except ImportError:
 import pystray  # noqa: E402
 from pystray import Menu, MenuItem as Item  # noqa: E402
 
-from halo import app_icon, build_info, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
+from halo import app_icon, build_info, device_events, flyout, history, icons, tray_history, updates, whatsnew, winevents  # noqa: E402
 from halo import i18n, tray_dpi  # noqa: E402
 
 from providers import hidlist  # noqa: E402
@@ -178,7 +178,7 @@ from providers import (AmInfinityProvider, AstroProvider, AsusProvider,  # noqa:
                        MchoseK99Provider,
                        CherryProvider, CoolerMasterProvider, JblHidV3Provider, RoyalKludgeProvider, ZowieProvider, FractalProvider,
                        AresonProvider, FantechProvider, MsiProvider, WraithProvider, ArbiterProvider, MachenikeProvider, MoondropProvider, NinjutsoSprimeProvider,
-                       AttackSharkR5Provider, SonyH9IIProvider)
+                       AttackSharkR5Provider, SonyH9IIProvider, HidBatteryProvider)
 from providers.bluetooth import BluetoothWatcher  # noqa: E402
 from providers.jbl import PROBE_LISTEN_S as JBL_PROBE_LISTEN_S  # noqa: E402
 from providers.bluetooth import NativeBluetoothWatcher  # noqa: E402
@@ -288,6 +288,7 @@ PROVIDER_LABELS = {
     "glorious": "Glorious Model O Wireless",
     "gs3075t": "GANSS GS3075T keyboards",
     "gwolves": "G-Wolves mice",
+    "hid_battery": "Other standard-HID devices",
     "hyperx": "HyperX Cloud II Wireless",
     "hyperx_alpha2": "HyperX Cloud Alpha 2",
     "hyperx_alpha_wireless": "HyperX Cloud Alpha Wireless",
@@ -373,7 +374,9 @@ def make_providers(jbl_listen_first: float = 0.0) -> list:
             SonyInzoneProvider(), SonyH9IIProvider(), AtkNearlinkProvider(), FinalmouseProvider(), AtkKeyboardProvider(), AttackSharkX66Provider(),
             AttackSharkR11Provider(),
             HyperXAlphaWirelessProvider(), JabraProvider(), HyperXCloudFlightProvider(), MonsGeekProvider(), RoyuanProvider(),
-            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider()]
+            EweadnProvider(), EweadnYdxProvider(), MchoseKbProvider(), Endgame4kProvider(), PlantronicsProvider(), HyperXNgenuityProvider(), AlienwareProvider(), DjiProvider(), DarmosharkProvider(), GloriousProvider(), Gs3075tProvider(), LamzuSinowealthProvider(), UrxProvider(), MchoseK99Provider(), RedSquareProvider(), KrakenV4Provider(), NinjutsoSoraV3Provider(), AkkoS9Provider(), LogitechG325Provider(), JblQuantum350Provider(),
+            # last: it is the fallback for devices no vendor driver above can read
+            HidBatteryProvider()]
 
 
 # ---------------------------------------------------------------- config
@@ -1257,6 +1260,37 @@ def drop_bluetooth_duplicates(results: List[DeviceStatus],
     return kept
 
 
+def drop_hid_battery_duplicates(results: List[DeviceStatus],
+                                logged: Set[str]) -> List[DeviceStatus]:
+    """A vendor reading beats the standard-HID fallback for the same device.
+
+    The fallback reads collections whose own top-level usage is a battery level. A
+    vendor driver can read the same physical device through a different collection,
+    which would otherwise put two icons in the tray; the device family name ties
+    them together, exactly as it does for Bluetooth copies. A fallback reading stays
+    when no vendor provider reports the device at all, which is the case it exists for.
+    """
+    vendors = [device_family(st.name) for st in results
+               if st.source != "hid_battery" and st.level is not None]
+    kept: List[DeviceStatus] = []
+    for st in results:
+        if st.source == "hid_battery":
+            fam = device_family(st.name)
+            # both sides need enough of a name to be a device, not a fragment
+            duplicate = bool(fam) and any(
+                fam == v or (min(len(fam), len(v)) >= 6 and (fam in v or v in fam))
+                for v in vendors)
+            if duplicate:
+                if st.key not in logged:
+                    logged.add(st.key)
+                    log.info("[HID] %s is read by its own driver, the standard-HID "
+                             "copy is not shown", st.name)
+                continue
+            logged.discard(st.key)
+        kept.append(st)
+    return kept
+
+
 try:                             # Win32 only; harmless to define elsewhere
     import ctypes as _ctypes
 
@@ -1304,6 +1338,28 @@ def phone_link_last_reported(st: DeviceStatus) -> bool:
             and type(st.level) is int and 0 <= st.level <= 100)
 
 
+def with_power_state(st: DeviceStatus) -> DeviceStatus:
+    """Mark a charging device at 100 % as full, and an asleep reading as not charging.
+
+    Providers with a real "charged" flag may set `full` themselves (and at a lower
+    level); every other protocol only has a charging bit, so 100 % on the charger is
+    the point where the icon should stop breathing and the tooltip says "fully charged".
+    Only a live reading gets there: a greyed one is a last known value.
+
+    A reading kept for an asleep device is its last level, not a charger report
+    (#109), so it keeps neither a charging nor a full flag. A device that is switched
+    off on its cable is not asleep and keeps the charging its provider reports.
+    """
+    if st.asleep and not st.online:
+        if st.charging or st.full:
+            return replace(st, charging=False, full=False)
+        return st
+    if (st.charging and not st.full and st.online and st.level is not None
+            and st.level >= 100 and st.charging_known):
+        return replace(st, full=True)
+    return st
+
+
 def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> str:
     """The part of describe() after the name: "85%, charging", "no link ..."."""
     if phone_link_last_reported(st):
@@ -1333,7 +1389,9 @@ def device_state(st: DeviceStatus, left: str = "", *, language: str = "en") -> s
         state = i18n.translate("state.no_link", language=language)
     else:
         state = i18n.translate("state.level", language=language, level=st.level)
-        if st.charging:
+        if st.full:
+            state = i18n.translate("state.fully_charged", language=language, state=state)
+        elif st.charging:
             state = i18n.translate("state.charging", language=language, state=state)
         elif not st.charging_known:
             state = i18n.translate("state.charging_unknown", language=language, state=state)
@@ -1620,6 +1678,9 @@ class App:
         self.light_taskbar = False
         self.theme_evt = threading.Event()   # "re-check the icon colour now"
         self.win_events: Optional[winevents.WindowEventWatcher] = None
+        self.device_events: Optional[device_events.DeviceEventWatcher] = None
+        self.device_event_at = 0.0            # monotonic time of the last arrival, removal or resume
+        self.device_event_reason = ""
         self.light_taskbar = self.compute_light()
         self.tray_size = tray_dpi.tray_pixels()
         self.providers = make_providers()
@@ -1634,6 +1695,7 @@ class App:
         self.placeholder: Optional[pystray.Icon] = None
         self.lock = threading.RLock()
         self._bt_dup_logged: Set[str] = set()   # Bluetooth copies already reported
+        self._hid_dup_logged: Set[str] = set()  # standard-HID copies already reported
         self.wake = WakeEvent()
         self.stop_evt = threading.Event()
         self.diag_requested = threading.Event()
@@ -1742,7 +1804,7 @@ class App:
     def icon_render_state(self, st: DeviceStatus, *, size: Optional[int] = None) -> tuple:
         """The shared tray/Settings render contract; size is physical pixels."""
         badge = self.pictogram(st) if self.cfg["badges"] else ""
-        animate = self.cfg["animation"] and st.charging and st.online
+        animate = self.cfg["animation"] and st.charging and st.online and not st.full
         # Exact and coarse ("about NN%") levels show the number; the tooltip and
         # status file keep the "about" wording. Any other approx text marks a
         # level the device did not report as a number (a wired pad's placeholder
@@ -2728,7 +2790,11 @@ class App:
             bt = list(self.bt_cache)
             results = dedupe_controllers(results, bt) + bt
             results = drop_bluetooth_duplicates(results, self._bt_dup_logged)
-        return results
+        # A vendor protocol always wins over the standard-HID fallback.
+        logged = getattr(self, "_hid_dup_logged", None)
+        if logged is None:                 # apps built in tests skip __init__
+            logged = self._hid_dup_logged = set()
+        return drop_hid_battery_duplicates(results, logged)
 
     def show_bluetooth(self):
         """New Bluetooth results between two polls: merge them with the last poll's
@@ -2860,6 +2926,7 @@ class App:
         hidden = self._settings_map("hidden")
         now = time.time()
         for st in results:
+            st = with_power_state(st)
             # "Hide this device" runs in a menu thread: with the lock, a device is
             # either hidden before this check or has its icon removed after the update
             with self.lock:
@@ -3026,13 +3093,14 @@ class App:
         if st.level is None or not st.charging_known:
             return  # Still connected: wait for confirmation, never alert on this sample.
         prev = self.full_state.get(st.key)
-        if st.level >= 100 and prev == "charging" and self.cfg.get("full_alert", True):
+        is_full = st.full or st.level >= 100
+        if is_full and prev == "charging" and self.cfg.get("full_alert", True):
             try:
                 self.notify(ic.icon, st.key, fully_charged_text(self.display_name(st)),
                             "Fully charged", kind="full", params={"name": self.display_name(st)})
             except Exception as e:
                 log.warning("notify: %s", e)
-        if st.level >= 100:
+        if is_full:
             self.full_state[st.key] = "full"
         elif not st.charging:
             self.full_state[st.key] = "idle"
@@ -3254,6 +3322,7 @@ class App:
         for st in results:
             if st.key in hidden:
                 continue
+            st = with_power_state(st)  # the same charging and full states as the tooltip
             secs = None if st.approx else self.history.seconds_left(st.key, st.level)
             if st.charging or not st.online or not st.charging_known:
                 secs = None
@@ -3262,8 +3331,10 @@ class App:
                 "name": self.display_name(st),
                 "level": st.level,
                 "charging": st.charging,
+                "full": st.full,
                 "charging_known": st.charging_known,
                 "online": st.online,
+                "asleep": st.asleep,
                 "polling_stale": st.polling_stale,
                 "kind": self.pictogram(st),
                 "approx": st.approx or None,
@@ -3602,7 +3673,7 @@ class App:
                     cleanup.append(("ATK", provider.close))
                 elif isinstance(provider, MchoseK99Provider):
                     cleanup.append(("MCHOSE K99", provider.close))
-            for name in ("win_events", "bt_watch"):
+            for name in ("win_events", "device_events", "bt_watch"):
                 target = getattr(self, name, None)
                 if target is not None:
                     cleanup.append((name, target.stop))
@@ -3667,6 +3738,17 @@ class App:
             return
         log.info("tray history: shell preference not ready; migration deferred")
 
+    def _on_device_change(self, reason: str) -> None:
+        """A receiver arrived or left, a Bluetooth link came up, or the PC resumed.
+
+        Runs on the watcher's timer thread. A full poll is what makes a cable,
+        a dongle or a dock visible on screen at once instead of at the next
+        interval; the signature check in wait_next() stays as the fallback.
+        """
+        self.device_event_at = time.monotonic()
+        self.device_event_reason = reason
+        self.wake.set()
+
     def run(self):
         log.info("start v%s", VERSION)
         try:
@@ -3680,6 +3762,8 @@ class App:
                 self.start_native_transport()
             worker = threading.Thread(target=self.loop, daemon=True)
             worker.start()
+            self.device_events = device_events.DeviceEventWatcher(self._on_device_change)
+            log.info("device events: %s", "on" if self.device_events.start() else "unavailable")
             threading.Thread(target=self.theme_loop, daemon=True).start()
             threading.Thread(target=self.anim_loop, daemon=True).start()
             threading.Thread(target=self.bt_loop, daemon=True).start()

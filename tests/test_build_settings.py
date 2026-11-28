@@ -26,7 +26,7 @@ class SettingsPublishTests(unittest.TestCase):
         (self.repo / "halo.ico").write_bytes(b"icon")
         (self.repo / "halo_battery.pyw").write_text('VERSION = "1.17.0"\n', encoding="utf-8")
         for name in ("global.json", "NuGet.Config"):
-            shutil.copyfile(REPOSITORY / name, self.repo / name)
+            shutil.copyfile(REPOSITORY / "ui" / name, self.repo / "ui" / name)
         self.packages = self.root / "packages"
         pins = {}
         for name in ("Fake.Main", "Fake.SDK"):

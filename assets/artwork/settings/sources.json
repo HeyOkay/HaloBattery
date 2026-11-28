@@ -1,7 +1,7 @@
 {
   "package": "lucide-static",
   "version": "1.17.0",
-  "license": "../../docs/licenses/lucide-1.17.0-LICENSE.txt",
+  "license": "../../../docs/licenses/lucide-1.17.0-LICENSE.txt",
   "icons": {
     "menu": {
       "source": "https://unpkg.com/lucide-static@1.17.0/icons/menu.svg",

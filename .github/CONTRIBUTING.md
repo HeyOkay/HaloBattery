@@ -86,15 +86,15 @@ AI coding agents: read [AGENTS.md](../AGENTS.md) first.
 - CI packages with Python 3.12.10 and also runs the full unit suite on Python
   3.13.17 and 3.14.10. Ruff checks correctness errors without a formatting rewrite.
   Both compatibility and lint must pass before the required `tests` check can
-  succeed. To run lint locally, install `requirements-lint.txt` with
-  `python -m pip install --require-hashes -r requirements-lint.txt`, then run
-  `python -m ruff check halo_battery.pyw halo providers tools tests`.
-- CI installs from `requirements-build.txt` (exact versions and hashes, Windows,
-  with PyInstaller). `requirements.txt` stays the loose source-run list. After
-  you change `requirements.txt` or `requirements-build.in`, regenerate the lock with:
+  succeed. To run lint locally, install `requirements/requirements-lint.txt` with
+  `python -m pip install --require-hashes -r requirements/requirements-lint.txt`, then run
+  `python -m ruff check --config .github/ruff.toml halo_battery.pyw halo providers tools tests`.
+- CI installs from `requirements/requirements-build.txt` (exact versions and hashes, Windows,
+  with PyInstaller). `requirements/requirements.txt` stays the loose source-run list. After
+  you change `requirements/requirements.txt` or `requirements/requirements-build.in`, regenerate the lock with:
 
   ```
-  uv pip compile requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements-build.txt
+  uv pip compile requirements/requirements-build.in --generate-hashes --python-version 3.12 --python-platform windows -o requirements/requirements-build.txt
   ```
 - Native dependency locks, compiler pins and verified local packaging are
   described in [Building](../docs/building.md). Do not silently regenerate locks

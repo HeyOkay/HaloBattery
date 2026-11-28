@@ -28,6 +28,7 @@ from .steelseries_elite import SteelSeriesEliteProvider  # noqa: F401
 from .jbl import JblProvider  # noqa: F401
 from .jbl_hidv3 import JblHidV3Provider  # noqa: F401
 from .jbl_quantum350 import JblQuantum350Provider  # noqa: F401
+from .hid_battery import HidBatteryProvider  # noqa: F401
 from .keychron import KeychronProvider  # noqa: F401
 from .nuphy import NuphyProvider  # noqa: F401
 from .darkrim import DarkrimProvider  # noqa: F401
