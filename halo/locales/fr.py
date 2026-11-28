@@ -132,6 +132,7 @@ MESSAGES = {
     "state.no_link": "aucune liaison (éteint ou en veille)",
     "state.level": "{level} %",
     "state.charging": "{state}, en charge",
+    "state.fully_charged": "{state}, chargé à 100 %",
     "state.asleep": "{state} (dernière valeur connue, périphérique en veille)",
     "provider.ajazz": "Souris AJAZZ",
 "provider.akko_s9": "Casque Akko Verge S9 Ultra",

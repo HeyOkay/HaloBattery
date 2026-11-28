@@ -133,6 +133,7 @@ MESSAGES = {
     "state.no_link": "未連線（已關機或休眠）",
     "state.level": "{level}%",
     "state.charging": "{state}，充電中",
+    "state.fully_charged": "{state}，已充滿",
     "state.asleep": "{state}（上次記錄的電量，裝置休眠中）",
     "provider.ajazz": "AJAZZ 滑鼠",
 "provider.akko_s9": "Akko Verge S9 Ultra 耳機",

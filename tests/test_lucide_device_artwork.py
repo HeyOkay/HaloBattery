@@ -27,11 +27,11 @@ OPTICAL_Y = {"health": .25, "display": .25, "webcam": .25, "smart_home": -.25}
 
 class NewLucideArtworkTests(unittest.TestCase):
     def test_pinned_sources_keep_uniform_stroke_and_centered_geometry(self):
-        manifest = json.loads((ROOT / "artwork/tray/manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads((ROOT / "assets/artwork/tray/manifest.json").read_text(encoding="utf-8"))
         for kind, expected_hash in SOURCES.items():
             with self.subTest(kind=kind):
                 source_name = {"health": "heart-pulse", "smart_home": "house", "display": "tv-minimal", "tracker": "radar"}.get(kind, kind)
-                source = (ROOT / f"artwork/tray/lucide-{source_name}.svg").read_bytes()
+                source = (ROOT / f"assets/artwork/tray/lucide-{source_name}.svg").read_bytes()
                 self.assertNotIn(b"\r", source)
                 self.assertEqual(hashlib.sha256(source).hexdigest(), expected_hash)
                 svg = ET.fromstring(source)
@@ -136,8 +136,8 @@ class NewLucideArtworkTests(unittest.TestCase):
                                      icons.render(60,False,True,text="60",**settings).tobytes())
 
     def test_shared_generator_reuses_rows_without_changing_other_masks(self):
-        manifest = json.loads((ROOT / "artwork/tray/manifest.json").read_text(encoding="utf-8"))
-        original = Image.open(ROOT / "artwork/tray/masks.png").copy()
+        manifest = json.loads((ROOT / "assets/artwork/tray/manifest.json").read_text(encoding="utf-8"))
+        original = Image.open(ROOT / "assets/artwork/tray/masks.png").copy()
         synthetic = Image.new("L",(1024,1024),128)
         for kind in ("microphone", "speaker", "webcam", "health", "smart_home", "watch", "display", "tracker"):
             with self.subTest(kind=kind):

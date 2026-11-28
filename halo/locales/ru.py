@@ -131,6 +131,7 @@ MESSAGES = {
     "state.no_link": "нет связи (выключено или в спящем режиме)",
     "state.level": "{level}%",
     "state.charging": "{state}, заряжается",
+    "state.fully_charged": "{state}, полностью заряжен",
     "state.asleep": "{state} (последнее значение, устройство спит)",
     "provider.ajazz": "Мыши AJAZZ",
 "provider.akko_s9": "Наушники Akko Verge S9 Ultra",

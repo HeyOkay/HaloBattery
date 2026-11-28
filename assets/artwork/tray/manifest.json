@@ -8,7 +8,7 @@
     "lucide": {
       "name": "lucide-static 1.17.0",
       "url": "https://unpkg.com/lucide-static@1.17.0/",
-      "license": "../../docs/licenses/lucide-1.17.0-LICENSE.txt",
+      "license": "../../../docs/licenses/lucide-1.17.0-LICENSE.txt",
       "glyphs": {
         "headset": "headphones",
         "mouse": "mouse",
@@ -29,12 +29,12 @@
     "simple_icons": {
       "name": "Simple Icons 9.0.0",
       "url": "https://github.com/simple-icons/simple-icons/tree/9.0.0",
-      "license": "../../docs/licenses/simple-icons-9.0.0-LICENSE.md"
+      "license": "../../../docs/licenses/simple-icons-9.0.0-LICENSE.md"
     },
     "playstation_classic": {
       "name": "Sony / Manabu Sakamoto classic PlayStation logo",
       "url": "https://commons.wikimedia.org/wiki/File:Playstation_logo_colour.svg",
-      "notice": "Public-domain text-logo artwork; trademark rights remain with the owner. See ../../docs/credits.md."
+      "notice": "Public-domain text-logo artwork; trademark rights remain with the owner. See ../../../docs/credits.md."
     }
   },
   "masks": [

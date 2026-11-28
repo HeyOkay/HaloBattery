@@ -11,8 +11,8 @@
 - **Display scaling**: tray artwork is rendered at the taskbar's physical icon size and refreshed when its DPI changes, keeping the thin ring and pictograms sharp.
 - **Colour**: follows the taskbar (white on a dark bar, black on a light one). With [MyDockFinder](https://store.steampowered.com/app/1787090/MyDockFinder/) running it follows its top menu bar instead. With a transparent taskbar (e.g. TranslucentTB) pick **Icon colour → White** or **Black**.
 - **Amber**: close to the alert threshold. **Red**: at or below it.
-- **Green**: charging. A known battery level breathes in brightness; an unknown level uses a rotating green arc over a steady neutral ring. Turning animation off in Settings leaves the arc still.
-- **Translucent**: the mouse is asleep and keeps its last level for 5 minutes. A device that is switched off leaves the tray and comes back when it is switched on.
+- **Green**: charging. A known battery level breathes in brightness until the device is fully charged, then the ring stays steady green; an unknown level uses a rotating green arc over a steady neutral ring. Turning animation off in Settings leaves the arc still.
+- **Translucent**: the mouse is asleep and keeps its last level for 5 minutes. That kept level is never shown as charging or fully charged. A device that is switched off leaves the tray and comes back when it is switched on.
 
 The low battery notification fires once, and again only after the device has been charged.
 
@@ -165,8 +165,10 @@ back, while the ring fades, slides and scales through native Composition animati
   some games may stop seeing the controller until it is turned off and on.
   The optional `%APPDATA%\HaloBattery\status.json` is written after every poll
   for Rainmeter, Stream Deck and scripts. It includes device `name`, `level`,
-  `charging`, `online`, `kind`, `seconds_left` and tooltip `text`, plus `running`
-  and `updated_unix`. Turning the option off deletes the file.
+  `charging`, `full`, `asleep`, `online`, `kind`, `seconds_left` and tooltip
+  `text`, plus `running` and `updated_unix`. These follow the tooltip: a sleeping
+  mouse's kept level is never `charging` or `full`. Turning the option off
+  deletes the file.
 - **About**: version, diagnostics, the data folder, the website, the Discord
   community, the GitHub page, issue reporting, and authors and licenses for the
   interface fonts, Lucide glyphs and downloaded icons.
@@ -214,7 +216,7 @@ folder recursively, which would also remove portable user data.
 1. Install [Python 3.10+](https://www.python.org/downloads/) with **Add python.exe to PATH** checked.
 2. Download or clone this repository somewhere permanent, e.g. `C:\Tools\HaloBattery`.
 3. Install .NET SDK 10.0.404 for the native settings window. From the repository
-   root, run `python -m pip install -r requirements.txt`,
+   root, run `python -m pip install -r requirements/requirements.txt`,
    `python tools/make_icon.py halo.ico`, then `./scripts/build_settings.ps1`
    in PowerShell. Keep its `.build/settings-ui` output in place.
 4. Run `scripts\install_and_run.bat`, then right-click the tray icon → **Settings… → General → Start with Windows**.

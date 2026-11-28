@@ -132,6 +132,7 @@ MESSAGES = {
     "state.no_link": "no link (off or asleep)",
     "state.level": "{level}%",
     "state.charging": "{state}, charging",
+    "state.fully_charged": "{state}, fully charged",
     "state.asleep": "{state} (last known value, device asleep)",
     "provider.ajazz": "AJAZZ mice",
 "provider.akko_s9": "Akko Verge S9 Ultra headset",

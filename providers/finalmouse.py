@@ -201,7 +201,7 @@ class FinalmouseProvider(Provider):
             last = self._last.get(key)
             if last and time.time() - last[2] < ASLEEP_KEEP:
                 out.append(DeviceStatus(key, name, last[0], last[1], False, "finalmouse",
-                                        kind="mouse", wake_on_input=True))
+                                        kind="mouse", wake_on_input=True, asleep=True))
         return out
 
     def diagnostics(self) -> List[str]:

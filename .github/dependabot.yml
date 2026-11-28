@@ -7,7 +7,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
   - package-ecosystem: pip
-    directory: /
+    directory: /requirements
     target-branch: pre-release
     schedule:
       interval: weekly

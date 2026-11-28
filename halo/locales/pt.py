@@ -133,6 +133,7 @@ MESSAGES = {
     "state.no_link": "sem conexão (desligado ou em repouso)",
     "state.level": "{level}%",
     "state.charging": "{state}, carregando",
+    "state.fully_charged": "{state}, totalmente carregado",
     "state.asleep": "{state} (último valor conhecido, dispositivo em repouso)",
     "provider.ajazz": "Mouses AJAZZ",
     "provider.alienware": "Teclado Alienware Pro Wireless",

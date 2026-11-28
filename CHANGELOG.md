@@ -8,6 +8,22 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- React to a receiver or cable arriving or leaving, and to a resume from sleep, as
+  soon as Windows reports it instead of at the next poll: a hidden window receives
+  the same device and power broadcasts the vendor tools use and coalesces a dock's
+  burst of interfaces into one refresh. The existing check every few seconds stays
+  as the fallback.
+- A charging device at 100 % is now shown as fully charged: its ring stops breathing
+  and stays green, and the tooltip says so, translated in every language. A provider
+  with a real "charged" flag can set the same state below 100 %. Only a live reading
+  counts, never a greyed last known value.
+- The last level kept for a sleeping mouse is never shown as charging or fully
+  charged, so a mouse that fell asleep on its cable no longer looks like it is still
+  charging (#109). Pulsar, Rapoo, ATK, Attack Shark R11, Dareu, Finalmouse, HyperX
+  and Lamzu mice mark that reading as asleep, and moving a sleeping Rapoo mouse now
+  re-reads it.
+- `status.json` gains `full` and `asleep` and follows the tooltip: it no longer
+  reports a sleeping mouse as charging.
 - Read the standard HID battery fields of devices that publish them instead of a
   vendor protocol: page 0x06 usage 0x20 (Battery Strength) or page 0x85 usage 0x65
   (Relative State of Charge), with the page-0x85 charging, discharging, full and AC

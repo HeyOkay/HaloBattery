@@ -22,7 +22,7 @@ class SettingsSourcesTests(unittest.TestCase):
         self.assertTrue(names | {"eye", "refresh-cw", "download"} <= native.keys())
         for name in names:
             expected = []
-            svg = ET.parse(ROOT / "artwork" / "settings" / f"lucide-{name}.svg").getroot()
+            svg = ET.parse(ROOT / "assets" / "artwork" / "settings" / f"lucide-{name}.svg").getroot()
             for element in svg:
                 tag = element.tag.rsplit("}", 1)[-1]
                 attrs = element.attrib
@@ -47,7 +47,7 @@ class SettingsSourcesTests(unittest.TestCase):
                 self.assertEqual(native[name], expected)
 
     def test_official_svg_sources_keep_pinned_hashes_and_geometry(self):
-        directory = ROOT / "artwork" / "settings"
+        directory = ROOT / "assets" / "artwork" / "settings"
         sources = json.loads((directory / "sources.json").read_text(encoding="utf-8"))
         self.assertEqual(sources["package"], "lucide-static")
         self.assertEqual(sources["version"], "1.17.0")
@@ -64,7 +64,7 @@ class SettingsSourcesTests(unittest.TestCase):
                 self.assertEqual(svg.attrib["stroke-width"], "2")
 
     def test_qlementine_shortcuts_keep_pinned_hashes_and_native_paths(self):
-        directory = ROOT / "artwork" / "settings"
+        directory = ROOT / "assets" / "artwork" / "settings"
         sources = json.loads((directory / "qlementine-sources.json").read_text(encoding="utf-8"))
         self.assertTrue((directory / sources["license"]).is_file())
         native = (ROOT / "ui" / "HaloBattery.Settings" / "MainWindow.LinkButtons.cs").read_text(encoding="utf-8")

@@ -15,7 +15,7 @@ class BuiltinProfileTests(unittest.TestCase):
         self.glyph = SimpleNamespace(png_bytes=b'verified normalized png', digest='a' * 64)
 
     def test_mapping_is_exactly_the_reviewed_manifest_lucide_sources(self):
-        manifest = json.loads((Path(__file__).resolve().parents[1] / 'artwork/tray/manifest.json').read_text(encoding='utf-8'))
+        manifest = json.loads((Path(__file__).resolve().parents[1] / 'assets/artwork/tray/manifest.json').read_text(encoding='utf-8'))
         expected = {'lucide:' + name: kind for kind, name in manifest['sources']['lucide']['glyphs'].items()}
         self.assertEqual(_BUILTIN_PROFILES, expected)
         for kind in expected.values():

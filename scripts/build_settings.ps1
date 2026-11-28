@@ -195,7 +195,7 @@ if ($useAot) {
 if ($EnableVerification) {
     $commonArguments += '-p:HaloBatteryVerification=true'
 }
-if (-not $NuGetConfig) { $NuGetConfig = Join-Path $repository 'NuGet.Config' }
+if (-not $NuGetConfig) { $NuGetConfig = Join-Path $repository 'ui/NuGet.Config' }
 if (-not (Test-Path -LiteralPath $NuGetConfig -PathType Leaf)) { throw "Missing NuGet configuration: $NuGetConfig" }
 if ($PackagesDirectory) {
     $commonArguments += "-p:RestorePackagesPath=$([IO.Path]::GetFullPath($PackagesDirectory))"
@@ -209,7 +209,7 @@ $buildArguments = @('publish', $project, '--configuration', $Configuration, '--r
 $sdkDirectory = Join-Path $IntermediateDirectory 'sdk'
 [IO.Directory]::CreateDirectory($sdkDirectory) | Out-Null
 [IO.File]::WriteAllText((Join-Path $sdkDirectory 'global.json'),
-    [IO.File]::ReadAllText((Join-Path $repository 'global.json')),
+    [IO.File]::ReadAllText((Join-Path $repository 'ui/global.json')),
     [Text.UTF8Encoding]::new($false))
 $stageCreated = $false
 $originalEnvironment = @{ PATH = $env:PATH; LIB = $env:LIB; INCLUDE = $env:INCLUDE }
