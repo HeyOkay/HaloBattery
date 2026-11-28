@@ -1894,3 +1894,67 @@ change normal provider allowlists.
   Aurora 83 payload, one 100 ms wait and GET_FEATURE. No CompX/Glorious
   fallback, wired probes or alternate-size probing. Real receiver, charging
   and recovery validation remain outstanding.
+
+
+### Redragon M916 Pro 4K
+
+Source: [dongkid/g49-web-control](https://github.com/dongkid/g49-web-control/tree/da76cef7822741421a7612f1db4bbdb18d199dfd),
+`js/protocol.js` lines 48-79 (IDs and FF04), 581-603 (packet/checksum),
+`js/mouse-api.js` lines 164-185 (battery), `js/transport.js` sendPacket/readResponse.
+Receivers `3554:F54C/F54F/F55F`, cable `3554:F54E`: output report 8, command 04,
+zero address/payload, 17 bytes including report ID, checksum making the sum 55.
+On Windows read only FF02:0002 with a 17-byte output report. The source's WebHID
+FF04 filter describes the grouped USB device; the Windows FF04 collection has no
+input/output report and only an 8-byte feature report, so it cannot carry this
+exchange. FF02 carries 17-byte input/output report 8, as in the existing CompX
+reader. No interface fallback, heartbeat, flash or configuration writes.
+The existing CompX parser checks report ID, command, checksum and percentage
+0..100; this model additionally rejects charging flags outside 0/1. Percent is wire byte 6, charge byte 7.
+Do not merge the cable with an arbitrary receiver: several receiver variants are
+possible and no pairing identity has been established. A real Windows poll on the
+F54F receiver returned `08 04 00 00 00 02 46 00 0f 8c 00 00 00 00 00 00 66`:
+70%, discharging, 3980 mV, valid checksum. Other transport IDs remain untested;
+comparison against the vendor app is pending.
+
+### ATK N9 Pro
+
+Source: [ibroxiim/atk-n9-mac](https://github.com/ibroxiim/atk-n9-mac/tree/d95a2d36f673456d7cada9aa2db102d2b01064e6),
+`tools/diagnose.py` lines 36-78 and `native/native_host.py` lines 68-82.
+Only receiver `373B:11CB` is enabled. Discover its serial port by VID/PID,
+open at 9600 baud 8N1, send the 64-byte category-0 GET link command `02 00 04`
+(zero padded), then battery GET `02 00 03` only when connected.
+Replies are 64 bytes, byte 0 is payload length plus 2, bytes 1/2 echo category/command,
+and the second payload byte (wire byte 4) carries link 0/1 or battery.
+Battery is bits 0..6 (reject >100), charging bit 7. Short frames, unrelated events,
+invalid lengths and unknown link values are refused. Each query has a one-second
+budget and finite serial write/read timeouts; handles are closed on errors.
+No EQ, microphone, firmware or configuration writes. The macOS-specific 63-byte
+CDC workaround is not used on Windows. The source marks N9 Pro as untested. A real N9 Pro Windows poll returned
+`04 00 04 00 01 ...` (connected), then `04 00 03 00 32 ...` (50%, not charging).
+Comparison with ATK Hub and hardware charging transitions remain pending.
+
+
+#### Receiver power-cycle refresh
+
+The Redragon M916 Pro 4K and ATK N9 Pro providers opt into a five-second refresh
+only while their supported receiver is enumerated. The polling coordinator caches
+this optional metadata on the provider worker and schedules that provider alone;
+it does no device I/O in pump/consume and retains its two-worker/lease limits,
+error backoff, disabled-provider handling and fullscreen quiet mode. Removing the
+receiver clears the opt-in on the next poll. The general configured battery
+interval remains unchanged for other providers. This is a bounded query cadence,
+not an immediate USB hotplug event: the receivers stay enumerated when their
+wireless device switches off.
+
+Measured on the F54F receiver with the mouse's physical switch off: command 04
+stopped answering; the existing CompX cache therefore preserves the last percent
+with online=False (off/asleep) and input-wake recovery. No new device commands
+are needed for these power-cycle fixes. A mouse sleeping and a mouse switched off
+are indistinguishable when the receiver is silent.
+
+
+Hardware cycle verification on Windows: with both receivers left connected, the
+M916 Pro 4K and N9 Pro were switched off together and both live application
+statuses changed to online=False. Switching them back on restored online=True
+without restarting the application (mouse 55%, headset 50%). Hardware charging
+transitions and comparisons against vendor battery displays remain untested.

@@ -169,6 +169,7 @@ MESSAGES = {
     "provider.shield": "NVIDIA SHIELD 控制器",
     "provider.skullcandy": "Skullcandy 耳機",
     "provider.sony_inzone": "Sony INZONE H9 / H5",
+    "provider.atk_n9": "ATK N9 Pro 耳機",
     "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Turtle Beach 耳機",
     "state.not_reported": "尚未回報",

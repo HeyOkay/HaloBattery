@@ -96,3 +96,4 @@ from .phone_link import PhoneLinkProvider  # noqa: F401
 from .blackshark_v3x import BlackSharkV3XProvider  # noqa: F401
 from .ninjutso_sora_v3 import NinjutsoSoraV3Provider  # noqa: F401
 from .redsquare import RedSquareProvider  # noqa: F401
+from .atk_n9 import AtkN9Provider  # noqa: F401

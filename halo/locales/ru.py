@@ -167,6 +167,7 @@ MESSAGES = {
     "provider.shield": "Контроллеры NVIDIA SHIELD",
     "provider.skullcandy": "Гарнитуры Skullcandy",
     "provider.sony_inzone": "Sony INZONE H9 / H5",
+    "provider.atk_n9": "Гарнитура ATK N9 Pro",
     "provider.sony_h9ii": "Sony INZONE H9 II",
     "provider.turtlebeach": "Гарнитуры Turtle Beach",
     "state.not_reported": "пока нет данных",

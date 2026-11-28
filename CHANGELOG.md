@@ -6,7 +6,19 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Redragon M916 Pro 4K receivers (`3554:F54C/F54F/F55F`) and USB cable
+  (`3554:F54E`): read CompX battery and charging on the FF02 report-8 collection.
+- ATK N9 Pro receiver (`373B:11CB`): serial link, battery percentage and charging
+  queries, with bounded reads and no configuration writes.
+
 ### Fixed
+
+- Refresh connected Redragon M916 Pro 4K and ATK N9 Pro receivers every five
+  seconds on their existing provider workers, so power cycles update the icons
+  without waiting for the general battery interval. Quiet mode still suppresses
+  these extra polls, and unplugged/disabled receivers stop refreshing.
 
 - Retry post-publication release and asset attestation verification when GitHub
   has not yet made the proofs available. Persistent verification errors still
