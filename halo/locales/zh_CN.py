@@ -132,6 +132,7 @@ MESSAGES = {
     "state.no_link": "未连接（已关机或休眠）",
     "state.level": "{level}%",
     "state.charging": "{state}，充电中",
+    "state.fully_charged": "{state}，已充满",
     "state.asleep": "{state}（上次记录的电量，设备休眠中）",
     "provider.ajazz": "AJAZZ 鼠标",
 "provider.akko_s9": "Akko Verge S9 Ultra 耳机",

@@ -516,10 +516,10 @@ class PulsarProvider(Provider):
                 name, charging = PIDS.get(vid, {}).get(pid, name), False
             if key in present:
                 self._diag.append(f"[Pulsar] {name} did not answer; keeping {level}%"
-                                  f"{' (charging)' if charging else ''} greyed "
-                                  f"(its receiver is still plugged in)")
-                out.append(DeviceStatus(key, name, level, charging, False, "pulsar",
-                                        kind=kind, wake_on_input=True))
+                                  f"{' (was charging)' if charging else ''} greyed "
+                                  f"(its receiver is still plugged in; asleep, not charging)")
+                out.append(DeviceStatus(key, name, level, False, False, "pulsar",
+                                        kind=kind, asleep=True, wake_on_input=True))
             else:
                 del self._last[key]
                 self._via_cable.discard(key)

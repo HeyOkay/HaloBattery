@@ -140,7 +140,7 @@ class LamzuProvider(Provider):
             return [DeviceStatus(key, NAME, batt, chg, True, "lamzu", kind="mouse")]
         if self._last and time.time() - self._last[2] < ASLEEP_KEEP:
             return [DeviceStatus(key, NAME, self._last[0], self._last[1], False, "lamzu",
-                                 kind="mouse")]
+                                 kind="mouse", asleep=True)]
         return []
 
     def diagnostics(self) -> List[str]:
@@ -258,7 +258,7 @@ class LamzuAtlantisProvider(Provider):
         if present and self._last and now - self._last[4] < THORN_ASLEEP_KEEP:
             key, name, level, charging, _seen = self._last
             return [DeviceStatus(key, name, level, charging, False, "lamzu",
-                                 kind="mouse", wake_on_input=True)]
+                                 kind="mouse", wake_on_input=True, asleep=True)]
         if not present:
             self._last = None
         return []

@@ -635,7 +635,10 @@ class PulsarTest(unittest.TestCase):
             kept = provider.poll()          # idle now: the receiver goes quiet
         self.assertEqual(1, len(kept), "the reading stays while the mouse is enumerated")
         self.assertFalse(kept[0].online, "a held reading is greyed out")
-        self.assertEqual((64, True), (kept[0].level, kept[0].charging))
+        # the last reading came from the cable (charging); a mouse the receiver can
+        # no longer hear is asleep, so the flag must not stay on (#109 lesson)
+        self.assertEqual((64, False), (kept[0].level, kept[0].charging))
+        self.assertTrue(kept[0].asleep, "a held reading is a sleeping device, not a charger")
         self.assertEqual("pulsar:3554f58a", kept[0].key)
         self.assertTrue(kept[0].wake_on_input, "the kept reading can be woken by input")
 

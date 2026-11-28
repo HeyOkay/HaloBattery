@@ -121,6 +121,7 @@ class DareuTest(unittest.TestCase):
         self.assertTrue(p.poll()[0].online)
         s, = p.poll()           # asleep: no reply, receiver still listed
         self.assertEqual((s.level, s.online, s.wake_on_input), (90, False, True))
+        self.assertTrue(s.asleep)
         rx.pid = 0x9999         # receiver unplugged
         self.assertEqual(p.poll(), [])
         rx.pid = 0x1074         # plugged back in, mouse still asleep: nothing stale

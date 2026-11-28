@@ -120,6 +120,7 @@ MESSAGES = {
     'state.no_link': 'байланыс жоқ (өшірулі немесе ұйқы режимінде)',
     'state.level': '{level}%',
     'state.charging': '{state}, зарядталуда',
+    'state.fully_charged': '{state}, толық зарядталды',
     'state.asleep': '{state} (соңғы белгілі мән, құрылғы ұйқы режимінде)',
     'provider.ajazz': 'AJAZZ тінтуірлері',
 'provider.akko_s9': 'Akko Verge S9 Ultra құлаққабы',

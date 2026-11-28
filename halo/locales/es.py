@@ -141,6 +141,7 @@ MESSAGES = {
     "state.no_link": "sin conexión (apagado o suspendido)",
     "state.level": "{level}%",
     "state.charging": "{state}, cargando",
+    "state.fully_charged": "{state}, carga completa",
     "state.asleep": "{state} (último valor conocido, dispositivo suspendido)",
     "provider.ajazz": "Ratones AJAZZ",
 "provider.akko_s9": "Auriculares Akko Verge S9 Ultra",
