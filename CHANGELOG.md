@@ -142,6 +142,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - Use independent protocol fixtures and cover the six originally surviving
   battery/history mutations without changing device requests or controller identities.
+- Retry Razer Hammerhead V3 X HyperSpeed battery and link queries a limited
+  number of times when the receiver returns replies to other requests.
 
 ### Added
 - ROYUAN 2.4 GHz keyboards (`3151:4011` receiver, reported on an Epomaker TH80 ISO):
@@ -153,6 +155,10 @@ and the project follows [Semantic Versioning](https://semver.org/).
   unknown. Test build 2 confirmed wired charging on hardware; the wireless replies with
   and without a wall charger differ only in the level byte
   ([#560](https://github.com/HeyOkay/HaloBattery/issues/560)).
+- Show Razer Hammerhead V3 X HyperSpeed earbud battery through its 2.4 GHz
+  charging-case receiver (`1532:0A64`). When both earbuds are connected, show
+  the lower of their reported levels. Use Synapse's on-battery status for
+  connected earbuds so low-battery alerts apply.
 - Read the Attack Shark R11 Ultra on its 2.4 GHz CompX 8K receiver
   (`3554:FB44`) with the shared 17-byte power query, so the tray shows its
   level and charging state (#525).
